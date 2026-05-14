@@ -1,0 +1,13 @@
+# INLOP BI Dashboard — GitHub Pages
+# No ignorar nada — todos los archivos se publican
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+*.log
+
+# Editores
+.vscode/
+.idea/
+*.swp
+*.swo
