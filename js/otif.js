@@ -94,9 +94,14 @@ window.ohSetDataFromCloud = function(cloudData) {
   
   // Renderizar
   if (typeof ohRender === 'function') {
-    console.log('🌉 [BRIDGE] Llamando ohRender()...');
     ohRender();
-    console.log('🌉 [BRIDGE] ohRender completado ✓');
+    // If view-otif is visible, trigger resize so Chart.js gets real canvas dimensions
+    setTimeout(function(){
+      var v = document.getElementById('view-otif');
+      if(v && v.style.display !== 'none') {
+        window.dispatchEvent(new Event('resize'));
+      }
+    }, 100);
   }
   
   // Actualizar stats del portal
