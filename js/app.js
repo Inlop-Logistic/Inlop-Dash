@@ -135,8 +135,8 @@ window.updatePortalStats = function(){
     var viajesEl = document.getElementById('portal-viajes-val');
     if(viajesEl){
       try {
-        var liqArr = (typeof DATA_LIQ !== 'undefined') ? DATA_LIQ : (window.DATA_LIQ || []);
-        var secArr = (typeof DATA_SEC !== 'undefined') ? DATA_SEC : (window.DATA_SEC || []);
+        var liqArr = (window.DATA_LIQ || []);
+        var secArr = (window.DATA_SEC || []);
         var liqCur = liqArr.length > 0 ? liqArr[liqArr.length - 1] : null;
         var secCur = secArr.length > 0 ? secArr[secArr.length - 1] : null;
         if(liqCur || secCur){
@@ -169,8 +169,8 @@ window.updatePortalStats = function(){
     var semanaEl = document.getElementById('portal-semana-val');
     if(semanaEl){
       try {
-        var liqArr2 = (typeof DATA_LIQ !== 'undefined') ? DATA_LIQ : (window.DATA_LIQ || []);
-        var secArr2 = (typeof DATA_SEC !== 'undefined') ? DATA_SEC : (window.DATA_SEC || []);
+        var liqArr2 = (window.DATA_LIQ || []);
+        var secArr2 = (window.DATA_SEC || []);
         var lastWk = null;
         if(liqArr2.length > 0) lastWk = liqArr2[liqArr2.length - 1];
         if(!lastWk && secArr2.length > 0) lastWk = secArr2[secArr2.length - 1];
