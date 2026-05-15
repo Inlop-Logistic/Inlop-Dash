@@ -92,16 +92,14 @@ window.ohSetDataFromCloud = function(cloudData) {
   if (elContent) elContent.style.display = 'block';
   if (elRef) elRef.style.display = 'block';
   
-  // Renderizar
-  if (typeof ohRender === 'function') {
+  // Solo renderizar si la vista está visible
+  // Si está oculta, abrirVista('otif') hará el render cuando el usuario navegue
+  var viewOtif = document.getElementById('view-otif');
+  var viewVisible = viewOtif && viewOtif.style.display !== 'none';
+  
+  if (typeof ohRender === 'function' && viewVisible) {
     ohRender();
-    // If view-otif is visible, trigger resize so Chart.js gets real canvas dimensions
-    setTimeout(function(){
-      var v = document.getElementById('view-otif');
-      if(v && v.style.display !== 'none') {
-        window.dispatchEvent(new Event('resize'));
-      }
-    }, 100);
+    setTimeout(function(){ window.dispatchEvent(new Event('resize')); }, 100);
   }
   
   // Actualizar stats del portal
