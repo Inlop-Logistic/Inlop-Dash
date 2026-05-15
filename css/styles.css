@@ -533,7 +533,9 @@ input[type=file]{display:none}
 #view-portal{display:block}
 #view-ops{display:none}
 #view-otif{display:none}
-.back-btn{display:none !important}
+.back-btn{display:none}
+.back-btn.visible{display:inline-flex;position:fixed;bottom:20px;left:20px;z-index:9999;background:var(--c2);border:1px solid var(--line2);color:var(--w1);padding:10px 18px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.4);align-items:center;gap:6px;transition:.2s}
+.back-btn.visible:hover{background:var(--c3);border-color:var(--amber);color:var(--amber)}
 .portal-wrap{min-height:100vh;background:#080d16;display:flex;flex-direction:column;position:relative;overflow-x:hidden}
 .portal-wrap::before{content:'';position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse 60% 40% at 20% 50%,rgba(1,42,107,.25) 0%,transparent 60%),radial-gradient(ellipse 50% 35% at 80% 30%,rgba(192,6,19,.12) 0%,transparent 60%),radial-gradient(ellipse 40% 30% at 60% 80%,rgba(232,160,32,.07) 0%,transparent 60%)}
 .portal-wrap::after{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:100;background:linear-gradient(90deg,#012A6B 0%,#C00613 35%,#E8A020 65%,#012A6B 100%)}
