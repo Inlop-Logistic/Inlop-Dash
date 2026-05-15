@@ -320,7 +320,8 @@ function pc(p){return p===100?'var(--green)':p>=70?'var(--amber)':'var(--danger)
 
 /* CHART THEME — high contrast axes */
 /* ════════════ BANNER ════════════ */
-function updateBanner(){
+function updateBanner(){ return; // banner eliminado del layout v2
+  if(false){
   const w=AWK();if(!w)return;
   const s=ws(w),banner=document.getElementById('alertBanner'),txt=document.getElementById('bannerTxt');
   const cLabel=isSec()?'CARGA SECA':'CARGA LÍQUIDA';
