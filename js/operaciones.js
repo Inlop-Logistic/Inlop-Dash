@@ -701,7 +701,14 @@ function renderRutaCards(){
 /* ════════════ TABLE ════════════ */
 function renderTable(){
   const w=AWK();if(!w)return;
-  const rows=flt==='all'?w.rows:w.rows.filter(r=>rst(r)===flt);
+  // Apply client filter if active
+  let rows=flt==='all'?w.rows:w.rows.filter(r=>rst(r)===flt);
+  if(window._clientFilter){
+    rows=rows.filter(r=>{
+      const norm=(r.c||'').trim().toUpperCase().replace(/\s+/g,' ').replace(/[.,;]/g,'');
+      return norm===window._clientFilter;
+    });
+  }
   const s=ws(w),sec=isSec();
   document.getElementById('tblTitle').textContent=sec?'Registro semanal · Tipo de operación':'Registro semanal · Por campo / ruta';
   document.getElementById('filRow').innerHTML=['all','ok','warn','bad','none'].map(f=>{
@@ -796,7 +803,7 @@ function renderCausas(){
   causes.forEach((c,i)=>{
     const map={crit:['ci-r','var(--danger)'],warn:['ci-y','var(--amber)'],ok:['ci-g','var(--green)']};
     const[ci,col]=map[c.type]||map['warn'];
-    html+=`<div class="cause-card">
+    html+=`<div class="cause-card ${ci}">
       <div class="cause-hdr">
         <div class="cause-icon ${ci}">${c.icon}</div>
         <div style="flex:1">
@@ -2531,45 +2538,29 @@ function populateClientFilter() {
   const current = activeCliente;
   sel.innerHTML = '<option value="">Todos los clientes</option>';
   const wks = WKS ? WKS() : [];
-  const clients = new Set();
+  // Normalize & deduplicate: "ECOPETROL SA" and "Ecopetrol" → same key
+  const clientMap = {};
   wks.forEach(w => {
     (w.rows || []).forEach(r => {
-      if (r.name) clients.add(r.name);
+      if (!r.c) return;
+      const norm = r.c.trim().toUpperCase().replace(/\s+/g,' ').replace(/[.,;]/g,'');
+      if (!clientMap[norm]) clientMap[norm] = r.c.trim();
     });
   });
-  Array.from(clients).sort().forEach(c => {
+  Object.keys(clientMap).sort().forEach(norm => {
     const opt = document.createElement('option');
-    opt.value = c;
-    opt.textContent = c;
-    if (c === current) opt.selected = true;
+    opt.value = norm;
+    opt.textContent = clientMap[norm];
+    if (norm === current) opt.selected = true;
     sel.appendChild(opt);
   });
 }
 
 function selCliente(val) {
   activeCliente = val;
-  // Re-render table with client filter
-  if (typeof renderTable === 'function') {
-    // Patch flt to include client
-    window._clientFilter = val;
-    renderTable();
-  }
+  window._clientFilter = val;
+  if (typeof refresh === 'function') refresh();
 }
-
-/* Patch renderTable to apply client filter */
-const _origRenderTable = window.renderTable || function(){};
-window.renderTable = function() {
-  _origRenderTable();
-  if (window._clientFilter) {
-    // Hide rows that don't match
-    const tbody = document.getElementById('tBody');
-    if (!tbody) return;
-    tbody.querySelectorAll('tr[data-cli]').forEach(tr => {
-      const cli = tr.getAttribute('data-cli') || '';
-      tr.style.display = (!window._clientFilter || cli.includes(window._clientFilter)) ? '' : 'none';
-    });
-  }
-};
 
 /* ── FILTRO MES ──────────────────────────────────────────────────── */
 function populateMonthFilter() {
@@ -2679,11 +2670,18 @@ function renderMesView(mes) {
 function parseConsolidadoSheets(wb) {
   MONTH_DATA = {};
   const MES_MAP = {
-    'ENERO': 'Enero', 'FEBRERO': 'Febrero', 'MARZO': 'Marzo',
-    'ABRIL': 'Abril', 'MAYO': 'Mayo', 'JUNIO': 'Junio',
-    'JULIO': 'Julio', 'AGOSTO': 'Agosto', 'SEPTIEMBRE': 'Septiembre',
-    'OCTUBRE': 'Octubre', 'NOVIEMBRE': 'Noviembre', 'DICIEMBRE': 'Diciembre'
+    'ENERO':'Enero','FEBRERO':'Febrero','MARZO':'Marzo','ABRIL':'Abril',
+    'MAYO':'Mayo','JUNIO':'Junio','JULIO':'Julio','AGOSTO':'Agosto',
+    'SEPTIEMBRE':'Septiembre','OCTUBRE':'Octubre','NOVIEMBRE':'Noviembre','DICIEMBRE':'Diciembre'
   };
+
+  // Normalizar nombre de cliente: quitar puntuación extra, uppercase, trim
+  function normClient(name) {
+    return String(name||'').trim()
+      .toUpperCase()
+      .replace(/\s+/g,' ')
+      .replace(/[.,;]/g,'');
+  }
 
   wb.SheetNames.forEach(sn => {
     const upper = sn.toUpperCase();
@@ -2697,74 +2695,92 @@ function parseConsolidadoSheets(wb) {
     const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
     if (!data || data.length < 5) return;
 
-    // Find module sections (LIQ starts at row 3/idx2, SECA starts when MÓDULO CARGA SECA found)
+    // Estructura real del Excel (verificada con openpyxl):
+    // LIQ: row0=título, row1=módulo+periodo, row2=headers, row3=sub-headers(Sol/Carg), row4+=datos
+    // SECA: rowN=MÓDULO CARGA SECA, rowN+1=headers, rowN+2=sub-headers, rowN+3+=datos
+    // Cols (0-based): 0=Cliente, 19=Sol.Mes, 20=Carg.Mes, 21=Balance.Mes, 22=%Mes
+
+    // Columnas de mes — buscar en fila de headers (idx=2)
+    let solCol=19, cargCol=20, balCol=21, pctCol=22;
+    const hdrRow = data[2] || [];
+    for (let c = 14; c < 25; c++) {
+      const v = String(hdrRow[c]||'').toLowerCase().replace(/\n/g,' ');
+      if (v.includes('sol') && v.includes('mes')) solCol = c;
+      if (v.includes('carg') && v.includes('mes')) cargCol = c;
+      if (v.includes('bal') && v.includes('mes')) balCol = c;
+      if (v.includes('%') && v.includes('mes')) pctCol = c;
+    }
+
+    // Encontrar inicio de CARGA SECA
     let secStartIdx = -1;
-    for (let i = 0; i < data.length; i++) {
-      const cell = String(data[i][0] || '').toUpperCase();
+    for (let i = 3; i < data.length; i++) {
+      const cell = String(data[i][0]||'').toUpperCase();
       if (cell.includes('MÓDULO CARGA SECA') || cell.includes('MODULO CARGA SECA')) {
         secStartIdx = i;
         break;
       }
     }
 
-    // Col indices (0-based): sol.mes=19, carg.mes=20, bal.mes=21, %mes=22
-    // But ABRIL has different layout — check col headers row
-    let solCol = 19, cargCol = 20, balCol = 21, pctCol = 22;
-
-    // Find header row (row with 'Sol.' and 'Mes')
-    for (let i = 0; i < Math.min(10, data.length); i++) {
-      const row = data[i];
-      for (let c = 15; c < 25; c++) {
-        const v = String(row[c] || '').toLowerCase();
-        if (v.includes('sol') && v.includes('mes')) { solCol = c; }
-        if (v.includes('carg') && v.includes('mes')) { cargCol = c; }
-        if (v.includes('bal') && v.includes('mes')) { balCol = c; }
-        if (v.includes('%') && v.includes('mes')) { pctCol = c; }
+    // Para SECA: buscar sus propias columnas de mes en su fila de headers (secStartIdx+1)
+    let secSolCol=solCol, secCargCol=cargCol, secBalCol=balCol, secPctCol=pctCol;
+    if (secStartIdx > 0) {
+      const secHdr = data[secStartIdx+1] || [];
+      for (let c = 14; c < 25; c++) {
+        const v = String(secHdr[c]||'').toLowerCase().replace(/\n/g,' ');
+        if (v.includes('sol') && v.includes('mes')) secSolCol = c;
+        if (v.includes('carg') && v.includes('mes')) secCargCol = c;
+        if (v.includes('bal') && v.includes('mes')) secBalCol = c;
+        if (v.includes('%') && v.includes('mes')) secPctCol = c;
       }
     }
 
-    function parseModule(startIdx, endIdx) {
-      const rows = [];
-      let total = { sol: 0, carg: 0 };
-      // Data starts 2 rows after header (header + sub-header)
-      for (let i = startIdx + 2; i < endIdx; i++) {
+    // parseModule: dataStartIdx = first actual data row (after headers+sub-headers)
+    function parseModule(dataStartIdx, endIdx, sc, cc) {
+      const clientMap = {}; // normalized name -> {displayName, sol, carg}
+      let totalSol = 0, totalCarg = 0;
+      for (let i = dataStartIdx; i < endIdx; i++) {
         const row = data[i];
         if (!row || !row[0]) continue;
-        const name = String(row[0]).trim();
-        if (!name || name.toUpperCase().includes('TOTAL')) {
-          if (name.toUpperCase().includes('TOTAL')) {
-            total.sol = Number(row[solCol]) || 0;
-            total.carg = Number(row[cargCol]) || 0;
-          }
-          continue;
+        const rawName = String(row[0]).trim();
+        if (!rawName) continue;
+        const nameUp = rawName.toUpperCase();
+        if (nameUp.includes('TOTAL') || nameUp === 'CLIENTE') continue;
+        // Skip section headers (rows that have no numeric data)
+        const sol = Number(row[sc]) || 0;
+        const carg = Number(row[cc]) || 0;
+        if (nameUp.includes('MÓDULO') || nameUp.includes('MODULO')) continue;
+        const norm = normClient(rawName);
+        if (!clientMap[norm]) {
+          clientMap[norm] = { name: rawName, sol: 0, carg: 0 };
         }
-        const sol = Number(row[solCol]) || 0;
-        const carg = Number(row[cargCol]) || 0;
-        if (sol === 0 && carg === 0) continue;
-        // Aggregate by client name
-        const existing = rows.find(r => r.name === name);
-        if (existing) { existing.sol += sol; existing.carg += carg; }
-        else rows.push({ name, sol, carg });
+        clientMap[norm].sol += sol;
+        clientMap[norm].carg += carg;
+        totalSol += sol;
+        totalCarg += carg;
       }
-      // Recalculate total if not found in sheet
-      if (!total.sol) {
-        rows.forEach(r => { total.sol += r.sol; total.carg += r.carg; });
-      }
-      return { rows, total };
+      const rows = Object.values(clientMap).filter(r => r.sol > 0 || r.carg > 0);
+      rows.sort((a,b) => b.sol - a.sol); // sort by volume descending
+      // Use sheet total if available, else sum
+      return { rows, total: { sol: totalSol, carg: totalCarg } };
     }
 
     const liqEnd = secStartIdx > 0 ? secStartIdx : data.length;
-    const liqData = parseModule(2, liqEnd);
-    const secData = secStartIdx > 0 ? parseModule(secStartIdx + 2, data.length) : { rows: [], total: {} };
+    // LIQ data starts at idx=4 (row5): idx0=title, idx1=module, idx2=headers, idx3=sub-headers, idx4=data
+    const liqData = parseModule(4, liqEnd, solCol, cargCol);
+    // SECA data starts at secStartIdx+3: idx0=MÓDULO, idx1=headers, idx2=sub-headers, idx3=data
+    const secData = secStartIdx > 0
+      ? parseModule(secStartIdx+3, data.length, secSolCol, secCargCol)
+      : { rows: [], total: {} };
 
     if (!MONTH_DATA[mesName]) MONTH_DATA[mesName] = {};
     MONTH_DATA[mesName].liq = liqData;
     MONTH_DATA[mesName].sec = secData;
+    console.log(`[INLOP] ${mesName} LIQ: ${liqData.rows.length} clientes, total sol=${liqData.total.sol} carg=${liqData.total.carg}`);
+    console.log(`[INLOP] ${mesName} SEC: ${secData.rows.length} clientes, total sol=${secData.total.sol} carg=${secData.total.carg}`);
   });
 
-  // Update month filter dropdown
   populateMonthFilter();
-  console.log('[INLOP] Meses cargados:', Object.keys(MONTH_DATA));
+  console.log('[INLOP] Meses disponibles:', Object.keys(MONTH_DATA));
 }
 
 /* ── HOOK: interceptar parseWB para llamar parseConsolidadoSheets ─ */
