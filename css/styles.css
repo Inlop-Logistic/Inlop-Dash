@@ -23,16 +23,11 @@
 body{background:var(--c0);color:var(--w1);font-family:'DM Sans',sans-serif;font-size:13px;line-height:1.5;min-height:100vh;overflow-x:hidden}
 body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 80% 50% at 50% -10%,rgba(1,42,107,.18) 0%,transparent 70%);pointer-events:none;z-index:0}
 body::after{content:'';position:fixed;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--navy) 0%,var(--red) 35%,var(--red) 65%,var(--navy) 100%);z-index:1000}
-
-/* ─── ALERT BANNER ─── */
-.alert-banner{position:fixed;top:2px;left:0;right:0;z-index:999;padding:7px 28px;display:flex;align-items:center;justify-content:space-between;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:1.5px;text-transform:uppercase}
-.banner-ok{background:rgba(0,135,90,.92);backdrop-filter:blur(8px)}
-.banner-warn{background:rgba(160,80,0,.92);backdrop-filter:blur(8px)}
 .banner-crit{background:rgba(160,0,0,.94);backdrop-filter:blur(8px)}
 .bdot{width:6px;height:6px;border-radius:50%;background:#fff;animation:blink 2s infinite;margin-right:8px}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
-.shell{position:relative;z-index:1;display:flex;flex-direction:column;min-height:100vh;padding-top:36px}
+.shell{position:relative;z-index:1;display:flex;flex-direction:column;min-height:100vh;padding-top:0}
 
 /* ─── HEADER ─── */
 .header{background:var(--c1);border-bottom:1px solid var(--line2);padding:0 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:sticky;top:36px;z-index:100;overflow:hidden}
