@@ -320,16 +320,7 @@ function pc(p){return p===100?'var(--green)':p>=70?'var(--amber)':'var(--danger)
 
 /* CHART THEME — high contrast axes */
 /* ════════════ BANNER ════════════ */
-function updateBanner(){ return; // banner eliminado del layout v2
-  if(false){
-  const w=AWK();if(!w)return;
-  const s=ws(w),banner=document.getElementById('alertBanner'),txt=document.getElementById('bannerTxt');
-  const cLabel=isSec()?'CARGA SECA':'CARGA LÍQUIDA';
-  if(s.pct>=META){banner.className='alert-banner banner-ok';txt.textContent=`OPERACIÓN NORMAL · ${cLabel} ${w.label} — Cumplimiento ${s.pct}% · Meta ${META}% superada`}
-  else if(s.pct>=80){banner.className='alert-banner banner-warn';txt.textContent=`ALERTA · ${cLabel} ${w.label} — Cumplimiento ${s.pct}% · Por debajo de meta ${META}%`}
-  else{banner.className='alert-banner banner-crit';txt.textContent=`CRÍTICO · ${cLabel} ${w.label} — Cumplimiento ${s.pct}% · Déficit de ${s.deficit} viajes`}
-  document.getElementById('bannerDate').textContent=new Date().toLocaleDateString('es-CO',{weekday:'short',day:'2-digit',month:'short',year:'numeric'}).toUpperCase();
-}
+function updateBanner(){} // eliminado v2
 
 /* ════════════ NAV ════════════ */
 function renderNav(){
