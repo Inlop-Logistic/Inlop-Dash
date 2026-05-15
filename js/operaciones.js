@@ -301,11 +301,14 @@ function setCargo(m){
 function showTab(id){
   document.querySelectorAll('.tc').forEach(el=>el.classList.remove('show'));
   document.querySelectorAll('.tb').forEach(el=>{el.classList.remove('on','sec')});
-  document.getElementById('tc-'+id).classList.add('show');
+  const tc=document.getElementById('tc-'+id);
+  if(tc)tc.classList.add('show');
   const btn=document.getElementById('tab-'+id);
-  btn.classList.add('on');
-  // Presidencia tab doesn't follow cargo color
-  if(isSec()&&id!=='pre')btn.classList.add('sec');
+  if(btn){btn.classList.add('on');if(isSec()&&id!=='pre')btn.classList.add('sec');}
+  // Sync sidebar
+  document.querySelectorAll('.sb-item[id^="sb-"]').forEach(el=>el.classList.remove('active'));
+  const sbEl=document.getElementById('sb-'+id);
+  if(sbEl)sbEl.classList.add('active');
   if(id==='pre')renderPresident();
 }
 
@@ -1259,6 +1262,12 @@ function setupPWA(){
    AI STATUS BAR UPDATE
 ════════════════════════════════════════════════════════ */
 function updateAiStatus(){
+  // Update sidebar mini status
+  const miniLabel = document.getElementById('aiMiniLabel');
+  if (miniLabel) {
+    miniLabel.textContent = aiKey ? '✦ IA configurada' : 'IA no configurada';
+    miniLabel.style.color = aiKey ? '#818cf8' : 'var(--w4)';
+  }
   const key=getApiKey();
   const label=document.getElementById('aiStatusLabel');
   const detail=document.getElementById('aiStatusDetail');
@@ -2435,3 +2444,372 @@ Object.defineProperty(window, 'DATA_LIQ', { get: ()=>DATA_LIQ, configurable:true
 Object.defineProperty(window, 'DATA_SEC', { get: ()=>DATA_SEC, configurable:true });
 // Exponer ws() para cálculo de KPIs en el portal
 window._opsWs = ws;
+
+/* ══════════════════════════════════════════════════════════════════
+   REDISEÑO v2.0 — Sidebar · Filtros · Mes · Presentation Mode
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── DATOS MENSUALES ─────────────────────────────────────────────
+   MONTH_DATA[mes] = { liq: {rows, total}, sec: {rows, total} }
+   Llenado en parseWB cuando el Excel tiene hojas CONSOLIDADO.
+   ──────────────────────────────────────────────────────────────── */
+let MONTH_DATA = {};
+let activeMes = '';
+let activeCliente = '';
+
+/* ── SIDEBAR ─────────────────────────────────────────────────────── */
+let _sbCollapsed = false;
+
+function toggleSidebar() {
+  const sb = document.getElementById('opsSidebar');
+  const ov = document.getElementById('sbOverlay');
+  if (!sb) return;
+  if (window.innerWidth <= 900) {
+    sb.classList.toggle('mobile-open');
+    ov && ov.classList.toggle('active');
+  } else {
+    collapseToggle();
+  }
+}
+
+function closeSidebar() {
+  const sb = document.getElementById('opsSidebar');
+  const ov = document.getElementById('sbOverlay');
+  if (sb) sb.classList.remove('mobile-open');
+  if (ov) ov.classList.remove('active');
+}
+
+function collapseToggle() {
+  const sb = document.getElementById('opsSidebar');
+  if (!sb) return;
+  _sbCollapsed = !_sbCollapsed;
+  sb.classList.toggle('collapsed', _sbCollapsed);
+  try { localStorage.setItem('inlop_sb_collapsed', _sbCollapsed ? '1' : '0'); } catch(e) {}
+}
+
+/* ── showTabSb — versión sidebar (llama al showTab original) ─── */
+function showTabSb(id) {
+  // Update sidebar active state
+  document.querySelectorAll('.sb-item[id^="sb-"]').forEach(el => el.classList.remove('active'));
+  const sbEl = document.getElementById('sb-' + id);
+  if (sbEl) sbEl.classList.add('active');
+
+  // Show tab content — reutiliza lógica existente
+  if (id === 'mes') {
+    showMesView();
+  } else {
+    showTab(id);
+  }
+
+  // Close mobile sidebar
+  if (window.innerWidth <= 900) closeSidebar();
+}
+
+/* ── CARGO TOGGLE v2 — sincroniza clases visuales ──────────────── */
+// Patch applied after initial definition via wrapper at bottom of file
+
+/* ── PRESENTATION MODE ───────────────────────────────────────────── */
+let _presentMode = false;
+
+function togglePresentMode() {
+  _presentMode = !_presentMode;
+  document.body.classList.toggle('present-mode', _presentMode);
+  const btn = document.getElementById('presentBtn');
+  if (btn) {
+    btn.innerHTML = _presentMode
+      ? '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2l12 12M14 2L2 14"/></svg> Salir'
+      : '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="14" height="9" rx="1.5"/><path d="M6 12l1 2M10 12l-1 2M5 14h6"/></svg> Presentar';
+  }
+  if (_presentMode && document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else if (!_presentMode && document.exitFullscreen && document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
+// Exit present mode on ESC (add to existing keydown handler)
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && _presentMode) togglePresentMode();
+});
+
+/* ── FILTRO CLIENTE ──────────────────────────────────────────────── */
+function populateClientFilter() {
+  const sel = document.getElementById('clientSelect');
+  if (!sel) return;
+  const current = activeCliente;
+  sel.innerHTML = '<option value="">Todos los clientes</option>';
+  const wks = WKS ? WKS() : [];
+  const clients = new Set();
+  wks.forEach(w => {
+    (w.rows || []).forEach(r => {
+      if (r.name) clients.add(r.name);
+    });
+  });
+  Array.from(clients).sort().forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c;
+    if (c === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function selCliente(val) {
+  activeCliente = val;
+  // Re-render table with client filter
+  if (typeof renderTable === 'function') {
+    // Patch flt to include client
+    window._clientFilter = val;
+    renderTable();
+  }
+}
+
+/* Patch renderTable to apply client filter */
+const _origRenderTable = window.renderTable || function(){};
+window.renderTable = function() {
+  _origRenderTable();
+  if (window._clientFilter) {
+    // Hide rows that don't match
+    const tbody = document.getElementById('tBody');
+    if (!tbody) return;
+    tbody.querySelectorAll('tr[data-cli]').forEach(tr => {
+      const cli = tr.getAttribute('data-cli') || '';
+      tr.style.display = (!window._clientFilter || cli.includes(window._clientFilter)) ? '' : 'none';
+    });
+  }
+};
+
+/* ── FILTRO MES ──────────────────────────────────────────────────── */
+function populateMonthFilter() {
+  const sel = document.getElementById('monthSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Seleccionar mes —</option>';
+  const meses = Object.keys(MONTH_DATA);
+  if (!meses.length) return;
+  meses.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = m.charAt(0).toUpperCase() + m.slice(1).toLowerCase();
+    sel.appendChild(opt);
+  });
+}
+
+function selMes(val) {
+  activeMes = val;
+  if (val) {
+    showMesView();
+    // Update sidebar active
+    document.querySelectorAll('.sb-item[id^="sb-"]').forEach(el => el.classList.remove('active'));
+    const sbMes = document.getElementById('sb-mes');
+    if (sbMes) sbMes.classList.add('active');
+  }
+}
+
+function showMesView() {
+  // Hide all tab contents, show tc-mes
+  document.querySelectorAll('.tc').forEach(el => el.classList.remove('show'));
+  const tcMes = document.getElementById('tc-mes');
+  if (tcMes) tcMes.classList.add('show');
+  if (activeMes) renderMesView(activeMes);
+  else {
+    // Show most recent month with data
+    const meses = Object.keys(MONTH_DATA);
+    if (meses.length) renderMesView(meses[meses.length - 1]);
+  }
+}
+
+function renderMesView(mes) {
+  activeMes = mes;
+  const data = MONTH_DATA[mes];
+  if (!data) {
+    document.getElementById('mesLabel').textContent = 'Sin datos para ' + mes;
+    return;
+  }
+
+  const modulo = cargo === 'liq' ? data.liq : data.sec;
+  if (!modulo) return;
+
+  const mesCapitalized = mes.charAt(0).toUpperCase() + mes.slice(1).toLowerCase();
+  document.getElementById('mesLabel').textContent = mesCapitalized + ' 2026';
+
+  const total = modulo.total || {};
+  const sol = total.sol || 0;
+  const carg = total.carg || 0;
+  const bal = carg - sol;
+  const pct = sol > 0 ? Math.round(carg / sol * 100 * 10) / 10 : 0;
+
+  const color = pct >= 95 ? 'var(--green)' : pct >= 80 ? 'var(--amber)' : 'var(--danger)';
+  const balColor = bal >= 0 ? 'var(--green)' : 'var(--danger)';
+
+  document.getElementById('mes-sol').textContent = sol;
+  document.getElementById('mes-sol').style.color = 'var(--blue)';
+  document.getElementById('mes-carg').textContent = carg;
+  document.getElementById('mes-carg').style.color = 'var(--green)';
+  document.getElementById('mes-pct').textContent = pct + '%';
+  document.getElementById('mes-pct').style.color = color;
+  document.getElementById('mes-bal').textContent = (bal >= 0 ? '+' : '') + bal;
+  document.getElementById('mes-bal').style.color = balColor;
+
+  // Table
+  const tbody = document.getElementById('mesTableBody');
+  if (!tbody) return;
+  const rows = modulo.rows || [];
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--w4);padding:24px">Sin datos de clientes para este mes</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const p = r.sol > 0 ? Math.round(r.carg / r.sol * 100) : 0;
+    const c = p >= 95 ? '#00d97e' : p >= 80 ? '#f59e0b' : '#ef4444';
+    const b = r.carg - r.sol;
+    const bStr = (b >= 0 ? '+' : '') + b;
+    return `<tr>
+      <td style="font-weight:500">${r.name}</td>
+      <td style="text-align:right;color:var(--w3)">${r.sol}</td>
+      <td style="text-align:right;color:var(--green)">${r.carg}</td>
+      <td style="text-align:right;color:${b < 0 ? 'var(--danger)' : 'var(--w3)'}">${bStr}</td>
+      <td>
+        <div class="month-pct-bar">
+          <div class="month-pct-track">
+            <div class="month-pct-fill" style="width:${Math.min(p,100)}%;background:${c}"></div>
+          </div>
+          <span style="color:${c};font-weight:600;font-size:12px;min-width:38px">${p}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── PARSEAR HOJAS CONSOLIDADO desde parseWB ─────────────────────
+   Se llama al final de parseWB() vía hook.
+   ──────────────────────────────────────────────────────────────── */
+function parseConsolidadoSheets(wb) {
+  MONTH_DATA = {};
+  const MES_MAP = {
+    'ENERO': 'Enero', 'FEBRERO': 'Febrero', 'MARZO': 'Marzo',
+    'ABRIL': 'Abril', 'MAYO': 'Mayo', 'JUNIO': 'Junio',
+    'JULIO': 'Julio', 'AGOSTO': 'Agosto', 'SEPTIEMBRE': 'Septiembre',
+    'OCTUBRE': 'Octubre', 'NOVIEMBRE': 'Noviembre', 'DICIEMBRE': 'Diciembre'
+  };
+
+  wb.SheetNames.forEach(sn => {
+    const upper = sn.toUpperCase();
+    const mesKey = Object.keys(MES_MAP).find(k => upper.includes(k));
+    if (!mesKey || !upper.includes('CONSOLIDADO')) return;
+
+    const mesName = MES_MAP[mesKey];
+    const ws = wb.Sheets[sn];
+    if (!ws) return;
+
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    if (!data || data.length < 5) return;
+
+    // Find module sections (LIQ starts at row 3/idx2, SECA starts when MÓDULO CARGA SECA found)
+    let secStartIdx = -1;
+    for (let i = 0; i < data.length; i++) {
+      const cell = String(data[i][0] || '').toUpperCase();
+      if (cell.includes('MÓDULO CARGA SECA') || cell.includes('MODULO CARGA SECA')) {
+        secStartIdx = i;
+        break;
+      }
+    }
+
+    // Col indices (0-based): sol.mes=19, carg.mes=20, bal.mes=21, %mes=22
+    // But ABRIL has different layout — check col headers row
+    let solCol = 19, cargCol = 20, balCol = 21, pctCol = 22;
+
+    // Find header row (row with 'Sol.' and 'Mes')
+    for (let i = 0; i < Math.min(10, data.length); i++) {
+      const row = data[i];
+      for (let c = 15; c < 25; c++) {
+        const v = String(row[c] || '').toLowerCase();
+        if (v.includes('sol') && v.includes('mes')) { solCol = c; }
+        if (v.includes('carg') && v.includes('mes')) { cargCol = c; }
+        if (v.includes('bal') && v.includes('mes')) { balCol = c; }
+        if (v.includes('%') && v.includes('mes')) { pctCol = c; }
+      }
+    }
+
+    function parseModule(startIdx, endIdx) {
+      const rows = [];
+      let total = { sol: 0, carg: 0 };
+      // Data starts 2 rows after header (header + sub-header)
+      for (let i = startIdx + 2; i < endIdx; i++) {
+        const row = data[i];
+        if (!row || !row[0]) continue;
+        const name = String(row[0]).trim();
+        if (!name || name.toUpperCase().includes('TOTAL')) {
+          if (name.toUpperCase().includes('TOTAL')) {
+            total.sol = Number(row[solCol]) || 0;
+            total.carg = Number(row[cargCol]) || 0;
+          }
+          continue;
+        }
+        const sol = Number(row[solCol]) || 0;
+        const carg = Number(row[cargCol]) || 0;
+        if (sol === 0 && carg === 0) continue;
+        // Aggregate by client name
+        const existing = rows.find(r => r.name === name);
+        if (existing) { existing.sol += sol; existing.carg += carg; }
+        else rows.push({ name, sol, carg });
+      }
+      // Recalculate total if not found in sheet
+      if (!total.sol) {
+        rows.forEach(r => { total.sol += r.sol; total.carg += r.carg; });
+      }
+      return { rows, total };
+    }
+
+    const liqEnd = secStartIdx > 0 ? secStartIdx : data.length;
+    const liqData = parseModule(2, liqEnd);
+    const secData = secStartIdx > 0 ? parseModule(secStartIdx + 2, data.length) : { rows: [], total: {} };
+
+    if (!MONTH_DATA[mesName]) MONTH_DATA[mesName] = {};
+    MONTH_DATA[mesName].liq = liqData;
+    MONTH_DATA[mesName].sec = secData;
+  });
+
+  // Update month filter dropdown
+  populateMonthFilter();
+  console.log('[INLOP] Meses cargados:', Object.keys(MONTH_DATA));
+}
+
+/* ── HOOK: interceptar parseWB para llamar parseConsolidadoSheets ─ */
+const _origParseWB = window.parseWB;
+if (typeof parseWB !== 'undefined') {
+  // Wrap via document event since parseWB is in same scope
+  const _parseSave = parseWB;
+}
+// We hook via the DOMContentLoaded post-init, but parseWB is synchronous
+// so we patch it here after it's defined — use a flag
+window._wbRef = null;
+document.addEventListener('inlop:wb-parsed', function(e) {
+  if (e.detail && e.detail.wb) parseConsolidadoSheets(e.detail.wb);
+});
+
+/* ── INIT SIDEBAR STATE ──────────────────────────────────────────── */
+(function initSidebarState() {
+  try {
+    const collapsed = localStorage.getItem('inlop_sb_collapsed') === '1';
+    if (collapsed) {
+      const sb = document.getElementById('opsSidebar');
+      if (sb) { sb.classList.add('collapsed'); _sbCollapsed = true; }
+    }
+  } catch(e) {}
+
+  // Set initial active sidebar item based on current tab
+  const activeTab = document.querySelector('.tb.on');
+  if (activeTab) {
+    const tabId = activeTab.id.replace('tab-', '');
+    const sbItem = document.getElementById('sb-' + tabId);
+    if (sbItem) {
+      document.querySelectorAll('.sb-item[id^="sb-"]').forEach(el => el.classList.remove('active'));
+      sbItem.classList.add('active');
+    }
+  }
+
+  // Populate client filter once data loads
+  setTimeout(populateClientFilter, 2000);
+})();
+
