@@ -260,7 +260,13 @@ function parseWB(wb,fn){
   if(lW.length)DATA_LIQ=merge(DATA_LIQ,lW);
   if(sW.length)DATA_SEC=merge(DATA_SEC,sW);
   const ids=WKS().map(w=>w.id);wkId=ids[ids.length-1];flt='all';
-  src='live';saveMem(fn);updateXLUI();refresh();saveToSupabase();
+  src='live';saveMem(fn);updateXLUI();
+  // Mostrar dashboard, ocultar pantalla vacía (igual que loadFromSupabase)
+  const emptyEl = document.getElementById('opsEmpty');
+  const shellEl = document.getElementById('opsShell');
+  if (emptyEl) emptyEl.style.display = 'none';
+  if (shellEl) shellEl.style.display = '';
+  refresh();saveToSupabase();
   // Auto-build causes from Excel causa column
   buildCausesFromExcel();
   toast(`✓ ${tot} semana(s) cargada(s) desde "${fn}".${warns.length?'\n'+warns.join(', '):''}`,warns.length?'err':'ok');
@@ -918,6 +924,8 @@ function setFlt(f){flt=f;renderTable()}
 function selWk(id){wkId=id;refresh()}
 
 function refresh(){
+  // Guard: no renderizar si no hay datos cargados
+  if(!WKS() || WKS().length === 0) return;
   renderNav();updateBanner();renderKPIs();renderGauge();renderAlerts();renderResAnalysis();
   buildTrend();buildVol();buildDist();buildCliente();
   renderRutaCards();renderTable();
@@ -2349,25 +2357,26 @@ https://inlop-dash.netlify.app/
 }
 
 
-document.addEventListener('DOMContentLoaded',async ()=>{
-  // Try loading from Supabase first
-  const cloudLoaded = await loadFromSupabase();
-  
-  if(!cloudLoaded){
-    // Fallback to localStorage
-    const mem=loadMem();
-    if(mem&&mem.liq&&mem.liq.length){
-    DATA_LIQ=filterEmpty(mem.liq);DATA_SEC=filterEmpty(mem.sec);src='memory';
-    const ids=WKS().map(w=>w.id);wkId=ids[ids.length-1];
-    try{const a=localStorage.getItem(KA);if(a)actions=JSON.parse(a)}catch(e){}
-    try{const c=localStorage.getItem(KC);if(c)causesEdits=JSON.parse(c)}catch(e){}
-    updateXLUI();refresh();
-    buildCausesFromExcel();
-    toast(`Datos restaurados desde "${mem.meta.fn||'sesión anterior'}" (${fdt(mem.meta.at)}).`,'info');
-    } else {updateXLUI();refresh()}
+/* ══ SYNC desde Supabase — igual que financiero.html ══════════════
+   window.opsLoadFromSupabase() es el puente para el botón Sincronizar
+   ══════════════════════════════════════════════════════════════════ */
+window.opsLoadFromSupabase = async function() {
+  return await loadFromSupabase();
+};
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // Mostrar pantalla vacía mientras carga (igual que fhEmpty en financiero)
+  const emptyEl = document.getElementById('opsEmpty');
+  const shellEl = document.getElementById('opsShell');
+  if (emptyEl) emptyEl.style.display = 'flex';
+  if (shellEl) shellEl.style.display = 'none';
+
+  // Cargar desde Supabase — única fuente de verdad, igual que financiero
+  if (window.location.protocol !== 'file:') {
+    await loadFromSupabase();
   }
-  
-  // Actualizar stats del portal cuando todo esté cargado
+
+  // Actualizar stats del portal
   setTimeout(function(){
     if(typeof window.updatePortalStats === 'function'){
       window.updatePortalStats();
