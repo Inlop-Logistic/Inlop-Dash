@@ -31,13 +31,36 @@ function abrirVista(v){
     var el=document.getElementById('view-'+id);
     if(el) el.style.display = id===v?'block':'none';
   });
+  // Hide ops fixed overlays when leaving ops view
+  if(v !== 'ops') {
+    var opsEmpty = document.getElementById('opsEmpty');
+    if(opsEmpty) opsEmpty.style.display = 'none';
+  }
   document.getElementById('backBtn').classList.add('visible');
   window.scrollTo(0,0);
   
   // Guardar vista activa en localStorage
   try { localStorage.setItem('inlop_last_view', v); } catch(e){}
   
-  if(v==='ops'){setTimeout(function(){if(typeof refresh==='function')refresh();},150);}
+  if(v==='ops'){
+    // Show opsShell if data is loaded, otherwise show opsEmpty
+    var opsShell = document.getElementById('opsShell');
+    var opsEmpty = document.getElementById('opsEmpty');
+    var hasOpsData = (typeof WKS === 'function' && WKS() && WKS().length > 0) ||
+                     (typeof DATA_LIQ !== 'undefined' && window.DATA_LIQ && window.DATA_LIQ.length > 0);
+    if (opsShell && hasOpsData) {
+      opsShell.style.display = '';
+      if (opsEmpty) opsEmpty.style.display = 'none';
+    } else if (opsEmpty && !hasOpsData) {
+      opsEmpty.style.display = 'flex';
+      if (opsShell) opsShell.style.display = 'none';
+      // Trigger Supabase load
+      if (typeof window.opsLoadFromSupabase === 'function') {
+        window.opsLoadFromSupabase();
+      }
+    }
+    setTimeout(function(){if(typeof refresh==='function')refresh();},150);
+  }
   if(v==='otif'){
     setTimeout(function(){if(typeof otifInit==='function')otifInit();},150);
     // Auto-cargar desde Supabase si no hay datos en memoria
