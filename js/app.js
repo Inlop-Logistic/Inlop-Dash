@@ -27,20 +27,26 @@ console.log('[INLOP BI] ohBuildReportData:', typeof ohBuildReportData);
 console.log('[INLOP BI] ohGenerarHTMLPDF:', typeof ohGenerarHTMLPDF);
 
 function abrirVista(v){
+  console.log('[NAV] → abrirVista("' + v + '")');
+  
   ['portal','ops','otif','financiero'].forEach(function(id){
     var el=document.getElementById('view-'+id);
     if(el) el.style.display = id===v?'block':'none';
   });
+  
   // Hide ops fixed overlays when leaving ops view
   if(v !== 'ops') {
     var opsEmpty = document.getElementById('opsEmpty');
     if(opsEmpty) opsEmpty.style.display = 'none';
   }
-  document.getElementById('backBtn').classList.add('visible');
+  
+  // Show back button
+  var bb = document.getElementById('backBtn');
+  if(bb) bb.classList.add('visible');
+  
   window.scrollTo(0,0);
   
-  // Guardar vista activa en localStorage
-  try { localStorage.setItem('inlop_last_view', v); } catch(e){}
+  // NOTE: localStorage restore disabled — only manual navigation
   
   if(v==='ops'){
     // Show opsShell if data is loaded, otherwise show opsEmpty
@@ -65,49 +71,86 @@ function abrirVista(v){
     },200);
   }
   if(v==='otif'){
+    console.log('[OTIF NAV] hasOData:', typeof window.oData, window.oData ? Object.keys(window.oData).length : 0);
+    
     var hasData = (typeof window.oData !== 'undefined' && window.oData && Object.keys(window.oData||{}).length > 0);
     
+    // Always init admin state first
+    if(typeof otifInit === 'function') {
+      console.log('[OTIF NAV] Llamando otifInit...');
+      otifInit();
+    }
+    
     if(hasData){
+      console.log('[OTIF NAV] hay datos — mostrando UI');
       // Show content elements explicitly
       var elFilt = document.getElementById('ohFilters');
       var elNoData = document.getElementById('ohNoData');
       var elContent = document.getElementById('ohContent');
+      var elRef = document.getElementById('ohRef');
+      
       if(elFilt) elFilt.classList.add('visible');
       if(elNoData) elNoData.style.display = 'none';
       if(elContent) elContent.style.display = 'block';
+      if(elRef) elRef.style.display = 'block';
       
-      // Re-render after view is visible (gives Chart.js real canvas dimensions)
+      // Build filters if needed
+      if(typeof ohBuildFiltros === 'function') {
+        try { ohBuildFiltros(); } catch(e) { console.error('[OTIF NAV] ohBuildFiltros err:', e); }
+      }
+      
+      // Force re-render with delay so DOM is ready
       setTimeout(function(){
-        if(typeof ohRender === 'function') ohRender();
-        setTimeout(function(){ window.dispatchEvent(new Event('resize')); }, 100);
-      }, 100);
+        if(typeof ohRender === 'function') {
+          console.log('[OTIF NAV] Forzando ohRender...');
+          try {
+            ohRender();
+            console.log('[OTIF NAV] ohRender OK');
+          } catch(err) {
+            console.error('[OTIF NAV] ohRender CRASH:', err);
+          }
+          setTimeout(function(){ window.dispatchEvent(new Event('resize')); }, 150);
+        } else {
+          console.error('[OTIF NAV] ohRender no existe!');
+        }
+      }, 200);
     } else {
-      // No data — trigger Supabase load
+      console.log('[OTIF NAV] sin datos — cargando de Supabase');
       if(typeof loadOtifFromSupabase === 'function'){
-        loadOtifFromSupabase().catch(function(e){
-          console.error('[OTIF] Error cargando:', e);
-        });
+        loadOtifFromSupabase()
+          .then(function(){
+            // Re-trigger view after load
+            setTimeout(function(){ abrirVista('otif'); }, 100);
+          })
+          .catch(function(e){
+            console.error('[OTIF NAV] Error cargando:', e);
+          });
       }
     }
-    
-    // Always init admin state
-    setTimeout(function(){ if(typeof otifInit==='function') otifInit(); }, 50);
   }
   if(v==='financiero'){
+    console.log('[FIN NAV] activando financiero');
     var frame = document.getElementById('financieroFrame');
     var loading = document.getElementById('financieroLoading');
-    if(frame){
-      if(!frame.getAttribute('data-loaded')){
-        // Primera vez: mostrar loading y cargar
-        if(loading) loading.style.display = 'flex';
-        console.log('💰 [FINANCIERO] Cargando iframe por primera vez...');
-        frame.src = 'financiero.html';
-        frame.setAttribute('data-loaded', '1');
-      } else {
-        // Ya cargado: ocultar loading inmediatamente
+    
+    if(!frame) {
+      console.error('[FIN NAV] financieroFrame no encontrado!');
+      return;
+    }
+    
+    if(!frame.getAttribute('data-loaded')){
+      console.log('[FIN NAV] cargando iframe por primera vez...');
+      if(loading) loading.style.display = 'flex';
+      frame.src = 'financiero.html';
+      frame.setAttribute('data-loaded', '1');
+      // Hide loading when iframe loads
+      frame.onload = function(){
         if(loading) loading.style.display = 'none';
-        console.log('💰 [FINANCIERO] iframe ya cargado');
-      }
+        console.log('[FIN NAV] iframe cargado ✓');
+      };
+    } else {
+      if(loading) loading.style.display = 'none';
+      console.log('[FIN NAV] iframe ya estaba cargado');
     }
   }
 }
