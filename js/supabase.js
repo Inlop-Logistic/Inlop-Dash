@@ -100,6 +100,8 @@ async function loadFromSupabase() {
     updateXLUI();
     refresh();
     buildCausesFromExcel();
+    // Refresh client filter with loaded data
+    if (typeof populateClientFilter === 'function') populateClientFilter();
 
     const updated = cloudData.meta && cloudData.meta.updated
       ? new Date(cloudData.meta.updated).toLocaleString('es-CO')
