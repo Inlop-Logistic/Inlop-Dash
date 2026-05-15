@@ -59,25 +59,33 @@ function abrirVista(v){
         window.opsLoadFromSupabase();
       }
     }
-    setTimeout(function(){if(typeof refresh==='function')refresh();},150);
+    setTimeout(function(){
+      if(typeof refresh==='function') refresh();
+      window.dispatchEvent(new Event('resize'));
+    },200);
   }
   if(v==='otif'){
-    setTimeout(function(){if(typeof otifInit==='function')otifInit();},150);
-    // Auto-cargar desde Supabase si no hay datos en memoria
+    // Step 1: init state
+    setTimeout(function(){ if(typeof otifInit==='function') otifInit(); }, 50);
+    // Step 2: re-render charts NOW that the container is visible (fixes 0px canvas bug)
     setTimeout(function(){
       var hasData = (typeof window.oData !== 'undefined' && window.oData && Object.keys(window.oData||{}).length > 0);
-      console.log('🔄 [OTIF AUTOLOAD] hasData?', hasData);
-      if(!hasData){
-        if(typeof loadOtifFromSupabase === 'function'){
-          console.log('🔄 [OTIF AUTOLOAD] Llamando loadOtifFromSupabase...');
-          loadOtifFromSupabase().catch(function(e){
-            console.error('Error auto-carga OTIF:', e);
-          });
+      if(hasData){
+        // Force chart re-render with correct dimensions
+        if(typeof ohRender === 'function'){
+          ohRender();
+          // Trigger resize so Chart.js recalculates canvas size
+          window.dispatchEvent(new Event('resize'));
         }
       } else {
-        console.log('🔄 [OTIF AUTOLOAD] Ya hay datos, no se carga de nube');
+        // No data — load from Supabase
+        if(typeof loadOtifFromSupabase === 'function'){
+          loadOtifFromSupabase().catch(function(e){
+            console.error('[OTIF] Error cargando:', e);
+          });
+        }
       }
-    }, 400);
+    }, 200);
   }
   if(v==='financiero'){
     var frame = document.getElementById('financieroFrame');
