@@ -62,51 +62,58 @@ async function saveToSupabase() {
   }
 }
 
-// Load data from Supabase
+// Load data from Supabase — patrón idéntico a financiero.html
 async function loadFromSupabase() {
+  toast('⏳ Sincronizando...', 'info');
   try {
-    toast('Cargando datos de la nube...', 'info');
-    
     const result = await supabaseQuery('GET', 'dashboard_data?id=eq.1&select=*');
-    
+
     if (!result || !result[0] || !result[0].data) {
-      toast('No hay datos en la nube.', 'info');
+      toast('⚠ Sin datos en la nube. Carga un Excel.', 'info');
       return false;
     }
-    
+
     const cloudData = result[0].data;
-    
-    // Load all data
-    if (cloudData.liq && cloudData.liq.length) {
-      DATA_LIQ = filterEmpty(cloudData.liq);
-      DATA_SEC = filterEmpty(cloudData.sec || []);
-      actions = cloudData.actions || {liq:{}, sec:{}};
-      causesEdits = cloudData.causes || {};
-      aiCausesData = cloudData.aiCauses || {};
-      src = 'supabase';
-      
-      const ids = WKS().map(w => w.id);
-      wkId = ids[ids.length - 1];
-      
-      updateXLUI();
-      refresh();
-      buildCausesFromExcel();
-      
-      const updated = cloudData.meta?.updated ? new Date(cloudData.meta.updated).toLocaleString('es-CO') : 'fecha desconocida';
-      toast(`✓ Datos cargados desde la nube (actualizado: ${updated})`, 'ok');
-      
-      // Actualizar stats del portal
-      if(typeof window.updatePortalStats === 'function'){
-        setTimeout(function(){ window.updatePortalStats(); }, 100);
-      }
-      
-      return true;
+
+    if (!cloudData.liq || !cloudData.liq.length) {
+      toast('⚠ Sin datos operativos. Carga un Excel.', 'info');
+      return false;
     }
-    
-    return false;
+
+    // Asignar datos — igual que fSetDataFromCloud en financiero
+    DATA_LIQ    = filterEmpty(cloudData.liq);
+    DATA_SEC    = filterEmpty(cloudData.sec || []);
+    actions     = cloudData.actions  || {liq:{}, sec:{}};
+    causesEdits = cloudData.causes   || {};
+    aiCausesData= cloudData.aiCauses || {};
+    src = 'supabase';
+
+    const ids = WKS().map(w => w.id);
+    wkId = ids[ids.length - 1];
+
+    // Ocultar pantalla vacía, mostrar dashboard
+    const emptyEl = document.getElementById('opsEmpty');
+    if (emptyEl) emptyEl.style.display = 'none';
+    const shellEl = document.getElementById('opsShell');
+    if (shellEl) shellEl.style.display = '';
+
+    updateXLUI();
+    refresh();
+    buildCausesFromExcel();
+
+    const updated = cloudData.meta && cloudData.meta.updated
+      ? new Date(cloudData.meta.updated).toLocaleString('es-CO')
+      : 'fecha desconocida';
+    toast('✅ Datos sincronizados (' + updated + ')', 'ok');
+
+    if (typeof window.updatePortalStats === 'function') {
+      setTimeout(function(){ window.updatePortalStats(); }, 200);
+    }
+
+    return true;
   } catch (error) {
     console.error('Supabase load error:', error);
-    toast('Error al cargar de la nube: ' + error.message, 'err');
+    toast('❌ ' + error.message, 'err');
     return false;
   }
 }
