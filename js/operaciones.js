@@ -50,6 +50,32 @@ const ACTIONS_DEF={
 
 /* ════════════ STATE ════════════ */
 
+const K1='inlop_liq_v10', K2='inlop_sec_v10', K3='inlop_meta_v10';
+const KA='inlop_act_v10', KC='inlop_cau_v10', KCA='inlop_excauses_v12';
+
+function filterEmpty(wks) {
+  return wks.filter(w => {
+    const s  = w.sol  || w.rows.reduce((a,r) => a + r.sol,  0);
+    const cv = w.carg || w.rows.reduce((a,r) => a + r.carg, 0);
+    return s > 0 || cv > 0;
+  });
+}
+
+let DATA_LIQ = filterEmpty(JSON.parse(JSON.stringify(EMBED.liq)));
+let DATA_SEC  = filterEmpty(JSON.parse(JSON.stringify(EMBED.sec)));
+let cargo = 'liq', wkId = 'S16', flt = 'all', src = 'demo';
+let actions      = JSON.parse(JSON.stringify(ACTIONS_DEF));
+let causesEdits  = {};
+let editingAction = null;
+let CH           = {};
+let aiCausesData = {};
+
+const WKS   = () => cargo === 'liq' ? DATA_LIQ : DATA_SEC;
+const AWK   = () => WKS().find(w => w.id === wkId) || WKS()[WKS().length-1] || null;
+const isSec = () => cargo === 'sec';
+const META  = 95;
+
+
 // ═══════════════════════════════════════════════════════
 // SUPABASE CONFIGURATION
 // ═══════════════════════════════════════════════════════
