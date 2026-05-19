@@ -532,7 +532,7 @@ input[type=file]{display:none}
 /* ══ 2. PORTAL — estilos del view-portal ══════════════════════ */
 #view-portal{display:block}
 #view-ops{display:none}
-#view-otif{display:none}
+#view-otif{display:none;height:100vh;overflow-y:auto}
 .back-btn{display:none}
 .back-btn.visible{display:inline-flex;position:fixed;bottom:20px;left:20px;z-index:9999;background:var(--c2);border:1px solid var(--line2);color:var(--w1);padding:10px 18px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.4);align-items:center;gap:6px;transition:.2s}
 .back-btn.visible:hover{background:var(--c3);border-color:var(--amber);color:var(--amber)}
@@ -852,7 +852,7 @@ input[type=file]{display:none}
 
 /* ── LAYOUT RAÍZ CON SIDEBAR ────────────────────────────────────── */
 #opsShell {
-  display: flex !important;
+  display: flex;
   flex-direction: column;
   min-height: 100vh;
 }
