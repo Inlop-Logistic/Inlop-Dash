@@ -931,4 +931,7 @@ window.otifInit=function(){
   if(oData)ohRender();
 };
 
+window.ohRender = ohRender;
+window.ohBuildFiltros = ohBuildFiltros;
+
 })();
