@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<title>INLOP · Control Tower BI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@200;300;400;500;600;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+
+<style>
+/* ═══════════════════════════════════════════════════════
+   INLOP CONTROL TOWER — index.html
+   Arquitectura: Portada pura + 3 iframes autónomos
+   Módulos: operaciones.html | otif.html | financiero.html
+   Comunicación: window.parent.volverPortal()
+   ═══════════════════════════════════════════════════════ */
+
+:root {
+  /* Paleta corporativa INLOP */
+  --ink:    #060810;
+  --ink2:   #0a0d1a;
+  --ink3:   #0f1424;
+  --ink4:   #141a2e;
+  --ink5:   #1a2038;
+
+  --red:    #C00613;
+  --red2:   #e0081a;
+  --red3:   rgba(192,6,19,.12);
+  --red4:   rgba(192,6,19,.06);
+
+  --gold:   #d4a853;
+  --gold2:  #b8903a;
+  --gold3:  rgba(212,168,83,.15);
+
+  --navy:   #012A6B;
+  --navy2:  #0a3580;
+  --navy3:  rgba(1,42,107,.5);
+
+  --line:   rgba(255,255,255,.06);
+  --line2:  rgba(255,255,255,.11);
+  --line3:  rgba(255,255,255,.22);
+
+  --w0:  #ffffff;
+  --w1:  #eef2f8;
+  --w2:  #c8d4e8;
+  --w3:  #8fa4c0;
+  --w4:  #576880;
+
+  --green: #00d97e;
+  --amber: #f59e0b;
+  --blue:  #3b82f6;
+
+  /* Módulo accent colors */
+  --ops-color:  #e05a1c;
+  --otif-color: #d4a853;
+  --fin-color:  #2a8fd4;
+
+  --ease:  cubic-bezier(.4,0,.2,1);
+  --ease-out: cubic-bezier(0,.55,.45,1);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--ink);
+  color: var(--w1);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+/* ─── CAPA DE FONDO ANIMADA ─── */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0;
+  background:
+    radial-gradient(ellipse 60% 45% at 15% 0%, rgba(192,6,19,.12) 0%, transparent 65%),
+    radial-gradient(ellipse 50% 40% at 85% 100%, rgba(1,42,107,.18) 0%, transparent 65%),
+    radial-gradient(ellipse 30% 30% at 50% 50%, rgba(212,168,83,.04) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Grid decorativo de fondo */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+  background-size: 64px 64px;
+  pointer-events: none;
+}
+
+/* ─── PORTADA ─── */
+#portal {
+  position: fixed; inset: 0; z-index: 10;
+  display: flex; flex-direction: column;
+  transition: opacity .5s var(--ease), transform .5s var(--ease);
+}
+#portal.hidden {
+  opacity: 0;
+  transform: scale(.97);
+  pointer-events: none;
+}
+
+/* ─── TOPBAR ─── */
+.topbar {
+  position: relative; z-index: 1;
+  background: rgba(6,8,16,.92);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--line);
+  padding: 0 32px;
+  height: 56px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+
+/* Barra de acento rojo arriba */
+.topbar::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--navy) 0%, var(--red) 35%, var(--gold) 65%, var(--navy) 100%);
+}
+
+.topbar-left { display: flex; align-items: center; gap: 20px; }
+
+.brand-logo {
+  display: flex; align-items: center; gap: 10px;
+}
+.brand-mark {
+  width: 32px; height: 32px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--navy), var(--red));
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Oswald', sans-serif;
+  font-weight: 700; font-size: 11px; letter-spacing: .5px;
+  color: #fff; flex-shrink: 0;
+}
+.brand-names { line-height: 1.2; }
+.brand-name {
+  font-family: 'Oswald', sans-serif;
+  font-weight: 500; font-size: 13px; letter-spacing: 2.5px;
+  text-transform: uppercase; color: #fff;
+}
+.brand-sub {
+  font-size: 9px; color: var(--w3); letter-spacing: 1.5px; text-transform: uppercase;
+}
+
+.topbar-div { width: 1px; height: 28px; background: var(--line2); }
+
+.topbar-title {
+  font-family: 'Oswald', sans-serif;
+  font-size: 12px; font-weight: 400;
+  letter-spacing: 2px; text-transform: uppercase; color: var(--w2);
+}
+
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+
+.status-pill {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: 100px;
+  background: rgba(0,217,126,.08); border: 1px solid rgba(0,217,126,.2);
+  font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--green); font-family: 'Oswald', sans-serif;
+}
+.status-pill::before {
+  content: '';
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--green); animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+.topbar-date {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; color: var(--w4); letter-spacing: .5px;
+}
+
+/* ─── HERO AREA ─── */
+.hero {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 32px 24px 0;
+  position: relative; z-index: 1;
+  overflow: hidden;
+}
+
+.hero-eyebrow {
+  font-family: 'Oswald', sans-serif;
+  font-size: 10px; font-weight: 400;
+  letter-spacing: 4px; text-transform: uppercase;
+  color: var(--gold); margin-bottom: 16px;
+  opacity: 0; animation: fadeUp .6s var(--ease) .1s forwards;
+  display: flex; align-items: center; gap: 10px;
+}
+.hero-eyebrow::before, .hero-eyebrow::after {
+  content: ''; flex: 1; max-width: 60px; height: 1px; background: var(--gold2); opacity: .5;
+}
+
+.hero-title {
+  font-family: 'Oswald', sans-serif;
+  font-size: clamp(36px, 5vw, 58px);
+  font-weight: 700; letter-spacing: 3px; text-transform: uppercase;
+  text-align: center; line-height: 1.05; margin-bottom: 14px;
+  opacity: 0; animation: fadeUp .6s var(--ease) .2s forwards;
+}
+.hero-title-main { color: #fff; display: block; }
+.hero-title-accent {
+  color: transparent;
+  background: linear-gradient(90deg, var(--red2), var(--gold));
+  -webkit-background-clip: text; background-clip: text;
+  display: block;
+}
+
+.hero-sub {
+  font-size: 13px; color: var(--w3); text-align: center;
+  max-width: 520px; line-height: 1.7; margin-bottom: 48px;
+  opacity: 0; animation: fadeUp .6s var(--ease) .3s forwards;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── MÓDULOS GRID ─── */
+.modules-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 340px);
+  gap: 20px;
+  opacity: 0; animation: fadeUp .6s var(--ease) .4s forwards;
+}
+
+@media (max-width: 1120px) { .modules-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 800px)  { .modules-grid { grid-template-columns: 1fr; max-width: 400px; } }
+
+/* ─── TARJETA DE MÓDULO ─── */
+.mod-card {
+  position: relative;
+  background: var(--ink3);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 28px 24px 24px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform .25s var(--ease), border-color .25s var(--ease), box-shadow .25s var(--ease);
+  text-decoration: none; color: inherit;
+  display: flex; flex-direction: column;
+  -webkit-user-select: none; user-select: none;
+}
+
+/* Barra superior de acento */
+.mod-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2.5px;
+  border-radius: 14px 14px 0 0;
+  background: var(--card-accent);
+  transition: height .25s var(--ease);
+}
+
+/* Glow de fondo al hover */
+.mod-card::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 70% 60% at 50% 0%, var(--card-glow, rgba(255,255,255,.03)), transparent);
+  opacity: 0; transition: opacity .3s var(--ease);
+  pointer-events: none;
+}
+
+.mod-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--card-border);
+  box-shadow: 0 20px 60px -10px var(--card-shadow), 0 4px 12px rgba(0,0,0,.4);
+}
+.mod-card:hover::before { height: 4px; }
+.mod-card:hover::after  { opacity: 1; }
+.mod-card:active        { transform: translateY(-2px) scale(.99); }
+
+/* Operaciones */
+.mod-ops {
+  --card-accent: linear-gradient(90deg, var(--red), var(--ops-color));
+  --card-border: rgba(224,90,28,.35);
+  --card-shadow: rgba(192,6,19,.25);
+  --card-glow:   rgba(192,6,19,.06);
+}
+/* OTIF */
+.mod-otif {
+  --card-accent: linear-gradient(90deg, var(--gold2), var(--gold));
+  --card-border: rgba(212,168,83,.35);
+  --card-shadow: rgba(212,168,83,.2);
+  --card-glow:   rgba(212,168,83,.06);
+}
+/* Financiero */
+.mod-fin {
+  --card-accent: linear-gradient(90deg, var(--navy2), var(--blue));
+  --card-border: rgba(42,143,212,.35);
+  --card-shadow: rgba(42,143,212,.2);
+  --card-glow:   rgba(42,143,212,.06);
+}
+
+/* Ícono del módulo */
+.mod-icon-wrap {
+  width: 48px; height: 48px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 20px; font-size: 22px;
+  background: var(--card-glow-bg, rgba(255,255,255,.06));
+  border: 1px solid var(--line);
+  transition: background .25s var(--ease), transform .25s var(--ease);
+  flex-shrink: 0;
+}
+.mod-ops  .mod-icon-wrap { background: rgba(192,6,19,.12); border-color: rgba(192,6,19,.2); }
+.mod-otif .mod-icon-wrap { background: rgba(212,168,83,.12); border-color: rgba(212,168,83,.2); }
+.mod-fin  .mod-icon-wrap { background: rgba(42,143,212,.12); border-color: rgba(42,143,212,.2); }
+.mod-card:hover .mod-icon-wrap { transform: scale(1.08); }
+
+.mod-label {
+  font-size: 9px; font-weight: 600; letter-spacing: 2.5px;
+  text-transform: uppercase; margin-bottom: 6px;
+}
+.mod-ops  .mod-label { color: var(--ops-color); }
+.mod-otif .mod-label { color: var(--gold); }
+.mod-fin  .mod-label { color: var(--fin-color); }
+
+.mod-title {
+  font-family: 'Oswald', sans-serif;
+  font-size: 20px; font-weight: 600; letter-spacing: .5px;
+  color: #fff; margin-bottom: 8px; line-height: 1.15;
+}
+
+.mod-desc {
+  font-size: 12px; color: var(--w3); line-height: 1.65;
+  flex: 1;
+}
+
+.mod-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 20px; padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.mod-meta { font-size: 10px; color: var(--w4); font-family: 'DM Mono', monospace; }
+
+.mod-arrow {
+  width: 30px; height: 30px; border-radius: 8px;
+  border: 1px solid var(--line2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; color: var(--w3);
+  transition: all .2s var(--ease);
+}
+.mod-card:hover .mod-arrow {
+  background: var(--card-border);
+  border-color: transparent;
+  color: #fff;
+  transform: translateX(2px);
+}
+
+/* KPI chips en la tarjeta */
+.mod-kpis {
+  display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap;
+}
+.mod-kpi {
+  padding: 3px 9px; border-radius: 4px;
+  font-family: 'DM Mono', monospace; font-size: 9px;
+  background: rgba(255,255,255,.05); border: 1px solid var(--line);
+  color: var(--w3);
+  transition: all .2s var(--ease);
+}
+.mod-card:hover .mod-kpi { border-color: var(--card-border); }
+
+/* ─── BARRA INFERIOR ─── */
+.bottom-bar {
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 32px; z-index: 1; position: relative;
+}
+.bottom-left { font-size: 10px; color: var(--w4); letter-spacing: 1px; }
+.bottom-left b { color: var(--red2); }
+.bottom-right { display: flex; align-items: center; gap: 16px; }
+.bottom-version {
+  font-family: 'DM Mono', monospace; font-size: 9px;
+  color: var(--w4); letter-spacing: 1px;
+}
+.bottom-links { display: flex; gap: 12px; }
+.bottom-link {
+  font-size: 9px; color: var(--w4); letter-spacing: 1px;
+  text-transform: uppercase; cursor: pointer;
+  transition: color .15s;
+}
+.bottom-link:hover { color: var(--w2); }
+
+/* ─── WRAPPER IFRAMES ─── */
+.mod-frame-wrap {
+  position: fixed; inset: 0; z-index: 100;
+  display: none; /* NUNCA usar visibility/opacity para el state inicial */
+}
+.mod-frame-wrap.open { display: block; }
+
+/* Pantalla de carga del iframe */
+.frame-loader {
+  position: absolute; inset: 0;
+  background: var(--ink);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px; z-index: 2;
+  transition: opacity .4s var(--ease);
+}
+.frame-loader.done { opacity: 0; pointer-events: none; }
+
+.loader-spinner {
+  width: 40px; height: 40px;
+  border: 3px solid rgba(255,255,255,.08);
+  border-top-color: var(--loader-color, var(--red));
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loader-txt {
+  font-family: 'Oswald', sans-serif;
+  font-size: 11px; letter-spacing: 3px;
+  text-transform: uppercase; color: var(--w4);
+}
+
+.mod-frame-wrap iframe {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  border: none; display: block;
+}
+
+/* ─── OVERLAY DECORATIVO: SCAN LINE ─── */
+.scanline {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(0,0,0,.025) 3px,
+    rgba(0,0,0,.025) 4px
+  );
+  opacity: .4;
+}
+
+/* ─── CORNER DECORATIONS ─── */
+.corner {
+  position: fixed; z-index: 0; pointer-events: none;
+}
+.corner-tl { top: 60px; left: 20px; }
+.corner-br { bottom: 40px; right: 20px; }
+.corner svg { opacity: .08; }
+
+/* ─── ANIMACIONES ENTRADA ─── */
+.mod-card { animation: cardIn .5s var(--ease-out) both; }
+.mod-card:nth-child(1) { animation-delay: .45s; }
+.mod-card:nth-child(2) { animation-delay: .55s; }
+.mod-card:nth-child(3) { animation-delay: .65s; }
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 600px) {
+  .topbar { padding: 0 16px; }
+  .topbar-div, .topbar-title, .topbar-date { display: none; }
+  .hero { padding: 24px 16px 0; }
+  .hero-eyebrow::before, .hero-eyebrow::after { display: none; }
+  .bottom-bar { padding: 10px 16px; }
+  .bottom-right { display: none; }
+}
+
+/* ─── FUTURE: MÓDULOS ADICIONALES (pre-arquitectura) ─── */
+/* Cuando se agreguen nuevos módulos, añadir .mod-X y su wrapper aquí */
+/* Login system: agregar #login-overlay con z-index: 200 */
+/* Auth state: data-auth="none|logged|admin" en <html> */
+
+</style>
+</head>
+<body>
+
+<!-- Decoraciones -->
+<div class="scanline"></div>
+<div class="corner corner-tl">
+  <svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M0 0 H60 V4 H4 V60 H0 Z" fill="white"/>
+  </svg>
+</div>
+<div class="corner corner-br">
+  <svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M60 60 H0 V56 H56 V0 H60 Z" fill="white"/>
+  </svg>
+</div>
+
+<!-- ══════════════════════════════════════════
+     PORTADA — Launcher ejecutivo
+     ══════════════════════════════════════════ -->
+<div id="portal">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="brand-logo">
+        <div class="brand-mark">IN</div>
+        <div class="brand-names">
+          <div class="brand-name">INLOP</div>
+          <div class="brand-sub">Integral Logistics Operations</div>
+        </div>
+      </div>
+      <div class="topbar-div"></div>
+      <div class="topbar-title">Control Tower BI</div>
+    </div>
+    <div class="topbar-right">
+      <div class="status-pill">Sistema operativo</div>
+      <div class="topbar-date" id="topDate">—</div>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <main class="hero">
+    <div class="hero-eyebrow">Centro de Inteligencia Operativa</div>
+    <h1 class="hero-title">
+      <span class="hero-title-main">Plataforma BI</span>
+      <span class="hero-title-accent">Ejecutiva</span>
+    </h1>
+    <p class="hero-sub">
+      Selecciona un módulo para acceder al dashboard correspondiente.
+      Cada módulo opera de forma autónoma con sincronización en tiempo real vía Supabase.
+    </p>
+
+    <!-- MÓDULOS -->
+    <div class="modules-grid">
+
+      <!-- OPERACIONES -->
+      <div class="mod-card mod-ops" onclick="abrirVista('ops')" role="button" tabindex="0" aria-label="Abrir módulo de Operaciones">
+        <div class="mod-icon-wrap">🚛</div>
+        <div class="mod-label">Módulo 01</div>
+        <div class="mod-title">Centro de Control Operativo</div>
+        <div class="mod-kpis">
+          <span class="mod-kpi">Nominación semanal</span>
+          <span class="mod-kpi">OTIF por ruta</span>
+          <span class="mod-kpi">IA integrada</span>
+        </div>
+        <div class="mod-desc">
+          Dashboard de nominaciones Carga Líquida y Seca. Cumplimiento, causas, acciones correctivas y análisis histórico por semana y cliente.
+        </div>
+        <div class="mod-footer">
+          <span class="mod-meta">Supabase · ID=1</span>
+          <div class="mod-arrow">→</div>
+        </div>
+      </div>
+
+      <!-- OTIF -->
+      <div class="mod-card mod-otif" onclick="abrirVista('otif')" role="button" tabindex="0" aria-label="Abrir módulo OTIF">
+        <div class="mod-icon-wrap">📊</div>
+        <div class="mod-label">Módulo 02</div>
+        <div class="mod-title">Indicador OTIF</div>
+        <div class="mod-kpis">
+          <span class="mod-kpi">On Time</span>
+          <span class="mod-kpi">In Full</span>
+          <span class="mod-kpi">Ranking clientes</span>
+        </div>
+        <div class="mod-desc">
+          Informe de desempeño logístico. On Time & In Full por cliente, semana y línea de negocio. Exportación Word / PDF para comités.
+        </div>
+        <div class="mod-footer">
+          <span class="mod-meta">Supabase · ID=2</span>
+          <div class="mod-arrow">→</div>
+        </div>
+      </div>
+
+      <!-- FINANCIERO -->
+      <div class="mod-card mod-fin" onclick="abrirVista('fin')" role="button" tabindex="0" aria-label="Abrir módulo Financiero">
+        <div class="mod-icon-wrap">💼</div>
+        <div class="mod-label">Módulo 03</div>
+        <div class="mod-title">Dashboard Financiero</div>
+        <div class="mod-kpis">
+          <span class="mod-kpi">Facturación</span>
+          <span class="mod-kpi">Cartera</span>
+          <span class="mod-kpi">Flujo de caja</span>
+        </div>
+        <div class="mod-desc">
+          Consolidado financiero: facturación, cartera por cobrar, bancos, saldos y gastos administrativos. Filtros por mes, semana y cliente.
+        </div>
+        <div class="mod-footer">
+          <span class="mod-meta">Supabase · ID=4</span>
+          <div class="mod-arrow">→</div>
+        </div>
+      </div>
+
+    </div><!-- /modules-grid -->
+  </main><!-- /hero -->
+
+  <!-- BOTTOM BAR -->
+  <footer class="bottom-bar">
+    <div class="bottom-left">
+      INLOP · <b>Integral Logistics Operations S.A.S.</b> · Cartagena de Indias
+    </div>
+    <div class="bottom-right">
+      <div class="bottom-links">
+        <span class="bottom-link">Soporte</span>
+        <span class="bottom-link">v2.0</span>
+      </div>
+      <div class="bottom-version" id="buildDate">—</div>
+    </div>
+  </footer>
+
+</div><!-- /portal -->
+
+
+<!-- ══════════════════════════════════════════
+     IFRAMES — Un div por módulo.
+     Se muestran con display:block al abrir.
+     Los iframes cargan src="" lazy.
+     ══════════════════════════════════════════ -->
+
+<!-- OPERACIONES -->
+<div id="wrap-ops" class="mod-frame-wrap">
+  <div class="frame-loader" id="loader-ops" style="--loader-color:var(--ops-color)">
+    <div class="loader-spinner"></div>
+    <div class="loader-txt">Cargando Operaciones…</div>
+  </div>
+  <iframe id="frame-ops" src=""
+    onload="frameLoaded('ops')"
+    title="Centro de Control Operativo — INLOP">
+  </iframe>
+</div>
+
+<!-- OTIF -->
+<div id="wrap-otif" class="mod-frame-wrap">
+  <div class="frame-loader" id="loader-otif" style="--loader-color:var(--gold)">
+    <div class="loader-spinner"></div>
+    <div class="loader-txt">Cargando OTIF…</div>
+  </div>
+  <iframe id="frame-otif" src=""
+    onload="frameLoaded('otif')"
+    title="Indicador OTIF — INLOP">
+  </iframe>
+</div>
+
+<!-- FINANCIERO -->
+<div id="wrap-fin" class="mod-frame-wrap">
+  <div class="frame-loader" id="loader-fin" style="--loader-color:var(--fin-color)">
+    <div class="loader-spinner"></div>
+    <div class="loader-txt">Cargando Financiero…</div>
+  </div>
+  <iframe id="frame-fin" src=""
+    onload="frameLoaded('fin')"
+    title="Dashboard Financiero — INLOP">
+  </iframe>
+</div>
+
+<!-- ══════════════════════════════════════════
+     JAVASCRIPT — Navegación robusta
+     Principios:
+     1. abrirVista(id)  → muestra iframe, oculta portal
+     2. volverPortal()  → muestra portal, oculta iframe
+     3. Los módulos llaman window.parent.volverPortal()
+     4. Sin localStorage auto-restore (causa pantalla azul)
+     5. src="" lazy → se asigna solo la primera vez
+     ══════════════════════════════════════════ -->
+<script>
+'use strict';
+
+/* ── Mapa de módulos ────────────────────────────────── */
+var MODULOS = {
+  ops:  { src: 'operaciones.html', wrap: 'wrap-ops',  loader: 'loader-ops',  frame: 'frame-ops'  },
+  otif: { src: 'otif.html',        wrap: 'wrap-otif', loader: 'loader-otif', frame: 'frame-otif' },
+  fin:  { src: 'financiero.html',  wrap: 'wrap-fin',  loader: 'loader-fin',  frame: 'frame-fin'  }
+};
+
+/* ── Estado ──────────────────────────────────────────── */
+var _activeModule = null;  // id del módulo abierto, o null si portada
+var _loaded = {};          // { ops: true, otif: false, fin: true }
+
+/* ── ABRIR MÓDULO ───────────────────────────────────── */
+function abrirVista(id) {
+  var mod = MODULOS[id];
+  if (!mod) { console.warn('[INLOP] Módulo desconocido:', id); return; }
+
+  // 1. Ocultar portada con animación
+  var portal = document.getElementById('portal');
+  portal.classList.add('hidden');
+
+  // 2. Mostrar el wrapper del módulo
+  Object.keys(MODULOS).forEach(function(k) {
+    document.getElementById(MODULOS[k].wrap).classList.remove('open');
+  });
+  document.getElementById(mod.wrap).classList.add('open');
+
+  // 3. Cargar iframe la PRIMERA vez (lazy — evita cargas simultáneas)
+  if (!_loaded[id]) {
+    var frame = document.getElementById(mod.frame);
+    var loader = document.getElementById(mod.loader);
+    if (loader) loader.classList.remove('done');
+    frame.src = mod.src;
+    // El evento onload llama frameLoaded(id) → oculta el loader
+  } else {
+    // Ya cargado: solo ocultar el loader
+    var loader2 = document.getElementById(mod.loader);
+    if (loader2) loader2.classList.add('done');
+  }
+
+  _activeModule = id;
+  console.log('[INLOP] ✓ Módulo abierto:', id, '— src:', mod.src);
+}
+window.abrirVista = abrirVista;
+
+/* ── CALLBACK CUANDO CARGA EL IFRAME ───────────────── */
+function frameLoaded(id) {
+  _loaded[id] = true;
+  var loader = document.getElementById(MODULOS[id] ? MODULOS[id].loader : '');
+  if (loader) {
+    // Pequeño delay para que el módulo pinte su UI antes de quitar el loader
+    setTimeout(function() { loader.classList.add('done'); }, 350);
+  }
+  console.log('[INLOP] ✓ iframe cargado:', id);
+}
+window.frameLoaded = frameLoaded;
+
+/* ── VOLVER A PORTADA ───────────────────────────────── */
+/*
+   Esta función es llamada por los módulos hijos vía:
+     window.parent.volverPortal()
+   Todos los módulos adjuntos ya implementan este patrón.
+*/
+function volverPortal() {
+  // Ocultar todos los wrappers
+  Object.keys(MODULOS).forEach(function(k) {
+    document.getElementById(MODULOS[k].wrap).classList.remove('open');
+  });
+
+  // Mostrar portada
+  var portal = document.getElementById('portal');
+  portal.classList.remove('hidden');
+
+  _activeModule = null;
+  console.log('[INLOP] ✓ Volver a portada');
+}
+window.volverPortal = volverPortal;
+
+/* ── TECLADO ────────────────────────────────────────── */
+document.addEventListener('keydown', function(e) {
+  // Escape vuelve a la portada si hay módulo abierto
+  if (e.key === 'Escape' && _activeModule) {
+    volverPortal();
+  }
+  // Atajo numérico: 1=ops, 2=otif, 3=fin (solo desde portada)
+  if (!_activeModule) {
+    if (e.key === '1') abrirVista('ops');
+    if (e.key === '2') abrirVista('otif');
+    if (e.key === '3') abrirVista('fin');
+  }
+});
+
+/* ── ACCESIBILIDAD: Teclas en tarjetas ──────────────── */
+document.querySelectorAll('.mod-card').forEach(function(card) {
+  card.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      card.click();
+    }
+  });
+});
+
+/* ── FECHA EN TOPBAR ────────────────────────────────── */
+(function() {
+  var now = new Date();
+  var opts = { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' };
+  var dateStr = now.toLocaleDateString('es-CO', opts).toUpperCase();
+  var timeStr = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+
+  var dateEl = document.getElementById('topDate');
+  if (dateEl) dateEl.textContent = dateStr + ' · ' + timeStr;
+
+  var buildEl = document.getElementById('buildDate');
+  if (buildEl) buildEl.textContent = 'BUILD ' + now.toISOString().slice(0,10).replace(/-/g,'.');
+
+  // Actualizar hora cada minuto
+  setInterval(function() {
+    var t = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    if (dateEl) dateEl.textContent = dateStr + ' · ' + t;
+  }, 60000);
+})();
+
+/* ── ARRANQUE ───────────────────────────────────────── */
+/*
+   IMPORTANTE: NO restauramos lastView desde localStorage.
+   Esto causaba el bug de "pantalla azul al cargar".
+   El usuario siempre arranca desde la portada y navega manualmente.
+*/
+console.log('[INLOP] ✓ Control Tower BI iniciada. Módulos disponibles:', Object.keys(MODULOS).join(', '));
+</script>
+
+</body>
+</html>
