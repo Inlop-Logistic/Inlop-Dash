@@ -40,7 +40,46 @@ setInterval(async () => {
   catch(e) { console.error("❌ Error renovando token:", e.message); }
 }, TOKEN_TTL);
 
-async function proxyGet(path, res) {
+// ─── PRIORIDAD OPERACIONAL POR ESTADO ───────────────────
+const ESTADO_PRIORIDAD = {
+  'en transíto':  1,
+  'en tránsito':  1,
+  'en transito':  1,
+  'cargando':     2,
+  'descargando':  3,
+  'iniciado':     4,
+  'pernoctando':  5,
+  'sin activar':  6,
+  'sin asignar':  7,
+  'completado':   8,
+  'finalizado':   9,
+  'cancelado':   10,
+};
+
+function getPrioridad(state_travel) {
+  const s = (state_travel || '').toLowerCase().trim();
+  for (const [key, prio] of Object.entries(ESTADO_PRIORIDAD)) {
+    if (s.includes(key)) return prio;
+  }
+  return 5; // default medio
+}
+
+function sortViajes(data) {
+  return data.sort((a, b) => {
+    const pA = getPrioridad(a.state_travel);
+    const pB = getPrioridad(b.state_travel);
+
+    // 1. Primero por prioridad de estado
+    if (pA !== pB) return pA - pB;
+
+    // 2. Dentro del mismo estado, más reciente primero (GPS)
+    const dateA = new Date(a.latest_gps_report || 0);
+    const dateB = new Date(b.latest_gps_report || 0);
+    return dateB - dateA;
+  });
+}
+
+async function proxyGet(path, res, transform) {
   try {
     const token = await getToken();
     const response = await fetch(`${BASE_URL}${path}`, {
@@ -48,6 +87,19 @@ async function proxyGet(path, res) {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
     });
     const text = await response.text();
+
+    if (transform) {
+      try {
+        const data = JSON.parse(text);
+        const result = transform(data);
+        res.setHeader("Content-Type", "application/json");
+        res.send(JSON.stringify(result));
+        return;
+      } catch(e) {
+        console.error("Error transformando datos:", e.message);
+      }
+    }
+
     res.setHeader("Content-Type", "application/json");
     res.send(text);
   } catch (err) {
@@ -56,8 +108,23 @@ async function proxyGet(path, res) {
   }
 }
 
-// Viajes activos (Resume)
-app.get("/api/data", (req, res) => proxyGet("/Resume", res));
+// ─── ENDPOINTS ──────────────────────────────────────────
+
+// Viajes activos — ordenados por prioridad operacional
+app.get("/api/data", (req, res) => {
+  proxyGet("/Resume", res, (data) => {
+    if (!Array.isArray(data)) return data;
+
+    const sorted = sortViajes(data);
+
+    // Log para debug en Railway Logs
+    console.log(`📦 ${sorted.length} viajes | Estados: ${
+      sorted.map(v => v.state_travel).join(', ')
+    }`);
+
+    return sorted;
+  });
+});
 
 // Alarmas históricas
 app.get("/api/alarmas", (req, res) => proxyGet("/Alarm", res));
@@ -65,8 +132,18 @@ app.get("/api/alarmas", (req, res) => proxyGet("/Alarm", res));
 // Viajes pendientes de monitorear
 app.get("/api/pendientes", (req, res) => proxyGet("/Travel/search", res));
 
+// Health check
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    tokenActivo: !!currentToken,
+    ultimoLogin: lastLogin ? new Date(lastLogin).toISOString() : null
+  });
+});
+
 app.listen(process.env.PORT || 3000, async () => {
-  console.log("🚀 Servidor INLOP Torre de Control iniciado");
+  console.log("🚀 INLOP Torre de Control — Servidor iniciado");
+  console.log("📊 Lógica: En Tránsito > Cargando > Descargando > Iniciado > Pernoctando > Completado");
   try { await refreshToken(); }
   catch(e) { console.error("❌ Login inicial fallido:", e.message); }
 });
