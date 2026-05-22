@@ -6,7 +6,7 @@ const app = express();
 
 app.use(cors());
 
-app.get("/TorreControl", async (req, res) => {
+app.get("/api/data", async (req, res) => {
   try {
     const response = await fetch("https://app.controlt.com.co/apipublic/api/Resume", {
       method: "GET",
