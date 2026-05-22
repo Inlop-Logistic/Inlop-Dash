@@ -42,18 +42,18 @@ setInterval(async () => {
 
 // ─── PRIORIDAD OPERACIONAL POR ESTADO ───────────────────
 const ESTADO_PRIORIDAD = {
-  'en transíto':  1,
-  'en tránsito':  1,
-  'en transito':  1,
-  'cargando':     2,
-  'descargando':  3,
-  'iniciado':     4,
-  'pernoctando':  5,
-  'sin activar':  6,
-  'sin asignar':  7,
-  'completado':   8,
-  'finalizado':   9,
-  'cancelado':   10,
+  'en transíto': 1,
+  'en tránsito': 1,
+  'en transito': 1,
+  'cargando':    2,
+  'descargando': 3,
+  'iniciado':    4,
+  'pernoctando': 5,
+  'sin activar': 6,
+  'sin asignar': 7,
+  'completado':  8,
+  'finalizado':  9,
+  'cancelado':  10,
 };
 
 function getPrioridad(state_travel) {
@@ -61,76 +61,81 @@ function getPrioridad(state_travel) {
   for (const [key, prio] of Object.entries(ESTADO_PRIORIDAD)) {
     if (s.includes(key)) return prio;
   }
-  return 5; // default medio
+  return 5;
 }
 
 function sortViajes(data) {
-  return data.sort((a, b) => {
+  return [...data].sort((a, b) => {
     const pA = getPrioridad(a.state_travel);
     const pB = getPrioridad(b.state_travel);
-
-    // 1. Primero por prioridad de estado
     if (pA !== pB) return pA - pB;
-
-    // 2. Dentro del mismo estado, más reciente primero (GPS)
     const dateA = new Date(a.latest_gps_report || 0);
     const dateB = new Date(b.latest_gps_report || 0);
     return dateB - dateA;
   });
 }
 
-async function proxyGet(path, res, transform) {
+// ─── HELPER — fetch seguro que siempre devuelve JSON válido ─
+async function safeFetch(path, fallback = []) {
+  const token = await getToken();
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
+  });
+  const text = await response.text();
   try {
-    const token = await getToken();
-    const response = await fetch(`${BASE_URL}${path}`, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
-    });
-    const text = await response.text();
-
-    if (transform) {
-      try {
-        const data = JSON.parse(text);
-        const result = transform(data);
-        res.setHeader("Content-Type", "application/json");
-        res.send(JSON.stringify(result));
-        return;
-      } catch(e) {
-        console.error("Error transformando datos:", e.message);
-      }
+    const data = JSON.parse(text);
+    // Si ControlT devuelve { Message: "Authorization has been denied..." }
+    if (data && data.Message && data.Message.toLowerCase().includes('denied')) {
+      console.warn(`⚠️  ${path} bloqueado por permisos — devolviendo fallback`);
+      return fallback;
     }
-
-    res.setHeader("Content-Type", "application/json");
-    res.send(text);
-  } catch (err) {
-    console.error(`ERROR ${path}:`, err);
-    res.status(500).json({ error: "Fallo proxy Railway", detail: err.message });
+    return data;
+  } catch(e) {
+    console.warn(`⚠️  ${path} devolvió respuesta no-JSON — devolviendo fallback`);
+    return fallback;
   }
 }
 
 // ─── ENDPOINTS ──────────────────────────────────────────
 
 // Viajes activos — ordenados por prioridad operacional
-app.get("/api/data", (req, res) => {
-  proxyGet("/Resume", res, (data) => {
-    if (!Array.isArray(data)) return data;
-
-    const sorted = sortViajes(data);
-
-    // Log para debug en Railway Logs
-    console.log(`📦 ${sorted.length} viajes | Estados: ${
-      sorted.map(v => v.state_travel).join(', ')
-    }`);
-
-    return sorted;
-  });
+app.get("/api/data", async (req, res) => {
+  try {
+    const data = await safeFetch("/Resume", []);
+    const arr = Array.isArray(data) ? data : data.data || data.result || [];
+    const sorted = sortViajes(arr);
+    console.log(`📦 ${sorted.length} viajes | ${sorted.map(v => v.state_travel).join(', ')}`);
+    res.json(sorted);
+  } catch(err) {
+    console.error("ERROR /api/data:", err.message);
+    res.status(500).json({ error: "Fallo proxy Railway", detail: err.message });
+  }
 });
 
 // Alarmas históricas
-app.get("/api/alarmas", (req, res) => proxyGet("/Alarm", res));
+app.get("/api/alarmas", async (req, res) => {
+  try {
+    const data = await safeFetch("/Alarm", []);
+    const arr = Array.isArray(data) ? data : data.data || data.result || [];
+    res.json(arr);
+  } catch(err) {
+    console.error("ERROR /api/alarmas:", err.message);
+    res.json([]);
+  }
+});
 
-// Viajes pendientes de monitorear
-app.get("/api/pendientes", (req, res) => proxyGet("/Travel/search", res));
+// Viajes pendientes — silencioso si está bloqueado
+app.get("/api/pendientes", async (req, res) => {
+  try {
+    const data = await safeFetch("/Travel/search", []);
+    const arr = Array.isArray(data) ? data : data.data || data.result || [];
+    res.json(arr);
+  } catch(err) {
+    console.warn("⚠️  /api/pendientes no disponible:", err.message);
+    res.json([]); // Nunca romper el dashboard
+  }
+});
 
 // Health check
 app.get("/health", (req, res) => {
@@ -143,7 +148,7 @@ app.get("/health", (req, res) => {
 
 app.listen(process.env.PORT || 3000, async () => {
   console.log("🚀 INLOP Torre de Control — Servidor iniciado");
-  console.log("📊 Lógica: En Tránsito > Cargando > Descargando > Iniciado > Pernoctando > Completado");
+  console.log("📊 Prioridad: En Tránsito > Cargando > Descargando > Iniciado > Pernoctando > Completado");
   try { await refreshToken(); }
   catch(e) { console.error("❌ Login inicial fallido:", e.message); }
 });
