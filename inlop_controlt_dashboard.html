@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>INLOP · Torre de Control</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg-base:     #080d14;
+    --bg-panel:    #0d1520;
+    --bg-card:     #111c2d;
+    --bg-row:      #0f1a28;
+    --bg-row-alt:  #0b1521;
+    --border:      #1a2d45;
+    --border-glow: #1e4976;
+    --accent:      #0ea5e9;
+    --accent-dim:  #0369a1;
+    --text-head:   #e2f0ff;
+    --text-body:   #8bafc8;
+    --text-muted:  #4a6480;
+    --green:  #22c55e; --green-bg:  #052e16;
+    --blue:   #38bdf8; --blue-bg:   #082f49;
+    --yellow: #fbbf24; --yellow-bg: #27200a;
+    --purple: #a78bfa; --purple-bg: #1e1036;
+    --red:    #f87171; --red-bg:    #2d0d0d;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg-base);
+    color: var(--text-body);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,.12) 2px,
+      rgba(0,0,0,.12) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Grid background */
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(14,165,233,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(14,165,233,.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* Fonts */
+  .font-mono-tech { font-family: 'Share Tech Mono', monospace; }
+  .font-rajdhani  { font-family: 'Rajdhani', sans-serif; }
+
+  /* Header */
+  header {
+    background: linear-gradient(180deg, #0b1824 0%, rgba(11,24,36,0) 100%);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+    backdrop-filter: blur(12px);
+  }
+
+  /* Glow effects */
+  .glow-accent { box-shadow: 0 0 20px rgba(14,165,233,.15); }
+  .glow-text   { text-shadow: 0 0 20px rgba(14,165,233,.5); }
+
+  /* KPI Card */
+  .kpi-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color .2s, transform .15s;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--card-accent, var(--accent)), transparent);
+  }
+  .kpi-card:hover { border-color: var(--border-glow); transform: translateY(-2px); }
+
+  .kpi-number {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 2rem;
+    line-height: 1;
+    color: var(--text-head);
+  }
+
+  /* Table */
+  .data-table { width: 100%; border-collapse: collapse; }
+  .data-table thead tr {
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-glow);
+  }
+  .data-table th {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    padding: .75rem 1rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .data-table tbody tr {
+    border-bottom: 1px solid rgba(26,45,69,.5);
+    transition: background .15s;
+  }
+  .data-table tbody tr:nth-child(odd)  { background: var(--bg-row); }
+  .data-table tbody tr:nth-child(even) { background: var(--bg-row-alt); }
+  .data-table tbody tr:hover { background: rgba(14,165,233,.07); }
+  .data-table td {
+    padding: .75rem 1rem;
+    font-size: .8rem;
+    color: var(--text-body);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .data-table td:first-child {
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--accent);
+    font-size: .78rem;
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-flex; align-items: center; gap: .3rem;
+    padding: .2rem .65rem;
+    border-radius: 3px;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    border: 1px solid;
+  }
+  .badge-green  { color: var(--green);  background: var(--green-bg);  border-color: rgba(34,197,94,.25); }
+  .badge-blue   { color: var(--blue);   background: var(--blue-bg);   border-color: rgba(56,189,248,.25); }
+  .badge-yellow { color: var(--yellow); background: var(--yellow-bg); border-color: rgba(251,191,36,.25); }
+  .badge-purple { color: var(--purple); background: var(--purple-bg); border-color: rgba(167,139,250,.25); }
+  .badge-red    { color: var(--red);    background: var(--red-bg);    border-color: rgba(248,113,113,.25); }
+  .badge-gray   { color: #94a3b8; background: #1e293b; border-color: rgba(148,163,184,.2); }
+
+  /* Progress bar */
+  .progress-bar {
+    width: 80px; height: 6px;
+    background: rgba(14,165,233,.12);
+    border-radius: 3px; overflow: hidden;
+    display: inline-block;
+  }
+  .progress-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+    transition: width .4s ease;
+  }
+
+  /* Input / Select */
+  input[type="text"], select {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-body);
+    padding: .5rem .85rem;
+    font-size: .82rem;
+    outline: none;
+    transition: border-color .2s;
+  }
+  input[type="text"]:focus, select:focus { border-color: var(--accent); }
+  input[type="text"]::placeholder { color: var(--text-muted); }
+  select option { background: var(--bg-panel); }
+
+  /* Filter button */
+  .filter-btn {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .4rem .9rem;
+    border-radius: 5px;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: .78rem;
+    font-weight: 600;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-body);
+    transition: all .15s;
+  }
+  .filter-btn:hover, .filter-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(14,165,233,.08);
+  }
+  .filter-btn.active { box-shadow: 0 0 10px rgba(14,165,233,.15); }
+
+  /* Spinner */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+
+  /* Refresh pulse */
+  @keyframes pulse-ring {
+    0%   { transform: scale(1); opacity: .8; }
+    70%  { transform: scale(1.4); opacity: 0; }
+    100% { transform: scale(1.4); opacity: 0; }
+  }
+  .live-dot {
+    position: relative; display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%; background: var(--green);
+  }
+  .live-dot::before {
+    content: '';
+    position: absolute; inset: -3px;
+    border-radius: 50%; border: 1.5px solid var(--green);
+    animation: pulse-ring 1.8s ease-out infinite;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-base); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-glow); }
+
+  /* Responsive table wrapper */
+  .table-scroll { overflow-x: auto; }
+
+  /* Error state */
+  .error-box {
+    background: var(--red-bg);
+    border: 1px solid rgba(248,113,113,.3);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    color: var(--red);
+    font-size: .82rem;
+    display: flex; align-items: center; gap: .75rem;
+  }
+
+  /* Countdown ring */
+  .countdown-ring {
+    transform: rotate(-90deg);
+  }
+  .countdown-ring circle {
+    stroke-dasharray: 50.27;
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset 1s linear;
+  }
+
+  @keyframes fadeInRow {
+    from { opacity: 0; transform: translateX(-8px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  .fade-in-row { animation: fadeInRow .3s ease both; }
+</style>
+</head>
+<body class="grid-bg">
+
+<!-- ═══════════════════════════════════════ HEADER ═══════════════════════════════════════ -->
+<header class="px-4 py-3">
+  <div class="max-w-screen-2xl mx-auto flex items-center justify-between gap-4 flex-wrap">
+    <div class="flex items-center gap-4">
+      <div class="flex flex-col">
+        <div class="flex items-center gap-2">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="1.5">
+            <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/>
+            <polyline points="12 2 12 22"/>
+            <line x1="2" y1="8.5" x2="22" y2="8.5"/>
+            <line x1="2" y1="15.5" x2="22" y2="15.5"/>
+          </svg>
+          <span class="font-rajdhani font-bold text-xl glow-text" style="color:var(--text-head);letter-spacing:.08em">INLOP</span>
+          <span class="font-mono-tech text-xs" style="color:var(--text-muted)">·</span>
+          <span class="font-rajdhani font-semibold text-sm" style="color:var(--accent)">TORRE DE CONTROL</span>
+        </div>
+        <span class="font-mono-tech text-xs" style="color:var(--text-muted)">Integral Logistics Operations S.A.S. — ControlT Live Feed</span>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-5 flex-wrap">
+      <!-- Timestamp -->
+      <div class="flex flex-col items-end">
+        <span id="clock" class="font-mono-tech text-sm" style="color:var(--accent)">--:--:--</span>
+        <span id="date-label" class="font-mono-tech text-xs" style="color:var(--text-muted)">-- --- ----</span>
+      </div>
+
+      <!-- Countdown -->
+      <div class="flex items-center gap-2" title="Próxima actualización automática">
+        <svg width="20" height="20" class="countdown-ring">
+          <circle id="countdown-circle" cx="10" cy="10" r="8" fill="none" stroke="var(--accent)" stroke-width="2"/>
+        </svg>
+        <span class="font-mono-tech text-xs" style="color:var(--text-muted)">AUTO&nbsp;</span>
+        <span id="countdown-label" class="font-mono-tech text-xs" style="color:var(--accent)">30s</span>
+      </div>
+
+      <!-- Live indicator -->
+      <div class="flex items-center gap-2">
+        <div class="live-dot" id="live-dot"></div>
+        <span class="font-rajdhani font-semibold text-xs" style="color:var(--green);letter-spacing:.08em" id="live-label">LIVE</span>
+      </div>
+
+      <!-- Refresh button -->
+      <button id="btn-refresh" onclick="loadData()" class="filter-btn" style="border-color:var(--accent-dim)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="23 4 23 10 17 10"/>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg>
+        Actualizar
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════ MAIN ═════════════════════════════════════════ -->
+<main class="max-w-screen-2xl mx-auto px-4 py-6 space-y-6">
+
+  <!-- Error banner -->
+  <div id="error-box" class="error-box hidden">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span id="error-msg">Error al conectar con la API de ControlT.</span>
+  </div>
+
+  <!-- ─── KPI CARDS ─── -->
+  <div id="kpi-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+    <!-- Generated by JS -->
+  </div>
+
+  <!-- ─── CONTROLS ─── -->
+  <div class="flex flex-wrap items-center gap-3">
+    <!-- Search -->
+    <div class="relative flex-1 min-w-[200px] max-w-xs">
+      <svg class="absolute left-2.5 top-1/2 -translate-y-1/2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input type="text" id="search-input" placeholder="Placa, conductor, viaje…"
+             style="padding-left:2rem; width:100%"
+             oninput="applyFilters()"/>
+    </div>
+
+    <!-- Quick filters -->
+    <div class="flex flex-wrap gap-2" id="filter-buttons">
+      <button class="filter-btn active" data-filter="all"    onclick="setFilter('all',this)">Todos</button>
+      <button class="filter-btn" data-filter="completado"    onclick="setFilter('completado',this)">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block"></span>Completado
+      </button>
+      <button class="filter-btn" data-filter="en tránsito"   onclick="setFilter('en tránsito',this)">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--blue);display:inline-block"></span>En Tránsito
+      </button>
+      <button class="filter-btn" data-filter="iniciado"      onclick="setFilter('iniciado',this)">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--yellow);display:inline-block"></span>Iniciado
+      </button>
+      <button class="filter-btn" data-filter="descargando"   onclick="setFilter('descargando',this)">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--purple);display:inline-block"></span>Descargando
+      </button>
+    </div>
+
+    <!-- Result count -->
+    <span id="result-count" class="font-mono-tech text-xs ml-auto" style="color:var(--text-muted)"></span>
+  </div>
+
+  <!-- ─── TABLE ─── -->
+  <div class="rounded-lg overflow-hidden glow-accent" style="border:1px solid var(--border)">
+    <!-- Loading overlay -->
+    <div id="loading-overlay" class="flex flex-col items-center justify-center gap-4 py-20">
+      <div class="spinner"></div>
+      <span class="font-mono-tech text-sm" style="color:var(--text-muted)">Conectando con ControlT API…</span>
+    </div>
+
+    <!-- Table -->
+    <div id="table-wrap" class="table-scroll hidden">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Nº Viaje</th>
+            <th>Placa</th>
+            <th>Conductor</th>
+            <th>Teléfono</th>
+            <th>Estado</th>
+            <th>Último Evento</th>
+            <th>Ubicación Actual</th>
+            <th>Avance</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Empty state -->
+    <div id="empty-state" class="hidden flex flex-col items-center justify-center gap-3 py-16">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5">
+        <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+      </svg>
+      <span class="font-rajdhani font-semibold text-sm" style="color:var(--text-muted)">No se encontraron viajes con ese filtro</span>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="flex justify-between items-center text-xs" style="color:var(--text-muted)">
+    <span id="last-update" class="font-mono-tech">Última actualización: —</span>
+    <span class="font-mono-tech">INLOP · Operaciones &amp; Cumplimiento Comercial</span>
+  </div>
+
+</main>
+
+<!-- ═══════════════════════════════════════ SCRIPT ═══════════════════════════════════════ -->
+<script>
+const API_URL   = 'https://app.controlt.com.co/apipublic/api/Resume';
+const API_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6Ijk1MjQiLCJpbmZvVXNlciI6IntcImlkVXNlclwiOjk1MjQsXCJuYW1lXCI6XCJBY3R1YWxpemFyXCIsXCJsYXN0TmFtZVwiOlwiQWN0dWFsaXphclwiLFwicHJvZmlsZU5hbWVcIjpcIlBhcm5lcnMgV1NcIixcImlkUHJvZmlsZVwiOjEwLFwidXNlcm5hbWVcIjpcIklubG9wXCIsXCJpZGVudGlmaWNhdGlvblVzZXJcIjpcIkFjdHVhbGl6YXJcIixcImlkQ29tcGFueVwiOjc4OTczOSxcIm5pdENvbXBhbnlcIjpcIjkwMTM2MjU0NTNcIixcIm5hbWVDb21wYW55XCI6XCJJbnRlZ3JhbCBMb2dpc3RpY3MgT3BlcmF0aW9ucyBTQVNcIixcInR5cGVVc2VyXCI6MSxcInNlcnZpY2VzXCI6W10sXCJzdWJTZXJ2aWNlc1wiOltdfSIsIm5iZiI6MTc3OTM5MjcxMCwiZXhwIjoxNzc5NDc5MTEwLCJpYXQiOjE3NzkzOTI3MTAsImlzcyI6Imh0dHA6Ly9sb2NhbGhvc3Q6ODAxMSIsImF1ZCI6Imh0dHA6Ly9sb2NhbGhvc3Q6ODAxMSJ9.DBZPL-G591kC6R2RuPKo34zAH4yHW5Z-eJXyKegIaYQ';
+const REFRESH_INTERVAL = 30; // seconds
+
+let allTrips      = [];
+let currentFilter = 'all';
+let countdown     = REFRESH_INTERVAL;
+let refreshTimer  = null;
+let countdownTimer= null;
+
+// ─── CLOCK ───────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('es-CO', { hour12: false });
+  document.getElementById('date-label').textContent =
+    now.toLocaleDateString('es-CO', { day:'2-digit', month:'short', year:'numeric' }).toUpperCase();
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ─── COUNTDOWN ───────────────────────────────────────────
+const CIRC = 2 * Math.PI * 8; // r=8
+function startCountdown() {
+  clearInterval(countdownTimer);
+  countdown = REFRESH_INTERVAL;
+  countdownTimer = setInterval(() => {
+    countdown--;
+    document.getElementById('countdown-label').textContent = countdown + 's';
+    const pct = countdown / REFRESH_INTERVAL;
+    document.getElementById('countdown-circle').style.strokeDashoffset = (CIRC * (1 - pct)).toFixed(2);
+    if (countdown <= 0) {
+      clearInterval(countdownTimer);
+      loadData();
+    }
+  }, 1000);
+}
+
+// ─── BADGE ───────────────────────────────────────────────
+function stateBadge(state) {
+  const s = (state || '').toLowerCase().trim();
+  const map = {
+    'completado':  ['badge-green',  '✓', 'Completado'],
+    'en tránsito': ['badge-blue',   '⬤', 'En Tránsito'],
+    'en transito': ['badge-blue',   '⬤', 'En Tránsito'],
+    'iniciado':    ['badge-yellow', '◆', 'Iniciado'],
+    'descargando': ['badge-purple', '↓', 'Descargando'],
+    'cancelado':   ['badge-red',    '✕', 'Cancelado'],
+  };
+  // fuzzy match
+  for (const [key, [cls, icon, label]] of Object.entries(map)) {
+    if (s.includes(key)) return `<span class="badge ${cls}">${icon} ${label}</span>`;
+  }
+  const raw = state || '—';
+  return `<span class="badge badge-gray">${raw}</span>`;
+}
+
+// ─── PROGRESS ────────────────────────────────────────────
+function progressCell(pct) {
+  const p = parseFloat(pct) || 0;
+  const clamped = Math.min(100, Math.max(0, p));
+  const color = clamped >= 100 ? 'var(--green)' : clamped > 50 ? 'var(--accent)' : 'var(--yellow)';
+  return `
+    <div class="flex items-center gap-2">
+      <div class="progress-bar">
+        <div class="progress-fill" style="width:${clamped}%;background:linear-gradient(90deg,${color}99,${color})"></div>
+      </div>
+      <span class="font-mono-tech text-xs" style="color:${color}">${clamped.toFixed(0)}%</span>
+    </div>`;
+}
+
+// ─── NORMALIZE DATA ──────────────────────────────────────
+// ControlT may return different field names; this handles variations
+function normalizeTrip(item) {
+  return {
+    trip_number:              item.trip_number   || item.tripNumber   || item.numeroViaje    || item.id || '—',
+    license_plate:            item.license_plate || item.licensePlate || item.placa          || '—',
+    driver_name:              item.driver_name   || item.driverName   || item.conductor      || item.nombreConductor || '—',
+    driver_phone:             item.driver_phone  || item.driverPhone  || item.telefono       || item.telefonoConductor || '—',
+    state_travel:             item.state_travel  || item.stateTravel  || item.estado         || item.estadoViaje || '—',
+    current_address_location: item.current_address_location || item.currentAddressLocation
+                              || item.ubicacion  || item.ubicacionActual || item.address || '—',
+    last_event:               item.last_event    || item.lastEvent    || item.ultimoEvento   || item.evento || '—',
+    percentage_travel:        item.percentage_travel ?? item.percentageTravel ?? item.porcentaje ?? item.avance ?? 0,
+  };
+}
+
+// ─── KPI CARDS ───────────────────────────────────────────
+function renderKPIs(trips) {
+  const total       = trips.length;
+  const completados = trips.filter(t => (t.state_travel||'').toLowerCase().includes('completado')).length;
+  const enTransito  = trips.filter(t => (t.state_travel||'').toLowerCase().includes('tr')).length;
+  const iniciados   = trips.filter(t => (t.state_travel||'').toLowerCase().includes('iniciado')).length;
+  const descargando = trips.filter(t => (t.state_travel||'').toLowerCase().includes('descarg')).length;
+  const avgPct      = total ? (trips.reduce((s,t) => s + (parseFloat(t.percentage_travel)||0), 0) / total) : 0;
+
+  const cards = [
+    { label:'Total Viajes', value: total,               accent:'#0ea5e9', icon:'🚛' },
+    { label:'Completados',  value: completados,          accent:'#22c55e', icon:'✅' },
+    { label:'En Tránsito',  value: enTransito,           accent:'#38bdf8', icon:'🔵' },
+    { label:'Iniciados',    value: iniciados,            accent:'#fbbf24', icon:'🟡' },
+    { label:'Descargando',  value: descargando,          accent:'#a78bfa', icon:'🟣' },
+    { label:'Avance Prom.', value: avgPct.toFixed(1)+'%', accent:'#f97316', icon:'📊' },
+  ];
+
+  document.getElementById('kpi-grid').innerHTML = cards.map(c => `
+    <div class="kpi-card" style="--card-accent:${c.accent}">
+      <div class="flex justify-between items-start mb-2">
+        <span class="font-rajdhani font-semibold text-xs uppercase tracking-widest" style="color:var(--text-muted)">${c.label}</span>
+        <span style="font-size:1.1rem">${c.icon}</span>
+      </div>
+      <div class="kpi-number" style="color:${c.accent}">${c.value}</div>
+    </div>
+  `).join('');
+}
+
+// ─── RENDER TABLE ────────────────────────────────────────
+function renderTable(trips) {
+  const tbody = document.getElementById('table-body');
+  if (!trips.length) {
+    tbody.innerHTML = '';
+    document.getElementById('table-wrap').classList.add('hidden');
+    document.getElementById('empty-state').classList.remove('hidden');
+    document.getElementById('result-count').textContent = '0 resultados';
+    return;
+  }
+  document.getElementById('table-wrap').classList.remove('hidden');
+  document.getElementById('empty-state').classList.add('hidden');
+  document.getElementById('result-count').textContent = trips.length + ' viaje' + (trips.length !== 1 ? 's' : '');
+
+  tbody.innerHTML = trips.map((t, i) => `
+    <tr class="fade-in-row" style="animation-delay:${Math.min(i*0.03,0.5)}s">
+      <td>${t.trip_number}</td>
+      <td><span class="font-rajdhani font-bold text-sm" style="color:var(--text-head)">${t.license_plate}</span></td>
+      <td style="color:var(--text-head)">${t.driver_name}</td>
+      <td>${t.driver_phone}</td>
+      <td>${stateBadge(t.state_travel)}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.last_event}">${t.last_event}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.current_address_location}">${t.current_address_location}</td>
+      <td>${progressCell(t.percentage_travel)}</td>
+    </tr>
+  `).join('');
+}
+
+// ─── FILTER & SEARCH ─────────────────────────────────────
+function applyFilters() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  let filtered = allTrips;
+
+  if (currentFilter !== 'all') {
+    filtered = filtered.filter(t =>
+      (t.state_travel || '').toLowerCase().includes(currentFilter)
+    );
+  }
+  if (q) {
+    filtered = filtered.filter(t =>
+      Object.values(t).some(v => String(v).toLowerCase().includes(q))
+    );
+  }
+  renderTable(filtered);
+}
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters();
+}
+
+// ─── LOAD DATA ───────────────────────────────────────────
+async function loadData() {
+  // Reset
+  clearInterval(countdownTimer);
+  document.getElementById('loading-overlay').classList.remove('hidden');
+  document.getElementById('table-wrap').classList.add('hidden');
+  document.getElementById('empty-state').classList.add('hidden');
+  document.getElementById('error-box').classList.add('hidden');
+  document.getElementById('live-dot').style.background = 'var(--yellow)';
+  document.getElementById('live-label').textContent = 'SYNC…';
+
+  try {
+    const res = await fetch(API_URL, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${API_TOKEN}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
+
+    const raw = await res.json();
+
+    // ControlT may return { data: [...] } or directly an array
+    let items = Array.isArray(raw) ? raw
+      : Array.isArray(raw.data)   ? raw.data
+      : Array.isArray(raw.result) ? raw.result
+      : Array.isArray(raw.trips)  ? raw.trips
+      : Array.isArray(raw.viajes) ? raw.viajes
+      : [];
+
+    allTrips = items.map(normalizeTrip);
+
+    renderKPIs(allTrips);
+    applyFilters();
+
+    // Update status
+    document.getElementById('loading-overlay').classList.add('hidden');
+    document.getElementById('last-update').textContent =
+      'Última actualización: ' + new Date().toLocaleTimeString('es-CO', { hour12: false });
+    document.getElementById('live-dot').style.background = 'var(--green)';
+    document.getElementById('live-label').textContent = 'LIVE';
+
+  } catch (err) {
+    document.getElementById('loading-overlay').classList.add('hidden');
+    document.getElementById('error-box').classList.remove('hidden');
+    document.getElementById('error-msg').textContent =
+      `Error al conectar con ControlT: ${err.message}. Verifica CORS o el token JWT.`;
+    document.getElementById('live-dot').style.background = 'var(--red)';
+    document.getElementById('live-label').textContent = 'ERROR';
+
+    // If we already have data, keep showing it
+    if (allTrips.length) {
+      document.getElementById('table-wrap').classList.remove('hidden');
+    }
+  }
+
+  startCountdown();
+}
+
+// ─── INIT ────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>
