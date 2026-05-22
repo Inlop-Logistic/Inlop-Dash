@@ -141,7 +141,7 @@ app.get("/api/pendientes", async (req, res) => {
       if (!str) return null;
       const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
       if (!m) return null;
-      const [, mm, dd, yyyy, hh, min] = m;
+      const [, mm, dd, yyyy, hh, min] = m; // MM/DD/YYYY
       return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:00`);
     }
 
@@ -160,7 +160,7 @@ app.get("/api/pendientes", async (req, res) => {
       if (!str) return new Date(0);
       const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
       if (!m) return new Date(0);
-      const [, dd, mm, yyyy, hh, min] = m;
+      const [, mm, dd, yyyy, hh, min] = m; // MM/DD/YYYY
       return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:00`);
     }
 
