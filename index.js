@@ -76,16 +76,19 @@ function sortViajes(data) {
 }
 
 // ─── HELPER — fetch seguro que siempre devuelve JSON válido ─
-async function safeFetch(path, fallback = []) {
+async function safeFetch(path, fallback = [], extraHeaders = {}) {
   const token = await getToken();
   const response = await fetch(`${BASE_URL}${path}`, {
     method: "GET",
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      ...extraHeaders
+    }
   });
   const text = await response.text();
   try {
     const data = JSON.parse(text);
-    // Si ControlT devuelve { Message: "Authorization has been denied..." }
     if (data && data.Message && data.Message.toLowerCase().includes('denied')) {
       console.warn(`⚠️  ${path} bloqueado por permisos — devolviendo fallback`);
       return fallback;
@@ -99,10 +102,10 @@ async function safeFetch(path, fallback = []) {
 
 // ─── ENDPOINTS ──────────────────────────────────────────
 
-// Viajes activos — size=100 para traer todos, ordenados por prioridad operacional
+// Viajes activos — size=100 via header para traer todos
 app.get("/api/data", async (req, res) => {
   try {
-    const data = await safeFetch("/Resume?size=100&page=1", []);
+    const data = await safeFetch("/Resume", [], { size: "100", page: "1" });
     const arr = Array.isArray(data) ? data : data.data || data.result || [];
     const sorted = sortViajes(arr);
     console.log(`📦 ${sorted.length} viajes | ${sorted.map(v => v.state_travel).join(', ')}`);
@@ -113,10 +116,10 @@ app.get("/api/data", async (req, res) => {
   }
 });
 
-// Alarmas históricas — size=500 para traer más alarmas
+// Alarmas históricas — size=500 via header
 app.get("/api/alarmas", async (req, res) => {
   try {
-    const data = await safeFetch("/Alarm?size=500&page=1", []);
+    const data = await safeFetch("/Alarm", [], { size: "500", page: "1" });
     const arr = Array.isArray(data) ? data : data.data || data.result || [];
     res.json(arr);
   } catch(err) {
@@ -125,29 +128,26 @@ app.get("/api/alarmas", async (req, res) => {
   }
 });
 
-// Viajes pendientes — Sin Activar (45) y Sin Asignar (46): asignados pero no iniciados
+// Viajes pendientes — Sin Activar y Sin Asignar
 app.get("/api/pendientes", async (req, res) => {
   try {
-    const data = await safeFetch("/Resume?size=100&page=1", []);
+    const data = await safeFetch("/Resume", [], { size: "100", page: "1" });
     const arr = Array.isArray(data) ? data : data.data || data.result || [];
 
-    // Filtrar: Sin Activar = asignado no iniciado | Sin Asignar = sin vehículo/conductor
     const pendientes = arr.filter(v => {
       const estado = (v.state_travel || '').toLowerCase().trim();
       return estado.includes('sin activar') || estado.includes('sin asignar');
     });
 
-    // Ordenar por created_on más reciente (MM/DD/YYYY)
     function parseCreated(str) {
       if (!str) return new Date(0);
       const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
       if (!m) return new Date(0);
-      const [, mm, dd, yyyy, hh, min] = m; // MM/DD/YYYY
+      const [, mm, dd, yyyy, hh, min] = m;
       return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:00`);
     }
 
     pendientes.sort((a, b) => parseCreated(b.created_on) - parseCreated(a.created_on));
-
     console.log(`⏳ Pendientes (Sin Activar/Sin Asignar): ${pendientes.length} de ${arr.length} viajes`);
     res.json(pendientes);
   } catch(err) {
