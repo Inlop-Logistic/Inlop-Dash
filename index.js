@@ -76,15 +76,11 @@ function sortViajes(data) {
 }
 
 // ─── HELPER — fetch seguro que siempre devuelve JSON válido ─
-async function safeFetch(path, fallback = [], extraHeaders = {}) {
+async function safeFetch(path, fallback = []) {
   const token = await getToken();
   const response = await fetch(`${BASE_URL}${path}`, {
     method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-      ...extraHeaders
-    }
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
   });
   const text = await response.text();
   try {
@@ -102,10 +98,10 @@ async function safeFetch(path, fallback = [], extraHeaders = {}) {
 
 // ─── ENDPOINTS ──────────────────────────────────────────
 
-// Viajes activos — size=100 via header para traer todos
+// Viajes activos — size=100 para traer todos, ordenados por prioridad operacional
 app.get("/api/data", async (req, res) => {
   try {
-    const data = await safeFetch("/Resume", [], { size: "100", page: "1" });
+    const data = await safeFetch("/Resume?size=100&page=1", []);
     const arr = Array.isArray(data) ? data : data.data || data.result || [];
     const sorted = sortViajes(arr);
     console.log(`📦 ${sorted.length} viajes | ${sorted.map(v => v.state_travel).join(', ')}`);
@@ -116,10 +112,10 @@ app.get("/api/data", async (req, res) => {
   }
 });
 
-// Alarmas históricas — size=500 via header
+// Alarmas históricas
 app.get("/api/alarmas", async (req, res) => {
   try {
-    const data = await safeFetch("/Alarm", [], { size: "500", page: "1" });
+    const data = await safeFetch("/Alarm?size=500&page=1", []);
     const arr = Array.isArray(data) ? data : data.data || data.result || [];
     res.json(arr);
   } catch(err) {
@@ -131,7 +127,7 @@ app.get("/api/alarmas", async (req, res) => {
 // Viajes pendientes — Sin Activar y Sin Asignar
 app.get("/api/pendientes", async (req, res) => {
   try {
-    const data = await safeFetch("/Resume", [], { size: "100", page: "1" });
+    const data = await safeFetch("/Resume?size=100&page=1", []);
     const arr = Array.isArray(data) ? data : data.data || data.result || [];
 
     const pendientes = arr.filter(v => {
