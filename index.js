@@ -1,9 +1,12 @@
 import express from "express";
 import fetch from "node-fetch";
+import cors from "cors";
 
 const app = express();
 
-app.get("/api/torre-control", async (req, res) => {
+app.use(cors());
+
+app.get("/TorreControl", async (req, res) => {
   try {
     const response = await fetch("https://app.controlt.com.co/apipublic/api/Resume", {
       method: "GET",
@@ -13,7 +16,7 @@ app.get("/api/torre-control", async (req, res) => {
       }
     });
 
-    const text = await response.text(); // importante para debug real
+    const text = await response.text();
 
     res.setHeader("Content-Type", "application/json");
     res.send(text);
