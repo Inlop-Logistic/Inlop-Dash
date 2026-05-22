@@ -125,15 +125,45 @@ app.get("/api/alarmas", async (req, res) => {
   }
 });
 
-// Viajes pendientes — silencioso si está bloqueado
+// Viajes pendientes — filtrados por últimos 3 días, silencioso si está bloqueado
 app.get("/api/pendientes", async (req, res) => {
   try {
     const data = await safeFetch("/Travel/search", []);
     const arr = Array.isArray(data) ? data : data.data || data.result || [];
-    res.json(arr);
+
+    // created_on viene como MM/DD/YYYY HH:MM:SS — parseo correcto
+    function parseCreatedOn(str) {
+      if (!str) return null;
+      // Formato MM/DD/YYYY HH:MM:SS
+      const match = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})/);
+      if (match) {
+        const [, mm, dd, yyyy, hh, min, ss] = match;
+        return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:${ss}`);
+      }
+      return new Date(str); // fallback
+    }
+
+    const ahora = new Date();
+    const hace3Dias = new Date(ahora.getTime() - (3 * 24 * 60 * 60 * 1000));
+
+    const filtrados = arr.filter(v => {
+      const fecha = parseCreatedOn(v.created_on);
+      if (!fecha || isNaN(fecha.getTime())) return true; // si no parsea, incluir
+      return fecha >= hace3Dias;
+    });
+
+    // Ordenar por created_on más reciente primero
+    filtrados.sort((a, b) => {
+      const dA = parseCreatedOn(a.created_on) || new Date(0);
+      const dB = parseCreatedOn(b.created_on) || new Date(0);
+      return dB - dA;
+    });
+
+    console.log(`⏳ Pendientes: ${arr.length} total → ${filtrados.length} en últimos 3 días`);
+    res.json(filtrados);
   } catch(err) {
     console.warn("⚠️  /api/pendientes no disponible:", err.message);
-    res.json([]); // Nunca romper el dashboard
+    res.json([]);
   }
 });
 
