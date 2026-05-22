@@ -99,10 +99,10 @@ async function safeFetch(path, fallback = []) {
 
 // ─── ENDPOINTS ──────────────────────────────────────────
 
-// Viajes activos — ordenados por prioridad operacional
+// Viajes activos — size=100 para traer todos, ordenados por prioridad operacional
 app.get("/api/data", async (req, res) => {
   try {
-    const data = await safeFetch("/Resume", []);
+    const data = await safeFetch("/Resume?size=100&page=1", []);
     const arr = Array.isArray(data) ? data : data.data || data.result || [];
     const sorted = sortViajes(arr);
     console.log(`📦 ${sorted.length} viajes | ${sorted.map(v => v.state_travel).join(', ')}`);
@@ -113,10 +113,10 @@ app.get("/api/data", async (req, res) => {
   }
 });
 
-// Alarmas históricas
+// Alarmas históricas — size=500 para traer más alarmas
 app.get("/api/alarmas", async (req, res) => {
   try {
-    const data = await safeFetch("/Alarm", []);
+    const data = await safeFetch("/Alarm?size=500&page=1", []);
     const arr = Array.isArray(data) ? data : data.data || data.result || [];
     res.json(arr);
   } catch(err) {
@@ -125,38 +125,20 @@ app.get("/api/alarmas", async (req, res) => {
   }
 });
 
-// Viajes pendientes — Iniciados con avance 0 y sin GPS reciente (aún no han arrancado)
+// Viajes pendientes — Sin Activar (45) y Sin Asignar (46): asignados pero no iniciados
 app.get("/api/pendientes", async (req, res) => {
   try {
-    const data = await safeFetch("/Resume", []);
+    const data = await safeFetch("/Resume?size=100&page=1", []);
     const arr = Array.isArray(data) ? data : data.data || data.result || [];
 
-    // Detectar viajes que operacionalmente están "esperando arrancar":
-    // - Estado Iniciado
-    // - Avance 0%
-    // - Sin señal GPS reciente (más de 6 horas sin reporte) O sin coordenadas
-    const ahora = new Date();
-
-    function parseGPS(str) {
-      if (!str) return null;
-      const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
-      if (!m) return null;
-      const [, mm, dd, yyyy, hh, min] = m; // MM/DD/YYYY
-      return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:00`);
-    }
-
+    // Filtrar: Sin Activar = asignado no iniciado | Sin Asignar = sin vehículo/conductor
     const pendientes = arr.filter(v => {
-      const estado = (v.state_travel || '').toLowerCase();
-      const avance = parseFloat(v.percentage_travel) || 0;
-      const gps = parseGPS(v.latest_gps_report);
-      const sinGPSReciente = !gps || (ahora - gps) > (6 * 60 * 60 * 1000);
-      const sinCoordenadas = !v.latitude || parseFloat(v.latitude) === 0;
-
-      return estado.includes('inici') && avance === 0 && (sinGPSReciente || sinCoordenadas);
+      const estado = (v.state_travel || '').toLowerCase().trim();
+      return estado.includes('sin activar') || estado.includes('sin asignar');
     });
 
-    // Ordenar por activated_on más reciente (DD/MM/YYYY)
-    function parseActivated(str) {
+    // Ordenar por created_on más reciente (MM/DD/YYYY)
+    function parseCreated(str) {
       if (!str) return new Date(0);
       const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
       if (!m) return new Date(0);
@@ -164,9 +146,9 @@ app.get("/api/pendientes", async (req, res) => {
       return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:00`);
     }
 
-    pendientes.sort((a, b) => parseActivated(b.activated_on) - parseActivated(a.activated_on));
+    pendientes.sort((a, b) => parseCreated(b.created_on) - parseCreated(a.created_on));
 
-    console.log(`⏳ Pendientes (sin arrancar): ${pendientes.length} de ${arr.length} viajes`);
+    console.log(`⏳ Pendientes (Sin Activar/Sin Asignar): ${pendientes.length} de ${arr.length} viajes`);
     res.json(pendientes);
   } catch(err) {
     console.warn("⚠️  /api/pendientes error:", err.message);
