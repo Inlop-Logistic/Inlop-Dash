@@ -125,54 +125,51 @@ app.get("/api/alarmas", async (req, res) => {
   }
 });
 
-// Viajes pendientes — solo del día actual, excluyendo los ya activos en Resume
+// Viajes pendientes — Iniciados con avance 0 y sin GPS reciente (aún no han arrancado)
 app.get("/api/pendientes", async (req, res) => {
   try {
-    // Traer ambos endpoints en paralelo
-    const [pendData, activeData] = await Promise.all([
-      safeFetch("/Travel/search", []),
-      safeFetch("/Resume", [])
-    ]);
+    const data = await safeFetch("/Resume", []);
+    const arr = Array.isArray(data) ? data : data.data || data.result || [];
 
-    const pendArr   = Array.isArray(pendData)   ? pendData   : pendData.data   || [];
-    const activeArr = Array.isArray(activeData)  ? activeData : activeData.data || [];
+    // Detectar viajes que operacionalmente están "esperando arrancar":
+    // - Estado Iniciado
+    // - Avance 0%
+    // - Sin señal GPS reciente (más de 6 horas sin reporte) O sin coordenadas
+    const ahora = new Date();
 
-    // IDs de viajes que ya están activos en Resume
-    const activeIds = new Set(activeArr.map(v => v.trip_number).filter(Boolean));
-
-    // schedulate_origin viene como DD/MM/YYYY HH:MM:SS
-    function parseSchedulate(str) {
+    function parseGPS(str) {
       if (!str) return null;
-      const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):?(\d{2})?/);
+      const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
       if (!m) return null;
-      const [, dd, mm, yyyy, hh, min, ss='00'] = m;
-      return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:${ss.padStart(2,'0')}`);
+      const [, mm, dd, yyyy, hh, min] = m;
+      return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:00`);
     }
 
-    const ahora    = new Date();
-    const hace24h  = new Date(ahora.getTime() - (24 * 60 * 60 * 1000));
+    const pendientes = arr.filter(v => {
+      const estado = (v.state_travel || '').toLowerCase();
+      const avance = parseFloat(v.percentage_travel) || 0;
+      const gps = parseGPS(v.latest_gps_report);
+      const sinGPSReciente = !gps || (ahora - gps) > (6 * 60 * 60 * 1000);
+      const sinCoordenadas = !v.latitude || parseFloat(v.latitude) === 0;
 
-    const filtrados = pendArr.filter(v => {
-      // Excluir si ya está activo en Viajes
-      if (activeIds.has(v.trip_number)) return false;
-
-      // Solo últimas 24 horas por schedulate_origin
-      const fecha = parseSchedulate(v.schedulate_origin);
-      if (!fecha || isNaN(fecha.getTime())) return false;
-      return fecha >= hace24h;
+      return estado.includes('inici') && avance === 0 && (sinGPSReciente || sinCoordenadas);
     });
 
-    // Más reciente primero
-    filtrados.sort((a, b) => {
-      const dA = parseSchedulate(a.schedulate_origin) || new Date(0);
-      const dB = parseSchedulate(b.schedulate_origin) || new Date(0);
-      return dB - dA;
-    });
+    // Ordenar por activated_on más reciente (DD/MM/YYYY)
+    function parseActivated(str) {
+      if (!str) return new Date(0);
+      const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
+      if (!m) return new Date(0);
+      const [, dd, mm, yyyy, hh, min] = m;
+      return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:00`);
+    }
 
-    console.log(`⏳ Pendientes: ${pendArr.length} total → ${filtrados.length} del día (excluidos ${activeIds.size} ya activos)`);
-    res.json(filtrados);
+    pendientes.sort((a, b) => parseActivated(b.activated_on) - parseActivated(a.activated_on));
+
+    console.log(`⏳ Pendientes (sin arrancar): ${pendientes.length} de ${arr.length} viajes`);
+    res.json(pendientes);
   } catch(err) {
-    console.warn("⚠️  /api/pendientes no disponible:", err.message);
+    console.warn("⚠️  /api/pendientes error:", err.message);
     res.json([]);
   }
 });
