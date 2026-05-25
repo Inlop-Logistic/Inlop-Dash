@@ -15,8 +15,9 @@ let lastLogin    = null;
 
 // ─── CACHÉ EN MEMORIA ───────────────────────────────────
 const cache = {
-  viajes:   { data: [], ts: 0 },
-  alarmas:  { data: [], ts: 0 },
+  viajes:    { data: [], ts: 0 },
+  alarmas:   { data: [], ts: 0 },
+  pendientes:{ data: [], ts: 0 },
 };
 
 function cacheVigente(key) {
@@ -108,19 +109,66 @@ function parseCreated(str) {
   return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:00`);
 }
 
-// ─── SYNC PROACTIVO — llama a ControlT cada 60s en background ─
+async function syncPendientes() {
+  try {
+    const data = await safeFetch("/Travel/search", []);
+    const arr = Array.isArray(data) ? data : data.data || data.result || [];
+    cache.pendientes.data = arr;
+    cache.pendientes.ts   = Date.now();
+    console.log(`⏳ Pendientes actualizados: ${arr.length} viajes en Travel/search`);
+  } catch(e) {
+    console.error("❌ Error sync pendientes:", e.message);
+  }
+}
 async function syncViajes() {
   try {
-    const data = await safeFetch("/Resume?size=100&page=1", null);
-    if (!data) return; // respuesta inválida — mantener caché anterior
-    const arr = Array.isArray(data) ? data : data.data || data.result || [];
-    if (arr.length === 0) {
+    // Página 1 — viajes activos principales
+    const data1 = await safeFetch("/Resume?size=100&page=1", null);
+    if (!data1) return;
+    const arr1 = Array.isArray(data1) ? data1 : data1.data || data1.result || [];
+    if (arr1.length === 0) {
       console.warn("⚠️  Resume devolvió 0 viajes — manteniendo caché anterior");
       return;
     }
-    cache.viajes.data = sortViajes(arr);
+
+    let todos = [...arr1];
+
+    // Si la página 1 llegó llena (100 registros) puede haber más — traer página 2
+    if (arr1.length >= 100) {
+      try {
+        const data2 = await safeFetch("/Resume?size=100&page=2", null);
+        const arr2 = Array.isArray(data2) ? data2 : (data2?.data || data2?.result || []);
+        if (arr2.length > 0) {
+          todos = [...todos, ...arr2];
+          console.log(`📄 Página 2 cargada: ${arr2.length} viajes adicionales`);
+
+          // Si página 2 también llena, traer página 3
+          if (arr2.length >= 100) {
+            try {
+              const data3 = await safeFetch("/Resume?size=100&page=3", null);
+              const arr3 = Array.isArray(data3) ? data3 : (data3?.data || data3?.result || []);
+              if (arr3.length > 0) {
+                todos = [...todos, ...arr3];
+                console.log(`📄 Página 3 cargada: ${arr3.length} viajes adicionales`);
+              }
+            } catch(e) { console.warn("⚠️  Página 3 no disponible:", e.message); }
+          }
+        }
+      } catch(e) { console.warn("⚠️  Página 2 no disponible:", e.message); }
+    }
+
+    // Deduplicar por trip_number
+    const seen = new Set();
+    const dedup = todos.filter(v => {
+      const k = v.trip_number || v.id_monitoring_order;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+
+    cache.viajes.data = sortViajes(dedup);
     cache.viajes.ts   = Date.now();
-    console.log(`📦 Caché actualizado: ${arr.length} viajes | ${arr.map(v => v.state_travel).join(', ')}`);
+    console.log(`📦 Caché: ${dedup.length} viajes totales (p1:${arr1.length} + extras)`);
   } catch(e) {
     console.error("❌ Error sync viajes:", e.message);
   }
@@ -155,24 +203,72 @@ app.get("/api/alarmas", (req, res) => {
   res.json(cache.alarmas.data);
 });
 
-// Pendientes — filtrado del caché de viajes
-app.get("/api/pendientes", (req, res) => {
-  const pendientes = cache.viajes.data.filter(v => {
-    const estado = (v.state_travel || '').toLowerCase().trim();
-    return estado.includes('sin activar') || estado.includes('sin asignar');
-  }).sort((a, b) => parseCreated(b.created_on) - parseCreated(a.created_on));
-  res.json(pendientes);
+// Pendientes — Travel/search: incluye pasado (3 días) y futuro (7 días)
+app.get("/api/pendientes", async (req, res) => {
+  try {
+    // Usar caché si está vigente (5 min), si no refrescar
+    if ((Date.now() - cache.pendientes.ts) > 5 * 60 * 1000 || cache.pendientes.data.length === 0) {
+      await syncPendientes();
+    }
+    const arr = cache.pendientes.data;
+
+    function parseSchedulate(str) {
+      if (!str) return null;
+      const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):?(\d{2})?/);
+      if (!m) return null;
+      const [, dd, mm, yyyy, hh, min, ss = '00'] = m;
+      return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:${ss.padStart(2,'0')}`);
+    }
+
+    const ahora     = new Date();
+    const en7dias   = new Date(ahora.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const activeIds = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
+
+    const filtrados = arr.filter(v => {
+      // Si ya está activo en Resume → no mostrar
+      if (activeIds.has(v.trip_number)) return false;
+      const fecha = parseSchedulate(v.schedulate_origin);
+      // Sin fecha → no incluir (no sabemos cuándo es)
+      if (!fecha || isNaN(fecha.getTime())) return false;
+      // Solo futuros (desde ahora hasta 7 días adelante)
+      return fecha >= ahora && fecha <= en7dias;
+    });
+
+    filtrados.sort((a, b) => {
+      const dA = parseSchedulate(a.schedulate_origin) || new Date(0);
+      const dB = parseSchedulate(b.schedulate_origin) || new Date(0);
+      return dA - dB;
+    });
+
+    console.log(`⏳ Pendientes: ${arr.length} en Travel/search → ${filtrados.length} futuros pendientes (excluidos ${activeIds.size} ya activos en Resume)`);
+    res.json(filtrados);
+  } catch(err) {
+    console.warn("⚠️  /api/pendientes error:", err.message);
+    res.json([]);
+  }
 });
 
 // Health check con info del caché
 app.get("/health", (req, res) => {
+  const estados = {};
+  cache.viajes.data.forEach(v => {
+    const e = v.state_travel || 'desconocido';
+    estados[e] = (estados[e] || 0) + 1;
+  });
   res.json({
     status: "ok",
     tokenActivo: !!currentToken,
     ultimoLogin: lastLogin ? new Date(lastLogin).toISOString() : null,
     cache: {
-      viajes:  { cantidad: cache.viajes.data.length,  edad_seg: Math.round((Date.now() - cache.viajes.ts) / 1000) },
-      alarmas: { cantidad: cache.alarmas.data.length, edad_seg: Math.round((Date.now() - cache.alarmas.ts) / 1000) }
+      viajes:  {
+        cantidad: cache.viajes.data.length,
+        edad_seg: Math.round((Date.now() - cache.viajes.ts) / 1000),
+        por_estado: estados
+      },
+      alarmas: {
+        cantidad: cache.alarmas.data.length,
+        edad_seg: Math.round((Date.now() - cache.alarmas.ts) / 1000)
+      }
     }
   });
 });
@@ -184,14 +280,14 @@ app.listen(process.env.PORT || 3000, async () => {
 
   try {
     await refreshToken();
-    // Primer sync al arrancar
     await syncViajes();
     await syncAlarmas();
+    await syncPendientes();
   } catch(e) {
     console.error("❌ Error inicialización:", e.message);
   }
 
-  // Sync en background cada 60 segundos — escalonado para no saturar
-  setInterval(syncViajes,   60 * 1000);
-  setInterval(syncAlarmas, 70 * 1000); // 10s después para no coincidir
+  setInterval(syncViajes,    60 * 1000);
+  setInterval(syncAlarmas,   70 * 1000);
+  setInterval(syncPendientes, 5 * 60 * 1000); // cada 5 minutos
 });
