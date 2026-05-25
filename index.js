@@ -115,7 +115,13 @@ async function syncPendientes() {
     const arr = Array.isArray(data) ? data : data.data || data.result || [];
     cache.pendientes.data = arr;
     cache.pendientes.ts   = Date.now();
-    console.log(`⏳ Pendientes actualizados: ${arr.length} viajes en Travel/search`);
+    console.log(`⏳ Travel/search devolvió: ${arr.length} viajes`);
+    if(arr.length > 0){
+      console.log(`⏳ CAMPOS: ${Object.keys(arr[0]).join(', ')}`);
+      console.log(`⏳ PRIMER REGISTRO: ${JSON.stringify(arr[0])}`);
+    } else {
+      console.log(`⏳ RAW completo de Travel/search:`, JSON.stringify(data).slice(0, 500));
+    }
   } catch(e) {
     console.error("❌ Error sync pendientes:", e.message);
   }
@@ -240,7 +246,11 @@ app.get("/api/pendientes", async (req, res) => {
       return dA - dB;
     });
 
-    console.log(`⏳ Pendientes: ${arr.length} en Travel/search → ${filtrados.length} futuros pendientes (excluidos ${activeIds.size} ya activos en Resume)`);
+    console.log(`⏳ Cache pendientes: ${arr.length} total, activeIds: ${activeIds.size}`);
+    if(arr.length > 0){
+      console.log(`⏳ Muestra schedulate_origin:`, arr.slice(0,3).map(v=>`${v.trip_number}=${v.schedulate_origin}`).join(' | '));
+    }
+    console.log(`⏳ Resultado filtrado: ${filtrados.length} futuros pendientes`);
     res.json(filtrados);
   } catch(err) {
     console.warn("⚠️  /api/pendientes error:", err.message);
