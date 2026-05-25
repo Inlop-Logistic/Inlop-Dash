@@ -111,16 +111,36 @@ function parseCreated(str) {
 
 async function syncPendientes() {
   try {
-    const data = await safeFetch("/Travel/search", []);
+    // Travel/search necesita parámetros — buscar viajes de hoy hasta 7 días adelante
+    const ahora   = new Date();
+    const en7dias = new Date(ahora.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    // Formato DD/MM/YYYY para ControlT
+    const fmt = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+    const desde = fmt(ahora);
+    const hasta  = fmt(en7dias);
+
+    // Probar con parámetros de fecha
+    const path = `/Travel/search?dateStart=${encodeURIComponent(desde)}&dateEnd=${encodeURIComponent(hasta)}&size=200&page=1`;
+    console.log(`⏳ Consultando: ${path}`);
+
+    const data = await safeFetch(path, []);
     const arr = Array.isArray(data) ? data : data.data || data.result || [];
     cache.pendientes.data = arr;
     cache.pendientes.ts   = Date.now();
     console.log(`⏳ Travel/search devolvió: ${arr.length} viajes`);
     if(arr.length > 0){
       console.log(`⏳ CAMPOS: ${Object.keys(arr[0]).join(', ')}`);
-      console.log(`⏳ PRIMER REGISTRO: ${JSON.stringify(arr[0])}`);
+      console.log(`⏳ Muestra: ${arr.slice(0,3).map(v=>`${v.trip_number}=${v.schedulate_origin||v.license_plate}`).join(' | ')}`);
     } else {
-      console.log(`⏳ RAW completo de Travel/search:`, JSON.stringify(data).slice(0, 500));
+      // Fallback: intentar sin parámetros de fecha pero con size grande
+      console.log(`⏳ Sin resultados con fechas — intentando sin filtro de fecha...`);
+      const data2 = await safeFetch(`/Travel/search?size=200&page=1`, []);
+      const arr2 = Array.isArray(data2) ? data2 : data2.data || data2.result || [];
+      cache.pendientes.data = arr2;
+      cache.pendientes.ts   = Date.now();
+      console.log(`⏳ Fallback: ${arr2.length} viajes`);
+      if(arr2.length > 0) console.log(`⏳ CAMPOS fallback: ${Object.keys(arr2[0]).join(', ')}`);
     }
   } catch(e) {
     console.error("❌ Error sync pendientes:", e.message);
@@ -227,6 +247,7 @@ app.get("/api/pendientes", async (req, res) => {
     }
 
     const ahora     = new Date();
+    const hace1dia  = new Date(ahora.getTime() - 1 * 24 * 60 * 60 * 1000);
     const en7dias   = new Date(ahora.getTime() + 7 * 24 * 60 * 60 * 1000);
     const activeIds = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
 
@@ -234,10 +255,11 @@ app.get("/api/pendientes", async (req, res) => {
       // Si ya está activo en Resume → no mostrar
       if (activeIds.has(v.trip_number)) return false;
       const fecha = parseSchedulate(v.schedulate_origin);
-      // Sin fecha → no incluir (no sabemos cuándo es)
-      if (!fecha || isNaN(fecha.getTime())) return false;
-      // Solo futuros (desde ahora hasta 7 días adelante)
-      return fecha >= ahora && fecha <= en7dias;
+      // Sin fecha parseable → incluir igual (no descartar por falta de dato)
+      if (!fecha || isNaN(fecha.getTime())) return true;
+      // Mostrar desde ayer hasta 7 días adelante
+      // (ayer por si hay viajes programados de hoy temprano que aún no se activaron)
+      return fecha >= hace1dia && fecha <= en7dias;
     });
 
     filtrados.sort((a, b) => {
