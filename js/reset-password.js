@@ -1,18 +1,5 @@
-/**
- * reset-password.js — Actualización de contraseña
- * INLOP · Integral Logistics Operations
- *
- * Requiere: supabase.js cargado antes.
- * Flujo: callback.html captura el token → redirige aquí → usuario pone nueva contraseña.
- *
- * IMPORTANTE: Este script debe estar en reset-password.html,
- * que también debe tener detectSessionInUrl: true en el cliente Supabase
- * (ya configurado en supabase.js).
- */
-
 'use strict';
 
-// ─── Estado del botón ─────────────────────────────────────────────────────────
 function setLoading(isLoading) {
   const btn = document.getElementById('btn');
   if (!btn) return;
@@ -20,7 +7,6 @@ function setLoading(isLoading) {
   btn.disabled = isLoading;
 }
 
-// ─── Mostrar error ─────────────────────────────────────────────────────────────
 function showError(message) {
   const box = document.getElementById('err');
   const msg = document.getElementById('err-msg');
@@ -30,19 +16,17 @@ function showError(message) {
   box.classList.add('show');
 }
 
-// ─── Mostrar éxito ─────────────────────────────────────────────────────────────
 function showSuccess() {
   const box = document.getElementById('err');
   const msg = document.getElementById('err-msg');
   if (!box || !msg) return;
-  msg.textContent = 'Contraseña actualizada correctamente. Redirigiendo al login…';
+  msg.textContent = 'Contraseña creada correctamente. Redirigiendo al login…';
   box.classList.add('show', 'success');
   setTimeout(() => {
     window.location.replace(window.INLOP.config.paths.login);
   }, 2500);
 }
 
-// ─── Toggle visibilidad contraseña ────────────────────────────────────────────
 function togglePwd(inputId, iconId) {
   const input = document.getElementById(inputId);
   const icon  = document.getElementById(iconId);
@@ -56,18 +40,15 @@ function togglePwd(inputId, iconId) {
   }
 }
 
-// ─── Indicador de fuerza de contraseña ────────────────────────────────────────
 function checkPasswordStrength(password) {
   const bar   = document.getElementById('strength-bar');
   const label = document.getElementById('strength-label');
   if (!bar || !label) return;
-
   let score = 0;
-  if (password.length >= 8)              score++;
-  if (/[A-Z]/.test(password))           score++;
-  if (/[0-9]/.test(password))           score++;
-  if (/[^A-Za-z0-9]/.test(password))   score++;
-
+  if (password.length >= 8)            score++;
+  if (/[A-Z]/.test(password))         score++;
+  if (/[0-9]/.test(password))         score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
   const levels = [
     { pct: '0%',   color: 'transparent', text: '' },
     { pct: '25%',  color: '#c00613',     text: 'Muy débil' },
@@ -75,7 +56,6 @@ function checkPasswordStrength(password) {
     { pct: '75%',  color: '#00bcd4',     text: 'Buena' },
     { pct: '100%', color: '#00e676',     text: 'Fuerte' },
   ];
-
   const level = levels[score] || levels[0];
   bar.style.width           = level.pct;
   bar.style.backgroundColor = level.color;
@@ -83,35 +63,10 @@ function checkPasswordStrength(password) {
   label.style.color         = level.color;
 }
 
-// ─── Validar que el token exista en la URL o sesión ───────────────────────────
-async function validateResetContext() {
-  const { sb, config } = window.INLOP;
-
-  // Supabase v2 con detectSessionInUrl: true procesa automáticamente el hash
-  const { data: { session } } = await sb.auth.getSession();
-
-  if (!session) {
-    // Sin sesión → el enlace expiró o es inválido
-    showError('El enlace ha expirado o no es válido. Solicita uno nuevo.');
-    const btn = document.getElementById('btn');
-    if (btn) btn.disabled = true;
-
-    setTimeout(() => {
-      window.location.href = `${config.paths.login}`;
-    }, 3000);
-    return false;
-  }
-  return true;
-}
-
-// ─── Handler del formulario ───────────────────────────────────────────────────
 async function handleResetPassword(event) {
   event.preventDefault();
-
   const newPwd     = document.getElementById('pwd')?.value;
   const confirmPwd = document.getElementById('pwd-confirm')?.value;
-
-  // Validaciones
   if (!newPwd || newPwd.length < 8) {
     showError('La contraseña debe tener al menos 8 caracteres.');
     return;
@@ -124,18 +79,12 @@ async function handleResetPassword(event) {
     showError('La contraseña debe incluir al menos una mayúscula y un número.');
     return;
   }
-
   setLoading(true);
-
   try {
     const { sb } = window.INLOP;
-
     const { error } = await sb.auth.updateUser({ password: newPwd });
-
     if (error) throw new Error(error.message);
-
     showSuccess();
-
   } catch (err) {
     const message = err.message?.includes('same password')
       ? 'La nueva contraseña no puede ser igual a la anterior.'
@@ -145,25 +94,38 @@ async function handleResetPassword(event) {
   }
 }
 
-// ─── Inicialización ────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async () => {
-  // Validar contexto de reset
-  const valid = await validateResetContext();
-  if (!valid) return;
+document.addEventListener('DOMContentLoaded', () => {
+  const { sb, config } = window.INLOP;
 
-  // Formulario
+  // Escuchar el evento de sesión — funciona para recovery e invite
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
+      // Sesión válida — habilitar formulario
+      const btn = document.getElementById('btn');
+      if (btn) btn.disabled = false;
+    }
+    if (event === 'SIGNED_OUT') {
+      showError('El enlace ha expirado. Solicita uno nuevo.');
+      setTimeout(() => window.location.replace(config.paths.login), 3000);
+    }
+  });
+
+  // Verificar sesión actual
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (!session) {
+      showError('El enlace ha expirado o no es válido. Solicita uno nuevo.');
+      const btn = document.getElementById('btn');
+      if (btn) btn.disabled = true;
+      setTimeout(() => window.location.replace(config.paths.login), 3000);
+    }
+  });
+
   const form = document.getElementById('reset-form');
-  if (form) {
-    form.addEventListener('submit', handleResetPassword);
-  }
+  if (form) form.addEventListener('submit', handleResetPassword);
 
-  // Fuerza de contraseña en tiempo real
   const pwdInput = document.getElementById('pwd');
-  if (pwdInput) {
-    pwdInput.addEventListener('input', (e) => checkPasswordStrength(e.target.value));
-  }
+  if (pwdInput) pwdInput.addEventListener('input', (e) => checkPasswordStrength(e.target.value));
 
-  // Toggle ojos
   document.getElementById('eye-btn-1')?.addEventListener('click', () => togglePwd('pwd', 'eye-ico-1'));
   document.getElementById('eye-btn-2')?.addEventListener('click', () => togglePwd('pwd-confirm', 'eye-ico-2'));
 });
