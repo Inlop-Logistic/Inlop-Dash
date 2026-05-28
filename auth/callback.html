@@ -12,10 +12,8 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--ink);font-family:'DM Sans',system-ui,sans-serif;color:var(--w0);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px}
-
 .ring{width:64px;height:64px;border-radius:50%;border:2px solid rgba(255,255,255,.1);border-top-color:var(--cyan);animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-
 .msg{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--w4)}
 .status{font-size:11px;color:var(--w4);opacity:.6;letter-spacing:1px}
 </style>
@@ -25,59 +23,38 @@ html,body{height:100%;background:var(--ink);font-family:'DM Sans',system-ui,sans
 <div class="msg">Verificando sesión…</div>
 <div class="status" id="status">Por favor espera</div>
 
-<!--
-  NOTAS IMPORTANTES:
-  Este archivo está en /app/auth/callback.html
-  Por eso los scripts usan rutas relativas: ../js/
--->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../js/supabase.js"></script>
 <script>
 (async function handleCallback() {
   const statusEl = document.getElementById('status');
   const { sb, config } = window.INLOP;
-
   try {
-    // Supabase v2 con detectSessionInUrl: true procesa automáticamente
-    // los parámetros del hash (#access_token=...) o query string
     const { data: { session }, error } = await sb.auth.getSession();
-
     if (error) throw new Error(error.message);
-
     if (!session) {
-      // Puede ser que el token aún esté en el hash → esperar un tick
       await new Promise(r => setTimeout(r, 800));
       const { data: { session: session2 } } = await sb.auth.getSession();
-
       if (!session2) {
         statusEl.textContent = 'Enlace inválido o expirado.';
         setTimeout(() => window.location.replace(config.paths.login), 2000);
         return;
       }
     }
-
-    // ─── Detectar el tipo de callback ────────────────────────────────────────
-    // Supabase indica el tipo en el hash o query param "type"
     const hash   = window.location.hash;
     const params = new URLSearchParams(hash.replace('#', '?'));
     const type   = params.get('type') || new URLSearchParams(window.location.search).get('type');
 
-    if (type === 'recovery') {
-      // Flujo de reset de contraseña → ir a reset-password.html
+    if (type === 'recovery' || type === 'invite') {
       statusEl.textContent = 'Redirigiendo para restablecer contraseña…';
       setTimeout(() => window.location.replace(config.paths.resetPassword), 500);
-
     } else if (type === 'signup' || type === 'email_change') {
-      // Confirmación de email → ir al dashboard
       statusEl.textContent = 'Email verificado. Ingresando…';
       setTimeout(() => window.location.replace(config.paths.dashboard), 1000);
-
     } else {
-      // Login estándar o cualquier otro → dashboard
       statusEl.textContent = 'Sesión válida. Ingresando…';
       setTimeout(() => window.location.replace(config.paths.dashboard), 800);
     }
-
   } catch (err) {
     console.error('[INLOP Callback] Error:', err);
     statusEl.textContent = 'Error de verificación. Redirigiendo…';
