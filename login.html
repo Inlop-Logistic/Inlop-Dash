@@ -6,7 +6,6 @@
 <title>INLOP · Acceso</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
   --ink:#04060e;--ink2:#080c18;--ink3:#0c1220;--ink4:#111828;
@@ -24,8 +23,8 @@ html,body{height:100%;background:var(--ink);font-family:'DM Sans',sans-serif;ove
 .overlay{position:fixed;inset:0;z-index:1;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(192,6,19,.1) 0%,transparent 60%),radial-gradient(ellipse 60% 50% at 50% 100%,rgba(1,42,107,.15) 0%,transparent 55%);pointer-events:none}
 .scanlines{position:fixed;inset:0;z-index:2;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.025) 2px,rgba(0,0,0,.025) 4px);opacity:.4}
 
-/* Centro total */
-.center{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+.center{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;animation:fadeUp .6s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 
 /* Marca */
 .brand{display:flex;align-items:center;gap:12px;margin-bottom:48px}
@@ -33,15 +32,8 @@ html,body{height:100%;background:var(--ink);font-family:'DM Sans',sans-serif;ove
 .brand-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;letter-spacing:4px;text-transform:uppercase;color:var(--w0);line-height:1}
 .brand-sub{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:2px;color:var(--w4);text-transform:uppercase;margin-top:4px}
 
-/* Card login */
-.card{
-  width:100%;max-width:400px;
-  background:rgba(8,12,24,.8);
-  border:1px solid var(--line2);
-  border-radius:16px;padding:40px;
-  position:relative;overflow:hidden;
-  backdrop-filter:blur(20px);
-}
+/* Card */
+.card{width:100%;max-width:400px;background:rgba(8,12,24,.8);border:1px solid var(--line2);border-radius:16px;padding:40px;position:relative;overflow:hidden;backdrop-filter:blur(20px)}
 .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),var(--gold),transparent)}
 .card-corner{position:absolute;width:16px;height:16px}
 .card-corner.tl{top:12px;left:12px;border-top:1.5px solid rgba(192,6,19,.5);border-left:1.5px solid rgba(192,6,19,.5)}
@@ -61,9 +53,13 @@ html,body{height:100%;background:var(--ink);font-family:'DM Sans',sans-serif;ove
 .field-input::placeholder{color:var(--w4);font-size:11px;letter-spacing:0}
 .field-input:focus{border-color:rgba(192,6,19,.5);box-shadow:0 0 0 3px rgba(192,6,19,.08)}
 .field-input:focus~.f-ico{stroke:var(--red2)}
-.eye-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--w4);display:flex;padding:4px;transition:color .2s}
+.eye-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--w4);display:flex;padding:4px;transition:color .2s;type:button}
 .eye-btn:hover{color:var(--w2)}
 .eye-btn svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.5;fill:none}
+
+/* Olvidé contraseña */
+.forgot-link{display:block;text-align:right;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--w4);text-decoration:none;margin-top:-12px;margin-bottom:20px;transition:color .2s}
+.forgot-link:hover{color:var(--gold)}
 
 /* Botón */
 .btn{width:100%;height:50px;margin-top:8px;background:linear-gradient(135deg,var(--red),#8a030d);border:none;border-radius:8px;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#fff;cursor:pointer;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:10px;transition:transform .15s,box-shadow .15s}
@@ -78,12 +74,14 @@ html,body{height:100%;background:var(--ink);font-family:'DM Sans',sans-serif;ove
 .btn.loading .spinner{display:block}
 .btn.loading .btn-txt,.btn.loading .btn-arrow{display:none}
 
-/* Error */
+/* Error / Info */
 .err{display:none;align-items:center;gap:8px;border-radius:7px;padding:11px 14px;margin-top:16px;background:rgba(192,6,19,.1);border:1px solid rgba(192,6,19,.3)}
 .err.show{display:flex}
+.err.success{background:rgba(0,230,118,.08);border-color:rgba(0,230,118,.3)}
+.err.success .err-txt{color:#00e676}
 .err-txt{font-family:'DM Mono',monospace;font-size:11px;color:#ff6b6b;letter-spacing:.5px}
 
-/* Badge seguridad */
+/* Seguridad */
 .sec{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:24px;padding:7px;border-radius:6px;background:rgba(0,212,255,.04);border:1px solid rgba(0,212,255,.1)}
 .sec-dot{width:5px;height:5px;border-radius:50%;background:var(--cyan);animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
@@ -97,10 +95,6 @@ html,body{height:100%;background:var(--ink);font-family:'DM Sans',sans-serif;ove
 .sov-name{font-family:'Rajdhani',sans-serif;font-size:24px;font-weight:700;letter-spacing:3px;color:var(--w0);text-transform:uppercase}
 .sov-sub{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:3px;color:var(--w4);text-transform:uppercase}
 .sov-red{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--green);text-transform:uppercase}
-
-/* Entrada */
-.center{animation:fadeUp .6s ease both}
-@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body>
@@ -126,113 +120,81 @@ html,body{height:100%;background:var(--ink);font-family:'DM Sans',sans-serif;ove
     <div class="card-title">Bienvenido</div>
     <div class="card-sub">Ingresa tus credenciales para continuar</div>
 
-    <form onsubmit="handleLogin(event)">
+    <!-- id="login-form" es requerido por login.js -->
+    <form id="login-form" novalidate>
       <div class="field">
         <label class="field-label" for="email">Correo corporativo</label>
         <div class="field-wrap">
-          <input type="email" id="email" class="field-input" placeholder="usuario@inlop.com.co" required autocomplete="email"/>
-          <svg class="f-ico" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          <input type="email" id="email" class="field-input"
+                 placeholder="usuario@inlop.com.co"
+                 required autocomplete="email"/>
+          <svg class="f-ico" viewBox="0 0 24 24">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+            <polyline points="22,6 12,13 2,6"/>
+          </svg>
         </div>
       </div>
+
       <div class="field">
         <label class="field-label" for="pwd">Contraseña</label>
         <div class="field-wrap">
-          <input type="password" id="pwd" class="field-input" placeholder="••••••••••••" required style="padding-right:40px"/>
-          <svg class="f-ico" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          <button type="button" class="eye-btn" onclick="togglePwd()">
-            <svg id="eye-ico" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <input type="password" id="pwd" class="field-input"
+                 placeholder="••••••••••••"
+                 required autocomplete="current-password"
+                 style="padding-right:40px"/>
+          <svg class="f-ico" viewBox="0 0 24 24">
+            <rect x="3" y="11" width="18" height="11" rx="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          <!-- id="eye-btn" es detectado por login.js -->
+          <button type="button" class="eye-btn" id="eye-btn" aria-label="Mostrar contraseña">
+            <svg id="eye-ico" viewBox="0 0 24 24">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
           </button>
         </div>
       </div>
+
+      <!-- Enlace "Olvidaste tu contraseña" -->
+      <a href="forgot-password.html" class="forgot-link">¿Olvidaste tu contraseña?</a>
+
       <button type="submit" class="btn" id="btn">
         <div class="spinner"></div>
         <span class="btn-txt">Ingresar al sistema</span>
         <span class="btn-arrow">→</span>
       </button>
-      <div class="err" id="err"><span>⚠</span><span class="err-txt" id="err-msg"></span></div>
+
+      <!-- id="err" y id="err-msg" requeridos por login.js -->
+      <div class="err" id="err">
+        <span>⚠</span>
+        <span class="err-txt" id="err-msg"></span>
+      </div>
     </form>
 
     <div class="sec">
       <div class="sec-dot"></div>
-      <div class="sec-txt">Conexión cifrada · Supabase Auth</div>
+      <div class="sec-txt">Conexión cifrada · Supabase Auth v2</div>
     </div>
   </div>
 </div>
 
-<!-- Success overlay -->
+<!-- Pantalla de éxito (controlada por login.js) -->
 <div class="sov" id="sov">
   <div class="sov-ring">✓</div>
   <div class="sov-name" id="sov-name">Bienvenido</div>
-  <div class="sov-sub" id="sov-sub">—</div>
+  <div class="sov-sub"  id="sov-sub">—</div>
   <div class="sov-red">Ingresando al portal…</div>
 </div>
 
-<script>
-'use strict';
-const SB_URL='https://gtyydandwcgoaratmnqh.supabase.co';
-const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0eXlkYW5kd2Nnb2FyYXRtbnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDAyMTcsImV4cCI6MjA5MjYxNjIxN30.utGZtr0L5t9hIpRABTtfhsKEsrSCBJLHcP_gQ5Hq0EI';
-const sb=supabase.createClient(SB_URL,SB_KEY);
-
-// Canvas fondo
-(function(){
-  const c=document.getElementById('bg'),ctx=c.getContext('2d');
-  let W,H,pts=[];
-  function resize(){W=c.width=innerWidth;H=c.height=innerHeight;}
-  resize();window.addEventListener('resize',resize);
-  for(let i=0;i<50;i++) pts.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.2,vy:(Math.random()-.5)*.2,r:Math.random()*.8+.3,col:['#c00613','#c8973a','#012A6B'][Math.floor(Math.random()*3)]});
-  function draw(){
-    ctx.clearRect(0,0,W,H);
-    for(let i=0;i<pts.length;i++){
-      const p=pts[i];
-      for(let j=i+1;j<pts.length;j++){
-        const q=pts[j],dx=p.x-q.x,dy=p.y-q.y,d=Math.sqrt(dx*dx+dy*dy);
-        if(d<120){ctx.beginPath();ctx.strokeStyle=`rgba(255,255,255,${.018*(1-d/120)})`;ctx.lineWidth=.4;ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();}
-      }
-      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=p.col+'28';ctx.fill();
-      p.x+=p.vx;p.y+=p.vy;
-      if(p.x<0||p.x>W)p.vx*=-1;if(p.y<0||p.y>H)p.vy*=-1;
-    }
-    requestAnimationFrame(draw);
-  }
-  draw();
-})();
-
-function togglePwd(){
-  const i=document.getElementById('pwd'),ico=document.getElementById('eye-ico'),v=i.type==='text';
-  i.type=v?'password':'text';
-  ico.innerHTML=v?'<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>':'<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
-}
-
-async function handleLogin(e){
-  e.preventDefault();
-  const email=document.getElementById('email').value.trim();
-  const pwd=document.getElementById('pwd').value;
-  const btn=document.getElementById('btn');
-  const err=document.getElementById('err');
-  btn.classList.add('loading');btn.disabled=true;err.classList.remove('show');
-  try{
-    const{data:auth,error:ae}=await sb.auth.signInWithPassword({email,password:pwd});
-    if(ae) throw new Error('Credenciales incorrectas.');
-    const{data:prof,error:pe}=await sb.from('profiles').select('nombre,rol,activo').eq('id',auth.user.id).single();
-    if(pe||!prof) throw new Error('Error obteniendo perfil.');
-    if(!prof.activo) throw new Error('Cuenta desactivada. Contacta al administrador.');
-    sessionStorage.setItem('inlop_user',JSON.stringify({id:auth.user.id,email,nombre:prof.nombre,rol:prof.rol}));
-    document.getElementById('sov-name').textContent='¡Bienvenido, '+(prof.nombre||email.split('@')[0])+'!';
-    document.getElementById('sov-sub').textContent=prof.rol.toUpperCase()+' · INLOP Control Tower';
-    document.getElementById('sov').classList.add('show');
-    setTimeout(()=>window.location.href='index.html',2000);
-  }catch(ex){
-    document.getElementById('err-msg').textContent=ex.message;
-    err.classList.add('show');
-    btn.classList.remove('loading');btn.disabled=false;
-  }
-}
-
-// Si ya hay sesión activa → saltar login
-(async()=>{
-  const{data:{session}}=await sb.auth.getSession();
-  if(session) window.location.href='index.html';
-})();
-</script>
+<!-- ═══════════════════════════════════════════════════════
+     Scripts: SIEMPRE en este orden
+     1. CDN de Supabase
+     2. supabase.js  (inicializa el cliente)
+     3. login.js     (lógica del formulario)
+     ═══════════════════════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase.js"></script>
+<script src="js/login.js"></script>
 </body>
 </html>
