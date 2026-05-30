@@ -268,6 +268,53 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.72rem}
 .tv-kpi-val{font-family:var(--syne);font-size:1.6rem;font-weight:800;line-height:1}
 .tv-kpi-label{font-family:var(--mono);font-size:.55rem;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;margin-top:.2rem}
 #tv-map{width:100%;height:100%}
+
+/* ── SISTEMA DE SOPORTES POR TIPO ── */
+.tipos-doc-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;margin-bottom:1rem}
+.tipo-doc-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:.7rem .8rem;display:flex;align-items:center;gap:.6rem;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
+.tipo-doc-card:hover{border-color:var(--accent);background:rgba(0,212,255,.05)}
+.tipo-doc-card.has-file{border-color:var(--green);background:rgba(0,230,118,.05)}
+.tipo-doc-card.has-file::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--green)}
+.tipo-doc-card.gut-card{border-color:rgba(234,128,252,.3);background:rgba(234,128,252,.04)}
+.tipo-doc-icon{font-size:1.3rem;flex-shrink:0}
+.tipo-doc-body{flex:1;min-width:0}
+.tipo-doc-name{font-family:var(--syne);font-size:.72rem;font-weight:700;color:var(--text0);letter-spacing:.03em}
+.tipo-doc-meta{font-family:var(--mono);font-size:.58rem;color:var(--text2);margin-top:.15rem}
+.tipo-doc-check{font-size:.9rem;color:var(--green)}
+.tipo-doc-add{font-family:var(--mono);font-size:.6rem;color:var(--accent);padding:.2rem .5rem;border:1px solid rgba(0,212,255,.3);border-radius:4px;background:rgba(0,212,255,.05)}
+.tipo-doc-files{margin-top:.4rem;padding-top:.4rem;border-top:1px dashed var(--border);display:flex;flex-direction:column;gap:.3rem}
+.tipo-doc-file{display:flex;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.6rem;color:var(--text1);padding:.2rem .4rem;background:var(--bg1);border-radius:4px}
+.tipo-doc-file a{color:var(--accent);text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tipo-doc-file .file-del{background:none;border:none;color:var(--red);cursor:pointer;font-size:.65rem;padding:0 .2rem}
+
+/* ── GUT — Granel Líquido fields ── */
+.gut-section{background:rgba(234,128,252,.05);border:1px solid rgba(234,128,252,.2);border-radius:10px;padding:1rem;margin-top:.5rem}
+.gut-section-title{font-family:var(--syne);font-size:.78rem;font-weight:700;color:var(--purple);letter-spacing:.05em;text-transform:uppercase;margin-bottom:.75rem;display:flex;align-items:center;gap:.4rem}
+.gut-fields{display:grid;grid-template-columns:repeat(2,1fr);gap:.65rem;margin-bottom:.75rem}
+.gut-field-label{font-family:var(--mono);font-size:.58rem;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.3rem}
+.gut-field input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text1);font-family:var(--mono);font-size:.73rem;padding:.45rem .7rem;outline:none}
+.gut-field input:focus{border-color:var(--purple)}
+.gut-field input:disabled{opacity:.55;cursor:not-allowed;background:var(--bg3)}
+.gut-radicado-badge{display:inline-flex;align-items:center;gap:.3rem;font-family:var(--mono);font-size:.6rem;padding:.2rem .5rem;border-radius:4px;background:rgba(0,230,118,.1);color:var(--green);border:1px solid rgba(0,230,118,.25)}
+
+/* ── MODAL DE ADVERTENCIA RADICADO ── */
+.warn-overlay{position:fixed;inset:0;background:rgba(6,10,16,.92);backdrop-filter:blur(10px);z-index:1200;display:none;align-items:center;justify-content:center;padding:1.5rem}
+.warn-overlay.open{display:flex}
+.warn-box{background:var(--bg1);border:2px solid var(--orange);border-radius:14px;width:100%;max-width:480px;overflow:hidden;box-shadow:0 30px 60px rgba(255,145,0,.2)}
+.warn-head{background:linear-gradient(180deg,rgba(255,145,0,.15) 0%,transparent 100%);padding:1.25rem;text-align:center;border-bottom:1px solid var(--border)}
+.warn-icon{font-size:2.5rem;margin-bottom:.5rem;animation:warnPulse 1.5s ease infinite}
+@keyframes warnPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+.warn-title{font-family:var(--syne);font-size:1rem;font-weight:800;color:var(--orange);letter-spacing:.05em;text-transform:uppercase}
+.warn-body{padding:1.25rem;color:var(--text1);font-size:.85rem;line-height:1.55;text-align:center}
+.warn-body .warn-fecha{display:block;font-family:var(--mono);font-size:1.2rem;color:var(--text0);background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:.6rem 1rem;margin:.85rem 0;letter-spacing:.05em}
+.warn-body strong{color:var(--orange)}
+.warn-actions{display:flex;gap:.5rem;padding:1rem 1.25rem;border-top:1px solid var(--border);background:var(--bg2)}
+.warn-btn{flex:1;padding:.7rem 1rem;border-radius:8px;font-family:var(--syne);font-size:.78rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;border:1px solid;transition:all .15s}
+.warn-btn-edit{background:var(--bg3);border-color:var(--border2);color:var(--text1)}
+.warn-btn-edit:hover{border-color:var(--accent);color:var(--accent)}
+.warn-btn-ok{background:linear-gradient(135deg,var(--orange),#cc6f00);border-color:var(--orange);color:#000}
+.warn-btn-ok:hover{box-shadow:0 6px 18px rgba(255,145,0,.4)}
+
 </style>
 </head>
 <body>
@@ -588,6 +635,26 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.72rem}
   </div>
 </div>
 
+
+<!-- MODAL DE ADVERTENCIA RADICADO -->
+<div class="warn-overlay" id="warn-radicado">
+  <div class="warn-box">
+    <div class="warn-head">
+      <div class="warn-icon">⚠️</div>
+      <div class="warn-title">Confirmar Fecha de Radicado</div>
+    </div>
+    <div class="warn-body">
+      ¿Es correcta la fecha y hora del radicado físico?<br>
+      <span class="warn-fecha" id="warn-fecha-display">—</span>
+      <strong>Una vez confirmada, solo el usuario Master podrá modificarla.</strong>
+    </div>
+    <div class="warn-actions">
+      <button class="warn-btn warn-btn-edit" onclick="warnEditarFecha()">✏ Editar Fecha</button>
+      <button class="warn-btn warn-btn-ok" onclick="warnConfirmarRadicado()">✓ Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <!-- TV MODE OVERLAY -->
 <div id="tv-overlay">
   <div class="tv-header">
@@ -630,6 +697,17 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.72rem}
 <script>
 const API = 'https://inlop-dash-production.up.railway.app';
 const REFRESH = 60;
+
+// ── USUARIO ACTUAL (desde sessionStorage) ──────────────
+window._inlopUser = (function(){
+  try {
+    const raw = sessionStorage.getItem('inlop_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) {
+    return null;
+  }
+})();
+
 
 let dataViajes = [], dataAlarmas = [], dataPendientes = [];
 let mapInstance = null, mapMarkers = [], miniMap = null;
@@ -1780,11 +1858,16 @@ async function sbUpdateEstado(trip_number, estado, extra={}){
 }
 
 // ── SUPABASE STORAGE — SUBIR SOPORTE ──────────────────
-async function sbUploadSoporte(trip_number, placa, file){
-  const fecha = new Date().toISOString().slice(0,10);
-  const ext   = file.name.split('.').pop();
-  const nombre= `${trip_number}_${placa}_${fecha}_${file.name}`;
-  const path  = `cumplidos/${trip_number}/${nombre}`;
+async function sbUploadSoporte(trip_number, placa, file, tipoDoc){
+  const fecha = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  const ext   = file.name.split('.').pop().toLowerCase();
+  // Sanitizar tipo de documento: sin tildes, sin espacios
+  const tipoClean = (tipoDoc||'soporte').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'_').toLowerCase();
+  const placaClean = (placa||'sinplaca').replace(/\s+/g,'').toUpperCase();
+  const timestamp = Date.now();
+  // Estructura: cumplidos/{trip_number}/{tipo}_{placa}_{fecha}_{timestamp}.ext
+  const nombre = `${tipoClean}_${placaClean}_${fecha}_${timestamp}.${ext}`;
+  const path   = `cumplidos/${trip_number}/${nombre}`;
 
   const r = await fetch(`https://gtyydandwcgoaratmnqh.supabase.co/storage/v1/object/${path}`,{
     method:'POST',
@@ -1797,7 +1880,12 @@ async function sbUploadSoporte(trip_number, placa, file){
     body: file
   });
   if(!r.ok) throw new Error(await r.text());
-  return `https://gtyydandwcgoaratmnqh.supabase.co/storage/v1/object/public/${path}`;
+  return {
+    url: `https://gtyydandwcgoaratmnqh.supabase.co/storage/v1/object/public/${path}`,
+    name: nombre,
+    tipo: tipoDoc,
+    originalName: file.name
+  };
 }
 
 // ── SUPABASE STORAGE — LISTAR SOPORTES ────────────────
@@ -1814,11 +1902,28 @@ async function sbListSoportes(trip_number){
     });
     if(!r.ok) return [];
     const data=await r.json();
-    return (data||[]).map(f=>({
-      name: f.name,
-      url: `https://gtyydandwcgoaratmnqh.supabase.co/storage/v1/object/public/cumplidos/${trip_number}/${f.name}`
-    }));
+    return (data||[]).map(f=>{
+      // Parsear tipo desde nombre: tipo_placa_fecha_timestamp.ext
+      const tipo = (f.name.split('_')[0]||'').toLowerCase();
+      return {
+        name: f.name,
+        tipo: tipo,
+        url: `https://gtyydandwcgoaratmnqh.supabase.co/storage/v1/object/public/cumplidos/${trip_number}/${f.name}`,
+        created_at: f.created_at
+      };
+    });
   }catch(e){return[];}
+}
+
+// ── ELIMINAR SOPORTE ───────────────────────────────────
+async function sbDeleteSoporte(trip_number, filename){
+  try{
+    const r=await fetch(`https://gtyydandwcgoaratmnqh.supabase.co/storage/v1/object/cumplidos/${trip_number}/${filename}`,{
+      method:'DELETE',
+      headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`}
+    });
+    return r.ok;
+  }catch(e){return false;}
 }
 
 function extraerTelefono(driver_phone, full_driver) {
@@ -2040,6 +2145,11 @@ function renderCumModalBody(){
   const waMsg=encodeURIComponent(`Hola ${c.conductor||''}, le escribe INLOP. Por favor envíe los soportes del viaje *${c.id}*. Gracias.`);
   const waLink=telValido?`https://wa.me/57${tel}?text=${waMsg}`:'';
 
+  // Detección de Granel Líquido para mostrar campos GUT
+  const viajeOriginal = dataViajes.find(v=>v.trip_number===c.id);
+  const tipoOp = (viajeOriginal?.type_operation||'').toLowerCase();
+  const esGranelLiquido = tipoOp.includes('granel') && tipoOp.includes('liquido');
+
   // Botones de cambio de estado según flujo
   let acciones='';
   if(estado==='LIVE'||estado==='SOLICITADO'){
@@ -2056,6 +2166,83 @@ function renderCumModalBody(){
     acciones+=`<button class="btn-solicitar" style="padding:.45rem 1rem;font-size:.72rem;color:var(--teal);background:var(--teal-bg);border:1px solid rgba(0,191,165,.3)" onclick="cumCambiarEstado('LIQUIDADO')">💰 Marcar Liquidado</button>`;
   }
 
+  // ── Construir tarjetas de tipos de documento ──
+  const tiposDocs = [
+    {key:'remesa',      icon:'📋', nombre:'Remesa',                quien:'Tráfico'},
+    {key:'cumplido',    icon:'✅', nombre:'Cumplido',              quien:'Tráfico'},
+    {key:'manifiesto',  icon:'📄', nombre:'Manifiesto',            quien:'Tráfico'},
+    {key:'evidencias',  icon:'📷', nombre:'Evidencias descargue',  quien:'Tráfico'},
+    {key:'tiquete',     icon:'⚖️', nombre:'Tiquete Báscula',       quien:'Tráfico'},
+  ];
+  if(esGranelLiquido) tiposDocs.push({key:'gut', icon:'🛢️', nombre:'GUT (Físico)', quien:'Contabilidad'});
+
+  const archivosPorTipo = {};
+  cumSoportes.forEach(s=>{
+    const t = (s.tipo||'').toLowerCase();
+    if(!archivosPorTipo[t]) archivosPorTipo[t] = [];
+    archivosPorTipo[t].push(s);
+  });
+
+  const tipoCards = tiposDocs.map(td=>{
+    const archivos = archivosPorTipo[td.key] || [];
+    const hasFile = archivos.length > 0;
+    const isGut = td.key === 'gut';
+    return `<div class="tipo-doc-card ${hasFile?'has-file':''} ${isGut?'gut-card':''}" onclick="document.getElementById('cum-file-input-${td.key}').click()">
+      <div class="tipo-doc-icon">${td.icon}</div>
+      <div class="tipo-doc-body">
+        <div class="tipo-doc-name">${td.nombre}</div>
+        <div class="tipo-doc-meta">Sube: ${td.quien} ${hasFile?`· ${archivos.length} archivo${archivos.length>1?'s':''}`:''}</div>
+        ${hasFile?`<div class="tipo-doc-files" onclick="event.stopPropagation()">${archivos.map(a=>`
+          <div class="tipo-doc-file">
+            <a href="${a.url}" target="_blank">${a.name.split('_').slice(3).join('_')||a.name}</a>
+            <button class="file-del" onclick="cumEliminarSoporte('${c.id}','${a.name}')" title="Eliminar">✕</button>
+          </div>`).join('')}</div>`:''}
+      </div>
+      ${hasFile?'<div class="tipo-doc-check">✓</div>':'<div class="tipo-doc-add">+ Subir</div>'}
+      <input type="file" id="cum-file-input-${td.key}" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none" onchange="cumUploadFilesTipo(event,'${td.key}')" multiple/>
+    </div>`;
+  }).join('');
+
+  // Sección GUT (fechas) si aplica
+  let gutSection = '';
+  if(esGranelLiquido){
+    const fechaCumplido = c.fecha_cumplido ? new Date(c.fecha_cumplido).toLocaleString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}) : '—';
+    const fechaRadicado = c.fecha_radicado ? new Date(c.fecha_radicado).toLocaleString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
+    const radicadoConfirmado = !!c.radicado_confirmado;
+    const userRol = (window._inlopUser?.rol||'').toLowerCase();
+    const esMaster = userRol === 'master';
+    const puedeEditarRadicado = !radicadoConfirmado || esMaster;
+    
+    gutSection = `<div class="gut-section">
+      <div class="gut-section-title">🛢️ Operación Granel Líquido — Información GUT</div>
+      <div class="gut-fields">
+        <div class="gut-field">
+          <div class="gut-field-label">Fecha Cumplido</div>
+          <input type="text" value="${fechaCumplido}" disabled title="Se asigna automáticamente al subir el Manifiesto"/>
+        </div>
+        <div class="gut-field">
+          <div class="gut-field-label">
+            Fecha Radicado Físico
+            ${radicadoConfirmado?'<span class="gut-radicado-badge" style="margin-left:.4rem">🔒 Confirmado</span>':''}
+          </div>
+          <input type="datetime-local" id="gut-fecha-radicado" value="${c.fecha_radicado?new Date(c.fecha_radicado).toISOString().slice(0,16):''}" ${!puedeEditarRadicado?'disabled':''} onchange="gutFechaRadicadoChange()"/>
+        </div>
+      </div>
+      ${!radicadoConfirmado && c.fecha_radicado ? `
+        <button class="btn-solicitar btn-sol-wp" style="padding:.4rem .85rem;font-size:.7rem" onclick="gutPedirConfirmacionRadicado()">
+          ✓ Confirmar Fecha de Radicado
+        </button>` : ''}
+      ${radicadoConfirmado && !esMaster ? `
+        <div style="font-family:var(--mono);font-size:.62rem;color:var(--text2);margin-top:.4rem">
+          🔒 Fecha confirmada. Solo el usuario Master puede modificarla.
+        </div>` : ''}
+      ${radicadoConfirmado && esMaster ? `
+        <div style="font-family:var(--mono);font-size:.62rem;color:var(--purple);margin-top:.4rem">
+          🔑 Modo Master: puedes modificar esta fecha.
+        </div>` : ''}
+    </div>`;
+  }
+
   document.getElementById('cum-modal-body').innerHTML=`
     <!-- Info del viaje -->
     <div class="info-grid">
@@ -2067,41 +2254,29 @@ function renderCumModalBody(){
       <div class="info-cell"><div class="info-cell-label">Cliente</div><div class="info-cell-val" style="font-size:.75rem">${c.cliente||'—'}</div></div>
     </div>
     <div class="info-grid">
+      <div class="info-cell"><div class="info-cell-label">Tipo Operación</div><div class="info-cell-val" style="font-size:.73rem;color:${esGranelLiquido?'var(--purple)':'var(--text1)'}">${viajeOriginal?.type_operation||'—'}</div></div>
       <div class="info-cell"><div class="info-cell-label">Estado ControlT</div><div class="info-cell-val">${stateBadge(c.estado_controlt)}</div></div>
-      <div class="info-cell"><div class="info-cell-label">Estado Cumplido</div><div class="info-cell-val">${cumBadge(c.estado_cumplido)}</div></div>
       <div class="info-cell"><div class="info-cell-label">Avance</div><div class="info-cell-val" style="font-family:var(--mono)">${(c.pct||0).toFixed(0)}%</div></div>
     </div>
-    ${c.obs?`<div class="info-cell"><div class="info-cell-label">Observaciones</div><div class="info-cell-val" style="font-size:.75rem;white-space:normal">${c.obs}</div></div>`:''}
 
     <!-- Acciones -->
     ${acciones?`<div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">${acciones}</div>`:''}
 
-    <!-- Sección Soportes -->
+    <!-- Sección Soportes por Tipo -->
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
-        <div style="font-family:var(--syne);font-size:.8rem;font-weight:700;color:var(--text0)">📎 Soportes <span style="font-family:var(--mono);font-size:.65rem;color:var(--text2)">(${cumSoportes.length}/5)</span></div>
-        ${cumSoportes.length<5?`<label style="cursor:pointer">
-          <input type="file" id="cum-file-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none" onchange="cumUploadFiles(event)"/>
-          <span class="btn-solicitar btn-sol-det" style="padding:.4rem .85rem;font-size:.7rem">+ Subir Soporte</span>
-        </label>`:'<span style="font-family:var(--mono);font-size:.62rem;color:var(--text2)">Máx. 5 archivos</span>'}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.85rem">
+        <div style="font-family:var(--syne);font-size:.82rem;font-weight:700;color:var(--text0)">📎 Soportes del Viaje</div>
+        <span style="font-family:var(--mono);font-size:.62rem;color:var(--text2)">${cumSoportes.length} archivo(s) total</span>
       </div>
-      ${cumSoportes.length?`
-        <div class="soportes-grid">
-          ${cumSoportes.map(s=>{
-            const icon=s.name.match(/\.pdf$/i)?'📄':s.name.match(/\.(jpg|jpeg|png|webp)$/i)?'🖼️':'📁';
-            return`<div class="soporte-card">
-              <span class="sc-icon">${icon}</span>
-              <span class="sc-name">${s.name.split('/').pop()}</span>
-              <a href="${s.url}" target="_blank" style="font-family:var(--mono);font-size:.58rem;color:var(--accent);text-decoration:none;margin-top:.2rem">Ver archivo →</a>
-            </div>`;
-          }).join('')}
-        </div>
-      `:`<div class="upload-zone" onclick="document.getElementById('cum-file-input')?.click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="cumDropFiles(event)">
-          <div class="uz-icon">📂</div>
-          <div class="uz-txt">Arrastra archivos aquí o haz clic</div>
-          <div class="uz-sub">PDF, JPG, PNG · Máx 5 archivos · 10 MB cada uno</div>
-        </div>`}
+      <div class="tipos-doc-grid">
+        ${tipoCards}
+      </div>
+      <div style="font-family:var(--mono);font-size:.58rem;color:var(--text2);margin-top:.6rem;line-height:1.5">
+        💡 Haz clic en cada tarjeta para subir el documento correspondiente · PDF, JPG, PNG · Máx 10 MB
+      </div>
     </div>
+
+    ${gutSection}
 
     <!-- Obs editable -->
     <div>
@@ -2112,52 +2287,161 @@ function renderCumModalBody(){
   `;
 }
 
-// ── SUBIR ARCHIVOS ─────────────────────────────────────
-async function cumUploadFiles(event){
-  const files=Array.from(event.target.files||[]);
-  await procesarArchivos(files);
-}
-async function cumDropFiles(event){
-  event.preventDefault();
-  document.querySelector('.upload-zone')?.classList.remove('drag');
-  const files=Array.from(event.dataTransfer.files||[]);
-  await procesarArchivos(files);
+// ── SUBIR ARCHIVOS POR TIPO ────────────────────────────
+async function cumUploadFilesTipo(event, tipoDoc){
+  const files = Array.from(event.target.files||[]);
+  if(!files.length) return;
+  await procesarArchivos(files, tipoDoc);
+  event.target.value = ''; // permitir resubir mismo archivo si lo eliminó
 }
 
-async function procesarArchivos(files){
-  const c=cumModalViaje;
+async function procesarArchivos(files, tipoDoc){
+  const c = cumModalViaje;
   if(!c||!files.length) return;
-  const disponibles=5-cumSoportes.length;
-  if(disponibles<=0){showToast('Máximo 5 archivos por viaje','err');return;}
-  const aSubir=files.slice(0,disponibles);
-
-  showToast(`Subiendo ${aSubir.length} archivo(s)…`,'info',5000);
-
-  for(const file of aSubir){
-    if(file.size>10*1024*1024){showToast(`${file.name} supera 10 MB`,'err');continue;}
-    try{
-      const url=await sbUploadSoporte(c.id,c.placa,file);
-      cumSoportes.push({name:file.name,url});
-    }catch(e){
-      showToast(`Error subiendo ${file.name}`,'err');
+  
+  showToast(`Subiendo ${files.length} archivo(s) de ${tipoDoc}…`, 'info', 5000);
+  
+  let subidos = 0;
+  for(const file of files){
+    if(file.size > 10*1024*1024){
+      showToast(`${file.name} supera 10 MB`, 'err');
+      continue;
+    }
+    try {
+      const result = await sbUploadSoporte(c.id, c.placa, file, tipoDoc);
+      cumSoportes.push({
+        name: result.name,
+        url:  result.url,
+        tipo: tipoDoc,
+        originalName: file.name
+      });
+      subidos++;
+    } catch(e){
+      showToast(`Error subiendo ${file.name}`, 'err');
+      console.error(e);
     }
   }
+  
+  if(subidos === 0) return;
 
-  // Actualizar tiene_soporte y estado si corresponde
-  const nuevoEstado=cumSoportes.length>0&&(c.estado_cumplido==='LIVE'||c.estado_cumplido==='SOLICITADO')?'CUMPLIDO RECIBIDO':c.estado_cumplido;
+  // Lógica especial: si es Manifiesto y es Granel Líquido → setear fecha_radicado por defecto
+  const viajeOriginal = dataViajes.find(v=>v.trip_number===c.id);
+  const tipoOp = (viajeOriginal?.type_operation||'').toLowerCase();
+  const esGranelLiquido = tipoOp.includes('granel') && tipoOp.includes('liquido');
+  
+  const updateData = {
+    tiene_soporte: true,
+    link_soporte: cumSoportes[0]?.url || ''
+  };
+
+  // Cambiar a CUMPLIDO RECIBIDO si estaba en LIVE o SOLICITADO
+  if(c.estado_cumplido === 'LIVE' || c.estado_cumplido === 'SOLICITADO'){
+    updateData.estado_cumplido = 'CUMPLIDO RECIBIDO';
+    updateData.fecha_cumplido = new Date().toISOString();
+  }
+
+  // Si subió Manifiesto en Granel Líquido y no hay fecha_radicado aún → poner por defecto
+  if(tipoDoc === 'manifiesto' && esGranelLiquido && !c.fecha_radicado){
+    updateData.fecha_radicado = new Date().toISOString();
+    updateData.radicado_confirmado = false;
+  }
+
   await fetch(`${SB_URL}/cumplidos?id=eq.${encodeURIComponent(c.id)}`,{
     method:'PATCH',
     headers:SB_HEADERS,
-    body:JSON.stringify({tiene_soporte:true,estado_cumplido:nuevoEstado,link_soporte:cumSoportes[0]?.url||''})
+    body:JSON.stringify(updateData)
   });
 
-  showToast(`✅ ${aSubir.length} archivo(s) subido(s) correctamente`,'ok');
-  cumData=await sbGetCumplidos();
-  cumModalViaje=cumData.find(x=>x.id===c.id);
-  document.getElementById('cum-modal-estado').innerHTML=cumBadge(cumModalViaje?.estado_cumplido);
+  showToast(`✅ ${subidos} archivo(s) de ${tipoDoc} subido(s)`, 'ok');
+  
+  // Recargar
+  cumData = await sbGetCumplidos();
+  cumModalViaje = cumData.find(x=>x.id===c.id);
+  cumSoportes = await sbListSoportes(c.id);
+  document.getElementById('cum-modal-estado').innerHTML = cumBadge(cumModalViaje?.estado_cumplido);
   cumApplyFilters();
   cumUpdateKPIs();
   renderCumModalBody();
+}
+
+// ── ELIMINAR SOPORTE ───────────────────────────────────
+async function cumEliminarSoporte(trip_number, filename){
+  if(!confirm(`¿Eliminar el archivo "${filename}"?`)) return;
+  const ok = await sbDeleteSoporte(trip_number, filename);
+  if(ok){
+    cumSoportes = cumSoportes.filter(s=>s.name !== filename);
+    showToast('Archivo eliminado', 'ok');
+    // Si ya no quedan archivos → tiene_soporte=false
+    if(cumSoportes.length === 0){
+      await fetch(`${SB_URL}/cumplidos?id=eq.${encodeURIComponent(trip_number)}`,{
+        method:'PATCH',
+        headers:SB_HEADERS,
+        body:JSON.stringify({tiene_soporte:false, link_soporte:''})
+      });
+      cumData = await sbGetCumplidos();
+      cumModalViaje = cumData.find(x=>x.id===trip_number);
+    }
+    renderCumModalBody();
+    cumApplyFilters();
+  } else {
+    showToast('Error al eliminar', 'err');
+  }
+}
+
+// ── GUT — FECHA RADICADO ──────────────────────────────
+let _gutPendingDate = null;
+
+function gutFechaRadicadoChange(){
+  const input = document.getElementById('gut-fecha-radicado');
+  if(!input) return;
+  _gutPendingDate = input.value;
+}
+
+function gutPedirConfirmacionRadicado(){
+  const c = cumModalViaje;
+  if(!c) return;
+  const fechaInput = document.getElementById('gut-fecha-radicado');
+  const fechaValor = fechaInput?.value || (c.fecha_radicado ? new Date(c.fecha_radicado).toISOString().slice(0,16) : '');
+  if(!fechaValor){
+    showToast('Define una fecha de radicado primero', 'err');
+    return;
+  }
+  _gutPendingDate = fechaValor;
+  const display = new Date(fechaValor).toLocaleString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+  document.getElementById('warn-fecha-display').textContent = display;
+  document.getElementById('warn-radicado').classList.add('open');
+}
+
+function warnEditarFecha(){
+  document.getElementById('warn-radicado').classList.remove('open');
+  document.getElementById('gut-fecha-radicado')?.focus();
+}
+
+async function warnConfirmarRadicado(){
+  const c = cumModalViaje;
+  if(!c || !_gutPendingDate) return;
+  document.getElementById('warn-radicado').classList.remove('open');
+  
+  const fechaISO = new Date(_gutPendingDate).toISOString();
+  
+  const r = await fetch(`${SB_URL}/cumplidos?id=eq.${encodeURIComponent(c.id)}`,{
+    method:'PATCH',
+    headers:SB_HEADERS,
+    body:JSON.stringify({
+      fecha_radicado: fechaISO,
+      radicado_confirmado: true
+    })
+  });
+  
+  if(r.ok){
+    showToast('✓ Fecha de radicado confirmada', 'ok');
+    cumData = await sbGetCumplidos();
+    cumModalViaje = cumData.find(x=>x.id===c.id);
+    renderCumModalBody();
+  } else {
+    showToast('Error al confirmar', 'err');
+  }
+  _gutPendingDate = null;
 }
 
 // ── CAMBIAR ESTADO DESDE MODAL ─────────────────────────
