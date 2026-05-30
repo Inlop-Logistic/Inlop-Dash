@@ -340,8 +340,8 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.72rem}
     <button class="tab-btn" onclick="switchTab('vehiculos',this)">
       <svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>Vehículos
     </button>
-    <button class="tab-btn" onclick="switchTab('pendientes',this)">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Pendientes
+    <button class="tab-btn" onclick="switchTab('planeados',this)">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Planeados
     </button>
     <button class="tab-btn" onclick="switchTab('cumplidos',this)" id="tab-cum-btn">
       <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
@@ -530,34 +530,59 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.72rem}
         </div>
       </div>
 
-      <!-- ── CONTENIDO PENDIENTES ── -->
-      <div id="content-pendientes" class="content-section" style="display:none;flex:1;overflow:hidden;flex-direction:column">
+      <!-- ── CONTENIDO PLANEADOS ── -->
+      <div id="content-planeados" class="content-section" style="display:none;flex:1;overflow:hidden;flex-direction:column">
+        <!-- KPIs horizontales -->
+        <div class="kpi-strip-h">
+          <div class="kpi-h" style="--kpi-c:var(--accent)"><div class="kpi-h-label">Total</div><div class="kpi-h-val" id="kpl-total">—</div><div class="kpi-h-sub">planeados</div></div>
+          <div class="kpi-h" style="--kpi-c:var(--yellow)"><div class="kpi-h-label">Programados</div><div class="kpi-h-val" id="kpl-prog">—</div><div class="kpi-h-sub">sin activar</div></div>
+          <div class="kpi-h" style="--kpi-c:var(--green)"><div class="kpi-h-label">Activos</div><div class="kpi-h-val" id="kpl-activo">—</div><div class="kpi-h-sub">en resume</div></div>
+          <div class="kpi-h" style="--kpi-c:var(--orange)"><div class="kpi-h-label">Próximos 2h</div><div class="kpi-h-val" id="kpl-prox">—</div><div class="kpi-h-sub">por activarse</div></div>
+        </div>
+        <!-- Filtros -->
         <div class="unified-toolbar">
-          <span style="font-family:var(--syne);font-size:.75rem;font-weight:700;color:var(--text0)">Viajes Pendientes de Monitorear</span>
-          <span id="count-pend" class="count-badge"></span>
+          <span style="font-family:var(--syne);font-size:.75rem;font-weight:700;color:var(--text0)">Planeación de Viajes</span>
+          <input type="date" id="pla-fil-fecha" onchange="planeadosApplyFilters()"
+            style="padding:.38rem .7rem;background:var(--bg1);border:1px solid var(--border);border-radius:6px;color:var(--text1);font-size:.72rem;outline:none"/>
+          <select id="pla-fil-cliente" onchange="planeadosApplyFilters()"
+            style="padding:.38rem .7rem;background:var(--bg1);border:1px solid var(--border);border-radius:6px;color:var(--text1);font-size:.72rem">
+            <option value="">Todos los clientes</option>
+          </select>
+          <select id="pla-fil-estado" onchange="planeadosApplyFilters()"
+            style="padding:.38rem .7rem;background:var(--bg1);border:1px solid var(--border);border-radius:6px;color:var(--text1);font-size:.72rem">
+            <option value="">Todos los estados</option>
+            <option value="programado">Programado</option>
+            <option value="activo">Activo</option>
+          </select>
+          <button class="btn-clear-filters" onclick="planeadosClearFilters()">
+            <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Limpiar
+          </button>
           <button class="btn-expand-table" onclick="toggleExpand()" style="margin-left:auto">
             <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
             Expandir
           </button>
+          <span class="count-badge" id="pla-count"></span>
         </div>
-        <div id="loading-pend" class="loading-state"><div class="spinner"></div><span>Cargando viajes pendientes…</span></div>
-        <div id="wrap-pend" class="tbl-wrap" style="display:none;flex:1;overflow-y:auto">
+        <div id="pla-loading" class="loading-state"><div class="spinner"></div><span>Cargando planeación…</span></div>
+        <div id="pla-wrap" class="tbl-wrap" style="display:none;flex:1;overflow-y:auto">
           <table>
             <thead><tr>
+              <th>Fecha Planillado</th>
               <th>Fecha Programada</th>
               <th># Viaje</th>
               <th>Placa</th>
               <th>Conductor</th>
-              <th>Localidad Origen</th>
-              <th>Ciudad Origen</th>
-              <th>Ciudad Destino</th>
+              <th>Cliente</th>
+              <th>Origen</th>
+              <th>Destino</th>
+              <th>Estado</th>
             </tr></thead>
-            <tbody id="tbody-pend"></tbody>
+            <tbody id="pla-tbody"></tbody>
           </table>
         </div>
-        <div id="empty-pend" class="empty-state" style="display:none">
+        <div id="pla-empty" class="empty-state" style="display:none">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>
-          <span>Sin viajes pendientes próximos</span>
+          <span>Sin viajes planeados para esta fecha</span>
         </div>
       </div>
 
@@ -710,6 +735,7 @@ window._inlopUser = (function(){
 
 
 let dataViajes = [], dataAlarmas = [], dataPendientes = [];
+let cache_viajes_local = [];
 let mapInstance = null, mapMarkers = [], miniMap = null;
 let cdTimer = null, alarmaFilter = 'historial';
 
@@ -773,7 +799,7 @@ setInterval(tick,1000);tick();
 
 // ── NAVEGACIÓN NUEVO LAYOUT ────────────────────────────
 let tabActual = 'viajes';
-const SECCIONES = ['viajes','mapa','alarmas','vehiculos','pendientes','cumplidos'];
+const SECCIONES = ['viajes','mapa','alarmas','vehiculos','planeados','cumplidos'];
 
 // KPIs por pestaña
 const SIDEBAR_DEFS = {
@@ -875,7 +901,7 @@ function switchTab(tab, btn){
       mapFullInstance.invalidateSize();
       renderMapFull();
     },120);
-  } else if(['alarmas','cumplidos','pendientes'].includes(tab)){
+  } else if(['alarmas','cumplidos','planeados'].includes(tab)){
     if(mapZone) mapZone.style.display='none';
     if(sidebar) sidebar.style.display='none';
     const bottom=document.querySelector('.main-bottom');
@@ -883,6 +909,7 @@ function switchTab(tab, btn){
     if(tab==='cumplidos'&&!cumData.length) initCumplidos();
     if(tab==='alarmas') updateAlarmasKPIs();
     if(tab==='cumplidos') cumUpdateKPIs();
+    if(tab==='planeados') loadPlaneados();
   } else {
     if(mapZone) mapZone.style.display='block';
     const bottom=document.querySelector('.main-bottom');
@@ -1018,6 +1045,7 @@ async function loadAll(){
     if(r1.status==='fulfilled'){
       const raw=r1.value;
       dataViajes=Array.isArray(raw)?raw:raw.data||raw.result||[];
+      cache_viajes_local=[...dataViajes];
     }
     if(r2.status==='fulfilled'){
       const raw=r2.value;
@@ -1040,6 +1068,7 @@ async function loadAll(){
     renderAlarmas();
     renderVehiculos();
     renderPendientes();
+    syncPlaneadosConResume();
     renderMap();
     document.getElementById('last-update').textContent='Actualizado: '+new Date().toLocaleTimeString('es-CO',{hour12:false});
     setLive('live');
@@ -1140,12 +1169,19 @@ function clearFiltersCumplidos(){
 
 // SELECTS
 function populateSelects(){
-  const cs=[...new Set(dataViajes.map(d=>(d.company_customer_name||'').split(',')[0].trim()).filter(Boolean))].sort();
+  // Normalizar clientes — deduplicar ignorando mayúsculas y espacios extra
+  const rawClientes = dataViajes.map(d=>(d.company_customer_name||'').split(',')[0].trim()).filter(Boolean);
+  const seen = new Map();
+  rawClientes.forEach(c => {
+    const key = c.toUpperCase().replace(/\s+/g,' ');
+    if (!seen.has(key)) seen.set(key, c);
+  });
+  const cs = [...seen.values()].sort((a,b)=>a.localeCompare(b,'es'));
   const se=document.getElementById('sel-cliente');
   if(se){
     const cv=se.value;
     se.innerHTML='<option value="">Todos los clientes</option>';
-    cs.forEach(c=>{const o=document.createElement('option');o.value=c.toLowerCase();o.textContent=c;se.appendChild(o)});
+    cs.forEach(c=>{const o=document.createElement('option');o.value=c.toUpperCase().replace(/\s+/g,' ');o.textContent=c;se.appendChild(o)});
     se.value=cv;
   }
 }
@@ -1158,7 +1194,7 @@ function applyFilters(){
   const fecha=(document.getElementById('sel-fecha')?.value||'');
   let rows=dataViajes;
   if(est) rows=rows.filter(d=>(d.state_travel||'').toLowerCase()===est||(d.state_travel||'').toLowerCase().includes(est));
-  if(cli) rows=rows.filter(d=>(d.company_customer_name||'').toLowerCase().includes(cli));
+  if(cli) rows=rows.filter(d=>(d.company_customer_name||'').toUpperCase().replace(/\s+/g,' ').includes(cli.toUpperCase()));
   if(fecha){
     rows=rows.filter(d=>{
       const f=parseFechaMDY(d.activated_on||d.created_on);
@@ -2112,7 +2148,10 @@ async function solicitarCumplido(trip_number, waLink){
 
 // ── POBLAR SELECTS DE FILTRO ───────────────────────────
 function cumPopulateClientes(){
-  const clientes=[...new Set(cumData.map(c=>c.cliente).filter(Boolean))].sort();
+  const rawCum = cumData.map(c=>(c.cliente||'').split(',')[0].trim()).filter(Boolean);
+  const seenCum = new Map();
+  rawCum.forEach(c => { const k=c.toUpperCase().replace(/\s+/g,' '); if(!seenCum.has(k)) seenCum.set(k,c); });
+  const clientes = [...seenCum.values()].sort((a,b)=>a.localeCompare(b,'es'));
   const sel=document.getElementById('cum-fil-cliente');
   if(!sel) return; // no existe en vista split/tv
   const val=sel.value;
@@ -2496,6 +2535,199 @@ async function onViajesLoaded(){
   await cumSyncViajes();
   cumPopulateClientes();
 }
+
+
+// ═══════════════════════════════════════════════════════
+// MÓDULO PLANEADOS
+// ═══════════════════════════════════════════════════════
+let dataPlaneados     = [];
+let planeadosFiltrados = [];
+
+const SB_URL_TC  = 'https://gtyydandwcgoaratmnqh.supabase.co/rest/v1';
+const SB_KEY_TC  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0eXlkYW5kd2Nnb2FyYXRtbnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDAyMTcsImV4cCI6MjA5MjYxNjIxN30.utGZtr0L5t9hIpRABTtfhsKEsrSCBJLHcP_gQ5Hq0EI';
+const SB_HDR_TC  = { 'apikey': SB_KEY_TC, 'Authorization': `Bearer ${SB_KEY_TC}` };
+
+async function loadPlaneados() {
+  const loading = document.getElementById('pla-loading');
+  const wrap    = document.getElementById('pla-wrap');
+  const empty   = document.getElementById('pla-empty');
+  if (!loading) return;
+  loading.style.display = 'flex';
+  wrap.style.display    = 'none';
+  empty.style.display   = 'none';
+
+  try {
+    // Fecha por defecto = hoy si no hay filtro
+    const filtFecha = document.getElementById('pla-fil-fecha')?.value;
+    if (!filtFecha) {
+      // Poner hoy como default en el input
+      const hoy = new Date().toISOString().slice(0, 10);
+      if (document.getElementById('pla-fil-fecha'))
+        document.getElementById('pla-fil-fecha').value = hoy;
+    }
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const hoyStr = hoy.toISOString().slice(0, 10);
+
+    const r = await fetch(
+      `${SB_URL_TC}/planeados?fecha_programada_dia=gte.${hoyStr}&order=schedulate_origin.asc&limit=500`,
+      { headers: SB_HDR_TC }
+    );
+    dataPlaneados = r.ok ? await r.json() : [];
+    planeadosPopulateClientes();
+    planeadosApplyFilters();
+    planeadosUpdateKPIs();
+  } catch(e) {
+    console.error('loadPlaneados:', e);
+    dataPlaneados = [];
+    planeadosApplyFilters();
+  }
+}
+
+function planeadosUpdateKPIs() {
+  const sv = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+  const ahora = Date.now();
+  const en2h  = ahora + 2 * 3600 * 1000;
+  const prox  = planeadosFiltrados.filter(v => {
+    const f = parseFechaDMY(v.schedulate_origin);
+    if (!f) return false;
+    return f.getTime() >= ahora && f.getTime() <= en2h;
+  });
+  sv('kpl-total',  planeadosFiltrados.length);
+  sv('kpl-prog',   planeadosFiltrados.filter(v => !v.activo_en_resume).length);
+  sv('kpl-activo', planeadosFiltrados.filter(v =>  v.activo_en_resume).length);
+  sv('kpl-prox',   prox.length);
+}
+
+function planeadosPopulateClientes() {
+  const clientes = [...new Set(dataPlaneados.map(v => (v.company_customer_name||'').split(',')[0].trim()).filter(Boolean))].sort();
+  const sel = document.getElementById('pla-fil-cliente');
+  if (!sel) return;
+  const val = sel.value;
+  sel.innerHTML = '<option value="">Todos los clientes</option>';
+  clientes.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.toLowerCase(); o.textContent = c;
+    sel.appendChild(o);
+  });
+  sel.value = val;
+}
+
+function planeadosApplyFilters() {
+  const fecha  = document.getElementById('pla-fil-fecha')?.value || new Date().toISOString().slice(0, 10);
+  const cli    = (document.getElementById('pla-fil-cliente')?.value || '').toLowerCase();
+  const estado = (document.getElementById('pla-fil-estado')?.value || '').toLowerCase();
+
+  let rows = [...dataPlaneados];
+
+  // Filtro fecha programada
+  if (fecha) rows = rows.filter(v => (v.fecha_programada_dia || '') === fecha);
+  // Filtro cliente
+  if (cli)   rows = rows.filter(v => (v.company_customer_name || '').toLowerCase().includes(cli));
+  // Filtro estado
+  if (estado === 'programado') rows = rows.filter(v => !v.activo_en_resume);
+  if (estado === 'activo')     rows = rows.filter(v =>  v.activo_en_resume);
+
+  planeadosFiltrados = rows;
+  document.getElementById('pla-count').textContent = rows.length + ' viaje' + (rows.length !== 1 ? 's' : '');
+  planeadosRenderTabla();
+  planeadosUpdateKPIs();
+}
+
+function planeadosClearFilters() {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const fd = document.getElementById('pla-fil-fecha');    if(fd) fd.value = hoy;
+  const fc = document.getElementById('pla-fil-cliente');  if(fc) fc.value = '';
+  const fe = document.getElementById('pla-fil-estado');   if(fe) fe.value = '';
+  planeadosApplyFilters();
+}
+
+function planeadosRenderTabla() {
+  const loading = document.getElementById('pla-loading');
+  const wrap    = document.getElementById('pla-wrap');
+  const empty   = document.getElementById('pla-empty');
+  if (!loading) return;
+  loading.style.display = 'none';
+
+  if (!planeadosFiltrados.length) {
+    wrap.style.display  = 'none';
+    empty.style.display = 'flex';
+    return;
+  }
+  empty.style.display = 'none';
+  wrap.style.display  = 'block';
+
+  const ahora = Date.now();
+
+  document.getElementById('pla-tbody').innerHTML = planeadosFiltrados.map((v, i) => {
+    const fProg  = parseFechaDMY(v.schedulate_origin);
+    const fPlan  = v.fecha_detectado ? new Date(v.fecha_detectado) : null;
+    const diff   = fProg ? fProg.getTime() - ahora : null;
+    const horas  = diff !== null ? Math.floor(diff / (1000 * 3600)) : null;
+    const mins   = diff !== null ? Math.floor((diff % (1000 * 3600)) / 60000) : null;
+
+    // Estado badge sin emoticonos
+    let estadoBadge = '';
+    if (v.activo_en_resume) {
+      estadoBadge = `<span class="badge b-green">ACTIVO</span>`;
+    } else if (diff !== null && diff > 0 && diff <= 2 * 3600 * 1000) {
+      estadoBadge = `<span class="badge b-orange">ACTIVANDOSE</span>`;
+    } else {
+      estadoBadge = `<span class="badge b-gray">PROGRAMADO</span>`;
+    }
+
+    // Tiempo restante
+    let tiempoTag = '';
+    if (fProg && !v.activo_en_resume) {
+      if (diff < 0) {
+        tiempoTag = `<div style="font-family:var(--mono);font-size:.55rem;color:var(--text2)">hace ${Math.abs(horas)}h</div>`;
+      } else if (horas < 2) {
+        tiempoTag = `<div style="font-family:var(--mono);font-size:.55rem;color:var(--orange);font-weight:700">en ${horas}h ${mins}m</div>`;
+      } else if (horas < 24) {
+        tiempoTag = `<div style="font-family:var(--mono);font-size:.55rem;color:var(--yellow)">en ${horas}h ${mins}m</div>`;
+      } else {
+        const dias = Math.floor(horas / 24);
+        tiempoTag = `<div style="font-family:var(--mono);font-size:.55rem;color:var(--text2)">en ${dias}d ${horas % 24}h</div>`;
+      }
+    }
+
+    const fmtPlan = fPlan ? fPlan.toLocaleDateString('es-CO', {day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' +
+      fPlan.toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit',hour12:false}) : '—';
+    const fmtProg = fProg ? fmtActivatedOn(v.schedulate_origin) : '—';
+    const cliente = v.company_customer_name ? (v.company_customer_name.split(',')[0].trim().slice(0, 22)) : '—';
+
+    return `<tr class="fade-row" style="animation-delay:${Math.min(i * .02, .4)}s">
+      <td style="font-family:var(--mono);font-size:.65rem;color:var(--text2)">${fmtPlan}</td>
+      <td>
+        <div style="font-family:var(--mono);font-size:.7rem;color:var(--text0)">${fmtProg}</div>
+        ${tiempoTag}
+      </td>
+      <td style="font-family:var(--mono);color:var(--accent);font-size:.72rem">${v.trip_number || '—'}</td>
+      <td><span class="plate">${v.license_plate || '—'}</span></td>
+      <td style="color:var(--text0);font-size:.72rem">${short(v.driver_name || '—', 22)}</td>
+      <td style="font-size:.7rem;color:var(--text2)">${cliente}</td>
+      <td style="font-size:.7rem">${v.city_origin || '—'}</td>
+      <td style="font-size:.7rem">${v.city_destination || '—'}</td>
+      <td>${estadoBadge}</td>
+    </tr>`;
+  }).join('');
+}
+
+// Actualizar estado activo cuando loadAll trae nuevos viajes
+function syncPlaneadosConResume() {
+  if (!dataPlaneados.length) return;
+  const activeIds = new Set(cache_viajes_local.map(v => v.trip_number).filter(Boolean));
+  dataPlaneados = dataPlaneados.map(p => ({
+    ...p,
+    activo_en_resume: activeIds.has(p.trip_number)
+  }));
+  if (tabActual === 'planeados') {
+    planeadosApplyFilters();
+    planeadosUpdateKPIs();
+  }
+}
+
 
 // INIT
 if(URL_VISTA === 'cumplidos'){
