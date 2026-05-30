@@ -2,6 +2,41 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 
+
+// ─── SUPABASE ───────────────────────────────────────────
+const SB_URL = "https://gtyydandwcgoaratmnqh.supabase.co/rest/v1";
+const SB_KEY = process.env.SUPABASE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0eXlkYW5kd2Nnb2FyYXRtbnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDAyMTcsImV4cCI6MjA5MjYxNjIxN30.utGZtr0L5t9hIpRABTtfhsKEsrSCBJLHcP_gQ5Hq0EI";
+
+const SB_HEADERS = {
+  "apikey": SB_KEY,
+  "Authorization": `Bearer ${SB_KEY}`,
+  "Content-Type": "application/json",
+  "Prefer": "resolution=merge-duplicates,return=representation"
+};
+
+async function sbFetch(path, method="GET", body=null) {
+  const opts = { method, headers: SB_HEADERS };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(`${SB_URL}${path}`, opts);
+  if (!r.ok) {
+    const txt = await r.text();
+    console.error(`Supabase ${method} ${path} → ${r.status}: ${txt}`);
+    return null;
+  }
+  if (method === "DELETE") return null;
+  const text = await r.text();
+  return text ? JSON.parse(text) : null;
+}
+
+// Parsear schedulate_origin DD/MM/YYYY HH:MM:SS
+function parseSchedulate(str) {
+  if (!str) return null;
+  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):?(\d{2})?/);
+  if (!m) return null;
+  const [, dd, mm, yyyy, hh, min, ss = '00'] = m;
+  return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:${ss.padStart(2,'0')}`);
+}
+
 const app = express();
 app.use(cors());
 
@@ -146,6 +181,111 @@ async function syncPendientes() {
     console.error("❌ Error sync pendientes:", e.message);
   }
 }
+
+// ─── SYNC PLANEADOS ─────────────────────────────────────
+async function syncPlaneados() {
+  try {
+    // 1. Traer Travel/search con size grande
+    const path = `/Travel/search?size=200&page=1`;
+    const data = await safeFetch(path, []);
+    const arr = Array.isArray(data) ? data : data.data || data.result || [];
+    
+    if (!arr.length) {
+      console.log('📅 Planeados: Travel/search devolvió 0 viajes');
+      return;
+    }
+
+    const ahora = new Date();
+
+    // 2. Filtrar solo viajes con schedulate_origin >= hoy 00:00
+    const hoyInicio = new Date(ahora);
+    hoyInicio.setHours(0, 0, 0, 0);
+
+    const viajesFuturos = arr.filter(v => {
+      const f = parseSchedulate(v.schedulate_origin);
+      if (!f || isNaN(f.getTime())) return false;
+      return f >= hoyInicio;
+    });
+
+    console.log(`📅 Planeados: ${arr.length} en Travel/search → ${viajesFuturos.length} hoy o futuros`);
+
+    if (!viajesFuturos.length) return;
+
+    // 3. Obtener los que ya existen en Supabase para no pisar fecha_detectado
+    const existentes = await sbFetch('/planeados?select=trip_number,fecha_detectado,company_customer_name');
+    const existMap = {};
+    (existentes || []).forEach(e => { existMap[e.trip_number] = e; });
+
+    // 4. IDs activos en Resume para marcar activo_en_resume
+    const activeIds = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
+
+    // 5. Upsert cada viaje — solo insertar nuevos, actualizar estado de activos
+    const rows = viajesFuturos.map(v => {
+      const f = parseSchedulate(v.schedulate_origin);
+      const yaExiste = existMap[v.trip_number];
+      const estaActivo = activeIds.has(v.trip_number);
+      
+      // Cliente: del viaje activo en Resume si existe, si no del Travel/search
+      const viajeResume = cache.viajes.data.find(r => r.trip_number === v.trip_number);
+      const cliente = viajeResume?.company_customer_name || v.company_customer_name || null;
+
+      const row = {
+        trip_number:           v.trip_number,
+        license_plate:         v.license_plate || null,
+        driver_name:           v.driver_name || null,
+        company_customer_name: cliente,
+        city_origin:           v.city_origin || null,
+        city_destination:      v.city_destination || null,
+        origin_address:        v.origin_address || null,
+        schedulate_origin:     v.schedulate_origin || null,
+        fecha_programada_dia:  f ? f.toISOString().slice(0, 10) : null,
+        activo_en_resume:      estaActivo,
+      };
+
+      // Si ya existe → mantener fecha_detectado original
+      if (yaExiste) {
+        row.fecha_detectado = yaExiste.fecha_detectado;
+        // Solo actualizar activado_en si acaba de activarse
+        if (estaActivo && !yaExiste.activo_en_resume) {
+          row.activado_en = new Date().toISOString();
+        }
+      } else {
+        row.fecha_detectado = new Date().toISOString();
+        if (estaActivo) row.activado_en = new Date().toISOString();
+      }
+
+      return row;
+    });
+
+    // Upsert en lotes de 50
+    for (let i = 0; i < rows.length; i += 50) {
+      const lote = rows.slice(i, i + 50);
+      await sbFetch('/planeados', 'POST', lote);
+    }
+
+    // 6. Limpiar viajes de días anteriores (fecha_programada_dia < hoy)
+    const hoyStr = hoyInicio.toISOString().slice(0, 10);
+    await sbFetch(`/planeados?fecha_programada_dia=lt.${hoyStr}`, 'DELETE');
+    console.log(`📅 Planeados: ${rows.length} upsertados, limpieza de anteriores a ${hoyStr}`);
+
+    // 7. Actualizar cliente en viajes ya activos que no tenían cliente
+    const sinCliente = (existentes || []).filter(e => !e.company_customer_name);
+    for (const e of sinCliente) {
+      const viajeResume = cache.viajes.data.find(r => r.trip_number === e.trip_number);
+      if (viajeResume?.company_customer_name) {
+        await sbFetch(
+          `/planeados?trip_number=eq.${encodeURIComponent(e.trip_number)}`,
+          'PATCH',
+          { company_customer_name: viajeResume.company_customer_name }
+        );
+      }
+    }
+
+  } catch(e) {
+    console.error("❌ Error sync planeados:", e.message);
+  }
+}
+
 async function syncViajes() {
   try {
     // Página 1 — viajes activos principales
@@ -280,6 +420,105 @@ app.get("/api/pendientes", async (req, res) => {
   }
 });
 
+
+
+// ─── SYNC CUMPLIDOS — corre en Railway cada 60s ─────────
+function extraerTelefono(driver_phone, full_driver) {
+  const p1 = (driver_phone || '').replace(/\D/g, '');
+  if (p1.length === 10 && p1.startsWith('3')) return p1;
+  const p2 = (full_driver || '').split(',')[1]?.trim().replace(/\D/g, '') || '';
+  if (p2.length === 10 && p2.startsWith('3')) return p2;
+  return '';
+}
+
+async function syncCumplidos() {
+  try {
+    if (!cache.viajes.data.length) return;
+
+    // 1. Leer todos los cumplidos existentes en Supabase
+    const existentesRaw = await sbFetch('/cumplidos?select=id,estado_cumplido,tiene_soporte,cliente&limit=1000');
+    const existentes = new Map((existentesRaw || []).map(c => [c.id, c]));
+
+    const ESTADOS_ACTIVOS = new Set(['LIVE', 'SOLICITADO', 'CUMPLIDO RECIBIDO']);
+    const apiSet = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
+
+    // 2. Insertar viajes nuevos que aparecieron en el Resume
+    let insertados = 0, actualizados = 0;
+    for (const v of cache.viajes.data) {
+      if (!v.trip_number) continue;
+      const existe = existentes.get(v.trip_number);
+      const cliente = (v.company_customer_name || '').split(',')[0].trim();
+
+      if (!existe) {
+        // Nuevo viaje — insertar con estado LIVE
+        const row = {
+          id:              v.trip_number,
+          manifiesto:      v.number_order || '',
+          placa:           v.license_plate || '',
+          conductor:       v.driver_name || '',
+          conductor_tel:   extraerTelefono(v.driver_phone, v.full_driver),
+          cliente:         cliente,
+          estado_controlt: v.state_travel || '',
+          estado_cumplido: 'LIVE',
+          pct:             parseFloat(v.percentage_travel) || 0,
+          fecha_viaje:     v.activated_on || v.created_on || '',
+          origen:          v.origin_city_name || '',
+          destino:         v.destiny_city_name || '',
+          tiene_soporte:   false,
+        };
+        await sbFetch('/cumplidos', 'POST', row);
+        insertados++;
+      } else {
+        // Actualizar estado_controlt, pct y cliente si antes estaba vacío
+        const patch = {
+          estado_controlt: v.state_travel || '',
+          pct:             parseFloat(v.percentage_travel) || 0,
+        };
+        if (!existe.cliente && cliente) patch.cliente = cliente;
+        await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(v.trip_number)}`, 'PATCH', patch);
+        actualizados++;
+      }
+    }
+
+    // 3. Detectar viajes que desaparecieron del Resume → finalizar en Supabase
+    let finalizados = 0;
+    for (const [id, c] of existentes) {
+      const estadoActivo = ESTADOS_ACTIVOS.has((c.estado_cumplido || '').toUpperCase());
+      if (estadoActivo && !apiSet.has(id)) {
+        const nuevoEstado = c.tiene_soporte ? 'PENDIENTE LIQUIDACION' : 'FINALIZADO CONTROLT';
+        await sbFetch(
+          `/cumplidos?id=eq.${encodeURIComponent(id)}`,
+          'PATCH',
+          { estado_cumplido: nuevoEstado, fecha_finalizacion: new Date().toISOString() }
+        );
+        finalizados++;
+        console.log(`🏁 Cumplido ${id} → ${nuevoEstado}`);
+      }
+    }
+
+    console.log(`✅ Cumplidos sync: +${insertados} nuevos, ~${actualizados} actualizados, 🏁${finalizados} finalizados`);
+  } catch(e) {
+    console.error('❌ Error syncCumplidos:', e.message);
+  }
+}
+
+// Planeados — desde Supabase
+app.get("/api/planeados", async (req, res) => {
+  try {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const hoyStr = hoy.toISOString().slice(0, 10);
+    // Traer hoy y futuros ordenado por schedulate_origin
+    const data = await sbFetch(
+      `/planeados?fecha_programada_dia=gte.${hoyStr}&order=schedulate_origin.asc&limit=500`
+    );
+    res.json(data || []);
+  } catch(e) {
+    console.error("❌ /api/planeados:", e.message);
+    res.json([]);
+  }
+});
+
 // Health check con info del caché
 app.get("/health", (req, res) => {
   const estados = {};
@@ -315,11 +554,15 @@ app.listen(process.env.PORT || 3000, async () => {
     await syncViajes();
     await syncAlarmas();
     await syncPendientes();
+    await syncPlaneados();
+    await syncCumplidos();
   } catch(e) {
     console.error("❌ Error inicialización:", e.message);
   }
 
   setInterval(syncViajes,    60 * 1000);
   setInterval(syncAlarmas,   70 * 1000);
-  setInterval(syncPendientes, 5 * 60 * 1000); // cada 5 minutos
+  setInterval(syncPendientes, 5 * 60 * 1000);
+  setInterval(syncPlaneados,  5 * 60 * 1000);
+  setInterval(syncCumplidos,  60 * 1000); // Cumplidos cada 60s — mismo ciclo que viajes
 });
