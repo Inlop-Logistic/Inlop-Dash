@@ -1264,7 +1264,7 @@ tbody td{color:var(--w2) !important;font-size:12px !important}
   gap:10px !important;
 }
 
-/* ── Título del Dashboard (Centro de Control Operativo) ── */
+/* ── Título del Dashboard (Centro de Operaciones) ── */
 .dash-page-title{
   padding:20px 0 18px;
   border-bottom:1px solid var(--line);
@@ -1648,6 +1648,74 @@ tbody td{color:var(--w2) !important;font-size:12px !important}
 .charts-2{align-items:stretch}
 .charts-2 > .card{display:flex;flex-direction:column}
 
+
+/* ── Sub-pestañas internas dentro del módulo Operaciones ── */
+.sub-tabs{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  padding:8px 0 0;
+  margin-bottom:18px;
+  border-bottom:1px solid var(--line);
+}
+.sub-tab{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 18px;
+  border:none;
+  background:transparent;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--w4);
+  cursor:pointer;
+  border-bottom:2.5px solid transparent;
+  margin-bottom:-1px;
+  transition:.15s;
+  white-space:nowrap;
+}
+.sub-tab i.ti{font-size:15px}
+.sub-tab:hover{color:var(--w2)}
+.sub-tab.on{
+  color:var(--navy);
+  border-bottom-color:var(--red);
+}
+.sub-tc{display:none}
+.sub-tc.show{display:block;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+
+/* ── Botones de módulos en construcción ── */
+.tb.soon{
+  position:relative;
+  opacity:.55;
+  cursor:not-allowed;
+}
+.tb.soon:hover{background:transparent !important;color:inherit !important}
+.tb-soon-badge{
+  display:inline-block;
+  margin-left:auto;
+  font-family:'JetBrains Mono',monospace;
+  font-size:8px;
+  font-weight:500;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  padding:2px 6px;
+  border-radius:4px;
+  background:rgba(225,6,19,.1);
+  color:var(--red);
+  white-space:nowrap;
+}
+.sb-section-label.upcoming{margin-top:14px;color:var(--w4);opacity:.7}
+
+
+/* ── Ocultar badge Soon y texto al colapsar sidebar ── */
+.ops-body-row.sb-collapsed .tb-soon-badge{display:none !important}
+.ops-body-row.sb-collapsed .tb.soon{opacity:.4}
+
 </style>
 </head>
 <body>
@@ -1757,7 +1825,7 @@ window.updatePortalStats=updatePortalStats;
 <div class="tab-row">
 
   <div class="sb-brand">
-    <div class="sb-brand-mark">
+    <div class="sb-brand-mark" id="logoIn" title="" style="cursor:default;user-select:none">
       <span style="font-family:'Anton',sans-serif;font-size:14px;font-weight:400;color:#012A6B;letter-spacing:.12em;line-height:1">IN</span>
     </div>
     <div>
@@ -1768,18 +1836,22 @@ window.updatePortalStats=updatePortalStats;
 
   <div class="sb-section-label">Vistas</div>
 
-<button class="tb on" id="tab-res" onclick="showTab('res')" data-label="Resumen">
-    <i class="ti ti-chart-bar" aria-hidden="true"></i>Resumen Operativo
+<button class="tb on" id="tab-res" onclick="showTab('res')" data-label="Operaciones">
+    <i class="ti ti-chart-bar" aria-hidden="true"></i>Operaciones
   </button>
 
-  <button class="tb" id="tab-his" onclick="showTab('his')" data-label="Histórico">
-    <i class="ti ti-history" aria-hidden="true"></i>Histórico
+  <div class="sb-section-label upcoming">Próximamente</div>
+  <button class="tb soon" type="button" data-label="Planeación Operativa" disabled aria-disabled="true" title="Módulo en construcción">
+    <i class="ti ti-calendar-stats" aria-hidden="true"></i>Planeación Operativa
+    <span class="tb-soon-badge">Soon</span>
   </button>
-
-  <div class="sb-section-label mt">Acciones</div>
-
-  <button class="tb" onclick="document.getElementById('xlInput')?.click()" type="button" data-label="Cargar Excel">
-    <i class="ti ti-upload" aria-hidden="true"></i>Cargar Excel
+  <button class="tb soon" type="button" data-label="Seguimiento en vivo" disabled aria-disabled="true" title="Módulo en construcción">
+    <i class="ti ti-radar" aria-hidden="true"></i>Seguimiento en vivo
+    <span class="tb-soon-badge">Soon</span>
+  </button>
+  <button class="tb soon" type="button" data-label="Project" disabled aria-disabled="true" title="Módulo en construcción">
+    <i class="ti ti-folder" aria-hidden="true"></i>Project
+    <span class="tb-soon-badge">Soon</span>
   </button>
 
   <div class="sb-footer">
@@ -1796,8 +1868,8 @@ window.updatePortalStats=updatePortalStats;
 
   <div class="hdr-r">
     <div class="header-module-title">
-      <div class="hmt-main">Centro de Control Operativo</div>
-      <div class="hmt-sub">Flota, viajes, trazabilidad · Tiempo real</div>
+      <div class="hmt-main">Centro de Operaciones</div>
+      <div class="hmt-sub">Planificación, seguimiento y control Operativo</div>
     </div>
 
     <div class="hdr-alert-pill" id="hdrAlertPill" style="display:none">
@@ -1914,7 +1986,19 @@ window.updatePortalStats=updatePortalStats;
 
 <!-- ══════════ RESUMEN EJECUTIVO ══════════ -->
 <div class="tc show" id="tc-res">
-  <div class="sh"><div class="sh-bar" style="background:var(--red)"></div><span class="sh-txt">Indicadores clave — Sol Vs Carg</span><div class="sh-line"></div></div>
+  <!-- Sub-navegador interno: Resumen Operativo / Tendencia -->
+  <div class="sub-tabs">
+    <button class="sub-tab on" id="subTabRes" onclick="showSubTab('res')">
+      <i class="ti ti-chart-bar" aria-hidden="true"></i>Resumen Operativo
+    </button>
+    <button class="sub-tab" id="subTabTen" onclick="showSubTab('ten')">
+      <i class="ti ti-trending-up" aria-hidden="true"></i>Tendencia
+    </button>
+  </div>
+
+  <!-- Sub-pestaña: Resumen Operativo (default) -->
+  <div class="sub-tc show" id="sub-tc-res">
+<div class="sh"><div class="sh-bar" style="background:var(--red)"></div><span class="sh-txt">Indicadores clave — Sol Vs Carg</span><div class="sh-line"></div></div>
   <!-- KPI ORDER: Sol → Carg → Balance → Cumplimiento → Rutas -->
   <div class="kpi-grid fade" id="kpiGrid"></div>
 
@@ -1969,12 +2053,11 @@ window.updatePortalStats=updatePortalStats;
     <div class="ab-title">Análisis Operativo</div>
     <div class="ab-grid" id="resAnalysisGrid"></div>
   </div>
-</div>
+  </div>
 
-
-<!-- ══════════ HISTÓRICO ══════════ -->
-<div class="tc" id="tc-his">
-  <div class="sh"><div class="sh-bar" style="background:var(--blue)"></div><span class="sh-txt">Evolución histórica — todas las semanas</span><div class="sh-line"></div></div>
+  <!-- Sub-pestaña: Tendencia (antes tc-his) -->
+  <div class="sub-tc" id="sub-tc-ten">
+<div class="sh"><div class="sh-bar" style="background:var(--blue)"></div><span class="sh-txt">Evolución histórica — todas las semanas</span><div class="sh-line"></div></div>
   <div class="charts-2" style="margin-bottom:20px">
     <div class="card cp">
       <div class="card-ttl">Tendencia de cumplimiento vs meta 95%</div>
@@ -2023,7 +2106,11 @@ window.updatePortalStats=updatePortalStats;
     <div class="ha-title" id="hisAnalysisTitle">Análisis gerencial — panorama histórico</div>
     <div class="ha-grid" id="hisAnalysisGrid"></div>
   </div>
+  </div>
 </div>
+
+
+
 
 </div><!-- /page -->
 
@@ -4652,6 +4739,112 @@ document.addEventListener('DOMContentLoaded', function(){
 
 
   
+
+  // ── Triple clic en logo IN → abrir modal de carga ──
+  (function(){
+    let clicks=0, timer=null;
+    const logo=document.getElementById('logoIn');
+    if(!logo) return;
+    logo.addEventListener('click', function(){
+      clicks++;
+      if(clicks===1) timer=setTimeout(()=>{ clicks=0; }, 500);
+      if(clicks===3){
+        clearTimeout(timer); clicks=0;
+        openUploadModal();
+      }
+    });
+  })();
+
+  window.openUploadModal = function(){
+    const m=document.getElementById('uploadModal');
+    if(m){ m.style.display='flex'; }
+  };
+
+  window.closeUploadModal = function(){
+    const m=document.getElementById('uploadModal');
+    if(m){ m.style.display='none'; }
+  };
+
+  // Cerrar modal al hacer clic fuera
+  document.getElementById('uploadModal')?.addEventListener('click', function(e){
+    if(e.target===this) closeUploadModal();
+  });
+
+  // Cerrar modal automáticamente cuando se carga el Excel
+  const _origLoadExcel = window.loadExcel;
+  if(typeof _origLoadExcel === 'function'){
+    window.loadExcel = function(input){
+      _origLoadExcel(input);
+      closeUploadModal();
+    };
+  }
+
+
+  // ── Sub-pestañas internas del módulo Operaciones ──
+  window.showSubTab = function(id){
+    document.querySelectorAll('.sub-tc').forEach(el=>el.classList.remove('show'));
+    document.querySelectorAll('.sub-tab').forEach(el=>el.classList.remove('on'));
+    const tc = document.getElementById('sub-tc-'+id);
+    const tab = id==='res' ? document.getElementById('subTabRes') : document.getElementById('subTabTen');
+    if(tc) tc.classList.add('show');
+    if(tab) tab.classList.add('on');
+  };
+
+
+  // ── Perfil de usuario desde sessionStorage (inlop_user) ──────
+  // login.js guarda { id, email, nombre, rol } en sessionStorage['inlop_user']
+  // auth.js también lo sincroniza tras verificar la sesión con Supabase
+  (function loadUserProfile(){
+    try {
+      const raw = sessionStorage.getItem('inlop_user');
+      if(!raw) return; // Sin sesión activa — mantiene el default
+      const user = JSON.parse(raw);
+      if(!user) return;
+
+      const nombre = user.nombre || user.email?.split('@')[0] || 'Usuario';
+      const rol    = user.rol    || 'INLOP';
+
+      // Iniciales: máx 2 palabras del nombre
+      const initials = nombre.trim().split(/\s+/).slice(0,2)
+        .map(w=>w[0]).join('').toUpperCase();
+
+      // Actualizar UI
+      const avEl   = document.getElementById('headerUserAv');
+      const nameEl = document.getElementById('headerUserName');
+      const rolEl  = document.getElementById('headerUserRol');
+      if(avEl)   avEl.textContent = initials || 'U';
+      if(nameEl) nameEl.textContent = nombre;
+      if(rolEl)  rolEl.textContent  = rol;
+    } catch(e){
+      console.warn('[INLOP] Perfil: no se pudo leer la sesión.', e);
+    }
+  })();
+
 </script>
+
+
+<!-- MODAL CARGAR EXCEL (triple clic en logo IN) -->
+<div id="uploadModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(1,42,107,.45);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:20px;padding:32px 36px;max-width:420px;width:90%;box-shadow:0 24px 60px rgba(1,42,107,.18);position:relative">
+    <button onclick="closeUploadModal()" style="position:absolute;top:14px;right:16px;background:none;border:none;font-size:20px;color:var(--w4);cursor:pointer;line-height:1" title="Cerrar">✕</button>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <div style="width:40px;height:40px;border-radius:12px;background:rgba(1,42,107,.07);display:flex;align-items:center;justify-content:center">
+        <i class="ti ti-upload" style="font-size:20px;color:var(--navy)" aria-hidden="true"></i>
+      </div>
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;letter-spacing:.06em;text-transform:uppercase;color:var(--navy)">Cargar archivo Excel</div>
+        <div style="font-size:12px;color:var(--w4);margin-top:2px">Seguimiento_Programación_Semanal.xlsx</div>
+      </div>
+    </div>
+    <div class="xl-zone" id="xlZoneModal" onclick="document.getElementById('xlInput')?.click()" style="cursor:pointer;border:2px dashed var(--line2);border-radius:12px;padding:28px 20px;text-align:center;transition:.18s;background:#FAFBFF">
+      <i class="ti ti-file-spreadsheet" style="font-size:32px;color:var(--navy);opacity:.4;display:block;margin-bottom:8px" aria-hidden="true"></i>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.06em;color:var(--navy)">Arrastra aquí o haz clic para seleccionar</div>
+      <div style="font-size:11px;color:var(--w4);margin-top:4px">.xlsx · .xls</div>
+    </div>
+    <div style="margin-top:14px;font-size:11px;color:var(--w4);text-align:center">
+      Los datos se guardan automáticamente en Supabase tras la carga.
+    </div>
+  </div>
+</div>
 
 </body>
