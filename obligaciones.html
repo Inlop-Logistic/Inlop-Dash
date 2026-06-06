@@ -210,15 +210,7 @@ body::before{
 .hdr-admin-tag.show{display:flex}
 
 /* ══ BANNER ══ */
-.ob-banner{
-  display:none;align-items:center;gap:10px;padding:7px 22px;
-  font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:500;
-  letter-spacing:.07em;text-transform:uppercase;flex-shrink:0
-}
-.ob-banner.show{display:flex}
-.ob-banner.bn-ok{background:var(--green3);border-bottom:1px solid rgba(0,135,95,.2);color:var(--green)}
-.ob-banner.bn-warn{background:var(--amber3);border-bottom:1px solid rgba(217,119,6,.2);color:var(--amber2)}
-.ob-banner.bn-crit{background:var(--danger3);border-bottom:1px solid rgba(220,38,38,.2);color:var(--danger)}
+/* ob-banner eliminado — la alerta se centraliza en hdrAlertPill */
 .bn-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0;animation:blink 2s infinite}
 .bn-date{margin-left:auto;color:inherit;opacity:.6}
 
@@ -354,6 +346,14 @@ body::before{
 }
 .fics-btn:hover{background:var(--navy2)}
 .fics-btn i.ti{font-size:12px}
+.btn-nueva-ob{
+  margin-left:auto;padding:0 12px;height:30px;border:none;border-radius:6px;
+  background:var(--fin-color);color:#fff;
+  font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;cursor:pointer;
+  display:flex;align-items:center;gap:5px;flex-shrink:0;
+}
+.btn-nueva-ob:hover{background:#006B4A}
 
 /* Chips de filtros activos */
 .active-filters{
@@ -777,6 +777,7 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 .cal-chip.chip-ok{background:var(--green3);color:var(--green)}
 .cal-chip.chip-pend{background:var(--c4);color:var(--w3)}
 .cal-chip.chip-more{background:var(--blue3);color:var(--blue);cursor:pointer}
+.cal-chip.chip-proy{background:rgba(2,132,199,.10);color:#185FA5;border:0.5px dashed rgba(2,132,199,.35);font-style:italic}
 .cal-chip-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
 
 /* ── Panel lateral deslizable ── */
@@ -875,22 +876,26 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 /* ── Layout historial ── */
 .his-layout{
   display:grid;
-  grid-template-columns:380px 1fr;
+  grid-template-columns:320px 1fr;
   gap:0;
   flex:1;
   min-height:0;
-  overflow:hidden
+  overflow:hidden;
+  height:100%
 }
-@media(max-width:900px){.his-layout{grid-template-columns:1fr}}
+@media(max-width:900px){.his-layout{grid-template-columns:1fr;grid-template-rows:260px 1fr}}
 
 /* ── Panel izquierdo: tabla de períodos ── */
 .his-left{
   display:flex;flex-direction:column;
-  border-right:1px solid var(--line);overflow:hidden
+  border-right:1.5px solid var(--line2);
+  overflow:hidden;
+  background:var(--c4)
 }
 .his-left-header{
-  padding:12px 16px 8px;border-bottom:1px solid var(--line);flex-shrink:0;
-  display:flex;align-items:center;justify-content:space-between
+  padding:12px 16px 8px;border-bottom:1.5px solid var(--line2);flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--c4)
 }
 .his-left-title{
   font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;
@@ -912,36 +917,38 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 
 .his-tabla-wrap table{width:100%;border-collapse:collapse;font-size:11px}
 .his-tabla-wrap thead th{
-  background:var(--c4);padding:7px 10px;text-align:left;
+  background:var(--c3);padding:7px 10px;text-align:left;
   font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;
   letter-spacing:.12em;text-transform:uppercase;color:var(--navy);
   border-bottom:1px solid var(--line2);white-space:nowrap;
   position:sticky;top:0;z-index:2
 }
 .his-tabla-wrap tbody td{
-  padding:7px 10px;border-bottom:0.5px solid var(--line);
+  padding:8px 10px;border-bottom:0.5px solid var(--line2);
   color:var(--w2);vertical-align:middle;white-space:nowrap;font-size:11px
 }
 .his-tabla-wrap tbody tr{cursor:pointer;transition:background .12s}
-.his-tabla-wrap tbody tr:hover td{background:rgba(1,42,107,.03)}
-.his-row-sel td{background:rgba(0,135,95,.06)!important;border-left:3px solid var(--fin-color)!important}
+.his-tabla-wrap tbody tr:hover td{background:rgba(1,42,107,.05)}
+.his-row-sel td{background:rgba(0,135,95,.09)!important;border-left:3px solid var(--fin-color)!important}
 
 /* ── Panel derecho: pagos del período ── */
 .his-right{
-  display:flex;flex-direction:column;overflow:hidden
+  display:flex;flex-direction:column;overflow:hidden;
+  background:var(--c0);min-height:0
 }
 .his-pagos-panel{
   display:flex;flex-direction:column;flex:1;overflow:hidden
 }
 .his-pagos-header{
-  padding:10px 16px 6px;border-bottom:1px solid var(--line);flex-shrink:0
+  padding:14px 20px 8px;border-bottom:1.5px solid var(--line2);flex-shrink:0;
+  background:var(--c1)
 }
 .his-pagos-title{
-  font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;
+  font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;
   letter-spacing:.06em;text-transform:uppercase;color:var(--navy)
 }
 .his-pagos-sub{
-  font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--w4);margin-top:2px
+  font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--w4);margin-top:3px
 }
 
 /* ── Sub-tabs del panel de pagos ── */
@@ -985,7 +992,7 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 
 /* ── Tabla de pagos del historial ── */
 .his-pagos-table-wrap{
-  flex:1;overflow:auto;padding:10px 16px 14px
+  flex:1;overflow:auto;padding:10px 16px 14px;min-height:0
 }
 .his-pagos-table-wrap::-webkit-scrollbar{width:6px;height:6px}
 .his-pagos-table-wrap::-webkit-scrollbar-track{background:transparent}
@@ -1034,7 +1041,7 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 /* ── KPIs del historial ── */
 #hisKpiGrid{
   display:grid;grid-template-columns:repeat(4,1fr);
-  gap:10px;padding:12px 16px;flex-shrink:0;
+  gap:8px;padding:8px 16px;flex-shrink:0;
   border-bottom:1px solid var(--line)
 }
 @media(max-width:768px){
@@ -1173,6 +1180,118 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 </div>
 
 <!-- Modal: PIN Admin -->
+<!-- Modal: Nueva Obligación -->
+<div class="modal-bg" id="modalNuevaOb">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-hdr">
+      <div class="modal-hdr-ico"><i class="ti ti-plus" aria-hidden="true"></i></div>
+      <div>
+        <div class="modal-ttl">Nueva Obligación</div>
+        <div class="modal-sub">Se agregará al catálogo y al período activo</div>
+      </div>
+    </div>
+    <div class="modal-body">
+
+      <!-- Proveedor -->
+      <div class="field">
+        <div class="field-lbl">Proveedor<span class="field-req">*</span></div>
+        <select id="nob-prov" class="field-inp" onchange="obNobToggleNuevoProv(this.value)">
+          <option value="">Selecciona un proveedor…</option>
+          <option value="__nuevo__">+ Nuevo proveedor</option>
+        </select>
+      </div>
+
+      <!-- Nuevo proveedor (oculto por defecto) -->
+      <div id="nob-prov-nuevo" style="display:none;background:rgba(1,42,107,.04);border-radius:8px;padding:10px;margin-bottom:4px">
+        <div class="fields-2">
+          <div class="field" style="margin-bottom:0">
+            <div class="field-lbl">NIT / Cédula</div>
+            <input type="text" id="nob-nit" class="field-inp" placeholder="Ej. 900411175">
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <div class="field-lbl">Razón social<span class="field-req">*</span></div>
+            <input type="text" id="nob-razon" class="field-inp" placeholder="Nombre completo del proveedor">
+          </div>
+        </div>
+      </div>
+
+      <!-- Categoría + Sede -->
+      <div class="fields-2">
+        <div class="field">
+          <div class="field-lbl">Categoría<span class="field-req">*</span></div>
+          <select id="nob-cat" class="field-inp">
+            <option value="">Selecciona…</option>
+          </select>
+        </div>
+        <div class="field">
+          <div class="field-lbl">Sede<span class="field-req">*</span></div>
+          <select id="nob-sede" class="field-inp">
+            <option value="nacional">Nacional</option>
+            <option value="cartagena">Cartagena</option>
+            <option value="bogota">Bogotá</option>
+            <option value="yopal">Yopal</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Detalle -->
+      <div class="field">
+        <div class="field-lbl">Detalle / Concepto<span class="field-req">*</span></div>
+        <input type="text" id="nob-detalle" class="field-inp" placeholder="Ej. Arriendo oficina sede Cartagena">
+      </div>
+
+      <!-- Frecuencia + Día -->
+      <div class="fields-2">
+        <div class="field">
+          <div class="field-lbl">Frecuencia<span class="field-req">*</span></div>
+          <select id="nob-frec" class="field-inp" onchange="obNobToggleFrecuencia(this.value)">
+            <option value="mensual">Mensual</option>
+            <option value="quincenal">Quincenal</option>
+            <option value="semanal">Semanal</option>
+          </select>
+        </div>
+        <div class="field" id="nob-dia-mes-wrap">
+          <div class="field-lbl">Día del mes (1–31)<span class="field-req">*</span></div>
+          <input type="number" id="nob-dia-pago" class="field-inp" min="1" max="31" placeholder="Ej. 5">
+          <div class="field-hint">Día límite de pago cada mes</div>
+        </div>
+        <div class="field" id="nob-dia-sem-wrap" style="display:none">
+          <div class="field-lbl">Día de la semana<span class="field-req">*</span></div>
+          <select id="nob-dia-semana" class="field-inp">
+            <option value="0">Lunes</option>
+            <option value="1">Martes</option>
+            <option value="2">Miércoles</option>
+            <option value="3">Jueves</option>
+            <option value="4">Viernes</option>
+            <option value="5">Sábado</option>
+            <option value="6">Domingo</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Monto estimado + Notas -->
+      <div class="fields-2">
+        <div class="field">
+          <div class="field-lbl">Monto estimado (COP)</div>
+          <input type="number" id="nob-monto" class="field-inp" min="0" step="1000" placeholder="0">
+          <div class="field-hint">Referencia — se ajusta al pagar</div>
+        </div>
+        <div class="field">
+          <div class="field-lbl">Notas (opcional)</div>
+          <input type="text" id="nob-notas" class="field-inp" placeholder="Observaciones…">
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="mbtn-c" onclick="obCerrarModalNuevaOb()">Cancelar</button>
+      <button class="mbtn-s" id="btnGuardarNuevaOb" onclick="obGuardarNuevaOb()">
+        <i class="ti ti-check" aria-hidden="true"></i> Crear obligación
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="pinModal">
   <div class="pin-modal">
     <div style="font-size:30px;margin-bottom:10px">🔐</div>
@@ -1326,12 +1445,7 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
     </div>
   </header>
 
-  <!-- BANNER DINÁMICO -->
-  <div class="ob-banner" id="obBanner" role="alert">
-    <div class="bn-dot"></div>
-    <span id="obBannerTxt"></span>
-    <span class="bn-date" id="obBannerDate"></span>
-  </div>
+  <!-- BANNER DINÁMICO eliminado — la alerta se muestra en hdrAlertPill (header) -->
 
   <!-- ══════════════════════════
        VISTA: PANEL
@@ -1451,6 +1565,9 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
       <button class="fics-btn" onclick="obDescargarICS('google')" aria-label="Exportar .ics">
         <i class="ti ti-calendar-event" aria-hidden="true"></i>.ics
       </button>
+      <button class="admin-only btn-nueva-ob" id="btnAbrirNuevaOb" onclick="obAbrirModalNuevaOb()" style="display:none" aria-label="Nueva obligación">
+        <i class="ti ti-plus" aria-hidden="true"></i>Nueva Obligación
+      </button>
     </div>
 
     <!-- Chips de filtros activos -->
@@ -1542,6 +1659,7 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
       <div class="cal-leg-item"><div class="cal-leg-dot warn"></div>PRÓXIMA (≤3 días)</div>
       <div class="cal-leg-item"><div class="cal-leg-dot ok"></div>PAGADA</div>
       <div class="cal-leg-item"><div class="cal-leg-dot pend"></div>PENDIENTE</div>
+      <div class="cal-leg-item"><div class="cal-leg-dot" style="background:rgba(2,132,199,.10);border:0.5px dashed rgba(2,132,199,.5)"></div>PROYECTADO</div>
       <span id="calTotalMes" style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--w4)"></span>
     </div>
 
@@ -1698,8 +1816,8 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
             </div>
 
             <!-- Tabla de pagos del período -->
-            <div class="his-pagos-table-wrap his-pagos-panel">
-              <div id="hisPagosTableWrap" style="min-height:120px">
+            <div class="his-pagos-table-wrap">
+              <div id="hisPagosTableWrap">
                 <!-- renderizado por JS -->
               </div>
             </div>
@@ -1735,9 +1853,21 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 
 <!-- ══════════════════════════════════════════════
      SCRIPTS — orden obligatorio
+     Detección automática de entorno:
+       GitHub Pages → inlop-logistic.github.io  → js/
+       cPanel       → inloplogistica.com/app/    → ../js/
 ══════════════════════════════════════════════ -->
-<script src="js/supabase.js"></script>
-<script src="js/ob-services.js"></script>
+<script>
+(function(){
+  var isGitHubPages = window.location.hostname.indexOf('github.io') !== -1;
+  window._OB_JS_BASE = isGitHubPages ? 'js/' : '../js/';
+  function s(name){
+    document.write('<script src="' + window._OB_JS_BASE + name + '"><\/script>');
+  }
+  s('supabase.js');
+  s('ob-services.js');
+})();
+</script>
 <script>
 /* ══════════════════════════════════════════════════════════════
    OBLIGACIONES FINANCIERAS · Módulo JS principal
@@ -1748,6 +1878,7 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 /* ══ ESTADO GLOBAL ══ */
 var OB_DATA        = [];        // pagos del período activo (ob_vista_pagos_activos)
 var OB_PERIODO     = null;      // período activo
+var OB_CATALOGO    = [];        // catálogo completo de ob_obligaciones (para proyecciones)
 var OB_RESUMEN_CAT = [];        // resumen por categoría (dona)
 var OB_SEMA        = [];        // semáforo por sede
 var OB_USER        = null;      // perfil del usuario (con ob_rol)
@@ -1903,6 +2034,150 @@ function obAbrirPin(){
   document.getElementById('pinModal').classList.add('show');
 }
 function obCerrarPin(){document.getElementById('pinModal').classList.remove('show');OB_PIN_BUF='';obPinUpdate()}
+
+/* ══ NUEVA OBLIGACIÓN ══ */
+
+async function obAbrirModalNuevaOb(){
+  if(!OB_IS_ADMIN){toast('Solo el administrador puede crear obligaciones','err');return;}
+
+  // Mostrar modal de inmediato con estado de carga
+  document.getElementById('modalNuevaOb').classList.add('show');
+
+  var selProv=document.getElementById('nob-prov');
+  var selCat=document.getElementById('nob-cat');
+  selProv.innerHTML='<option value="">Cargando proveedores…</option>';
+  selCat.innerHTML='<option value="">Cargando categorías…</option>';
+
+  // Cargar proveedores frescos desde Supabase (no depender de OBX_PROVEEDORES del parser)
+  var resProv=await OB.Proveedores.listar({soloActivos:false});
+  var proveedores=resProv.ok&&resProv.data?resProv.data:[];
+
+  selProv.innerHTML='<option value="">Selecciona un proveedor…</option><option value="__nuevo__">+ Nuevo proveedor</option>';
+  proveedores.sort(function(a,b){return(a.razon_social||'').localeCompare(b.razon_social||'')});
+  proveedores.forEach(function(p){
+    var opt=document.createElement('option');
+    opt.value=p.id;
+    opt.textContent=(p.razon_social||p.nombre_corto||'—')+(p.nit?' · NIT '+p.nit:'');
+    selProv.appendChild(opt);
+  });
+
+  // Cargar categorías frescas desde Supabase
+  var resCats=await OB.Categorias.listar();
+  var categorias=resCats.ok&&resCats.data?resCats.data:[];
+
+  selCat.innerHTML='<option value="">Selecciona una categoría…</option>';
+  categorias.forEach(function(c){
+    var opt=document.createElement('option');
+    opt.value=c.id;
+    opt.textContent=c.nombre;
+    selCat.appendChild(opt);
+  });
+
+  // Reset campos
+  document.getElementById('nob-detalle').value='';
+  document.getElementById('nob-dia-pago').value='';
+  document.getElementById('nob-monto').value='';
+  document.getElementById('nob-notas').value='';
+  document.getElementById('nob-nit').value='';
+  document.getElementById('nob-razon').value='';
+  document.getElementById('nob-frec').value='mensual';
+  document.getElementById('nob-sede').value='nacional';
+  document.getElementById('nob-prov-nuevo').style.display='none';
+  document.getElementById('nob-dia-mes-wrap').style.display='';
+  document.getElementById('nob-dia-sem-wrap').style.display='none';
+  document.getElementById('btnGuardarNuevaOb').disabled=false;
+}
+
+function obCerrarModalNuevaOb(){
+  document.getElementById('modalNuevaOb').classList.remove('show');
+}
+
+function obNobToggleNuevoProv(val){
+  document.getElementById('nob-prov-nuevo').style.display=val==='__nuevo__'?'block':'none';
+}
+
+function obNobToggleFrecuencia(val){
+  document.getElementById('nob-dia-mes-wrap').style.display=val==='semanal'?'none':'';
+  document.getElementById('nob-dia-sem-wrap').style.display=val==='semanal'?'':'none';
+}
+
+async function obGuardarNuevaOb(){
+  var btn=document.getElementById('btnGuardarNuevaOb');
+  btn.disabled=true;
+
+  var provId=document.getElementById('nob-prov').value;
+  var catId=document.getElementById('nob-cat').value;
+  var detalle=document.getElementById('nob-detalle').value.trim();
+  var sede=document.getElementById('nob-sede').value;
+  var frec=document.getElementById('nob-frec').value;
+  var diaPago=frec!=='semanal'?parseInt(document.getElementById('nob-dia-pago').value,10)||null:null;
+  var diaSem=frec==='semanal'?parseInt(document.getElementById('nob-dia-semana').value,10):null;
+  var monto=parseFloat(document.getElementById('nob-monto').value)||0;
+  var notas=document.getElementById('nob-notas').value.trim()||null;
+
+  // Validaciones antes de cualquier operación
+  if(!catId){toast('Selecciona una categoría','err');btn.disabled=false;return;}
+  if(!detalle){toast('El detalle es obligatorio','err');btn.disabled=false;return;}
+  if((frec==='mensual'||frec==='quincenal')&&(!diaPago||diaPago<1||diaPago>31)){
+    toast('Ingresa un día de pago válido (1-31)','err');btn.disabled=false;return;
+  }
+
+  // Crear proveedor nuevo si aplica — se guarda en ob_proveedores
+  if(provId==='__nuevo__'){
+    var nit=document.getElementById('nob-nit').value.replace(/\D/g,'').trim()||null;
+    var razon=document.getElementById('nob-razon').value.trim();
+    if(!razon){toast('Razón social del proveedor requerida','err');btn.disabled=false;return;}
+    var nombreCorto=razon.toLowerCase().replace(/\b\w/g,function(c){return c.toUpperCase();}).substring(0,22);
+    var resProv=await OB.Proveedores.crear({
+      nit:nit,
+      razon_social:razon,
+      nombre_corto:nombreCorto,
+      activo:true
+    });
+    if(!resProv.ok){toast('Error al crear proveedor: '+(resProv.error||'?'),'err');btn.disabled=false;return;}
+    provId=resProv.data.id;
+    toast('✓ Proveedor "'+razon+'" guardado','ok');
+  }
+
+  if(!provId||provId===''){toast('Selecciona un proveedor','err');btn.disabled=false;return;}
+
+  // Crear obligación en ob_obligaciones
+  var resOb=await OB.Obligaciones.crear({
+    proveedor_id:provId,
+    categoria_id:catId,
+    detalle:detalle,
+    sede:sede,
+    frecuencia:frec,
+    dia_pago:diaPago,
+    dia_semana:diaSem,
+    monto_estimado:monto,
+    activo:true,
+    notas:notas||'Creada manualmente · '+new Date().toLocaleDateString('es-CO')
+  });
+  if(!resOb.ok){toast('Error al crear obligación: '+(resOb.error||'?'),'err');btn.disabled=false;return;}
+
+  // Si hay período activo → generar el pago de este mes inmediatamente
+  if(OB_PERIODO&&resOb.data&&diaPago){
+    var parts=OB_PERIODO.anio_mes.split('-').map(Number);
+    var anioP=parts[0]; var mesP=parts[1];
+    var diaLim=Math.min(diaPago,new Date(anioP,mesP,0).getDate());
+    var fechaLim=OB_PERIODO.anio_mes+'-'+String(diaLim).padStart(2,'0');
+    // OB.Pagos.crear — si el servicio existe
+    if(OB.Pagos&&typeof OB.Pagos.crear==='function'){
+      await OB.Pagos.crear({
+        periodo_id:OB_PERIODO.id,
+        obligacion_id:resOb.data.id,
+        fecha_limite:fechaLim,
+        monto_estimado:monto,
+        estado:'pendiente'
+      });
+    }
+  }
+
+  toast('✓ Obligación creada — visible en el calendario','ok');
+  obCerrarModalNuevaOb();
+  await refresh();
+}
 function obPinPress(n){
   if(OB_PIN_BUF.length>=4) return;
   OB_PIN_BUF+=String(n);obPinUpdate();
@@ -1980,33 +2255,21 @@ function obLeerExcel(file){
 
 /* ══ BANNER DINÁMICO ══ */
 function obUpdateBanner(){
-  const banner=document.getElementById('obBanner');
-  const txt=document.getElementById('obBannerTxt');
-  const date=document.getElementById('obBannerDate');
-  if(!OB_DATA||!OB_DATA.length){banner.classList.remove('show');return}
+  // La alerta se muestra solo en hdrAlertPill (header) — no hay banner horizontal
+  if(!OB_DATA||!OB_DATA.length){ obUpdateHdrPill('ok','Sin datos'); return; }
 
   const hoy=obHoy();
   const vencidas=OB_DATA.filter(p=>p.estado==='vencida'||(p.estado==='pendiente'&&p.fecha_limite<hoy));
   const hoyVence=OB_DATA.filter(p=>p.estado==='pendiente'&&p.fecha_limite===hoy);
   const en3=OB_DATA.filter(p=>p.estado==='pendiente'&&obDiasRestantes(p.fecha_limite)!==null&&obDiasRestantes(p.fecha_limite)>0&&obDiasRestantes(p.fecha_limite)<=3);
 
-  banner.classList.add('show');
-  banner.className='ob-banner show';
-  date.textContent=new Date().toLocaleDateString('es-CO',{weekday:'short',day:'2-digit',month:'short'}).toUpperCase();
-
   if(vencidas.length>0||hoyVence.length>0){
-    const n=(vencidas.length+hoyVence.length);
-    banner.classList.add('bn-crit');
-    txt.textContent=`URGENTE · ${n} obligación(es) vencida(s) sin pago registrado`;
-    obUpdateHdrPill('crit',txt.textContent);
+    const n=vencidas.length+hoyVence.length;
+    obUpdateHdrPill('crit',`URGENTE · ${n} obligación(es) vencida(s) sin pago registrado`);
   } else if(en3.length>0){
-    banner.classList.add('bn-warn');
-    txt.textContent=`ALERTA · ${en3.length} obligación(es) vencen en los próximos 3 días`;
-    obUpdateHdrPill('warn',txt.textContent);
+    obUpdateHdrPill('warn',`ALERTA · ${en3.length} obligación(es) vencen en los próximos 3 días`);
   } else {
-    banner.classList.add('bn-ok');
-    txt.textContent='OPERACIÓN NORMAL · Todas las obligaciones del mes al día';
-    obUpdateHdrPill('ok',txt.textContent);
+    obUpdateHdrPill('ok','OPERACIÓN NORMAL · Todas las obligaciones del mes al día');
   }
 }
 
@@ -2489,48 +2752,194 @@ function obAbrirSoporte_ext(){
 // Alias para el botón
 window.obAbrirSoporte=obAbrirSoporte;
 
-/* ══ EXPORTAR .ICS ══ */
-function obDescargarICS(plataforma){
-  if(!OB_DATA||!OB_DATA.length){toast('Sin datos para exportar','err');return}
-  const pendientes=OB_DATA.filter(p=>!['pagada','pagada_mora'].includes(p.estado));
-  if(!pendientes.length){toast('Todas las obligaciones ya están pagadas','info');return}
+/* ══ EXPORTAR .ICS — Fase 7E · Calendario anual completo con RRULE ══
+   Fuente: OB_CATALOGO (ob_obligaciones completo, no solo el período activo)
+   Compatibilidad: Outlook · Teams · Google Calendar · Apple Calendar
+   UID estables por obligacion_id → reimportar actualiza en lugar de duplicar
+   ════════════════════════════════════════════════════════════════════════ */
 
-  const lineas=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//INLOP BI//Obligaciones Financieras//ES','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+/* Mapa iCalendar: dia_semana DB (0=lun…6=dom) → código BYDAY RFC 5545 */
+var OB_ICS_BYDAY = ['MO','TU','WE','TH','FR','SA','SU'];
 
-  pendientes.forEach(p=>{
-    if(!p.fecha_limite) return;
-    const uid=`ob-${p.pago_id||Math.random().toString(36).slice(2)}@inlop.com.co`;
-    const dtstart=p.fecha_limite.replace(/-/g,'');
-    const dtend_d=new Date(p.fecha_limite);dtend_d.setDate(dtend_d.getDate()+1);
-    const dtend=dtend_d.toISOString().split('T')[0].replace(/-/g,'');
-    const summary=`INLOP · ${(p.nombre_corto||p.razon_social||'Obligación').substring(0,50)} · ${obFmtCOP(p.monto_estimado)}`;
-    const desc=`Categoría: ${p.categoria_nombre||'—'}\\nSede: ${p.sede||'—'}\\nDetalle: ${(p.detalle||'—').substring(0,100)}\\nMonto estimado: ${obFmtCOP(p.monto_estimado)}`;
-    const now=new Date().toISOString().replace(/[-:.]/g,'').split('Z')[0]+'Z';
+/* Formatea Date a string YYYYMMDD para VALUE=DATE */
+function obIcsFecha(date){
+  var y=date.getFullYear();
+  var m=String(date.getMonth()+1).padStart(2,'0');
+  var d=String(date.getDate()).padStart(2,'0');
+  return y+''+m+''+d;
+}
 
-    lineas.push('BEGIN:VEVENT');
-    lineas.push(`UID:${uid}`);
-    lineas.push(`DTSTAMP:${now}`);
-    lineas.push(`DTSTART;VALUE=DATE:${dtstart}`);
-    lineas.push(`DTEND;VALUE=DATE:${dtend}`);
-    lineas.push(`SUMMARY:${summary}`);
-    lineas.push(`DESCRIPTION:${desc}`);
-    lineas.push('BEGIN:VALARM');
-    lineas.push('TRIGGER:-P3D');
-    lineas.push('ACTION:DISPLAY');
-    lineas.push(`DESCRIPTION:Vence en 3 días · ${p.nombre_corto||p.razon_social||'Obligación'}`);
-    lineas.push('END:VALARM');
-    lineas.push('END:VEVENT');
+/* Último día del mes, respetando meses cortos */
+function obIcsAjustarDia(dia, anio, mes){
+  var ultimoDia=new Date(anio,mes,0).getDate();
+  return Math.min(dia,ultimoDia);
+}
+
+/* 4 bloques VALARM compatibles con Outlook, Teams y Google */
+function obIcsAlarmas(nomCorto){
+  var nom=(nomCorto||'Obligación').substring(0,40);
+  return [
+    'BEGIN:VALARM','TRIGGER:-P7D','ACTION:DISPLAY',
+    'DESCRIPTION:\u26a0 7 d\u00edas \u00b7 Vence pronto \u00b7 '+nom,'END:VALARM',
+    'BEGIN:VALARM','TRIGGER:-P3D','ACTION:DISPLAY',
+    'DESCRIPTION:\u26a0 3 d\u00edas \u00b7 Vence pronto \u00b7 '+nom,'END:VALARM',
+    'BEGIN:VALARM','TRIGGER:-P1D','ACTION:DISPLAY',
+    'DESCRIPTION:\uD83D\uDD14 Ma\u00f1ana vence \u00b7 '+nom,'END:VALARM',
+    'BEGIN:VALARM','TRIGGER:PT0S','ACTION:DISPLAY',
+    'DESCRIPTION:\uD83D\uDEA8 Vence HOY \u00b7 Registrar pago \u00b7 '+nom,'END:VALARM'
+  ];
+}
+
+/* Genera un VEVENT completo con RRULE opcional y 4 alarmas */
+function obIcsVevent(uid,dtstart,dtend,rrule,summary,desc,dtstamp,alarmas){
+  var lines=[
+    'BEGIN:VEVENT',
+    'UID:'+uid,
+    'DTSTAMP:'+dtstamp,
+    'DTSTART;VALUE=DATE:'+dtstart,
+    'DTEND;VALUE=DATE:'+dtend,
+    'SUMMARY:'+summary,
+    'DESCRIPTION:'+desc,
+    'TRANSP:TRANSPARENT',
+    'CLASS:PRIVATE'
+  ];
+  if(rrule) lines.push('RRULE:'+rrule);
+  alarmas.forEach(function(l){lines.push(l);});
+  lines.push('END:VEVENT');
+  return lines;
+}
+
+/* ── Función principal — exportación .ICS anual ── */
+async function obDescargarICS(plataforma){
+  // Cargar catálogo real si no está disponible.
+  // OB_DATA tiene pagos (sin frecuencia/dia_pago). OB_CATALOGO tiene ob_obligaciones completo.
+  if(!OB_CATALOGO||!OB_CATALOGO.length){
+    toast('Cargando obligaciones…','info');
+    var resCat=await OB.Obligaciones.listar({soloActivas:true});
+    OB_CATALOGO=resCat.ok&&resCat.data?resCat.data:[];
+  }
+  var catalogo=OB_CATALOGO;
+  if(!catalogo.length){toast('Sin obligaciones para exportar','err');return;}
+
+  var hoy     =new Date();
+  var anio    =hoy.getFullYear();
+  var mes     =hoy.getMonth()+1; // 1-based
+  var dtstamp =hoy.toISOString().replace(/[-:.]/g,'').split('Z')[0]+'Z';
+
+  var lines=[
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//INLOP BI//Obligaciones Financieras 2.0//ES',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'X-WR-CALNAME:INLOP \u00b7 Obligaciones Financieras',
+    'X-WR-TIMEZONE:America/Bogota',
+    'X-WR-CALDESC:Vencimientos de pagos recurrentes INLOP SAS'
+  ];
+
+  var exportados=0;
+
+  catalogo.forEach(function(ob){
+    var obId     =ob.obligacion_id||ob.id||null;
+    if(!obId) return;
+
+    var freq     =(ob.frecuencia||'mensual').toLowerCase();
+    var diaPago  =ob.dia_pago?parseInt(ob.dia_pago):null;
+    var diaSemana=(ob.dia_semana!==undefined&&ob.dia_semana!==null)?parseInt(ob.dia_semana):null;
+
+    var nomCorto =(ob.nombre_corto||ob.razon_social||'Obligación').substring(0,45);
+    var monto    =ob.monto_estimado||0;
+    var catNom   =ob.categoria_nombre||(ob.categoria&&ob.categoria.nombre)||'—';
+    var summary  ='INLOP \u00b7 '+nomCorto+(monto>0?' \u00b7 '+obFmtCOP(monto):'');
+    var desc     ='Categor\u00eda: '+catNom
+                 +'\\nSede: '+(ob.sede||'—')
+                 +'\\nDetalle: '+(ob.detalle||'—').substring(0,120)
+                 +(monto>0?'\\nMonto estimado: '+obFmtCOP(monto):'')
+                 +'\\nFrecuencia: '+freq;
+    var alarmas  =obIcsAlarmas(nomCorto);
+
+    /* ── MENSUAL ── dia_pago 1–31, recurrencia 12 meses */
+    if(freq==='mensual'&&diaPago){
+      var diaAjust=obIcsAjustarDia(diaPago,anio,mes);
+      var dtS=new Date(anio,mes-1,diaAjust);
+      // Si ya pasó este mes, empezar el siguiente
+      if(dtS<=hoy){
+        var mn=mes===12?1:mes+1; var ay=mes===12?anio+1:anio;
+        dtS=new Date(ay,mn-1,obIcsAjustarDia(diaPago,ay,mn));
+      }
+      var dtE=new Date(dtS);dtE.setDate(dtE.getDate()+1);
+      // BYMONTHDAY con valor negativo para meses cortos no es universal;
+      // COUNT=12 cubre exactamente 1 año. Outlook y Google aceptan BYMONTHDAY hasta 28 sin problema.
+      var rruleM='FREQ=MONTHLY;BYMONTHDAY='+Math.min(diaPago,28)+';COUNT=12';
+      var evM=obIcsVevent('ob-mensual-'+obId+'@inlop.com.co',
+        obIcsFecha(dtS),obIcsFecha(dtE),rruleM,summary,desc,dtstamp,alarmas);
+      evM.forEach(function(l){lines.push(l);});
+      exportados++;
+    }
+
+    /* ── SEMANAL ── dia_semana 0=lun…6=dom, recurrencia 52 semanas */
+    else if(freq==='semanal'&&diaSemana!==null){
+      var byday=OB_ICS_BYDAY[diaSemana]||'MO';
+      // getDay(): 0=dom…6=sab → nuestro 0=lun requiere +1 %7
+      var jsTarget=(diaSemana+1)%7;
+      var dtSSem=new Date(hoy);
+      var diff=(jsTarget-dtSSem.getDay()+7)%7;
+      if(diff===0)diff=7; // si hoy es ese día, la próxima ocurrencia
+      dtSSem.setDate(dtSSem.getDate()+diff);
+      var dtESem=new Date(dtSSem);dtESem.setDate(dtESem.getDate()+1);
+      var rruleS='FREQ=WEEKLY;BYDAY='+byday+';COUNT=52';
+      var evS=obIcsVevent('ob-semanal-'+obId+'@inlop.com.co',
+        obIcsFecha(dtSSem),obIcsFecha(dtESem),rruleS,summary+' (semanal)',desc,dtstamp,alarmas);
+      evS.forEach(function(l){lines.push(l);});
+      exportados++;
+    }
+
+    /* ── QUINCENAL ── dos BYMONTHDAY por mes, 12 ocurrencias cada uno */
+    else if(freq==='quincenal'&&diaPago){
+      var d1=Math.min(diaPago,15);
+      var d2=Math.min(diaPago+15,28);
+      [d1,d2].forEach(function(d,idx){
+        var dtSQ=new Date(anio,mes-1,obIcsAjustarDia(d,anio,mes));
+        if(dtSQ<=hoy){var mn2=mes===12?1:mes+1;var ay2=mes===12?anio+1:anio;
+          dtSQ=new Date(ay2,mn2-1,obIcsAjustarDia(d,ay2,mn2));}
+        var dtEQ=new Date(dtSQ);dtEQ.setDate(dtEQ.getDate()+1);
+        var rrQ='FREQ=MONTHLY;BYMONTHDAY='+d+';COUNT=12';
+        var evQ=obIcsVevent('ob-quincenal-'+obId+'-'+idx+'@inlop.com.co',
+          obIcsFecha(dtSQ),obIcsFecha(dtEQ),rrQ,summary+' (quincenal)',desc,dtstamp,alarmas);
+        evQ.forEach(function(l){lines.push(l);});
+      });
+      exportados++;
+    }
+
+    /* ── ANUAL ── 3 ocurrencias hacia adelante */
+    else if(freq==='anual'&&diaPago){
+      var mesAnual=ob.mes_pago?parseInt(ob.mes_pago):mes;
+      var dtSA=new Date(anio,mesAnual-1,obIcsAjustarDia(diaPago,anio,mesAnual));
+      if(dtSA<=hoy)dtSA=new Date(anio+1,mesAnual-1,obIcsAjustarDia(diaPago,anio+1,mesAnual));
+      var dtEA=new Date(dtSA);dtEA.setDate(dtEA.getDate()+1);
+      var evA=obIcsVevent('ob-anual-'+obId+'@inlop.com.co',
+        obIcsFecha(dtSA),obIcsFecha(dtEA),'FREQ=YEARLY;COUNT=3',
+        summary+' (anual)',desc,dtstamp,alarmas);
+      evA.forEach(function(l){lines.push(l);});
+      exportados++;
+    }
   });
 
-  lineas.push('END:VCALENDAR');
-  const blob=new Blob([lineas.join('\r\n')],{type:'text/calendar;charset=utf-8'});
-  const a=document.createElement('a');
-  const periodo=OB_PERIODO?.anio_mes||new Date().toISOString().slice(0,7);
+  if(!exportados){toast('Sin obligaciones activas para exportar','err');return;}
+
+  lines.push('END:VCALENDAR');
+
+  var blob=new Blob([lines.join('\r\n')],{type:'text/calendar;charset=utf-8'});
+  var a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download=`INLOP_Obligaciones_${periodo}.ics`;
+  a.download='INLOP_Obligaciones_'+anio+'_12meses.ics';
   a.click();
   URL.revokeObjectURL(a.href);
-  toast(`✓ Archivo .ics descargado — ábrelo en ${plataforma==='outlook'?'Outlook':'Google Calendar'}`,  'ok');
+
+  var instruccion=plataforma==='outlook'
+    ?'Outlook → Calendario → Agregar calendario → Desde archivo'
+    :'Google Calendar → Otros calendarios → Importar';
+  toast('\u2713 '+exportados+' obligaciones exportadas \u00b7 '+instruccion,'ok');
 }
 
 /* ══ CREAR PERÍODO ══ */
@@ -2567,10 +2976,26 @@ async function obCargarDatos(){
   const resPer=await OB.Periodos.obtenerActivo();
   OB_PERIODO=resPer.ok?resPer.data:null;
 
+  // 2. Cargar catálogo completo siempre (para proyecciones del calendario)
+  const resCat2=await OB.Obligaciones.listar({soloActivas:true});
+  OB_CATALOGO=resCat2.ok&&resCat2.data?resCat2.data:[];
+
   const panelMesEl=document.getElementById('panelMes');
   if(panelMesEl&&OB_PERIODO) panelMesEl.textContent=OB_PERIODO.anio_mes;
 
-  // 2. Mostrar empty state si no hay período
+  // 3. Auto-crear período si admin y no existe para el mes actual
+  if(!OB_PERIODO && OB_IS_ADMIN){
+    const mesActual=new Date().toISOString().slice(0,7);
+    toast('Abriendo período '+mesActual+'…','info');
+    const resNuevo=await OB.Periodos.crear(mesActual);
+    if(resNuevo.ok){
+      OB_PERIODO=resNuevo.data;
+      if(panelMesEl&&OB_PERIODO) panelMesEl.textContent=OB_PERIODO.anio_mes;
+      toast('✓ Período '+mesActual+' creado automáticamente','ok');
+    }
+  }
+
+  // 4. Si no hay período (no admin o creación falló) → empty state
   const empty=document.getElementById('emptyState');
   const content=document.getElementById('panelContent');
   if(!OB_PERIODO){
@@ -2584,15 +3009,15 @@ async function obCargarDatos(){
   if(empty){empty.style.display='none'}
   if(content){content.style.display='block'}
 
-  // 3. Pagos del período
+  // 5. Pagos del período
   const resPagos=await OB.Vistas.cargarPeriodoActivo();
   OB_DATA=resPagos.ok?resPagos.data:[];
 
-  // 4. Resumen por categoría
-  const resCat=await OB.Vistas.resumenPorCategoria();
-  OB_RESUMEN_CAT=resCat.ok?resCat.data:[];
+  // 6. Resumen por categoría
+  const resCatRes=await OB.Vistas.resumenPorCategoria();
+  OB_RESUMEN_CAT=resCatRes.ok?resCatRes.data:[];
 
-  // 5. Semáforo por sede
+  // 7. Semáforo por sede
   const resSema=await OB.Vistas.semaPorSede();
   OB_SEMA=resSema.ok?resSema.data:[];
 }
@@ -2766,6 +3191,7 @@ function obCalFiltrarSede(btn, sede){
 /* ── Calcular estado visual de un pago para el calendario ── */
 function obCalChipCls(pago){
   if(!pago) return 'chip-pend';
+  if(pago._proyectado) return 'chip-proy';
   const e = pago.estado;
   const dias = obDiasRestantes(pago.fecha_limite);
   if(['pagada','pagada_mora'].includes(e))                        return 'chip-ok';
@@ -2789,26 +3215,46 @@ function obCalAjustarDia(dia, anio, mes){
   return Math.min(dia, ultimoDia);
 }
 
-/* ── Obtener pagos del día desde OB_DATA ── */
+/* ── Obtener pagos del día — real o proyectado ── */
 function obCalPagosDel(anio, mes, dia){
-  const fecha = `${anio}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+  const fecha=`${anio}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+  const esMesPeriodo=OB_PERIODO&&OB_PERIODO.anio_mes===`${anio}-${String(mes).padStart(2,'0')}`;
 
-  // Filtro de sede
-  let pool = OB_CAL_SEDE
-    ? OB_DATA.filter(p => p.sede === OB_CAL_SEDE)
-    : OB_DATA;
+  // ── Mes con período activo: usar OB_DATA (pagos reales con estados) ──
+  if(esMesPeriodo){
+    let pool=OB_CAL_SEDE?OB_DATA.filter(p=>p.sede===OB_CAL_SEDE):OB_DATA;
+    return pool.filter(p=>{
+      if(!p.fecha_limite) return false;
+      if(p.fecha_limite===fecha) return true;
+      if(p.frecuencia==='semanal'&&p.dia_semana!==null&&p.dia_semana!==undefined){
+        return obCalEsOcurrenciaSemanal(p,anio,mes,dia);
+      }
+      return false;
+    });
+  }
 
-  return pool.filter(p => {
-    if(!p.fecha_limite) return false;
-    // Coincidencia directa con fecha_limite
-    if(p.fecha_limite === fecha) return true;
-    // Para obligaciones semanales: expandir ocurrencias del mes
-    if(p.frecuencia === 'semanal' && p.dia_semana !== null && p.dia_semana !== undefined){
-      return obCalEsOcurrenciaSemanal(p, anio, mes, dia);
+  // ── Mes sin período: proyectar desde catálogo (Opción B — chips azul) ──
+  let catalogo=OB_CAL_SEDE?OB_CATALOGO.filter(o=>o.sede===OB_CAL_SEDE):OB_CATALOGO;
+  return catalogo.filter(o=>{
+    if(o.frecuencia==='mensual'||o.frecuencia==='quincenal'){
+      if(!o.dia_pago) return false;
+      var diaAjustado=obCalAjustarDia(o.dia_pago,anio,mes);
+      if(dia!==diaAjustado) return false;
+      if(o.frecuencia==='quincenal') return dia===diaAjustado||dia===(diaAjustado+15<=obCalUltimoDia(anio,mes)?diaAjustado+15:null);
+      return true;
+    }
+    if(o.frecuencia==='semanal'&&o.dia_semana!==null&&o.dia_semana!==undefined){
+      return obCalEsOcurrenciaSemanal(o,anio,mes,dia);
     }
     return false;
-  });
+  }).map(o=>({...o,_proyectado:true,estado:'proyectado',
+    nombre_corto:(o.proveedor&&o.proveedor.nombre_corto)||o.nombre_corto||'—',
+    razon_social:(o.proveedor&&o.proveedor.razon_social)||o.razon_social||'—',
+    monto_estimado:o.monto_estimado||0}));
 }
+
+/* ── Último día del mes ── */
+function obCalUltimoDia(anio,mes){return new Date(anio,mes,0).getDate();}
 
 /* ── Verificar si un día es ocurrencia semanal de una obligación ── */
 function obCalEsOcurrenciaSemanal(pago, anio, mes, dia){
@@ -3558,16 +4004,18 @@ obShowTab = function(tab){
 
 </script>
 
-<!-- ob-excel-parser.js — Parser de carga masiva de PAGOS_RECURRENTES.xlsx
-     Fase 6A · Debe cargarse DESPUÉS de ob-services.js y ANTES de auth.js
-     Extiende window.OB con: window.OB.obParseExcel(workbook, filename)
-     Llamado por obLeerExcel() vía drag&drop sobre la ventana del módulo.
-     Dependencias ya presentes arriba: supabase.js · ob-services.js · xlsx.full.min.js -->
-<script src="js/ob-excel-parser.js"></script>
-
-<!-- auth.js protege la ruta: sin sesión → redirect a login -->
-<script src="js/auth.js"></script>
-<script src="js/logout.js"></script>
+<!-- Scripts finales: ob-excel-parser → auth → logout
+     Ruta resuelta por window._OB_JS_BASE (detectada arriba) -->
+<script>
+(function(){
+  function s(name){
+    document.write('<script src="' + window._OB_JS_BASE + name + '"><\/script>');
+  }
+  s('ob-excel-parser.js');
+  s('auth.js');
+  s('logout.js');
+})();
+</script>
 
 </body>
 </html>
