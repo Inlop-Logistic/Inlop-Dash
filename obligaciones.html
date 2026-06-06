@@ -777,6 +777,7 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 .cal-chip.chip-ok{background:var(--green3);color:var(--green)}
 .cal-chip.chip-pend{background:var(--c4);color:var(--w3)}
 .cal-chip.chip-more{background:var(--blue3);color:var(--blue);cursor:pointer}
+.cal-chip.chip-proy{background:rgba(2,132,199,.10);color:#185FA5;border:0.5px dashed rgba(2,132,199,.35);font-style:italic}
 .cal-chip-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
 
 /* ── Panel lateral deslizable ── */
@@ -1173,6 +1174,118 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 </div>
 
 <!-- Modal: PIN Admin -->
+<!-- Modal: Nueva Obligación -->
+<div class="modal-bg" id="modalNuevaOb">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-hdr">
+      <div class="modal-hdr-ico"><i class="ti ti-plus" aria-hidden="true"></i></div>
+      <div>
+        <div class="modal-ttl">Nueva Obligación</div>
+        <div class="modal-sub">Se agregará al catálogo y al período activo</div>
+      </div>
+    </div>
+    <div class="modal-body">
+
+      <!-- Proveedor -->
+      <div class="field">
+        <div class="field-lbl">Proveedor<span class="field-req">*</span></div>
+        <select id="nob-prov" class="field-inp" onchange="obNobToggleNuevoProv(this.value)">
+          <option value="">Selecciona un proveedor…</option>
+          <option value="__nuevo__">+ Nuevo proveedor</option>
+        </select>
+      </div>
+
+      <!-- Nuevo proveedor (oculto por defecto) -->
+      <div id="nob-prov-nuevo" style="display:none;background:rgba(1,42,107,.04);border-radius:8px;padding:10px;margin-bottom:4px">
+        <div class="fields-2">
+          <div class="field" style="margin-bottom:0">
+            <div class="field-lbl">NIT / Cédula</div>
+            <input type="text" id="nob-nit" class="field-inp" placeholder="Ej. 900411175">
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <div class="field-lbl">Razón social<span class="field-req">*</span></div>
+            <input type="text" id="nob-razon" class="field-inp" placeholder="Nombre completo del proveedor">
+          </div>
+        </div>
+      </div>
+
+      <!-- Categoría + Sede -->
+      <div class="fields-2">
+        <div class="field">
+          <div class="field-lbl">Categoría<span class="field-req">*</span></div>
+          <select id="nob-cat" class="field-inp">
+            <option value="">Selecciona…</option>
+          </select>
+        </div>
+        <div class="field">
+          <div class="field-lbl">Sede<span class="field-req">*</span></div>
+          <select id="nob-sede" class="field-inp">
+            <option value="nacional">Nacional</option>
+            <option value="cartagena">Cartagena</option>
+            <option value="bogota">Bogotá</option>
+            <option value="yopal">Yopal</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Detalle -->
+      <div class="field">
+        <div class="field-lbl">Detalle / Concepto<span class="field-req">*</span></div>
+        <input type="text" id="nob-detalle" class="field-inp" placeholder="Ej. Arriendo oficina sede Cartagena">
+      </div>
+
+      <!-- Frecuencia + Día -->
+      <div class="fields-2">
+        <div class="field">
+          <div class="field-lbl">Frecuencia<span class="field-req">*</span></div>
+          <select id="nob-frec" class="field-inp" onchange="obNobToggleFrecuencia(this.value)">
+            <option value="mensual">Mensual</option>
+            <option value="quincenal">Quincenal</option>
+            <option value="semanal">Semanal</option>
+          </select>
+        </div>
+        <div class="field" id="nob-dia-mes-wrap">
+          <div class="field-lbl">Día del mes (1–31)<span class="field-req">*</span></div>
+          <input type="number" id="nob-dia-pago" class="field-inp" min="1" max="31" placeholder="Ej. 5">
+          <div class="field-hint">Día límite de pago cada mes</div>
+        </div>
+        <div class="field" id="nob-dia-sem-wrap" style="display:none">
+          <div class="field-lbl">Día de la semana<span class="field-req">*</span></div>
+          <select id="nob-dia-semana" class="field-inp">
+            <option value="0">Lunes</option>
+            <option value="1">Martes</option>
+            <option value="2">Miércoles</option>
+            <option value="3">Jueves</option>
+            <option value="4">Viernes</option>
+            <option value="5">Sábado</option>
+            <option value="6">Domingo</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Monto estimado + Notas -->
+      <div class="fields-2">
+        <div class="field">
+          <div class="field-lbl">Monto estimado (COP)</div>
+          <input type="number" id="nob-monto" class="field-inp" min="0" step="1000" placeholder="0">
+          <div class="field-hint">Referencia — se ajusta al pagar</div>
+        </div>
+        <div class="field">
+          <div class="field-lbl">Notas (opcional)</div>
+          <input type="text" id="nob-notas" class="field-inp" placeholder="Observaciones…">
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="mbtn-c" onclick="obCerrarModalNuevaOb()">Cancelar</button>
+      <button class="mbtn-s" id="btnGuardarNuevaOb" onclick="obGuardarNuevaOb()">
+        <i class="ti ti-check" aria-hidden="true"></i> Crear obligación
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="pinModal">
   <div class="pin-modal">
     <div style="font-size:30px;margin-bottom:10px">🔐</div>
@@ -1281,6 +1394,11 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
   <button class="tb" id="tab-historial" onclick="obShowTab('historial')" data-label="Historial" aria-label="Historial de períodos">
     <i class="ti ti-clock-hour-4" aria-hidden="true"></i>
     <span>Historial</span>
+  </button>
+
+  <button class="tb admin-only" id="btnAbrirNuevaOb" onclick="obAbrirModalNuevaOb()" data-label="Nueva Obligación" aria-label="Nueva obligación" style="display:none;border-top:0.5px solid var(--line2);margin-top:4px;color:var(--fin-color)">
+    <i class="ti ti-plus" aria-hidden="true"></i>
+    <span>Nueva obligación</span>
   </button>
 
   <div class="sb-footer">
@@ -1542,6 +1660,7 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
       <div class="cal-leg-item"><div class="cal-leg-dot warn"></div>PRÓXIMA (≤3 días)</div>
       <div class="cal-leg-item"><div class="cal-leg-dot ok"></div>PAGADA</div>
       <div class="cal-leg-item"><div class="cal-leg-dot pend"></div>PENDIENTE</div>
+      <div class="cal-leg-item"><div class="cal-leg-dot" style="background:rgba(2,132,199,.10);border:0.5px dashed rgba(2,132,199,.5)"></div>PROYECTADO</div>
       <span id="calTotalMes" style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--w4)"></span>
     </div>
 
@@ -1760,6 +1879,7 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 /* ══ ESTADO GLOBAL ══ */
 var OB_DATA        = [];        // pagos del período activo (ob_vista_pagos_activos)
 var OB_PERIODO     = null;      // período activo
+var OB_CATALOGO    = [];        // catálogo completo de ob_obligaciones (para proyecciones)
 var OB_RESUMEN_CAT = [];        // resumen por categoría (dona)
 var OB_SEMA        = [];        // semáforo por sede
 var OB_USER        = null;      // perfil del usuario (con ob_rol)
@@ -1915,6 +2035,122 @@ function obAbrirPin(){
   document.getElementById('pinModal').classList.add('show');
 }
 function obCerrarPin(){document.getElementById('pinModal').classList.remove('show');OB_PIN_BUF='';obPinUpdate()}
+
+/* ══ NUEVA OBLIGACIÓN ══ */
+
+function obAbrirModalNuevaOb(){
+  if(!OB_IS_ADMIN){toast('Solo el administrador puede crear obligaciones','err');return;}
+  // Llenar select de proveedores
+  var sel=document.getElementById('nob-prov');
+  sel.innerHTML='<option value="">Selecciona un proveedor…</option><option value="__nuevo__">+ Nuevo proveedor</option>';
+  OBX_PROVEEDORES&&OBX_PROVEEDORES.forEach(function(p){
+    var opt=document.createElement('option');
+    opt.value=p.id;
+    opt.textContent=(p.nombre_corto||p.razon_social)+(p.nit?' · '+p.nit:'');
+    sel.appendChild(opt);
+  });
+  // Llenar select de categorías
+  var selCat=document.getElementById('nob-cat');
+  selCat.innerHTML='<option value="">Selecciona…</option>';
+  OBX_CATEGORIAS&&OBX_CATEGORIAS.forEach(function(c){
+    var opt=document.createElement('option');
+    opt.value=c.id;
+    opt.textContent=c.nombre;
+    selCat.appendChild(opt);
+  });
+  // Reset campos
+  document.getElementById('nob-detalle').value='';
+  document.getElementById('nob-dia-pago').value='';
+  document.getElementById('nob-monto').value='';
+  document.getElementById('nob-notas').value='';
+  document.getElementById('nob-nit').value='';
+  document.getElementById('nob-razon').value='';
+  document.getElementById('nob-frec').value='mensual';
+  document.getElementById('nob-sede').value='nacional';
+  document.getElementById('nob-prov-nuevo').style.display='none';
+  document.getElementById('nob-dia-mes-wrap').style.display='';
+  document.getElementById('nob-dia-sem-wrap').style.display='none';
+  document.getElementById('btnGuardarNuevaOb').disabled=false;
+  document.getElementById('modalNuevaOb').classList.add('show');
+}
+
+function obCerrarModalNuevaOb(){
+  document.getElementById('modalNuevaOb').classList.remove('show');
+}
+
+function obNobToggleNuevoProv(val){
+  document.getElementById('nob-prov-nuevo').style.display=val==='__nuevo__'?'block':'none';
+}
+
+function obNobToggleFrecuencia(val){
+  document.getElementById('nob-dia-mes-wrap').style.display=val==='semanal'?'none':'';
+  document.getElementById('nob-dia-sem-wrap').style.display=val==='semanal'?'':'none';
+}
+
+async function obGuardarNuevaOb(){
+  var btn=document.getElementById('btnGuardarNuevaOb');
+  btn.disabled=true;
+
+  var provId=document.getElementById('nob-prov').value;
+  var catId=document.getElementById('nob-cat').value;
+  var detalle=document.getElementById('nob-detalle').value.trim();
+  var sede=document.getElementById('nob-sede').value;
+  var frec=document.getElementById('nob-frec').value;
+  var diaPago=frec!=='semanal'?parseInt(document.getElementById('nob-dia-pago').value,10)||null:null;
+  var diaSem=frec==='semanal'?parseInt(document.getElementById('nob-dia-semana').value,10):null;
+  var monto=parseFloat(document.getElementById('nob-monto').value)||0;
+  var notas=document.getElementById('nob-notas').value.trim()||null;
+
+  // Crear proveedor nuevo si aplica
+  if(provId==='__nuevo__'){
+    var nit=document.getElementById('nob-nit').value.trim()||null;
+    var razon=document.getElementById('nob-razon').value.trim();
+    if(!razon){toast('Razón social del proveedor requerida','err');btn.disabled=false;return;}
+    var resProv=await OB.Proveedores.crear({nit:nit,razon_social:razon,
+      nombre_corto:razon.substring(0,22)});
+    if(!resProv.ok){toast('Error al crear proveedor: '+resProv.error,'err');btn.disabled=false;return;}
+    provId=resProv.data.id;
+    OBX_PROVEEDORES&&OBX_PROVEEDORES.push(resProv.data);
+    OB_CATALOGO&&OB_CATALOGO.push(resProv.data);
+  }
+
+  // Validaciones
+  if(!provId){toast('Selecciona un proveedor','err');btn.disabled=false;return;}
+  if(!catId){toast('Selecciona una categoría','err');btn.disabled=false;return;}
+  if(!detalle){toast('El detalle es obligatorio','err');btn.disabled=false;return;}
+  if((frec==='mensual'||frec==='quincenal')&&(!diaPago||diaPago<1||diaPago>31)){
+    toast('Ingresa un día de pago válido (1-31)','err');btn.disabled=false;return;
+  }
+
+  // Crear obligación
+  var resOb=await OB.Obligaciones.crear({
+    proveedor_id:provId,categoria_id:catId,detalle:detalle,
+    sede:sede,frecuencia:frec,dia_pago:diaPago,dia_semana:diaSem,
+    monto_estimado:monto,notas:notas
+  });
+  if(!resOb.ok){toast('Error al crear obligación: '+resOb.error,'err');btn.disabled=false;return;}
+
+  // Si hay período activo → crear el pago de este mes inmediatamente
+  if(OB_PERIODO){
+    var hoy=obHoy();
+    var [a,m]=OB_PERIODO.anio_mes.split('-').map(Number);
+    var diaLimite=diaPago?Math.min(diaPago,new Date(a,m,0).getDate()):null;
+    var fechaLim=diaLimite?OB_PERIODO.anio_mes+'-'+String(diaLimite).padStart(2,'0'):null;
+    if(fechaLim){
+      await OB.Pagos&&OB.Pagos.crear?OB.Pagos.crear({
+        periodo_id:OB_PERIODO.id,
+        obligacion_id:resOb.data.id,
+        fecha_limite:fechaLim,
+        monto_estimado:monto,
+        estado:'pendiente'
+      }):null;
+    }
+  }
+
+  toast('✓ Obligación creada — aparece en el calendario','ok');
+  obCerrarModalNuevaOb();
+  await refresh();
+}
 function obPinPress(n){
   if(OB_PIN_BUF.length>=4) return;
   OB_PIN_BUF+=String(n);obPinUpdate();
@@ -2579,10 +2815,26 @@ async function obCargarDatos(){
   const resPer=await OB.Periodos.obtenerActivo();
   OB_PERIODO=resPer.ok?resPer.data:null;
 
+  // 2. Cargar catálogo completo siempre (para proyecciones del calendario)
+  const resCat2=await OB.Obligaciones.listar({soloActivas:true});
+  OB_CATALOGO=resCat2.ok&&resCat2.data?resCat2.data:[];
+
   const panelMesEl=document.getElementById('panelMes');
   if(panelMesEl&&OB_PERIODO) panelMesEl.textContent=OB_PERIODO.anio_mes;
 
-  // 2. Mostrar empty state si no hay período
+  // 3. Auto-crear período si admin y no existe para el mes actual
+  if(!OB_PERIODO && OB_IS_ADMIN){
+    const mesActual=new Date().toISOString().slice(0,7);
+    toast('Abriendo período '+mesActual+'…','info');
+    const resNuevo=await OB.Periodos.crear(mesActual);
+    if(resNuevo.ok){
+      OB_PERIODO=resNuevo.data;
+      if(panelMesEl&&OB_PERIODO) panelMesEl.textContent=OB_PERIODO.anio_mes;
+      toast('✓ Período '+mesActual+' creado automáticamente','ok');
+    }
+  }
+
+  // 4. Si no hay período (no admin o creación falló) → empty state
   const empty=document.getElementById('emptyState');
   const content=document.getElementById('panelContent');
   if(!OB_PERIODO){
@@ -2596,15 +2848,15 @@ async function obCargarDatos(){
   if(empty){empty.style.display='none'}
   if(content){content.style.display='block'}
 
-  // 3. Pagos del período
+  // 5. Pagos del período
   const resPagos=await OB.Vistas.cargarPeriodoActivo();
   OB_DATA=resPagos.ok?resPagos.data:[];
 
-  // 4. Resumen por categoría
-  const resCat=await OB.Vistas.resumenPorCategoria();
-  OB_RESUMEN_CAT=resCat.ok?resCat.data:[];
+  // 6. Resumen por categoría
+  const resCatRes=await OB.Vistas.resumenPorCategoria();
+  OB_RESUMEN_CAT=resCatRes.ok?resCatRes.data:[];
 
-  // 5. Semáforo por sede
+  // 7. Semáforo por sede
   const resSema=await OB.Vistas.semaPorSede();
   OB_SEMA=resSema.ok?resSema.data:[];
 }
@@ -2778,6 +3030,7 @@ function obCalFiltrarSede(btn, sede){
 /* ── Calcular estado visual de un pago para el calendario ── */
 function obCalChipCls(pago){
   if(!pago) return 'chip-pend';
+  if(pago._proyectado) return 'chip-proy';
   const e = pago.estado;
   const dias = obDiasRestantes(pago.fecha_limite);
   if(['pagada','pagada_mora'].includes(e))                        return 'chip-ok';
@@ -2801,26 +3054,46 @@ function obCalAjustarDia(dia, anio, mes){
   return Math.min(dia, ultimoDia);
 }
 
-/* ── Obtener pagos del día desde OB_DATA ── */
+/* ── Obtener pagos del día — real o proyectado ── */
 function obCalPagosDel(anio, mes, dia){
-  const fecha = `${anio}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+  const fecha=`${anio}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+  const esMesPeriodo=OB_PERIODO&&OB_PERIODO.anio_mes===`${anio}-${String(mes).padStart(2,'0')}`;
 
-  // Filtro de sede
-  let pool = OB_CAL_SEDE
-    ? OB_DATA.filter(p => p.sede === OB_CAL_SEDE)
-    : OB_DATA;
+  // ── Mes con período activo: usar OB_DATA (pagos reales con estados) ──
+  if(esMesPeriodo){
+    let pool=OB_CAL_SEDE?OB_DATA.filter(p=>p.sede===OB_CAL_SEDE):OB_DATA;
+    return pool.filter(p=>{
+      if(!p.fecha_limite) return false;
+      if(p.fecha_limite===fecha) return true;
+      if(p.frecuencia==='semanal'&&p.dia_semana!==null&&p.dia_semana!==undefined){
+        return obCalEsOcurrenciaSemanal(p,anio,mes,dia);
+      }
+      return false;
+    });
+  }
 
-  return pool.filter(p => {
-    if(!p.fecha_limite) return false;
-    // Coincidencia directa con fecha_limite
-    if(p.fecha_limite === fecha) return true;
-    // Para obligaciones semanales: expandir ocurrencias del mes
-    if(p.frecuencia === 'semanal' && p.dia_semana !== null && p.dia_semana !== undefined){
-      return obCalEsOcurrenciaSemanal(p, anio, mes, dia);
+  // ── Mes sin período: proyectar desde catálogo (Opción B — chips azul) ──
+  let catalogo=OB_CAL_SEDE?OB_CATALOGO.filter(o=>o.sede===OB_CAL_SEDE):OB_CATALOGO;
+  return catalogo.filter(o=>{
+    if(o.frecuencia==='mensual'||o.frecuencia==='quincenal'){
+      if(!o.dia_pago) return false;
+      var diaAjustado=obCalAjustarDia(o.dia_pago,anio,mes);
+      if(dia!==diaAjustado) return false;
+      if(o.frecuencia==='quincenal') return dia===diaAjustado||dia===(diaAjustado+15<=obCalUltimoDia(anio,mes)?diaAjustado+15:null);
+      return true;
+    }
+    if(o.frecuencia==='semanal'&&o.dia_semana!==null&&o.dia_semana!==undefined){
+      return obCalEsOcurrenciaSemanal(o,anio,mes,dia);
     }
     return false;
-  });
+  }).map(o=>({...o,_proyectado:true,estado:'proyectado',
+    nombre_corto:(o.proveedor&&o.proveedor.nombre_corto)||o.nombre_corto||'—',
+    razon_social:(o.proveedor&&o.proveedor.razon_social)||o.razon_social||'—',
+    monto_estimado:o.monto_estimado||0}));
 }
+
+/* ── Último día del mes ── */
+function obCalUltimoDia(anio,mes){return new Date(anio,mes,0).getDate();}
 
 /* ── Verificar si un día es ocurrencia semanal de una obligación ── */
 function obCalEsOcurrenciaSemanal(pago, anio, mes, dia){
