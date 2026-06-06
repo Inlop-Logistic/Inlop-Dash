@@ -209,6 +209,98 @@ body::before{
 }
 .hdr-admin-tag.show{display:flex}
 
+/* ══ NOTIFICACIONES — botón header + panel desplegable ══ */
+.notif-btn{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  width:32px;height:32px;border-radius:8px;border:1px solid var(--line2);
+  background:var(--c1);color:var(--w3);cursor:pointer;
+  transition:border-color .15s,color .15s;flex-shrink:0
+}
+.notif-btn:hover{border-color:var(--navy);color:var(--navy)}
+.notif-btn i.ti{font-size:16px}
+.notif-badge{
+  position:absolute;top:-5px;right:-5px;
+  min-width:16px;height:16px;border-radius:8px;
+  background:var(--danger);color:#fff;border:2px solid var(--c0);
+  font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;
+  display:none;align-items:center;justify-content:center;padding:0 3px;
+  line-height:1
+}
+.notif-badge.show{display:flex}
+
+/* Panel desplegable */
+.notif-panel{
+  position:absolute;top:calc(100% + 10px);right:0;
+  width:300px;max-height:420px;
+  background:#fff;border:1px solid var(--line2);border-radius:12px;
+  box-shadow:0 12px 40px rgba(1,42,107,.15);
+  display:none;flex-direction:column;overflow:hidden;z-index:500
+}
+.notif-panel.open{display:flex}
+.notif-panel-hdr{
+  padding:12px 14px 8px;border-bottom:1px solid var(--line);flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between
+}
+.notif-panel-title{
+  font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;
+  letter-spacing:.07em;text-transform:uppercase;color:var(--navy)
+}
+.notif-panel-actions{display:flex;gap:6px}
+.notif-action-btn{
+  font-family:'JetBrains Mono',monospace;font-size:8px;
+  padding:3px 8px;border-radius:4px;border:1px solid var(--line2);
+  background:var(--c4);color:var(--w3);cursor:pointer;
+  letter-spacing:.05em;text-transform:uppercase;transition:all .15s
+}
+.notif-action-btn:hover{border-color:var(--navy);color:var(--navy)}
+.notif-action-btn.danger{border-color:rgba(220,38,38,.3);color:var(--danger)}
+.notif-action-btn.danger:hover{background:rgba(220,38,38,.06)}
+.notif-body{flex:1;overflow-y:auto;padding:8px 0}
+.notif-body::-webkit-scrollbar{width:4px}
+.notif-body::-webkit-scrollbar-thumb{background:var(--line2);border-radius:2px}
+.notif-group{padding:0 14px 4px}
+.notif-group-label{
+  font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:500;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--w4);
+  padding:8px 0 4px;border-top:1px solid var(--line)
+}
+.notif-group:first-child .notif-group-label{border-top:none;padding-top:0}
+.notif-item{
+  display:flex;align-items:flex-start;gap:8px;
+  padding:6px 0;border-bottom:0.5px solid var(--line)
+}
+.notif-item:last-child{border-bottom:none}
+.notif-item-ico{font-size:13px;flex-shrink:0;margin-top:1px}
+.notif-item-body{flex:1;min-width:0}
+.notif-item-prov{
+  font-size:11px;font-weight:600;color:var(--w1);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+.notif-item-det{font-size:10px;color:var(--w4);margin-top:1px}
+.notif-empty{
+  padding:24px 14px;text-align:center;
+  font-size:11px;color:var(--w4)
+}
+.notif-footer{
+  padding:8px 14px;border-top:1px solid var(--line);flex-shrink:0;
+  background:var(--c4)
+}
+.notif-perm-warn{
+  font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--amber2);
+  background:var(--amber3);border:1px solid rgba(217,119,6,.2);
+  border-radius:6px;padding:6px 10px;margin:8px 14px 0;
+  display:none
+}
+.notif-perm-warn.show{display:block}
+.notif-config-row{
+  display:flex;align-items:center;justify-content:space-between;
+  font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--w3);
+  letter-spacing:.04em
+}
+.notif-config-estado{font-weight:600}
+.notif-config-estado.on{color:var(--fin-color)}
+.notif-config-estado.off{color:var(--w4)}
+
 /* ══ BANNER ══ */
 /* ob-banner eliminado — la alerta se centraliza en hdrAlertPill */
 .bn-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0;animation:blink 2s infinite}
@@ -1434,6 +1526,37 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
       <button class="btn-portada" onclick="obVolverPortal()" aria-label="Volver al portal">
         <i class="ti ti-arrow-left" aria-hidden="true"></i>Portada
       </button>
+
+      <!-- Centro de alertas — 🔔 -->
+      <div style="position:relative" id="notifWrap">
+        <button class="notif-btn" id="notifBtn" onclick="obNotifTogglePanel()" aria-label="Centro de alertas" title="Centro de alertas">
+          <i class="ti ti-bell" aria-hidden="true"></i>
+          <span class="notif-badge" id="notifBadge"></span>
+        </button>
+        <div class="notif-panel" id="notifPanel">
+          <div class="notif-panel-hdr">
+            <span class="notif-panel-title"><i class="ti ti-bell" style="margin-right:4px"></i>Centro de alertas</span>
+            <div class="notif-panel-actions">
+              <button class="notif-action-btn" onclick="obNotifProbar()" title="Enviar notificación de prueba">Probar</button>
+              <button class="notif-action-btn danger" id="notifToggleBtn" onclick="obNotifToggleActivacion()">Desactivar</button>
+            </div>
+          </div>
+          <div class="notif-perm-warn" id="notifPermWarn">
+            <i class="ti ti-alert-triangle" style="margin-right:4px"></i>
+            Notificaciones bloqueadas. Ve a Configuración del navegador → Permisos del sitio → Notificaciones → Permitir.
+          </div>
+          <div class="notif-body" id="notifPanelBody">
+            <div class="notif-empty">Sin alertas activas</div>
+          </div>
+          <div class="notif-footer">
+            <div class="notif-config-row">
+              <span>🔔 Notificaciones</span>
+              <span class="notif-config-estado" id="notifEstadoLbl">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="hdr-user">
         <div class="hdr-av" id="hdrAv">—</div>
         <div>
@@ -1888,6 +2011,13 @@ var OB_PIN_TIMER   = null;
 var OB_PIN         = '2025';    // PIN del módulo financiero — cambiar en producción
 var OB_PIN_KEY     = 'inlop_ob_admin_v1';
 var OB_AUTO_TIMER  = null;
+
+/* ══ NOTIFICACIONES BROWSER (Fase 8A) ══ */
+var OB_NOTIF_ACTIVO    = false;
+var OB_NOTIF_TIMER     = null;
+var OB_NOTIF_KEY_LOG   = 'ob_notif_log_v1';
+var OB_NOTIF_KEY_PERM  = 'ob_notif_perm_v1';
+var OB_NOTIF_MAX_CICLO = 5;
 
 /* ══ HELPERS DE FORMATO ══ */
 function obFmtCOP(n){
@@ -3028,6 +3158,7 @@ async function refresh(){
   obRenderAlertas();
   obUpdateBanner();
   obRenderTabla();
+  obNotifActualizarPanel();  // actualizar badge y lista del centro de alertas
   const fd=document.getElementById('footDate');
   if(fd) fd.textContent=new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'});
 }
@@ -3040,6 +3171,264 @@ async function refresh(){
  * Patrón defensivo: window.INLOP._userReadyDetail guarda el detail si
  * auth.js dispara antes del listener (sesión en caché → ~0ms latencia).
  */
+/* ════════════════════════════════════════════════════════════════
+   FASE 8A — BROWSER NOTIFICATIONS
+   Prefijo: obNotif*  |  Sin Service Worker  |  Sin fetch adicional
+   Fuente de datos: OB_DATA (ya en memoria)
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Constantes de nivel ── */
+var OB_NOTIF_NIVELES = [
+  { id:'mora', emoji:'🚨', titulo:'Obligación en mora',    prio:0 },
+  { id:'hoy',  emoji:'🔴', titulo:'Vence hoy',             prio:1 },
+  { id:'1d',   emoji:'🔔', titulo:'Vence mañana',          prio:2 },
+  { id:'3d',   emoji:'⚠️', titulo:'Vence en 3 días',       prio:3 },
+  { id:'7d',   emoji:'📅', titulo:'Vence en 7 días',       prio:4 },
+];
+
+/* ── Solicitar permiso una sola vez tras login ── */
+function obNotifSolicitarPermiso(){
+  if(!('Notification' in window)) return;
+  var prev=localStorage.getItem(OB_NOTIF_KEY_PERM);
+  if(Notification.permission==='granted'){
+    OB_NOTIF_ACTIVO=true;
+    localStorage.setItem(OB_NOTIF_KEY_PERM,'granted');
+    obNotifActualizarUI();
+    return;
+  }
+  if(Notification.permission==='denied'||prev==='denied'){
+    OB_NOTIF_ACTIVO=false;
+    localStorage.setItem(OB_NOTIF_KEY_PERM,'denied');
+    obNotifActualizarUI();
+    return;
+  }
+  // Solo pide si no lo ha pedido antes o si estaba pending
+  Notification.requestPermission().then(function(perm){
+    localStorage.setItem(OB_NOTIF_KEY_PERM,perm);
+    OB_NOTIF_ACTIVO=(perm==='granted');
+    obNotifActualizarUI();
+  });
+}
+
+/* ── Toggle activar / desactivar desde la UI ── */
+function obNotifToggleActivacion(){
+  if(!('Notification' in window)){toast('Tu navegador no soporta notificaciones','warn');return;}
+  if(Notification.permission==='denied'){
+    document.getElementById('notifPermWarn').classList.add('show');
+    return;
+  }
+  if(OB_NOTIF_ACTIVO){
+    OB_NOTIF_ACTIVO=false;
+    if(OB_NOTIF_TIMER){clearInterval(OB_NOTIF_TIMER);OB_NOTIF_TIMER=null;}
+    localStorage.setItem(OB_NOTIF_KEY_PERM,'disabled');
+    toast('Notificaciones desactivadas','warn');
+  } else {
+    obNotifSolicitarPermiso();
+    if(OB_NOTIF_ACTIVO&&!OB_NOTIF_TIMER){
+      OB_NOTIF_TIMER=setInterval(obNotifCheck,900000);
+    }
+    toast('Notificaciones activadas','ok');
+  }
+  obNotifActualizarUI();
+}
+
+/* ── Iniciar timer tras el primer refresh ── */
+function obNotifIniciarTimer(){
+  if(OB_NOTIF_TIMER) return; // ya corriendo
+  OB_NOTIF_TIMER=setInterval(obNotifCheck,900000);
+}
+
+/* ── Ciclo principal de verificación (cada 15 min) ── */
+function obNotifCheck(){
+  if(!OB_NOTIF_ACTIVO||!OB_DATA||!OB_DATA.length) return;
+  obNotifLimpiarLog();
+
+  var hoy=obHoy();
+  var candidatos=[];
+
+  OB_DATA.forEach(function(p){
+    if(['pagada','pagada_mora'].includes(p.estado)) return;
+    var dias=obDiasRestantes(p.fecha_limite);
+    var nivel=null;
+
+    if(p.fecha_limite<hoy)    nivel='mora';
+    else if(p.fecha_limite===hoy) nivel='hoy';
+    else if(dias===1)         nivel='1d';
+    else if(dias===3)         nivel='3d';
+    else if(dias===7)         nivel='7d';
+
+    if(!nivel) return;
+
+    var clave='ob_notif_'+(p.obligacion_id||p.id)+'_'+nivel+'_'+hoy;
+    if(localStorage.getItem(clave)) return; // ya notificado hoy
+
+    var nivelObj=OB_NOTIF_NIVELES.find(function(n){return n.id===nivel;});
+    candidatos.push({p:p, nivel:nivel, nivelObj:nivelObj, clave:clave, prio:nivelObj?nivelObj.prio:99});
+  });
+
+  // Ordenar por prioridad (mora primero) y limitar a max
+  candidatos.sort(function(a,b){return a.prio-b.prio;});
+  candidatos.slice(0,OB_NOTIF_MAX_CICLO).forEach(function(c){
+    obNotifEnviar(c.p,c.nivelObj);
+    localStorage.setItem(c.clave,'1');
+  });
+}
+
+/* ── Enviar una notificación del navegador ── */
+function obNotifEnviar(pago,nivelObj){
+  if(!OB_NOTIF_ACTIVO||Notification.permission!=='granted') return;
+  var nom=(pago.nombre_corto||pago.razon_social||'—');
+  var det=(pago.detalle||'').substring(0,60);
+  var title=(nivelObj?nivelObj.emoji+' ':'')+nom;
+  var body=(nivelObj?nivelObj.titulo+' — ':'')+det+' · '+(pago.sede||'');
+  var n=new Notification(title,{
+    body:body,
+    icon:'../img/logo-inlop.png',
+    tag:'ob_'+( pago.obligacion_id||pago.id),
+    requireInteraction: nivelObj&&nivelObj.id==='mora'
+  });
+  n.onclick=function(){window.focus();n.close();};
+}
+
+/* ── Notificación de prueba ── */
+function obNotifProbar(){
+  if(!('Notification' in window)){toast('Tu navegador no soporta notificaciones','warn');return;}
+  if(Notification.permission!=='granted'){
+    obNotifSolicitarPermiso();
+    return;
+  }
+  var n=new Notification('🔔 INLOP · Prueba de notificación',{
+    body:'Las notificaciones del módulo Obligaciones están activas.',
+    icon:'../img/logo-inlop.png',
+    tag:'ob_test'
+  });
+  n.onclick=function(){window.focus();n.close();};
+  toast('Notificación de prueba enviada','ok');
+}
+
+/* ── Limpiar log de días anteriores ── */
+function obNotifLimpiarLog(){
+  var hoy=obHoy();
+  var aEliminar=[];
+  for(var k in localStorage){
+    if(k.startsWith('ob_notif_')&&!k.endsWith('_'+hoy)&&k!==OB_NOTIF_KEY_LOG&&k!==OB_NOTIF_KEY_PERM){
+      aEliminar.push(k);
+    }
+  }
+  aEliminar.forEach(function(k){localStorage.removeItem(k);});
+}
+
+/* ── Actualizar UI del panel (badge + lista + estado) ── */
+function obNotifActualizarPanel(){
+  if(!OB_DATA) return;
+  var hoy=obHoy();
+  var grupos={mora:[],hoy:[],d3:[],d7:[]};
+
+  OB_DATA.forEach(function(p){
+    if(['pagada','pagada_mora'].includes(p.estado)) return;
+    var dias=obDiasRestantes(p.fecha_limite);
+    if(p.fecha_limite<hoy)              grupos.mora.push(p);
+    else if(p.fecha_limite===hoy)        grupos.hoy.push(p);
+    else if(dias!==null&&dias<=3)        grupos.d3.push(p);
+    else if(dias!==null&&dias<=7)        grupos.d7.push(p);
+  });
+
+  var total=grupos.mora.length+grupos.hoy.length+grupos.d3.length+grupos.d7.length;
+  var badge=document.getElementById('notifBadge');
+  var body=document.getElementById('notifPanelBody');
+  if(!badge||!body) return;
+
+  // Badge
+  if(total>0){
+    badge.textContent=total>9?'9+':String(total);
+    badge.classList.add('show');
+  } else {
+    badge.classList.remove('show');
+  }
+
+  // Lista
+  if(total===0){
+    body.innerHTML='<div class="notif-empty">✅ Todas las obligaciones al día</div>';
+    return;
+  }
+
+  var html='';
+  function renderGrupo(label,ico,items){
+    if(!items.length) return;
+    html+='<div class="notif-group"><div class="notif-group-label">'+ico+' '+label+'</div>';
+    items.slice(0,6).forEach(function(p){
+      var nom=p.nombre_corto||p.razon_social||'—';
+      var det=(p.detalle||'').substring(0,40);
+      html+='<div class="notif-item">'+
+        '<span class="notif-item-ico">'+ico+'</span>'+
+        '<div class="notif-item-body">'+
+          '<div class="notif-item-prov">'+obEscH(nom)+'</div>'+
+          '<div class="notif-item-det">'+obEscH(det)+(p.sede?' · '+p.sede:'')+'</div>'+
+        '</div></div>';
+    });
+    if(items.length>6) html+='<div style="font-size:9px;color:var(--w4);padding:4px 0">…y '+(items.length-6)+' más</div>';
+    html+='</div>';
+  }
+
+  renderGrupo('En mora','🚨',grupos.mora);
+  renderGrupo('Vence hoy','🔴',grupos.hoy);
+  renderGrupo('Próximos 3 días','⚠️',grupos.d3);
+  renderGrupo('Próximos 7 días','📅',grupos.d7);
+  body.innerHTML=html;
+}
+
+/* ── Helper escape HTML ── */
+function obEscH(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ── Toggle panel desplegable ── */
+function obNotifTogglePanel(){
+  var panel=document.getElementById('notifPanel');
+  if(!panel) return;
+  var isOpen=panel.classList.contains('open');
+  // Cerrar si está abierto
+  if(isOpen){panel.classList.remove('open');return;}
+  // Actualizar contenido y abrir
+  obNotifActualizarPanel();
+  panel.classList.add('open');
+}
+
+/* ── Cerrar panel al clicar fuera ── */
+document.addEventListener('click',function(e){
+  var wrap=document.getElementById('notifWrap');
+  if(wrap&&!wrap.contains(e.target)){
+    var panel=document.getElementById('notifPanel');
+    if(panel) panel.classList.remove('open');
+  }
+});
+
+/* ── Actualizar estado visual del botón y footer ── */
+function obNotifActualizarUI(){
+  var btn=document.getElementById('notifBtn');
+  var toggleBtn=document.getElementById('notifToggleBtn');
+  var estadoLbl=document.getElementById('notifEstadoLbl');
+  var permWarn=document.getElementById('notifPermWarn');
+
+  var denied=('Notification' in window)&&Notification.permission==='denied';
+  if(permWarn) permWarn.classList.toggle('show',denied);
+
+  if(estadoLbl){
+    if(denied){
+      estadoLbl.textContent='Bloqueadas';
+      estadoLbl.className='notif-config-estado off';
+    } else if(OB_NOTIF_ACTIVO){
+      estadoLbl.textContent='Activadas';
+      estadoLbl.className='notif-config-estado on';
+    } else {
+      estadoLbl.textContent='Desactivadas';
+      estadoLbl.className='notif-config-estado off';
+    }
+  }
+  if(toggleBtn) toggleBtn.textContent=OB_NOTIF_ACTIVO?'Desactivar':'Activar';
+  if(btn) btn.title=OB_NOTIF_ACTIVO?'Centro de alertas (activo)':'Centro de alertas (inactivo)';
+}
+
 async function obOnUserReady(u){
 
   // 2. Cargar perfil completo con ob_rol
@@ -3100,7 +3489,13 @@ async function obOnUserReady(u){
   // 11. Auto-refresh cada 30 minutos
   OB_AUTO_TIMER=setInterval(refresh,1800000);
 
-  // 12. Registrar acceso en auditoría (silencioso)
+  // 12. Solicitar permiso de notificaciones (una sola vez)
+  obNotifSolicitarPermiso();
+
+  // 13. Iniciar timer de notificaciones (cada 15 min)
+  obNotifIniciarTimer();
+
+  // 14. Registrar acceso en auditoría (silencioso)
   OB.Auth.registrarAcceso().catch(function(){});
 }
 
