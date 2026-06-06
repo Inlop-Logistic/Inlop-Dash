@@ -1,0 +1,3573 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Obligaciones Financieras — INLOP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@500;600;700&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* ══════════════════════════════════════════════════════════
+   INLOP · OBLIGACIONES FINANCIERAS · Design System v2
+   Área Financiera · v1.0
+   ══════════════════════════════════════════════════════════ */
+
+/* ══ TOKENS ══ */
+:root{
+  --c0:#F5F7FA; --c1:#FFFFFF; --c3:#F9FAFC; --c4:#EEF2F8;
+  --sb-bg:#0A1735; --sb-bg2:#0F1F45; --sb-width:230px;
+  --sb-line:rgba(255,255,255,.06); --sb-line2:rgba(255,255,255,.10);
+  --sb-txt:rgba(255,255,255,.70); --sb-txt2:rgba(255,255,255,.50); --sb-txt3:rgba(255,255,255,.35);
+  --navy:#012A6B; --navy2:#0A3A8F; --navy3:rgba(1,42,107,.50);
+  --red:#E10613; --red2:#F02030; --red3:rgba(225,6,19,.40);
+  --line:rgba(1,42,107,.08); --line2:rgba(1,42,107,.16); --line3:rgba(1,42,107,.28);
+  --w1:#0A0E27; --w2:#1F2937; --w3:#4B5563; --w4:#6B7280;
+  --green:#00875F; --green2:#006A4A; --green3:rgba(0,135,95,.10);
+  --amber:#D97706; --amber2:#B45309; --amber3:rgba(217,119,6,.10);
+  --danger:#DC2626; --danger2:#B91C1C; --danger3:rgba(220,38,38,.10);
+  --blue:#0284C7; --blue3:rgba(2,132,199,.10);
+  --fin-color:#00875F;
+  --ax:#6B7280; --ax-grid:rgba(1,42,107,.06);
+}
+
+/* ══ RESET ══ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--c0);font-family:'DM Sans',system-ui,sans-serif;color:var(--w1);overflow:hidden}
+
+/* ══ FIRMA DE MARCA navy→red→navy 2px — nunca eliminar ══ */
+body::before{
+  content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:999;
+  background:linear-gradient(90deg,var(--navy) 0%,var(--red) 50%,var(--navy) 100%)
+}
+
+/* ══ AUTH OVERLAY ══ */
+#authOverlay{
+  position:fixed;inset:0;background:var(--c0);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:16px;z-index:9998
+}
+#authOverlay.hidden{display:none}
+.auth-spin{
+  width:44px;height:44px;border-radius:50%;
+  border:3px solid var(--line2);border-top-color:var(--fin-color);
+  animation:spin .8s linear infinite
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.auth-lbl{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--w4);letter-spacing:.2em;text-transform:uppercase}
+
+/* ══ ACCESO DENEGADO ══ */
+#accessDenied{
+  position:fixed;inset:0;background:var(--c0);
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:9997
+}
+.deny-ico{font-size:40px}
+.deny-title{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;color:var(--navy);letter-spacing:.08em;text-transform:uppercase}
+.deny-sub{font-size:13px;color:var(--w4);text-align:center;max-width:320px}
+
+/* ══ SHELL ══ */
+.shell{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.ops-body-row{display:flex;flex:1;min-height:0;overflow:hidden}
+.ops-body-col{display:flex;flex-direction:column;flex:1;min-width:0;overflow:hidden}
+
+/* ══ SIDEBAR ══ */
+.tab-row{
+  width:var(--sb-width);min-width:var(--sb-width);flex-shrink:0;
+  background:var(--sb-bg);border-right:1px solid var(--sb-line2);
+  display:flex;flex-direction:column;overflow:hidden;
+  transition:width .25s ease,min-width .25s ease
+}
+.ops-body-row.sb-collapsed .tab-row{width:56px;min-width:56px}
+
+.sb-brand{
+  display:flex;align-items:center;gap:10px;
+  padding:14px 14px 14px;border-bottom:1px solid var(--sb-line);
+  flex-shrink:0;overflow:hidden
+}
+.sb-brand-mark{
+  width:32px;height:32px;border-radius:6px;background:var(--c1);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  cursor:pointer;user-select:none
+}
+.sb-brand-name{
+  font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;
+  color:rgba(255,255,255,.9);letter-spacing:.12em;line-height:1;white-space:nowrap
+}
+.sb-brand-sub{
+  font-family:'JetBrains Mono',monospace;font-size:7.5px;
+  color:var(--sb-txt3);letter-spacing:.1em;margin-top:2px;white-space:nowrap
+}
+.ops-body-row.sb-collapsed .sb-brand-name,
+.ops-body-row.sb-collapsed .sb-brand-sub{display:none}
+
+.sb-section-label{
+  font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:500;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--sb-txt3);
+  padding:14px 16px 6px;white-space:nowrap;overflow:hidden
+}
+.ops-body-row.sb-collapsed .sb-section-label{display:none}
+
+/* Botones sidebar */
+.tb{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 16px;width:100%;border:none;background:transparent;
+  font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--sb-txt);
+  cursor:pointer;border-radius:0;transition:all .15s;white-space:nowrap;overflow:hidden;
+  position:relative
+}
+.tb i.ti{font-size:16px;flex-shrink:0}
+.tb:hover{background:rgba(255,255,255,.05);color:rgba(255,255,255,.9)}
+.tb.on{background:rgba(0,135,95,.15);color:var(--fin-color)}
+.tb.on::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--fin-color);border-radius:0 2px 2px 0}
+.ops-body-row.sb-collapsed .tb span{display:none}
+
+/* Badge de alertas en sidebar */
+.sb-badge{
+  margin-left:auto;background:var(--danger);color:#fff;
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:500;
+  padding:2px 6px;border-radius:10px;flex-shrink:0;min-width:20px;text-align:center
+}
+.ops-body-row.sb-collapsed .sb-badge{display:none}
+
+/* Tooltip en colapso */
+.ops-body-row.sb-collapsed .tb[data-label]::after{
+  content:attr(data-label);position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);
+  background:var(--navy2);color:#fff;font-family:'Barlow Condensed',sans-serif;
+  font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  padding:5px 10px;border-radius:5px;white-space:nowrap;pointer-events:none;
+  opacity:0;transition:opacity .15s;z-index:100
+}
+.ops-body-row.sb-collapsed .tb[data-label]:hover::after{opacity:1}
+
+.sb-footer{margin-top:auto;border-top:1px solid var(--sb-line);padding:6px 0}
+.sb-version{
+  font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--sb-txt3);
+  padding:4px 16px;letter-spacing:.08em;white-space:nowrap;overflow:hidden
+}
+.ops-body-row.sb-collapsed .sb-version{display:none}
+
+/* ══ HEADER ══ */
+.header{
+  background:var(--c1);border-bottom:1px solid var(--line);
+  padding:0 22px;height:54px;display:flex;align-items:center;gap:12px;
+  flex-shrink:0;position:relative;z-index:30
+}
+.hmt-main{
+  font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:17px;
+  letter-spacing:.07em;color:var(--navy);text-transform:uppercase
+}
+.hmt-sub{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--w4);letter-spacing:.08em;margin-top:2px
+}
+
+/* Alert pill header */
+.hdr-alert-pill{
+  display:none;align-items:center;gap:8px;padding:5px 16px;border-radius:100px;
+  border:1px solid;font-family:'JetBrains Mono',monospace;font-size:9.5px;
+  font-weight:500;letter-spacing:.07em;text-transform:uppercase;
+  white-space:nowrap;flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  margin:0 auto;transition:all .3s
+}
+.hdr-alert-pill.state-ok{background:var(--green3);border-color:rgba(0,135,95,.3);color:var(--green)}
+.hdr-alert-pill.state-warn{background:var(--amber3);border-color:rgba(217,119,6,.35);color:var(--amber2)}
+.hdr-alert-pill.state-crit{background:var(--danger3);border-color:rgba(220,38,38,.35);color:var(--danger)}
+.hdr-pill-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0;animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+.header-clock{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--w4)}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.btn-portada{
+  display:flex;align-items:center;gap:6px;padding:5px 13px;border-radius:6px;
+  background:var(--c1);border:1px solid var(--line2);color:var(--w3);
+  font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .15s
+}
+.btn-portada:hover{border-color:var(--fin-color);color:var(--fin-color)}
+.btn-portada i.ti{font-size:13px}
+.hdr-user{
+  display:flex;align-items:center;gap:8px;padding:3px 10px 3px 4px;
+  border-radius:100px;background:var(--c4);border:1px solid var(--line)
+}
+.hdr-av{
+  width:26px;height:26px;border-radius:50%;
+  background:linear-gradient(135deg,var(--navy),var(--fin-color));
+  color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:10px;
+  display:flex;align-items:center;justify-content:center
+}
+.hdr-uname{font-size:11px;font-weight:500;color:var(--w1)}
+.hdr-urol{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--w4);text-transform:uppercase;letter-spacing:.07em}
+.hdr-admin-tag{
+  display:none;align-items:center;gap:5px;padding:3px 10px;border-radius:100px;
+  background:var(--amber3);border:1px solid rgba(217,119,6,.3);
+  font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--amber2);
+  letter-spacing:.07em;text-transform:uppercase
+}
+.hdr-admin-tag.show{display:flex}
+
+/* ══ BANNER ══ */
+.ob-banner{
+  display:none;align-items:center;gap:10px;padding:7px 22px;
+  font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:500;
+  letter-spacing:.07em;text-transform:uppercase;flex-shrink:0
+}
+.ob-banner.show{display:flex}
+.ob-banner.bn-ok{background:var(--green3);border-bottom:1px solid rgba(0,135,95,.2);color:var(--green)}
+.ob-banner.bn-warn{background:var(--amber3);border-bottom:1px solid rgba(217,119,6,.2);color:var(--amber2)}
+.ob-banner.bn-crit{background:var(--danger3);border-bottom:1px solid rgba(220,38,38,.2);color:var(--danger)}
+.bn-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0;animation:blink 2s infinite}
+.bn-date{margin-left:auto;color:inherit;opacity:.6}
+
+/* ══ PAGE (área scrollable) ══ */
+.page{flex:1;overflow-y:auto;padding:22px 24px 32px;background:var(--c0)}
+.page::-webkit-scrollbar{width:6px}
+.page::-webkit-scrollbar-track{background:transparent}
+.page::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+.page::-webkit-scrollbar-thumb:hover{background:var(--line3)}
+
+/* ══ SECTION HEADERS ══ */
+.sh{display:flex;align-items:center;gap:10px;margin-bottom:14px;margin-top:22px}
+.sh:first-of-type{margin-top:0}
+.sh-bar{width:3px;height:16px;border-radius:2px;flex-shrink:0}
+.sh-txt{
+  font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--navy)
+}
+.sh-line{flex:1;height:1px;background:var(--line)}
+
+/* ══ KPI GRID ══ */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:20px}
+.kpi{
+  background:var(--c1);border:1px solid var(--line);border-radius:12px;
+  padding:14px 16px;display:flex;flex-direction:column;gap:5px;
+  border-left:3px solid var(--kpi-accent,var(--blue));
+  box-shadow:0 1px 3px rgba(1,42,107,.04);transition:.18s
+}
+.kpi:hover{box-shadow:0 4px 14px rgba(1,42,107,.08);transform:translateY(-2px)}
+.kpi.k1{--kpi-accent:var(--blue)}
+.kpi.k2{--kpi-accent:var(--green)}
+.kpi.k3{--kpi-accent:var(--danger)}
+.kpi.k4{--kpi-accent:var(--amber)}
+.kpi-lbl{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--w4)}
+.kpi-val{font-family:'Anton',sans-serif;font-size:34px;line-height:1;color:var(--navy)}
+.kpi.k3 .kpi-val{color:var(--danger)}
+.kpi.k4 .kpi-val{color:var(--amber)}
+.kpi-sub{font-size:11px;color:var(--w4);line-height:1.4}
+.kpi-bar{height:3px;background:rgba(0,0,0,.06);border-radius:2px;overflow:hidden;margin-top:8px}
+.kpi-fill{height:100%;border-radius:2px;transition:width .7s ease}
+
+/* ══ CARDS y CHARTS ══ */
+.charts-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;align-items:start}
+.card{background:var(--c1);border:1px solid var(--line2);border-radius:12px;overflow:hidden}
+.cp{padding:18px 20px}
+.card-ttl{
+  font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--navy);margin-bottom:12px
+}
+
+/* Semáforo por sede */
+.gauge-row{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--line)}
+.gauge-row:last-child{border-bottom:none}
+.gauge-sede{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--w2);width:80px;flex-shrink:0}
+.gauge-track{flex:1;height:5px;background:var(--c4);border-radius:3px;overflow:hidden}
+.gauge-fill{height:100%;border-radius:3px;transition:width .6s ease}
+.gauge-pct{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;min-width:36px;text-align:right}
+
+/* ══ ALERTAS ══ */
+.alerts-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:4px}
+.ac{border-radius:10px;padding:14px 16px;border:1px solid;position:relative;overflow:hidden}
+.ac::after{content:'';position:absolute;left:0;top:0;bottom:0;width:3px}
+.ac-crit{background:rgba(220,38,38,.05);border-color:rgba(220,38,38,.2)}
+.ac-crit::after{background:var(--danger)}
+.ac-warn{background:rgba(217,119,6,.05);border-color:rgba(217,119,6,.2)}
+.ac-warn::after{background:var(--amber)}
+.ac-ok{background:rgba(0,135,95,.05);border-color:rgba(0,135,95,.2)}
+.ac-ok::after{background:var(--green)}
+.ac-prov{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;color:var(--w1);margin-bottom:2px;letter-spacing:.04em}
+.ac-det{font-size:11px;color:var(--w4);margin-bottom:8px;line-height:1.4}
+.ac-row{display:flex;align-items:center;gap:6px}
+.badge{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:4px}
+.badge-red{background:var(--danger3);color:var(--danger)}
+.badge-amber{background:var(--amber3);color:var(--amber2)}
+.badge-green{background:var(--green3);color:var(--green)}
+.badge-blue{background:var(--blue3);color:var(--blue)}
+.badge-gray{background:var(--c4);color:var(--w3)}
+.ac-monto{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;color:var(--navy)}
+
+/* Empty state alertas */
+.empty-ok{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:8px;padding:28px;text-align:center;
+  background:var(--green3);border:1px solid rgba(0,135,95,.2);border-radius:10px
+}
+.empty-ok-ico{font-size:28px}
+.empty-ok-txt{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:.08em;color:var(--green);text-transform:uppercase}
+
+/* ══ VISTA: REGISTRO ══ */
+
+/* Barra de filtros compacta (34px) */
+.filter-bar{
+  background:var(--c1);border-bottom:1px solid var(--line);
+  padding:5px 22px;display:flex;align-items:center;gap:5px;
+  flex-shrink:0;height:36px;overflow:hidden
+}
+.filter-search{
+  display:flex;align-items:center;gap:5px;
+  background:var(--c0);border:1px solid var(--line2);border-radius:5px;
+  padding:0 9px;height:24px;flex-shrink:0
+}
+.filter-search i.ti{font-size:12px;color:var(--w4)}
+.filter-search input{
+  border:none;background:transparent;font-size:11px;color:var(--w1);
+  outline:none;width:110px;font-family:'DM Sans',sans-serif
+}
+.filter-search input::placeholder{color:var(--w4);font-size:10px}
+.fsep{width:1px;height:16px;background:var(--line2);flex-shrink:0;margin:0 2px}
+.fsel{
+  height:24px;padding:0 7px;border:1px solid var(--line2);border-radius:5px;
+  font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:.04em;color:var(--w3);background:var(--c0);cursor:pointer;flex-shrink:0
+}
+.fsel:focus{outline:none;border-color:var(--navy)}
+.ftag{
+  display:flex;align-items:center;gap:3px;height:22px;padding:0 9px;
+  border-radius:11px;font-family:'Barlow Condensed',sans-serif;font-size:10px;
+  font-weight:700;letter-spacing:.05em;cursor:pointer;flex-shrink:0;
+  border:1px solid;transition:all .15s
+}
+.ftag-crit{background:var(--danger3);color:var(--danger);border-color:rgba(220,38,38,.25)}
+.ftag-warn{background:var(--amber3);color:var(--amber2);border-color:rgba(217,119,6,.25)}
+.ftag-all{background:var(--c4);color:var(--w3);border-color:var(--line2)}
+.ftag-all.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.ftag-count{font-size:9px;background:rgba(0,0,0,.1);padding:0 4px;border-radius:8px;font-weight:700}
+.fclear{font-size:10px;color:var(--w4);cursor:pointer;padding:0 4px;flex-shrink:0;transition:color .15s}
+.fclear:hover{color:var(--danger)}
+.fics-btn{
+  margin-left:auto;display:flex;align-items:center;gap:5px;
+  height:24px;padding:0 10px;border-radius:5px;background:var(--navy);
+  color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:.05em;cursor:pointer;flex-shrink:0;border:none;transition:background .15s
+}
+.fics-btn:hover{background:var(--navy2)}
+.fics-btn i.ti{font-size:12px}
+
+/* Chips de filtros activos */
+.active-filters{
+  background:rgba(2,132,199,.05);border-bottom:1px solid rgba(2,132,199,.12);
+  padding:4px 22px;display:none;align-items:center;gap:5px;flex-shrink:0;min-height:26px
+}
+.active-filters.show{display:flex}
+.af-lbl{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--blue);letter-spacing:.1em;text-transform:uppercase;font-weight:500;margin-right:2px}
+.af-chip{
+  display:flex;align-items:center;gap:3px;
+  background:var(--blue3);color:var(--blue);
+  font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;
+  padding:1px 7px;border-radius:10px;letter-spacing:.04em
+}
+.af-x{cursor:pointer;opacity:.7;font-size:10px;line-height:1}
+.af-clear{margin-left:auto;font-size:9px;color:var(--danger);cursor:pointer;font-weight:600;font-family:'JetBrains Mono',monospace}
+
+/* Admin tag */
+.admin-tag{
+  display:none;background:rgba(217,119,6,.08);border-bottom:1px solid rgba(217,119,6,.2);
+  padding:4px 22px;flex-shrink:0;
+  font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--amber2);
+  letter-spacing:.08em;text-transform:uppercase
+}
+.admin-tag.show{display:flex;align-items:center;gap:6px}
+.admin-tag i.ti{font-size:12px}
+
+/* Tabla */
+.tbl-wrap{flex:1;overflow:auto;padding:14px 22px 20px}
+.tbl-wrap::-webkit-scrollbar{width:6px;height:6px}
+.tbl-wrap::-webkit-scrollbar-track{background:transparent}
+.tbl-wrap::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+.tbl-wrap::-webkit-scrollbar-thumb:hover{background:var(--line3)}
+
+table{width:100%;border-collapse:collapse;font-size:12px;background:var(--c1);border-radius:10px;overflow:hidden;border:1px solid var(--line2)}
+thead th{
+  background:var(--c4);padding:9px 12px;text-align:left;
+  font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--navy);
+  border-bottom:1px solid var(--line2);white-space:nowrap;
+  position:sticky;top:0;z-index:2
+}
+thead th.th-sort{cursor:pointer}
+thead th.th-sort:hover{color:var(--navy2)}
+tbody td{
+  padding:9px 12px;border-bottom:1px solid var(--line);
+  color:var(--w2);vertical-align:middle;white-space:nowrap
+}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:rgba(1,42,107,.015)}
+tbody tr.row-vencida td{background:rgba(220,38,38,.03)}
+tbody tr.row-vencida td:first-child{border-left:3px solid var(--danger);padding-left:9px}
+tbody tr.row-warn td:first-child{border-left:3px solid var(--amber);padding-left:9px}
+tbody tr.row-pagada td{opacity:.65}
+tbody tr.row-pagada td:first-child{border-left:3px solid var(--green);padding-left:9px;opacity:1}
+tfoot td{
+  padding:9px 12px;background:var(--c4);font-weight:700;font-size:11px;
+  color:var(--navy);border-top:2px solid var(--line2);
+  font-family:'Barlow Condensed',sans-serif;letter-spacing:.06em
+}
+
+/* Monto inline editable */
+.monto-cell{cursor:text;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;color:var(--navy)}
+.monto-cell.editing input{
+  border:1px solid var(--navy);border-radius:4px;padding:2px 6px;
+  font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--navy);
+  background:var(--blue3);outline:none;width:110px
+}
+.monto-cell .monto-hint{font-size:9px;color:var(--w4);display:none}
+.monto-cell:hover .monto-hint{display:inline}
+
+/* Clip de soporte */
+.clip-icon{font-size:15px;cursor:pointer;transition:color .15s}
+.clip-icon.has-soporte{color:var(--green)}
+.clip-icon.no-soporte{color:var(--line3)}
+.clip-icon.has-soporte:hover{color:var(--green2)}
+.clip-icon.no-soporte:hover{color:var(--w3)}
+
+/* Botón registrar pago */
+.btn-pago{
+  font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:5px;
+  border:1px solid var(--line2);color:var(--navy);background:var(--c1);
+  cursor:pointer;white-space:nowrap;transition:all .15s
+}
+.btn-pago:hover{border-color:var(--green);color:var(--green);background:var(--green3)}
+.btn-ver-soporte{
+  font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:5px;
+  border:1px solid var(--line);color:var(--w4);background:transparent;
+  cursor:pointer;white-space:nowrap;transition:all .15s
+}
+.btn-ver-soporte:hover{border-color:var(--blue);color:var(--blue)}
+
+/* Mobile cards */
+.mob-card{
+  background:var(--c1);border:1px solid var(--line2);border-radius:10px;
+  padding:14px 16px;margin-bottom:10px;
+  border-left:3px solid var(--line2)
+}
+.mob-card.mc-crit{border-left-color:var(--danger)}
+.mob-card.mc-warn{border-left-color:var(--amber)}
+.mob-card.mc-ok{border-left-color:var(--green)}
+.mob-card-prov{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:var(--navy);margin-bottom:2px}
+.mob-card-det{font-size:11px;color:var(--w4);margin-bottom:8px}
+.mob-card-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mob-card-monto{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;color:var(--navy)}
+
+/* ══ FOOTER ══ */
+footer{
+  background:var(--c1);border-top:1px solid var(--line);
+  padding:9px 24px;display:flex;align-items:center;justify-content:space-between;
+  font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--w4);
+  letter-spacing:.06em;flex-shrink:0
+}
+footer b{color:var(--navy);font-weight:500}
+
+/* ══ TOAST ══ */
+.toast{
+  position:fixed;bottom:24px;right:24px;z-index:9999;
+  background:var(--navy);color:#fff;padding:10px 18px;border-radius:8px;
+  font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;
+  letter-spacing:.06em;box-shadow:0 8px 24px rgba(1,42,107,.25);
+  transform:translateY(120%);opacity:0;transition:all .3s ease;pointer-events:none
+}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.ok{background:var(--green)}
+.toast.err{background:var(--danger)}
+.toast.info{background:var(--navy2)}
+
+/* ══ MODALES ══ */
+.modal-bg{
+  position:fixed;inset:0;background:rgba(1,10,30,.5);
+  backdrop-filter:blur(4px);z-index:9990;
+  display:none;align-items:center;justify-content:center;padding:20px
+}
+.modal-bg.show{display:flex}
+.modal{
+  background:var(--c1);border:1px solid var(--line2);border-radius:14px;
+  width:100%;max-width:420px;overflow:hidden;
+  box-shadow:0 24px 60px rgba(1,42,107,.18)
+}
+.modal-hdr{
+  background:var(--navy);padding:16px 20px;
+  display:flex;align-items:center;gap:12px
+}
+.modal-hdr-ico{
+  width:34px;height:34px;background:rgba(255,255,255,.1);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0
+}
+.modal-hdr-ico i.ti{font-size:18px;color:#fff}
+.modal-ttl{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:#fff;letter-spacing:.06em;text-transform:uppercase}
+.modal-sub{font-family:'JetBrains Mono',monospace;font-size:8px;color:rgba(255,255,255,.5);margin-top:1px}
+.modal-body{padding:18px 20px}
+.modal-ctx{
+  background:var(--green3);border:1px solid rgba(0,135,95,.2);border-radius:8px;
+  padding:10px 13px;margin-bottom:14px
+}
+.modal-ctx-prov{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--green2)}
+.modal-ctx-det{font-size:11px;color:var(--green);margin-top:1px}
+.modal-ctx-fecha{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--w4);margin-top:4px}
+.fields-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.field{margin-bottom:12px}
+.field:last-child{margin-bottom:0}
+.field-lbl{
+  font-family:'JetBrains Mono',monospace;font-size:8.5px;font-weight:500;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--w3);
+  display:flex;align-items:center;gap:4px;margin-bottom:5px
+}
+.field-req{color:var(--danger)}
+.field-inp{
+  width:100%;height:36px;padding:0 10px;
+  border:1px solid var(--line2);border-radius:6px;
+  font-family:'DM Sans',sans-serif;font-size:12px;color:var(--w1);
+  background:var(--c3);outline:none;transition:border-color .15s
+}
+.field-inp:focus{border-color:var(--navy);background:var(--c1)}
+.field-inp::placeholder{color:var(--w4);font-size:11px}
+textarea.field-inp{height:56px;padding:8px 10px;resize:none}
+.field-hint{font-size:9px;color:var(--w4);margin-top:3px}
+.modal-divider{height:1px;background:var(--line);margin:12px 0}
+.modal-footer{
+  display:flex;gap:8px;padding:14px 20px;
+  border-top:1px solid var(--line)
+}
+.mbtn-c{
+  flex:1;padding:9px;border-radius:7px;
+  border:1px solid var(--line2);background:var(--c4);
+  font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--w3);cursor:pointer;transition:all .15s
+}
+.mbtn-c:hover{border-color:var(--line3);color:var(--w1)}
+.mbtn-s{
+  flex:2;padding:9px;border-radius:7px;background:var(--green);border:none;
+  font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:#fff;cursor:pointer;transition:background .15s
+}
+.mbtn-s:hover{background:var(--green2)}
+.mbtn-s:disabled{opacity:.5;cursor:not-allowed}
+
+/* Modal soporte */
+.soporte-url{
+  display:flex;gap:6px;align-items:center;margin-top:4px
+}
+.soporte-url a{
+  font-size:11px;color:var(--blue);text-decoration:none;flex:1;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+}
+.soporte-url a:hover{text-decoration:underline}
+.soporte-open-btn{
+  display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:5px;
+  background:var(--blue3);color:var(--blue);border:none;cursor:pointer;flex-shrink:0;
+  font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.05em
+}
+.soporte-open-btn i.ti{font-size:12px}
+
+/* PIN modal */
+.pin-modal{background:var(--c1);border:1px solid var(--line2);border-radius:14px;padding:28px;width:300px;max-width:95vw;text-align:center}
+.pin-title{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--navy);margin-bottom:4px}
+.pin-sub{font-size:11px;color:var(--w4);margin-bottom:18px}
+.pin-dots{display:flex;justify-content:center;gap:12px;margin-bottom:18px}
+.pin-dot{width:12px;height:12px;border-radius:50%;background:var(--line2);transition:background .15s}
+.pin-dot.filled{background:var(--navy)}
+.pin-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:180px;margin:0 auto}
+.pin-btn{
+  padding:11px;border-radius:8px;border:1px solid var(--line2);background:var(--c4);
+  font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;color:var(--w1);
+  cursor:pointer;transition:all .12s
+}
+.pin-btn:hover{background:var(--c0);border-color:var(--navy);color:var(--navy)}
+.pin-btn:active{transform:scale(.95)}
+.pin-err{font-size:11px;color:var(--danger);margin-top:12px;min-height:16px;font-family:'JetBrains Mono',monospace}
+
+/* Drag overlay */
+.drag-ov{
+  position:fixed;inset:0;background:rgba(1,42,107,.88);backdrop-filter:blur(8px);
+  z-index:9995;display:none;align-items:center;justify-content:center
+}
+.drag-ov.show{display:flex}
+.drag-box{
+  background:var(--c1);border-radius:16px;border:2px dashed var(--fin-color);
+  padding:40px 60px;text-align:center
+}
+.drag-box i.ti{font-size:40px;color:var(--fin-color);display:block;margin-bottom:12px}
+.drag-box p{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--navy)}
+
+/* EmptyState */
+#emptyState{
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;padding:60px 24px;text-align:center
+}
+#emptyState i.ti{font-size:48px;color:var(--line3)}
+.empty-title{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--navy)}
+.empty-sub{font-size:13px;color:var(--w4);max-width:340px;line-height:1.6}
+.btn-cta{
+  display:inline-flex;align-items:center;gap:7px;padding:10px 22px;border-radius:8px;
+  background:var(--fin-color);color:#fff;border:none;cursor:pointer;
+  font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  transition:background .15s;margin-top:4px
+}
+.btn-cta:hover{background:var(--green2)}
+.btn-cta i.ti{font-size:16px}
+
+/* Animación fade */
+.fade{animation:fadeIn .25s ease both}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+/* Scrollbars personalizados globales */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--line3)}
+
+/* Responsive */
+@media(max-width:768px){
+  .kpi-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .kpi-val{font-size:28px}
+  .charts-2{grid-template-columns:1fr}
+  .alerts-grid{grid-template-columns:1fr}
+  .desktop-only{display:none!important}
+  .mobile-only{display:block!important}
+  .filter-bar{padding:5px 14px}
+  .tbl-wrap{padding:10px 14px 16px}
+  .header{padding:0 14px}
+  .page{padding:14px 14px 24px}
+  .hdr-uname,.hdr-urol{display:none}
+  .header-clock{display:none}
+}
+@media(max-width:480px){
+  .kpi-grid{grid-template-columns:1fr}
+  .fields-2{grid-template-columns:1fr}
+}
+@media(prefers-reduced-motion:reduce){
+  #view-obligaciones *,#view-obligaciones *::before,#view-obligaciones *::after{
+    animation:none!important;transition:none!important
+  }
+}
+.mobile-only{display:none}
+
+/* ══════════════════════════════════════════════════════════
+   CALENDARIO — estilos exclusivos de la vista calendario
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Barra de controles del calendario ── */
+.cal-toolbar{
+  background:var(--c1);border-bottom:1px solid var(--line);
+  padding:7px 22px;display:flex;align-items:center;gap:8px;
+  flex-shrink:0;min-height:40px
+}
+.cal-nav-btn{
+  display:flex;align-items:center;justify-content:center;
+  width:28px;height:28px;border-radius:6px;
+  border:1px solid var(--line2);background:var(--c0);
+  color:var(--navy);cursor:pointer;transition:all .15s;flex-shrink:0
+}
+.cal-nav-btn:hover{border-color:var(--navy);background:var(--c4)}
+.cal-nav-btn i.ti{font-size:14px}
+.cal-mes-lbl{
+  font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--navy);
+  min-width:160px;text-align:center
+}
+.cal-hoy-btn{
+  padding:4px 12px;border-radius:6px;border:1px solid var(--line2);
+  background:var(--c0);font-family:'Barlow Condensed',sans-serif;
+  font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--w3);cursor:pointer;transition:all .15s
+}
+.cal-hoy-btn:hover{border-color:var(--fin-color);color:var(--fin-color)}
+.cal-sep{width:1px;height:20px;background:var(--line2);flex-shrink:0;margin:0 4px}
+.cal-sede-pills{display:flex;align-items:center;gap:4px}
+.cal-sede-pill{
+  padding:3px 10px;border-radius:10px;border:1px solid var(--line2);
+  font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:.05em;text-transform:uppercase;color:var(--w4);
+  background:transparent;cursor:pointer;transition:all .15s
+}
+.cal-sede-pill.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.cal-ics-strip{
+  margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0
+}
+.cal-ics-btn{
+  display:flex;align-items:center;gap:4px;padding:4px 11px;border-radius:6px;
+  font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:.05em;color:#fff;border:none;cursor:pointer;transition:opacity .15s
+}
+.cal-ics-btn:hover{opacity:.88}
+.cal-ics-btn.google{background:#4285F4}
+.cal-ics-btn.outlook{background:#0078D4}
+.cal-ics-btn i.ti{font-size:12px}
+
+/* ── Leyenda de colores ── */
+.cal-legend{
+  display:flex;align-items:center;gap:12px;padding:4px 22px;
+  background:var(--c0);border-bottom:1px solid var(--line);
+  flex-shrink:0
+}
+.cal-leg-item{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--w4);font-family:'JetBrains Mono',monospace;letter-spacing:.06em}
+.cal-leg-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.cal-leg-dot.crit{background:var(--danger)}
+.cal-leg-dot.warn{background:var(--amber)}
+.cal-leg-dot.ok{background:var(--green)}
+.cal-leg-dot.pend{background:var(--line3)}
+
+/* ── Layout principal del calendario ── */
+.cal-layout{
+  display:flex;flex:1;min-height:0;overflow:hidden
+}
+
+/* ── Cuadrícula mensual ── */
+.cal-grid-wrap{
+  flex:1;display:flex;flex-direction:column;overflow:hidden;
+  padding:14px 16px 14px 22px
+}
+.cal-dow-row{
+  display:grid;grid-template-columns:repeat(7,1fr);gap:4px;
+  margin-bottom:4px
+}
+.cal-dow{
+  font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--w4);
+  text-align:center;padding:4px 0
+}
+.cal-days-grid{
+  display:grid;grid-template-columns:repeat(7,1fr);
+  grid-auto-rows:minmax(76px,1fr);gap:4px;flex:1
+}
+
+/* ── Celda de día ── */
+.cal-day{
+  background:var(--c1);border:1px solid var(--line);border-radius:8px;
+  padding:5px 6px;overflow:hidden;display:flex;flex-direction:column;gap:2px;
+  transition:border-color .15s;position:relative;cursor:default
+}
+.cal-day:hover{border-color:var(--line3)}
+.cal-day.other-month{background:var(--c0);opacity:.45}
+.cal-day.today{border-color:var(--danger);border-width:1.5px;background:#fff}
+.cal-day.today .cal-day-num{color:var(--danger)}
+.cal-day.has-events{cursor:pointer}
+.cal-day.has-events:hover{border-color:var(--navy);background:rgba(1,42,107,.015)}
+.cal-day-num{
+  font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;
+  color:var(--w3);line-height:1;flex-shrink:0
+}
+.cal-day-total{
+  font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--w4);
+  margin-top:auto;text-align:right;flex-shrink:0
+}
+
+/* ── Chips de obligaciones en el día ── */
+.cal-chip{
+  display:flex;align-items:center;gap:3px;
+  padding:1px 5px;border-radius:3px;
+  font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;
+  letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  cursor:pointer;transition:opacity .12s;flex-shrink:0
+}
+.cal-chip:hover{opacity:.8}
+.cal-chip.chip-crit{background:var(--danger3);color:var(--danger)}
+.cal-chip.chip-warn{background:var(--amber3);color:var(--amber2)}
+.cal-chip.chip-ok{background:var(--green3);color:var(--green)}
+.cal-chip.chip-pend{background:var(--c4);color:var(--w3)}
+.cal-chip.chip-more{background:var(--blue3);color:var(--blue);cursor:pointer}
+.cal-chip-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+
+/* ── Panel lateral deslizable ── */
+.cal-slide-panel{
+  width:0;flex-shrink:0;overflow:hidden;
+  background:var(--c1);border-left:1px solid var(--line2);
+  display:flex;flex-direction:column;
+  transition:width .25s ease
+}
+.cal-slide-panel.open{width:260px}
+.cal-sp-header{
+  padding:14px 16px 10px;border-bottom:1px solid var(--line);
+  display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0
+}
+.cal-sp-fecha{
+  font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;
+  color:var(--navy);letter-spacing:.06em;text-transform:uppercase
+}
+.cal-sp-count{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--w4);margin-top:2px}
+.cal-sp-close{
+  background:none;border:none;cursor:pointer;color:var(--w4);
+  font-size:16px;padding:0;line-height:1;transition:color .15s;flex-shrink:0
+}
+.cal-sp-close:hover{color:var(--danger)}
+.cal-sp-body{flex:1;overflow-y:auto;padding:8px 0}
+.cal-sp-body::-webkit-scrollbar{width:4px}
+.cal-sp-body::-webkit-scrollbar-track{background:transparent}
+.cal-sp-body::-webkit-scrollbar-thumb{background:var(--line2);border-radius:2px}
+
+/* ── Ítem del panel lateral ── */
+.cal-sp-item{
+  padding:10px 16px;border-bottom:1px solid var(--line);
+  position:relative;transition:background .12s
+}
+.cal-sp-item:last-child{border-bottom:none}
+.cal-sp-item:hover{background:var(--c0)}
+.cal-sp-item::before{
+  content:'';position:absolute;left:0;top:0;bottom:0;
+  width:3px;border-radius:0 2px 2px 0
+}
+.cal-sp-item.sp-crit::before{background:var(--danger)}
+.cal-sp-item.sp-warn::before{background:var(--amber)}
+.cal-sp-item.sp-ok::before{background:var(--green)}
+.cal-sp-item.sp-pend::before{background:var(--line3)}
+.cal-sp-prov{
+  font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;
+  color:var(--w1);margin-bottom:1px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+.cal-sp-det{font-size:10px;color:var(--w4);margin-bottom:5px;line-height:1.4}
+.cal-sp-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.cal-sp-monto{
+  margin-left:auto;font-family:'JetBrains Mono',monospace;
+  font-size:11px;font-weight:500;color:var(--navy)
+}
+.cal-sp-btn{
+  width:calc(100% - 32px);margin:6px 16px 2px;
+  padding:6px;border-radius:6px;background:var(--fin-color);
+  color:#fff;border:none;cursor:pointer;
+  font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;transition:background .15s
+}
+.cal-sp-btn:hover{background:var(--green2)}
+
+/* ── Totalizador semanal ── */
+.cal-week-total{
+  font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--w4);
+  padding:2px 6px;background:var(--c4);border-radius:3px;
+  text-align:right;margin-top:2px
+}
+
+/* ── Strip de exportación (.ics) ── */
+.cal-export-bar{
+  background:var(--c4);border-top:1px solid var(--line);padding:8px 22px;
+  display:flex;align-items:center;gap:8px;flex-shrink:0
+}
+.cal-export-bar i.ti{font-size:15px;color:var(--fin-color)}
+.cal-export-txt{font-size:11px;color:var(--w3);flex:1}
+.cal-export-hint{font-size:9px;color:var(--w4)}
+
+/* Responsive calendario */
+@media(max-width:768px){
+  .cal-slide-panel.open{width:100%;position:absolute;right:0;top:0;bottom:0;z-index:50}
+  .cal-days-grid{grid-auto-rows:minmax(56px,1fr)}
+  .cal-chip{font-size:8px;padding:1px 3px}
+  .cal-toolbar{flex-wrap:wrap;gap:5px;padding:6px 14px;min-height:auto}
+  .cal-ics-strip{margin-left:0}
+  .cal-legend{flex-wrap:wrap;padding:4px 14px;gap:8px}
+  .cal-grid-wrap{padding:10px 14px}
+}
+
+/* ══════════════════════════════════════════════════════════
+   HISTORIAL — estilos exclusivos de la vista historial
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Layout historial ── */
+.his-layout{
+  display:grid;
+  grid-template-columns:380px 1fr;
+  gap:0;
+  flex:1;
+  min-height:0;
+  overflow:hidden
+}
+@media(max-width:900px){.his-layout{grid-template-columns:1fr}}
+
+/* ── Panel izquierdo: tabla de períodos ── */
+.his-left{
+  display:flex;flex-direction:column;
+  border-right:1px solid var(--line);overflow:hidden
+}
+.his-left-header{
+  padding:12px 16px 8px;border-bottom:1px solid var(--line);flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between
+}
+.his-left-title{
+  font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--navy)
+}
+.his-export-all-btn{
+  display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:5px;
+  background:var(--fin-color);color:#fff;border:none;cursor:pointer;
+  font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.05em;
+  transition:background .15s
+}
+.his-export-all-btn:hover{background:var(--green2)}
+.his-export-all-btn i.ti{font-size:12px}
+
+.his-tabla-wrap{flex:1;overflow-y:auto}
+.his-tabla-wrap::-webkit-scrollbar{width:5px}
+.his-tabla-wrap::-webkit-scrollbar-track{background:transparent}
+.his-tabla-wrap::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+
+.his-tabla-wrap table{width:100%;border-collapse:collapse;font-size:11px}
+.his-tabla-wrap thead th{
+  background:var(--c4);padding:7px 10px;text-align:left;
+  font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--navy);
+  border-bottom:1px solid var(--line2);white-space:nowrap;
+  position:sticky;top:0;z-index:2
+}
+.his-tabla-wrap tbody td{
+  padding:7px 10px;border-bottom:0.5px solid var(--line);
+  color:var(--w2);vertical-align:middle;white-space:nowrap;font-size:11px
+}
+.his-tabla-wrap tbody tr{cursor:pointer;transition:background .12s}
+.his-tabla-wrap tbody tr:hover td{background:rgba(1,42,107,.03)}
+.his-row-sel td{background:rgba(0,135,95,.06)!important;border-left:3px solid var(--fin-color)!important}
+
+/* ── Panel derecho: pagos del período ── */
+.his-right{
+  display:flex;flex-direction:column;overflow:hidden
+}
+.his-pagos-panel{
+  display:flex;flex-direction:column;flex:1;overflow:hidden
+}
+.his-pagos-header{
+  padding:10px 16px 6px;border-bottom:1px solid var(--line);flex-shrink:0
+}
+.his-pagos-title{
+  font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--navy)
+}
+.his-pagos-sub{
+  font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--w4);margin-top:2px
+}
+
+/* ── Sub-tabs del panel de pagos ── */
+.his-stabs{
+  display:flex;align-items:center;gap:0;
+  border-bottom:1px solid var(--line);flex-shrink:0;
+  padding:0 16px
+}
+.his-stab{
+  padding:7px 14px;font-family:'Barlow Condensed',sans-serif;font-size:11px;
+  font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--w4);
+  border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;
+  transition:all .15s;margin-bottom:-1px
+}
+.his-stab:hover{color:var(--navy)}
+.his-stab-on{color:var(--navy);border-bottom-color:var(--fin-color)}
+
+/* ── Barra de filtros del historial ── */
+.his-filter-bar{
+  background:var(--c1);border-bottom:1px solid var(--line);
+  padding:5px 16px;display:flex;align-items:center;gap:5px;
+  flex-shrink:0;height:36px;overflow:hidden
+}
+.his-export-btn{
+  display:flex;align-items:center;gap:4px;height:24px;padding:0 10px;
+  border-radius:5px;background:var(--fin-color);color:#fff;border:none;
+  font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:.05em;cursor:pointer;flex-shrink:0;transition:background .15s
+}
+.his-export-btn:hover{background:var(--green2)}
+.his-export-btn i.ti{font-size:12px}
+.his-cerrar-btn{
+  display:flex;align-items:center;gap:4px;height:24px;padding:0 10px;
+  border-radius:5px;background:var(--danger3);color:var(--danger);
+  border:1px solid rgba(220,38,38,.25);
+  font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:.05em;cursor:pointer;flex-shrink:0;transition:all .15s
+}
+.his-cerrar-btn:hover{background:var(--danger);color:#fff}
+.his-cerrar-btn i.ti{font-size:12px}
+
+/* ── Tabla de pagos del historial ── */
+.his-pagos-table-wrap{
+  flex:1;overflow:auto;padding:10px 16px 14px
+}
+.his-pagos-table-wrap::-webkit-scrollbar{width:6px;height:6px}
+.his-pagos-table-wrap::-webkit-scrollbar-track{background:transparent}
+.his-pagos-table-wrap::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+.his-pagos-table-wrap::-webkit-scrollbar-thumb:hover{background:var(--line3)}
+
+/* tabla interna — hereda estilos globales de table/thead/tbody/tfoot */
+#hisPagosTableWrap table{width:100%;border-collapse:collapse;font-size:11px;background:var(--c1);border-radius:8px;overflow:hidden;border:1px solid var(--line2)}
+#hisPagosTableWrap thead th{background:var(--c4);padding:7px 10px;text-align:left;font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--navy);border-bottom:1px solid var(--line2);white-space:nowrap;position:sticky;top:0;z-index:2}
+#hisPagosTableWrap thead th.th-sort{cursor:pointer}
+#hisPagosTableWrap tbody td{padding:7px 10px;border-bottom:0.5px solid var(--line);color:var(--w2);vertical-align:middle;white-space:nowrap}
+#hisPagosTableWrap tbody tr:hover td{background:rgba(1,42,107,.015)}
+#hisPagosTableWrap tbody tr.row-vencida td{background:rgba(220,38,38,.03)}
+#hisPagosTableWrap tbody tr.row-vencida td:first-child{border-left:3px solid var(--danger);padding-left:7px}
+#hisPagosTableWrap tbody tr.row-warn td:first-child{border-left:3px solid var(--amber);padding-left:7px}
+#hisPagosTableWrap tbody tr.row-pagada td{opacity:.65}
+#hisPagosTableWrap tbody tr.row-pagada td:first-child{border-left:3px solid var(--green);padding-left:7px;opacity:1}
+#hisPagosTableWrap tfoot td{padding:7px 10px;background:var(--c4);font-weight:700;font-size:10px;color:var(--navy);border-top:1px solid var(--line2);font-family:'Barlow Condensed',sans-serif;letter-spacing:.05em}
+
+/* ── Log de auditoría ── */
+.his-audit-wrap{
+  flex:1;overflow-y:auto;padding:10px 16px
+}
+.his-audit-wrap::-webkit-scrollbar{width:5px}
+.his-audit-wrap::-webkit-scrollbar-track{background:transparent}
+.his-audit-wrap::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+.his-aud-item{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:8px 0;border-bottom:0.5px solid var(--line)
+}
+.his-aud-item:last-child{border-bottom:none}
+.his-aud-dot{
+  width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px
+}
+.his-aud-body{flex:1}
+.his-aud-accion{
+  font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:.05em;color:var(--navy)
+}
+.his-aud-desc{font-size:11px;color:var(--w3);margin-top:1px;line-height:1.4}
+.his-aud-meta{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--w4);margin-top:2px
+}
+
+/* ── KPIs del historial ── */
+#hisKpiGrid{
+  display:grid;grid-template-columns:repeat(4,1fr);
+  gap:10px;padding:12px 16px;flex-shrink:0;
+  border-bottom:1px solid var(--line)
+}
+@media(max-width:768px){
+  #hisKpiGrid{grid-template-columns:1fr 1fr}
+  .his-layout{grid-template-columns:1fr}
+  .his-left{max-height:260px}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ AUTH OVERLAY ══ -->
+<div id="authOverlay">
+  <div class="auth-spin"></div>
+  <div class="auth-lbl">Verificando acceso financiero…</div>
+</div>
+
+<!-- ══ ACCESO DENEGADO ══ -->
+<div id="accessDenied">
+  <i class="ti ti-lock deny-ico" aria-hidden="true" style="font-size:40px;color:var(--danger)"></i>
+  <div class="deny-title">Acceso restringido</div>
+  <div class="deny-sub">No tienes permisos para acceder al módulo de Obligaciones Financieras. Contacta al administrador.</div>
+  <button class="btn-cta" style="margin-top:8px" onclick="window.location.href='../index.html'">
+    <i class="ti ti-arrow-left" aria-hidden="true"></i>Volver al portal
+  </button>
+</div>
+
+<!-- ══ DRAG OVERLAY ══ -->
+<div class="drag-ov" id="dragOv">
+  <div class="drag-box">
+    <i class="ti ti-file-upload" aria-hidden="true"></i>
+    <p>Suelta el Excel de Obligaciones aquí</p>
+  </div>
+</div>
+
+<!-- ══ TOAST ══ -->
+<div class="toast" id="toast" role="alert" aria-live="polite"></div>
+
+<!-- ══ MODALES ══ -->
+
+<!-- Modal: Registrar pago -->
+<div class="modal-bg" id="modalPago">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-hdr-ico"><i class="ti ti-credit-card" aria-hidden="true"></i></div>
+      <div>
+        <div class="modal-ttl">Registrar pago</div>
+        <div class="modal-sub">Obligación financiera recurrente</div>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="modal-ctx" id="pagoCtx">
+        <div class="modal-ctx-prov" id="pagoCtxProv">—</div>
+        <div class="modal-ctx-det" id="pagoCtxDet">—</div>
+        <div class="modal-ctx-fecha" id="pagoCtxFecha">—</div>
+      </div>
+      <div class="fields-2">
+        <div class="field">
+          <div class="field-lbl">Monto real pagado (COP)<span class="field-req">*</span></div>
+          <input type="number" id="pagoMonto" class="field-inp" placeholder="0" min="0" step="1000">
+          <div class="field-hint">Puede diferir del estimado</div>
+        </div>
+        <div class="field">
+          <div class="field-lbl">Fecha de pago<span class="field-req">*</span></div>
+          <input type="date" id="pagoFecha" class="field-inp">
+          <div class="field-hint">Fecha efectiva del pago</div>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-lbl">Referencia / N° comprobante<span class="field-req">*</span></div>
+        <input type="text" id="pagoReferencia" class="field-inp" placeholder="Ej. REF-0029483722 · PSE">
+      </div>
+      <div class="field">
+        <div class="field-lbl">Banco / cuenta de pago (INLOP)</div>
+        <input type="text" id="pagoBanco" class="field-inp" placeholder="Ej. Bancolombia cta. 693-000234-55">
+      </div>
+      <div class="modal-divider"></div>
+      <div class="field">
+        <div class="field-lbl">URL soporte (Drive / SharePoint)</div>
+        <div style="display:flex;gap:6px">
+          <input type="url" id="pagoUrl" class="field-inp" style="flex:1" placeholder="https://drive.google.com/…">
+        </div>
+        <div class="field-hint">Link donde está guardado el comprobante físico</div>
+      </div>
+      <div class="field" style="margin-top:8px">
+        <div class="field-lbl">Nota (opcional)</div>
+        <textarea id="pagoNota" class="field-inp" placeholder="Ej. Pago con 2 días de retraso por trámite bancario…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="mbtn-c" onclick="obCerrarModalPago()">Cancelar</button>
+      <button class="mbtn-s" id="btnConfirmarPago" onclick="obConfirmarPago()">
+        <i class="ti ti-check" aria-hidden="true"></i> Confirmar pago
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Ver soporte -->
+<div class="modal-bg" id="modalSoporte">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-hdr" style="background:var(--blue)">
+      <div class="modal-hdr-ico"><i class="ti ti-paperclip" aria-hidden="true"></i></div>
+      <div>
+        <div class="modal-ttl">Comprobante de pago</div>
+        <div class="modal-sub" id="soporteCtxProv">—</div>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <div class="field-lbl">Referencia</div>
+        <div id="soporteRef" style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--navy);padding:6px 0"></div>
+      </div>
+      <div class="field">
+        <div class="field-lbl">Banco pagador</div>
+        <div id="soporteBanco" style="font-size:12px;color:var(--w2);padding:4px 0"></div>
+      </div>
+      <div class="field">
+        <div class="field-lbl">Soporte digital</div>
+        <div class="soporte-url" id="soporteUrlWrap">
+          <a id="soporteLink" href="#" target="_blank" rel="noopener">—</a>
+          <button class="soporte-open-btn" onclick="obAbrirSoporte()">
+            <i class="ti ti-external-link" aria-hidden="true"></i>Abrir
+          </button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-lbl">Nota</div>
+        <div id="soporteNota" style="font-size:11px;color:var(--w3);padding:4px 0;line-height:1.5"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="mbtn-c" onclick="obCerrarModalSoporte()" style="flex:2">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: PIN Admin -->
+<div class="modal-bg" id="pinModal">
+  <div class="pin-modal">
+    <div style="font-size:30px;margin-bottom:10px">🔐</div>
+    <div class="pin-title">Acceso administrador</div>
+    <div class="pin-sub">Ingresa el PIN de 4 dígitos</div>
+    <div class="pin-dots" id="pinDots">
+      <div class="pin-dot"></div><div class="pin-dot"></div>
+      <div class="pin-dot"></div><div class="pin-dot"></div>
+    </div>
+    <div class="pin-grid">
+      <button class="pin-btn" onclick="obPinPress(1)">1</button>
+      <button class="pin-btn" onclick="obPinPress(2)">2</button>
+      <button class="pin-btn" onclick="obPinPress(3)">3</button>
+      <button class="pin-btn" onclick="obPinPress(4)">4</button>
+      <button class="pin-btn" onclick="obPinPress(5)">5</button>
+      <button class="pin-btn" onclick="obPinPress(6)">6</button>
+      <button class="pin-btn" onclick="obPinPress(7)">7</button>
+      <button class="pin-btn" onclick="obPinPress(8)">8</button>
+      <button class="pin-btn" onclick="obPinPress(9)">9</button>
+      <button class="pin-btn" onclick="obPinClear()" style="background:var(--danger3);color:var(--danger)">✕</button>
+      <button class="pin-btn" onclick="obPinPress(0)">0</button>
+      <button class="pin-btn" onclick="obCerrarPin()" style="background:var(--c4);color:var(--w4)">✗</button>
+    </div>
+    <div class="pin-err" id="pinErr"></div>
+  </div>
+</div>
+
+<!-- Modal: Soporte del historial (cargar / editar) -->
+<div class="modal-bg" id="modalHisSoporte">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-hdr" style="background:var(--fin-color)">
+      <div class="modal-hdr-ico"><i class="ti ti-paperclip" aria-hidden="true"></i></div>
+      <div>
+        <div class="modal-ttl">Adjuntar soporte</div>
+        <div class="modal-sub" id="hisSoporteProv">—</div>
+      </div>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="hisSoportePagoId">
+      <div class="field">
+        <div class="field-lbl">Referencia / N° comprobante <span class="field-req">*</span></div>
+        <input type="text" id="hisSoporteRef" class="field-inp" placeholder="Ej. REF-00294837 · PSE">
+      </div>
+      <div class="field">
+        <div class="field-lbl">Banco / cuenta de pago</div>
+        <input type="text" id="hisSoporteBanco" class="field-inp" placeholder="Ej. Bancolombia cta. 693-000234-55">
+      </div>
+      <div class="modal-divider"></div>
+      <div class="field">
+        <div class="field-lbl">URL soporte (Drive / SharePoint)</div>
+        <input type="url" id="hisSoporteUrl" class="field-inp" placeholder="https://drive.google.com/…">
+        <div class="field-hint">Link donde está guardado el comprobante físico</div>
+      </div>
+      <div class="field">
+        <div class="field-lbl">Nota</div>
+        <textarea id="hisSoporteNota" class="field-inp" placeholder="Observaciones adicionales…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="mbtn-c" onclick="document.getElementById('modalHisSoporte').classList.remove('show')">Cancelar</button>
+      <button class="mbtn-s" onclick="obHisGuardarSoporte()">
+        <i class="ti ti-check" aria-hidden="true"></i> Guardar soporte
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     SHELL PRINCIPAL
+══════════════════════════════════════════════ -->
+<div id="view-obligaciones">
+<div class="shell">
+<div class="ops-body-row" id="opsBodyRow">
+
+<!-- ══ SIDEBAR ══ -->
+<div class="tab-row">
+
+  <div class="sb-brand">
+    <div class="sb-brand-mark" id="logoIn" title="5 clics para modo admin">
+      <span style="font-family:'Anton',sans-serif;font-size:13px;font-weight:400;color:var(--navy);letter-spacing:.1em">IN</span>
+    </div>
+    <div>
+      <div class="sb-brand-name">INLOP</div>
+      <div class="sb-brand-sub">Business Intelligence</div>
+    </div>
+  </div>
+
+  <div class="sb-section-label">Vistas</div>
+
+  <button class="tb on" id="tab-panel" onclick="obShowTab('panel')" data-label="Panel" aria-label="Panel de obligaciones">
+    <i class="ti ti-layout-dashboard" aria-hidden="true"></i>
+    <span>Panel</span>
+    <span class="sb-badge" id="sbBadge" style="display:none">0</span>
+  </button>
+
+  <button class="tb" id="tab-registro" onclick="obShowTab('registro')" data-label="Registro" aria-label="Registro de pagos">
+    <i class="ti ti-list-details" aria-hidden="true"></i>
+    <span>Registro</span>
+  </button>
+
+  <button class="tb" id="tab-calendario" onclick="obShowTab('calendario')" data-label="Calendario" aria-label="Calendario de vencimientos">
+    <i class="ti ti-calendar-due" aria-hidden="true"></i>
+    <span>Calendario</span>
+  </button>
+
+  <button class="tb" id="tab-historial" onclick="obShowTab('historial')" data-label="Historial" aria-label="Historial de períodos">
+    <i class="ti ti-clock-hour-4" aria-hidden="true"></i>
+    <span>Historial</span>
+  </button>
+
+  <div class="sb-footer">
+    <button class="tb" onclick="obToggleSidebar()" id="sbCollapseBtn" data-label="Expandir" aria-label="Colapsar sidebar">
+      <i class="ti ti-layout-sidebar-left-collapse" aria-hidden="true"></i>
+      <span>Colapsar</span>
+    </button>
+    <div class="sb-version">v1.0 · Financiero</div>
+  </div>
+
+</div><!-- /tab-row -->
+
+<!-- ══ COLUMNA PRINCIPAL ══ -->
+<div class="ops-body-col">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div>
+      <div class="hmt-main">Obligaciones Financieras</div>
+      <div class="hmt-sub">Control y seguimiento de pagos recurrentes</div>
+    </div>
+
+    <div class="hdr-alert-pill" id="hdrAlertPill">
+      <div class="hdr-pill-dot"></div>
+      <span id="hdrAlertTxt"></span>
+    </div>
+
+    <div class="hdr-right">
+      <div class="header-clock" id="headerClock" aria-live="off"></div>
+      <div class="hdr-admin-tag" id="hdrAdminTag">
+        <i class="ti ti-shield-check" aria-hidden="true"></i>Admin activo
+      </div>
+      <button class="btn-portada" onclick="obVolverPortal()" aria-label="Volver al portal">
+        <i class="ti ti-arrow-left" aria-hidden="true"></i>Portada
+      </button>
+      <div class="hdr-user">
+        <div class="hdr-av" id="hdrAv">—</div>
+        <div>
+          <div class="hdr-uname" id="hdrUname">—</div>
+          <div class="hdr-urol" id="hdrUrol">—</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- BANNER DINÁMICO -->
+  <div class="ob-banner" id="obBanner" role="alert">
+    <div class="bn-dot"></div>
+    <span id="obBannerTxt"></span>
+    <span class="bn-date" id="obBannerDate"></span>
+  </div>
+
+  <!-- ══════════════════════════
+       VISTA: PANEL
+  ══════════════════════════ -->
+  <div id="view-panel" class="page" style="display:block">
+
+    <!-- Empty state -->
+    <div id="emptyState">
+      <i class="ti ti-database-off" aria-hidden="true"></i>
+      <div class="empty-title">Sin período activo</div>
+      <div class="empty-sub">No hay un período financiero abierto. El administrador debe crear el período del mes para comenzar a gestionar las obligaciones.</div>
+      <button class="btn-cta" id="btnCrearPeriodo" style="display:none" onclick="obCrearPeriodo()">
+        <i class="ti ti-calendar-plus" aria-hidden="true"></i>Abrir período actual
+      </button>
+    </div>
+
+    <!-- Contenido del panel (se oculta si no hay datos) -->
+    <div id="panelContent">
+
+      <!-- KPIs -->
+      <div class="sh">
+        <div class="sh-bar" style="background:var(--danger)"></div>
+        <span class="sh-txt">Indicadores del mes — <span id="panelMes">—</span></span>
+        <div class="sh-line"></div>
+      </div>
+      <div class="kpi-grid fade" id="kpiGrid">
+        <!-- renderizado por JS -->
+      </div>
+
+      <!-- Charts: dona + semáforo -->
+      <div class="sh">
+        <div class="sh-bar" style="background:var(--navy2)"></div>
+        <span class="sh-txt">Distribución y cumplimiento</span>
+        <div class="sh-line"></div>
+      </div>
+      <div class="charts-2">
+
+        <!-- Dona por categoría -->
+        <div class="card cp">
+          <div class="card-ttl">Gasto por categoría</div>
+          <div style="display:flex;align-items:center;gap:18px">
+            <div style="position:relative;width:160px;height:160px;flex-shrink:0">
+              <canvas id="chartDona"></canvas>
+              <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none">
+                <div id="donaTotal" style="font-family:'Anton',sans-serif;font-size:22px;color:var(--navy)">0</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--w4);text-transform:uppercase;letter-spacing:.1em">COP total</div>
+              </div>
+            </div>
+            <div id="donaLeg" style="flex:1;display:flex;flex-direction:column;gap:5px;min-width:0;font-size:11px"></div>
+          </div>
+        </div>
+
+        <!-- Semáforo por sede -->
+        <div class="card cp">
+          <div class="card-ttl">Semáforo por sede</div>
+          <div id="semaforoSede" style="display:flex;flex-direction:column;gap:2px">
+            <!-- renderizado por JS -->
+          </div>
+          <!-- Strip exportar .ics -->
+          <div style="margin-top:14px;background:var(--c4);border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px">
+            <i class="ti ti-calendar-event" aria-hidden="true" style="font-size:16px;color:var(--fin-color)"></i>
+            <span style="font-size:11px;color:var(--w3);flex:1">Exportar vencimientos al calendario</span>
+            <button onclick="obDescargarICS('google')" style="font-size:10px;padding:4px 10px;border-radius:4px;background:#4285F4;color:#fff;border:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.04em">Google</button>
+            <button onclick="obDescargarICS('outlook')" style="font-size:10px;padding:4px 10px;border-radius:4px;background:#0078D4;color:#fff;border:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.04em">Outlook</button>
+          </div>
+        </div>
+
+      </div><!-- /charts-2 -->
+
+      <!-- Alertas críticas -->
+      <div class="sh">
+        <div class="sh-bar" style="background:var(--danger)"></div>
+        <span class="sh-txt">Alertas críticas del día</span>
+        <div class="sh-line"></div>
+        <span id="alertCount" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--w4);white-space:nowrap"></span>
+      </div>
+      <div class="alerts-grid fade" id="alertsGrid">
+        <!-- renderizado por JS -->
+      </div>
+
+    </div><!-- /panelContent -->
+  </div><!-- /view-panel -->
+
+  <!-- ══════════════════════════
+       VISTA: REGISTRO
+  ══════════════════════════ -->
+  <div id="view-registro" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+
+    <!-- Barra de filtros compacta -->
+    <div class="filter-bar">
+      <div class="filter-search">
+        <i class="ti ti-search" aria-hidden="true"></i>
+        <input type="text" id="searchInput" placeholder="Buscar proveedor…" oninput="obFiltrar()" aria-label="Buscar proveedor">
+      </div>
+      <div class="fsep"></div>
+      <select class="fsel" id="filtCategoria" onchange="obFiltrar()" aria-label="Filtrar por categoría">
+        <option value="">Categoría</option>
+      </select>
+      <select class="fsel" id="filtSede" onchange="obFiltrar()" aria-label="Filtrar por sede">
+        <option value="">Sede</option>
+        <option value="cartagena">Cartagena</option>
+        <option value="bogota">Bogotá</option>
+        <option value="yopal">Yopal</option>
+        <option value="nacional">Nacional</option>
+      </select>
+      <div class="fsep"></div>
+      <button class="ftag ftag-crit" id="tagVencidas" onclick="obToggleTag('vencidas')" aria-pressed="false">
+        Vencidas <span class="ftag-count" id="tagCritCount">0</span>
+      </button>
+      <button class="ftag ftag-warn" id="tagRiesgo" onclick="obToggleTag('riesgo')" aria-pressed="false">
+        En riesgo <span class="ftag-count" id="tagWarnCount">0</span>
+      </button>
+      <button class="ftag ftag-all active" id="tagTodas" onclick="obToggleTag('todas')" aria-pressed="true">
+        Todas
+      </button>
+      <span class="fclear" onclick="obLimpiarFiltros()" title="Limpiar todos los filtros">✕ limpiar</span>
+      <button class="fics-btn" onclick="obDescargarICS('google')" aria-label="Exportar .ics">
+        <i class="ti ti-calendar-event" aria-hidden="true"></i>.ics
+      </button>
+    </div>
+
+    <!-- Chips de filtros activos -->
+    <div class="active-filters" id="activeFilters">
+      <span class="af-lbl">Filtros:</span>
+      <span id="afChips"></span>
+      <span class="af-clear" onclick="obLimpiarFiltros()">Limpiar todo</span>
+    </div>
+
+    <!-- Tag modo admin -->
+    <div class="admin-tag" id="adminTagRegistro">
+      <i class="ti ti-shield-check" aria-hidden="true"></i>
+      Modo administrador activo · Puedes registrar pagos y editar montos
+    </div>
+
+    <!-- Tabla desktop -->
+    <div class="tbl-wrap desktop-only" id="tblWrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="th-sort" onclick="obSortBy('proveedor')">Proveedor <i class="ti ti-arrows-sort" aria-hidden="true" style="font-size:10px;opacity:.4"></i></th>
+            <th>Detalle</th>
+            <th>Categoría</th>
+            <th class="th-sort" onclick="obSortBy('sede')">Sede</th>
+            <th class="th-sort" onclick="obSortBy('dia')">Día</th>
+            <th class="th-sort" onclick="obSortBy('monto')">Monto COP</th>
+            <th class="th-sort" onclick="obSortBy('estado')">Estado</th>
+            <th>F. Pago</th>
+            <th title="Comprobante">Soporte</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tblBody">
+          <!-- renderizado por JS -->
+        </tbody>
+        <tfoot id="tblFoot">
+          <!-- renderizado por JS -->
+        </tfoot>
+      </table>
+    </div>
+
+    <!-- Mobile cards -->
+    <div class="mobile-only" id="mobCards" style="padding:14px;overflow-y:auto;flex:1">
+      <!-- renderizado por JS -->
+    </div>
+
+  </div><!-- /view-registro -->
+
+  <!-- ══════════════════════════
+       VISTA: CALENDARIO — Fase 4
+  ══════════════════════════ -->
+  <div id="view-calendario" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+
+    <!-- Barra de controles -->
+    <div class="cal-toolbar">
+      <button class="cal-nav-btn" onclick="obCalNavMes(-1)" aria-label="Mes anterior">
+        <i class="ti ti-chevron-left" aria-hidden="true"></i>
+      </button>
+      <div class="cal-mes-lbl" id="calMesLbl">—</div>
+      <button class="cal-nav-btn" onclick="obCalNavMes(1)" aria-label="Mes siguiente">
+        <i class="ti ti-chevron-right" aria-hidden="true"></i>
+      </button>
+      <button class="cal-hoy-btn" onclick="obCalIrHoy()">Hoy</button>
+
+      <div class="cal-sep"></div>
+
+      <!-- Pills de sede -->
+      <div class="cal-sede-pills" id="calSedePills">
+        <button class="cal-sede-pill on" data-sede="" onclick="obCalFiltrarSede(this,'')">Todas</button>
+        <button class="cal-sede-pill" data-sede="cartagena" onclick="obCalFiltrarSede(this,'cartagena')">Cartagena</button>
+        <button class="cal-sede-pill" data-sede="bogota" onclick="obCalFiltrarSede(this,'bogota')">Bogotá</button>
+        <button class="cal-sede-pill" data-sede="yopal" onclick="obCalFiltrarSede(this,'yopal')">Yopal</button>
+        <button class="cal-sede-pill" data-sede="nacional" onclick="obCalFiltrarSede(this,'nacional')">Nacional</button>
+      </div>
+
+      <div class="cal-ics-strip">
+        <button class="cal-ics-btn google" onclick="obDescargarICS('google')" aria-label="Exportar a Google Calendar">
+          <i class="ti ti-calendar-event" aria-hidden="true"></i>Google
+        </button>
+        <button class="cal-ics-btn outlook" onclick="obDescargarICS('outlook')" aria-label="Exportar a Outlook">
+          <i class="ti ti-calendar-event" aria-hidden="true"></i>Outlook
+        </button>
+      </div>
+    </div>
+
+    <!-- Leyenda -->
+    <div class="cal-legend">
+      <div class="cal-leg-item"><div class="cal-leg-dot crit"></div>VENCIDA / HOY</div>
+      <div class="cal-leg-item"><div class="cal-leg-dot warn"></div>PRÓXIMA (≤3 días)</div>
+      <div class="cal-leg-item"><div class="cal-leg-dot ok"></div>PAGADA</div>
+      <div class="cal-leg-item"><div class="cal-leg-dot pend"></div>PENDIENTE</div>
+      <span id="calTotalMes" style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--w4)"></span>
+    </div>
+
+    <!-- Layout: cuadrícula + panel lateral -->
+    <div class="cal-layout">
+
+      <!-- Cuadrícula mensual -->
+      <div class="cal-grid-wrap">
+        <!-- Cabeceras de días de la semana -->
+        <div class="cal-dow-row">
+          <div class="cal-dow">LUN</div>
+          <div class="cal-dow">MAR</div>
+          <div class="cal-dow">MIÉ</div>
+          <div class="cal-dow">JUE</div>
+          <div class="cal-dow">VIE</div>
+          <div class="cal-dow">SÁB</div>
+          <div class="cal-dow">DOM</div>
+        </div>
+        <!-- Días — generados por JS -->
+        <div class="cal-days-grid" id="calDaysGrid"></div>
+      </div>
+
+      <!-- Panel lateral deslizable -->
+      <div class="cal-slide-panel" id="calSlidePanel" aria-label="Detalle del día">
+        <div class="cal-sp-header">
+          <div>
+            <div class="cal-sp-fecha" id="calSpFecha">—</div>
+            <div class="cal-sp-count" id="calSpCount">—</div>
+          </div>
+          <button class="cal-sp-close" onclick="obCalCerrarPanel()" aria-label="Cerrar panel">✕</button>
+        </div>
+        <div class="cal-sp-body" id="calSpBody">
+          <!-- renderizado por JS -->
+        </div>
+      </div>
+
+    </div><!-- /cal-layout -->
+
+    <!-- Strip de exportación inferior -->
+    <div class="cal-export-bar">
+      <i class="ti ti-calendar-down" aria-hidden="true"></i>
+      <div>
+        <div class="cal-export-txt">Sincronizar vencimientos con tu calendario</div>
+        <div class="cal-export-hint">Descarga el archivo .ics y ábrelo en Google Calendar o Outlook. Compatible con Apple Calendar.</div>
+      </div>
+      <button class="cal-ics-btn google" onclick="obDescargarICS('google')" style="flex-shrink:0">
+        <i class="ti ti-brand-google" aria-hidden="true"></i>Google Calendar
+      </button>
+      <button class="cal-ics-btn outlook" onclick="obDescargarICS('outlook')" style="flex-shrink:0">
+        <i class="ti ti-mail" aria-hidden="true"></i>Outlook
+      </button>
+    </div>
+
+  </div><!-- /view-calendario -->
+
+  <!-- ══════════════════════════
+       VISTA: HISTORIAL — Fase 5
+  ══════════════════════════ -->
+  <div id="view-historial" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+
+    <!-- KPIs resumen -->
+    <div id="hisKpiGrid">
+      <!-- renderizado por JS -->
+    </div>
+
+    <!-- Layout principal: lista períodos + panel pagos -->
+    <div class="his-layout">
+
+      <!-- ── Panel izquierdo: tabla de períodos ── -->
+      <div class="his-left">
+        <div class="his-left-header">
+          <div class="his-left-title">Períodos</div>
+          <button class="his-export-all-btn" onclick="obHisExportarTodo()" aria-label="Exportar historial completo a Excel">
+            <i class="ti ti-table-export" aria-hidden="true"></i>Excel completo
+          </button>
+        </div>
+        <div class="his-tabla-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Mes</th>
+                <th title="Total obligaciones">Total</th>
+                <th title="Pagadas">✓</th>
+                <th title="Vencidas">✗</th>
+                <th>Monto COP</th>
+                <th>Pagado</th>
+                <th>Compliance</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="hisTablaPeriodos">
+              <!-- renderizado por JS -->
+            </tbody>
+          </table>
+        </div>
+      </div><!-- /his-left -->
+
+      <!-- ── Panel derecho: detalle del período seleccionado ── -->
+      <div class="his-right">
+        <div class="his-pagos-panel" id="hisPagosPanel">
+
+          <!-- Cabecera del panel -->
+          <div class="his-pagos-header">
+            <div class="his-pagos-title" id="hisPagosTit">Selecciona un período</div>
+            <div class="his-pagos-sub" id="hisPagosSub">Haz clic en cualquier fila de la tabla de períodos para ver sus pagos</div>
+          </div>
+
+          <!-- Sub-tabs: Pagos | Auditoría -->
+          <div class="his-stabs">
+            <button class="his-stab his-stab-on" id="hisSubTab-pagos" onclick="obHisSubTab('pagos')">
+              <i class="ti ti-list-details" aria-hidden="true" style="font-size:12px;margin-right:4px"></i>Pagos
+            </button>
+            <button class="his-stab" id="hisSubTab-auditoria" onclick="obHisSubTab('auditoria')">
+              <i class="ti ti-shield-check" aria-hidden="true" style="font-size:12px;margin-right:4px"></i>Auditoría (admin)
+            </button>
+          </div>
+
+          <!-- ── Sub-tab: Pagos ── -->
+          <div id="hisSubCon-pagos" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+
+            <!-- Barra de filtros -->
+            <div class="his-filter-bar">
+              <div class="filter-search" style="flex-shrink:0">
+                <i class="ti ti-search" aria-hidden="true"></i>
+                <input type="text" id="hisFiltSearch" placeholder="Buscar…" oninput="obHisFiltrar()" style="width:90px" aria-label="Buscar en pagos del período">
+              </div>
+              <div class="fsep"></div>
+              <select class="fsel" id="hisFiltEstado" onchange="obHisFiltrar()" aria-label="Filtrar por estado">
+                <option value="">Estado</option>
+                <option value="pendiente">Pendiente</option>
+                <option value="pagada">Pagada</option>
+                <option value="vencida">Vencida</option>
+                <option value="pagada_mora">Con mora</option>
+              </select>
+              <select class="fsel" id="hisFiltSede" onchange="obHisFiltrar()" aria-label="Filtrar por sede">
+                <option value="">Sede</option>
+                <option value="cartagena">Cartagena</option>
+                <option value="bogota">Bogotá</option>
+                <option value="yopal">Yopal</option>
+                <option value="nacional">Nacional</option>
+              </select>
+              <select class="fsel" id="hisFiltCat" onchange="obHisFiltrar()" aria-label="Filtrar por categoría">
+                <option value="">Categoría</option>
+              </select>
+              <span class="fclear" onclick="obHisLimpiarFiltros()" title="Limpiar filtros">✕</span>
+              <div style="margin-left:auto;display:flex;align-items:center;gap:5px">
+                <button class="his-export-btn" onclick="obHisExportarExcel()" aria-label="Exportar pagos del período a Excel">
+                  <i class="ti ti-file-spreadsheet" aria-hidden="true"></i>Excel
+                </button>
+                <button class="his-cerrar-btn admin-only" id="btnCerrarMes" onclick="obHisCerrarMes()" aria-label="Cerrar período">
+                  <i class="ti ti-lock" aria-hidden="true"></i>Cerrar mes
+                </button>
+              </div>
+            </div>
+
+            <!-- Tabla de pagos del período -->
+            <div class="his-pagos-table-wrap his-pagos-panel">
+              <div id="hisPagosTableWrap" style="min-height:120px">
+                <!-- renderizado por JS -->
+              </div>
+            </div>
+
+          </div><!-- /hisSubCon-pagos -->
+
+          <!-- ── Sub-tab: Auditoría ── -->
+          <div id="hisSubCon-auditoria" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+            <div class="his-audit-wrap" id="hisAuditoriaWrap">
+              <div style="text-align:center;padding:28px;font-size:12px;color:var(--w4)">
+                Selecciona un período y haz clic en la pestaña Auditoría
+              </div>
+            </div>
+          </div><!-- /hisSubCon-auditoria -->
+
+        </div><!-- /his-pagos-panel -->
+      </div><!-- /his-right -->
+
+    </div><!-- /his-layout -->
+  </div><!-- /view-historial -->
+
+  <!-- FOOTER -->
+  <footer>
+    <span>INLOP · <b>Integral Logistics Operations SAS</b> · Área Financiera</span>
+    <span id="footDate"></span>
+    <span>Obligaciones v1.0</span>
+  </footer>
+
+</div><!-- /ops-body-col -->
+</div><!-- /ops-body-row -->
+</div><!-- /shell -->
+</div><!-- /view-obligaciones -->
+
+<!-- ══════════════════════════════════════════════
+     SCRIPTS — orden obligatorio
+══════════════════════════════════════════════ -->
+<script src="../js/supabase.js"></script>
+<script src="../js/ob-services.js"></script>
+<script>
+/* ══════════════════════════════════════════════════════════════
+   OBLIGACIONES FINANCIERAS · Módulo JS principal
+   Prefijo de funciones: ob  |  Variables globales: OB_*
+   ══════════════════════════════════════════════════════════════ */
+'use strict';
+
+/* ══ ESTADO GLOBAL ══ */
+var OB_DATA        = [];        // pagos del período activo (ob_vista_pagos_activos)
+var OB_PERIODO     = null;      // período activo
+var OB_RESUMEN_CAT = [];        // resumen por categoría (dona)
+var OB_SEMA        = [];        // semáforo por sede
+var OB_USER        = null;      // perfil del usuario (con ob_rol)
+var OB_IS_ADMIN    = false;     // acceso admin del módulo financiero
+var OB_CAN_EDIT    = false;     // puede registrar pagos (editor o admin)
+var OB_PAGO_ACTIVO = null;      // pago seleccionado para el modal
+var OB_SORT        = {col:'dia',asc:true};
+var OB_FILTROS     = {search:'',categoria:'',sede:'',tag:'todas'};
+var OB_CH          = {};        // instancias de Chart.js
+var OB_PIN_BUF     = '';
+var OB_PIN_CLICKS  = 0;
+var OB_PIN_TIMER   = null;
+var OB_PIN         = '2025';    // PIN del módulo financiero — cambiar en producción
+var OB_PIN_KEY     = 'inlop_ob_admin_v1';
+var OB_AUTO_TIMER  = null;
+
+/* ══ HELPERS DE FORMATO ══ */
+function obFmtCOP(n){
+  if(n===null||n===undefined||isNaN(n)) return '—';
+  return '$'+Math.round(n).toLocaleString('es-CO');
+}
+function obFmtFecha(iso){
+  if(!iso) return '—';
+  const [y,m,d]=iso.split('-');
+  const meses=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  return `${parseInt(d)} ${meses[parseInt(m)-1]} ${y}`;
+}
+function obHoy(){return new Date().toISOString().split('T')[0]}
+function obDiasRestantes(fechaLimite){
+  if(!fechaLimite) return null;
+  const hoy=new Date(obHoy());
+  const lim=new Date(fechaLimite);
+  return Math.floor((lim-hoy)/(1000*60*60*24));
+}
+
+/* ══ ESTADO VISUAL DE UN PAGO ══ */
+function obEstadoVisual(pago){
+  const e=pago.estado;
+  const dias=obDiasRestantes(pago.fecha_limite);
+  if(e==='pagada')     return{cls:'badge-green',txt:'Pagada',rowCls:'row-pagada'};
+  if(e==='pagada_mora')return{cls:'badge-amber',txt:'Pago tardío',rowCls:'row-warn'};
+  if(e==='vencida'||(e==='pendiente'&&dias!==null&&dias<0))
+                       return{cls:'badge-red',txt:'Vencida',rowCls:'row-vencida'};
+  if(e==='pendiente'&&dias!==null&&dias===0)
+                       return{cls:'badge-red',txt:'Vence hoy',rowCls:'row-vencida'};
+  if(e==='pendiente'&&dias!==null&&dias<=3)
+                       return{cls:'badge-amber',txt:`${dias}d restantes`,rowCls:'row-warn'};
+  if(e==='pendiente'&&dias!==null&&dias<=7)
+                       return{cls:'badge-amber',txt:`${dias}d restantes`,rowCls:''};
+  return{cls:'badge-gray',txt:'Pendiente',rowCls:''};
+}
+
+/* ══ TOAST ══ */
+function toast(msg,tipo){
+  tipo=tipo||'info';
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.className='toast '+tipo+' show';
+  clearTimeout(obToastTimer);
+  obToastTimer=setTimeout(()=>el.classList.remove('show'),3400);
+}
+var obToastTimer;
+
+/* ══ RELOJ ══ */
+function startClock(){
+  const el=document.getElementById('headerClock');
+  if(!el) return;
+  const u=()=>{el.textContent=new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+' UTC-5'};
+  u();setInterval(u,1000);
+}
+
+/* ══ NAVEGACIÓN ══ */
+function obShowTab(tab){
+  ['panel','registro','calendario','historial'].forEach(t=>{
+    const v=document.getElementById('view-'+t);
+    const b=document.getElementById('tab-'+t);
+    if(!v||!b) return;
+    const activo=t===tab;
+    if(activo){
+      // panel usa block; registro, calendario e historial usan flex (columna)
+      v.style.display=(t==='registro'||t==='calendario'||t==='historial')?'flex':'block';
+    } else {
+      v.style.display='none';
+    }
+    b.classList.toggle('on',activo);
+  });
+  localStorage.setItem('ob_tab_v1',tab);
+  if(tab==='registro') obRenderTabla();
+}
+
+/* ══ SIDEBAR ══ */
+function obToggleSidebar(){
+  const row=document.getElementById('opsBodyRow');
+  const btn=document.getElementById('sbCollapseBtn');
+  if(!row) return;
+  const col=row.classList.toggle('sb-collapsed');
+  if(btn){
+    const ico=btn.querySelector('i.ti');
+    if(ico) ico.className=col?'ti ti-layout-sidebar-left-expand':'ti ti-layout-sidebar-left-collapse';
+    const span=btn.querySelector('span');
+    if(span) span.textContent=col?'Expandir':'Colapsar';
+    btn.dataset.label=col?'Expandir':'Colapsar';
+    btn.setAttribute('aria-label',col?'Expandir sidebar':'Colapsar sidebar');
+  }
+  try{localStorage.setItem('ob_sb_v1',col?'1':'0')}catch(e){}
+}
+
+function obRestaurarSidebar(){
+  try{
+    const s=localStorage.getItem('ob_sb_v1');
+    if(s==='1'){
+      const row=document.getElementById('opsBodyRow');
+      if(row){
+        row.classList.add('sb-collapsed');
+        const btn=document.getElementById('sbCollapseBtn');
+        if(btn){
+          const ico=btn.querySelector('i.ti');
+          if(ico) ico.className='ti ti-layout-sidebar-left-expand';
+          const span=btn.querySelector('span');
+          if(span) span.textContent='Expandir';
+          btn.dataset.label='Expandir';
+        }
+      }
+    }
+  }catch(e){}
+}
+
+/* ══ VOLVER AL PORTAL ══ */
+function obVolverPortal(){
+  if(window.parent&&typeof window.parent.volverPortal==='function') window.parent.volverPortal();
+  else window.location.href='../index.html';
+}
+
+/* ══ ADMIN PIN ══ */
+function obCheckAdminSession(){
+  if(sessionStorage.getItem(OB_PIN_KEY)==='ok'){
+    OB_IS_ADMIN=true;OB_CAN_EDIT=true;
+    obMostrarControlesAdmin();
+  }
+}
+function obLogoClick(){
+  OB_PIN_CLICKS++;
+  clearTimeout(OB_PIN_TIMER);
+  OB_PIN_TIMER=setTimeout(()=>{OB_PIN_CLICKS=0},800);
+  if(OB_PIN_CLICKS>=5){
+    OB_PIN_CLICKS=0;
+    OB_IS_ADMIN?obLogoutAdmin():obAbrirPin();
+  }
+}
+function obAbrirPin(){
+  OB_PIN_BUF='';obPinUpdate();
+  document.getElementById('pinErr').textContent='';
+  document.getElementById('pinModal').classList.add('show');
+}
+function obCerrarPin(){document.getElementById('pinModal').classList.remove('show');OB_PIN_BUF='';obPinUpdate()}
+function obPinPress(n){
+  if(OB_PIN_BUF.length>=4) return;
+  OB_PIN_BUF+=String(n);obPinUpdate();
+  if(OB_PIN_BUF.length===4) setTimeout(obPinValidar,130);
+}
+function obPinClear(){OB_PIN_BUF='';obPinUpdate();document.getElementById('pinErr').textContent=''}
+function obPinUpdate(){
+  document.querySelectorAll('.pin-dot').forEach((d,i)=>{
+    d.classList.toggle('filled',i<OB_PIN_BUF.length);
+  });
+}
+function obPinValidar(){
+  if(OB_PIN_BUF===OB_PIN){
+    sessionStorage.setItem(OB_PIN_KEY,'ok');
+    OB_IS_ADMIN=true;OB_CAN_EDIT=true;
+    setTimeout(()=>{obCerrarPin();obMostrarControlesAdmin();toast('✓ Modo administrador activado','ok')},200);
+  } else {
+    document.getElementById('pinErr').textContent='PIN incorrecto';
+    OB_PIN_BUF='';obPinUpdate();
+  }
+}
+function obLogoutAdmin(){
+  sessionStorage.removeItem(OB_PIN_KEY);
+  OB_IS_ADMIN=false;
+  if(!OB_USER||OB_USER.ob_rol!=='editor') OB_CAN_EDIT=false;
+  obOcultarControlesAdmin();
+  toast('Modo administrador desactivado','info');
+}
+function obMostrarControlesAdmin(){
+  document.getElementById('hdrAdminTag').classList.add('show');
+  document.getElementById('hdrAdminTag').style.display='flex';
+  document.getElementById('adminTagRegistro')?.classList.add('show');
+  document.querySelectorAll('.admin-only').forEach(el=>el.style.removeProperty('display'));
+  obRenderTabla();
+}
+function obOcultarControlesAdmin(){
+  document.getElementById('hdrAdminTag').classList.remove('show');
+  document.getElementById('adminTagRegistro')?.classList.remove('show');
+  document.querySelectorAll('.admin-only').forEach(el=>el.style.display='none');
+  obRenderTabla();
+}
+
+/* ══ DRAG & DROP EXCEL ══ */
+function obInitDragDrop(){
+  document.addEventListener('dragover',e=>{e.preventDefault();document.getElementById('dragOv').classList.add('show')});
+  document.getElementById('dragOv').addEventListener('dragleave',()=>document.getElementById('dragOv').classList.remove('show'));
+  document.getElementById('dragOv').addEventListener('drop',e=>{
+    e.preventDefault();document.getElementById('dragOv').classList.remove('show');
+    const f=e.dataTransfer?.files[0];
+    if(f&&/\.(xlsx|xls)$/i.test(f.name)){
+      if(!OB_IS_ADMIN){toast('Solo el administrador puede cargar el Excel','err');return}
+      obLeerExcel(f);
+    } else if(f){
+      toast('Solo se aceptan archivos .xlsx o .xls','err');
+    }
+  });
+}
+
+function obLeerExcel(file){
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'binary'});
+      if(typeof window.OB!=='undefined'&&typeof window.OB.obParseExcel==='function'){
+        window.OB.obParseExcel(wb,file.name);
+      } else {
+        toast('Parser de Excel no disponible. Carga ob-excel-parser.js','warn');
+      }
+    }catch(err){
+      toast('Error al leer el Excel: '+err.message,'err');
+    }
+  };
+  r.readAsBinaryString(file);
+}
+
+/* ══ BANNER DINÁMICO ══ */
+function obUpdateBanner(){
+  const banner=document.getElementById('obBanner');
+  const txt=document.getElementById('obBannerTxt');
+  const date=document.getElementById('obBannerDate');
+  if(!OB_DATA||!OB_DATA.length){banner.classList.remove('show');return}
+
+  const hoy=obHoy();
+  const vencidas=OB_DATA.filter(p=>p.estado==='vencida'||(p.estado==='pendiente'&&p.fecha_limite<hoy));
+  const hoyVence=OB_DATA.filter(p=>p.estado==='pendiente'&&p.fecha_limite===hoy);
+  const en3=OB_DATA.filter(p=>p.estado==='pendiente'&&obDiasRestantes(p.fecha_limite)!==null&&obDiasRestantes(p.fecha_limite)>0&&obDiasRestantes(p.fecha_limite)<=3);
+
+  banner.classList.add('show');
+  banner.className='ob-banner show';
+  date.textContent=new Date().toLocaleDateString('es-CO',{weekday:'short',day:'2-digit',month:'short'}).toUpperCase();
+
+  if(vencidas.length>0||hoyVence.length>0){
+    const n=(vencidas.length+hoyVence.length);
+    banner.classList.add('bn-crit');
+    txt.textContent=`URGENTE · ${n} obligación(es) vencida(s) sin pago registrado`;
+    obUpdateHdrPill('crit',txt.textContent);
+  } else if(en3.length>0){
+    banner.classList.add('bn-warn');
+    txt.textContent=`ALERTA · ${en3.length} obligación(es) vencen en los próximos 3 días`;
+    obUpdateHdrPill('warn',txt.textContent);
+  } else {
+    banner.classList.add('bn-ok');
+    txt.textContent='OPERACIÓN NORMAL · Todas las obligaciones del mes al día';
+    obUpdateHdrPill('ok',txt.textContent);
+  }
+}
+
+function obUpdateHdrPill(estado,msg){
+  const pill=document.getElementById('hdrAlertPill');
+  const pillTxt=document.getElementById('hdrAlertTxt');
+  if(!pill||!pillTxt) return;
+  pill.className='hdr-alert-pill state-'+estado;
+  pill.style.display='flex';
+  pillTxt.textContent=msg;
+}
+
+/* ══ RENDER KPIs ══ */
+function obRenderKPIs(){
+  const grid=document.getElementById('kpiGrid');
+  if(!grid) return;
+
+  const hoy=obHoy();
+  const total=OB_DATA.length;
+  const pagadas=OB_DATA.filter(p=>['pagada','pagada_mora'].includes(p.estado)).length;
+  const vencidas=OB_DATA.filter(p=>p.estado==='vencida'||(p.estado==='pendiente'&&p.fecha_limite<hoy)).length;
+  const prox7=OB_DATA.filter(p=>{
+    const d=obDiasRestantes(p.fecha_limite);
+    return p.estado==='pendiente'&&d!==null&&d>=0&&d<=7;
+  }).length;
+  const montoTotal=OB_DATA.reduce((s,p)=>s+(p.monto_estimado||0),0);
+  const compliance=total>0?Math.round((pagadas/total)*100):0;
+
+  // Badge sidebar
+  const criticas=vencidas;
+  const badge=document.getElementById('sbBadge');
+  if(badge){badge.textContent=criticas;badge.style.display=criticas>0?'':'none'}
+
+  grid.innerHTML=`
+    <div class="kpi k1 fade">
+      <div class="kpi-lbl">Total mes</div>
+      <div class="kpi-val" style="color:var(--blue)">${obFmtCOP(montoTotal)}</div>
+      <div class="kpi-sub">${total} obligaciones activas</div>
+      <div class="kpi-bar"><div class="kpi-fill" style="width:100%;background:var(--blue)"></div></div>
+    </div>
+    <div class="kpi k2 fade" style="animation-delay:.05s">
+      <div class="kpi-lbl">Pagadas</div>
+      <div class="kpi-val" style="color:var(--green)">${pagadas}</div>
+      <div class="kpi-sub">${compliance}% compliance del mes</div>
+      <div class="kpi-bar"><div class="kpi-fill" style="width:${compliance}%;background:var(--green)"></div></div>
+    </div>
+    <div class="kpi k3 fade" style="animation-delay:.10s">
+      <div class="kpi-lbl">En riesgo</div>
+      <div class="kpi-val">${vencidas}</div>
+      <div class="kpi-sub">Acción inmediata requerida</div>
+    </div>
+    <div class="kpi k4 fade" style="animation-delay:.15s">
+      <div class="kpi-lbl">Próximas 7 días</div>
+      <div class="kpi-val">${prox7}</div>
+      <div class="kpi-sub">Preparar pagos</div>
+    </div>`;
+}
+
+/* ══ RENDER DONA ══ */
+function obRenderDona(){
+  if(OB_CH['dona']){OB_CH['dona'].destroy();delete OB_CH['dona']}
+  const canvas=document.getElementById('chartDona');
+  const leg=document.getElementById('donaTotal');
+  if(!canvas) return;
+
+  if(!OB_RESUMEN_CAT||!OB_RESUMEN_CAT.length){
+    const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);
+    if(leg) leg.textContent='0';
+    return;
+  }
+
+  const cats=OB_RESUMEN_CAT.filter(c=>c.monto_total>0).sort((a,b)=>b.monto_total-a.monto_total);
+  const total=cats.reduce((s,c)=>s+(c.monto_total||0),0);
+  if(leg) leg.textContent=obFmtCOP(total);
+
+  const colores=cats.map(c=>c.color_hex||'#6B7280');
+  const labels=cats.map(c=>c.nombre);
+  const data=cats.map(c=>c.monto_total||0);
+
+  const tip={
+    backgroundColor:'#0A1735',borderColor:'rgba(255,255,255,.15)',borderWidth:1,
+    titleColor:'#fff',bodyColor:'#c0cfe8',padding:10,
+    titleFont:{family:'\'Barlow Condensed\',sans-serif',weight:'700',size:13},
+    bodyFont:{family:'\'JetBrains Mono\',monospace',size:11}
+  };
+
+  OB_CH['dona']=new Chart(canvas,{
+    type:'doughnut',
+    data:{labels,datasets:[{data,backgroundColor:colores,borderColor:'#fff',borderWidth:2,hoverOffset:6}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,cutout:'66%',
+      plugins:{
+        legend:{display:false},
+        tooltip:{...tip,callbacks:{label:i=>`${obFmtCOP(i.raw)} (${total>0?Math.round(i.raw/total*100):0}%)`}}
+      }
+    }
+  });
+
+  // Leyenda manual
+  const legEl=document.getElementById('donaLeg');
+  if(legEl){
+    legEl.innerHTML=cats.slice(0,6).map(c=>{
+      const pct=total>0?Math.round((c.monto_total/total)*100):0;
+      const nom=c.nombre.length>18?c.nombre.slice(0,18)+'…':c.nombre;
+      return `<div style="display:flex;align-items:center;gap:6px">
+        <span style="width:8px;height:8px;border-radius:2px;background:${c.color_hex||'#6B7280'};flex-shrink:0"></span>
+        <span style="font-size:11px;color:var(--w3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nom}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--navy);flex-shrink:0">${pct}%</span>
+      </div>`;
+    }).join('');
+  }
+}
+
+/* ══ RENDER SEMÁFORO ══ */
+function obRenderSemaforo(){
+  const el=document.getElementById('semaforoSede');
+  if(!el) return;
+
+  if(!OB_SEMA||!OB_SEMA.length){
+    el.innerHTML='<div style="font-size:12px;color:var(--w4);padding:10px 0">Sin datos de sede</div>';
+    return;
+  }
+
+  el.innerHTML=OB_SEMA.map(s=>{
+    const col=s.compliance>=95?'var(--green)':s.compliance>=70?'var(--amber)':'var(--danger)';
+    const sede=s.sede.charAt(0).toUpperCase()+s.sede.slice(1);
+    return `<div class="gauge-row">
+      <span class="gauge-sede">${sede}</span>
+      <div class="gauge-track"><div class="gauge-fill" style="width:${s.compliance}%;background:${col}"></div></div>
+      <span class="gauge-pct" style="color:${col}">${s.compliance}%</span>
+    </div>`;
+  }).join('');
+}
+
+/* ══ RENDER ALERTAS ══ */
+function obRenderAlertas(){
+  const grid=document.getElementById('alertsGrid');
+  const countEl=document.getElementById('alertCount');
+  if(!grid) return;
+
+  const hoy=obHoy();
+  const criticas=OB_DATA.filter(p=>{
+    const d=obDiasRestantes(p.fecha_limite);
+    return p.estado==='vencida'||(p.estado==='pendiente'&&(p.fecha_limite<=hoy||d!==null&&d<=3));
+  }).sort((a,b)=>new Date(a.fecha_limite)-new Date(b.fecha_limite));
+
+  if(countEl) countEl.textContent=criticas.length?`${criticas.length} alerta(s)`:'';
+
+  if(!criticas.length){
+    grid.innerHTML=`<div class="empty-ok" style="grid-column:1/-1">
+      <i class="ti ti-circle-check" aria-hidden="true" style="font-size:28px;color:var(--green)"></i>
+      <div class="empty-ok-txt">Todas las obligaciones están al día</div>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML=criticas.slice(0,6).map(p=>{
+    const ev=obEstadoVisual(p);
+    const tipoCls=ev.cls.includes('red')?'ac-crit':'ac-warn';
+    const nom=p.nombre_corto||p.razon_social||'—';
+    return `<div class="ac ${tipoCls} fade" role="alert">
+      <div class="ac-prov">${nom}</div>
+      <div class="ac-det">${p.detalle||'—'} · ${p.sede||'—'}</div>
+      <div class="ac-row">
+        <span class="badge ${ev.cls}">${ev.txt}</span>
+        <span class="ac-monto">${obFmtCOP(p.monto_estimado)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ══ RENDER TABLA REGISTRO ══ */
+function obRenderTabla(){
+  const body=document.getElementById('tblBody');
+  const foot=document.getElementById('tblFoot');
+  const mob=document.getElementById('mobCards');
+  if(!body) return;
+
+  // Aplicar filtros
+  let rows=[...OB_DATA];
+  const {search,categoria,sede,tag}=OB_FILTROS;
+
+  if(search){
+    const q=search.toLowerCase();
+    rows=rows.filter(p=>(p.nombre_corto||'').toLowerCase().includes(q)||(p.razon_social||'').toLowerCase().includes(q)||(p.detalle||'').toLowerCase().includes(q));
+  }
+  if(categoria) rows=rows.filter(p=>p.categoria_codigo===categoria);
+  if(sede)      rows=rows.filter(p=>p.sede===sede);
+
+  const hoy=obHoy();
+  if(tag==='vencidas') rows=rows.filter(p=>p.estado==='vencida'||(p.estado==='pendiente'&&p.fecha_limite<hoy));
+  if(tag==='riesgo')   rows=rows.filter(p=>{const d=obDiasRestantes(p.fecha_limite);return p.estado==='pendiente'&&d!==null&&d>=0&&d<=3});
+
+  // Ordenar
+  rows.sort((a,b)=>{
+    let va,vb;
+    if(OB_SORT.col==='proveedor'){va=(a.nombre_corto||'');vb=(b.nombre_corto||'')}
+    else if(OB_SORT.col==='dia'){va=a.dia_pago||0;vb=b.dia_pago||0}
+    else if(OB_SORT.col==='monto'){va=a.monto_estimado||0;vb=b.monto_estimado||0}
+    else if(OB_SORT.col==='estado'){va=a.estado||'';vb=b.estado||''}
+    else if(OB_SORT.col==='sede'){va=a.sede||'';vb=b.sede||''}
+    else{va=a.fecha_limite||'';vb=b.fecha_limite||''}
+    if(va<vb) return OB_SORT.asc?-1:1;
+    if(va>vb) return OB_SORT.asc?1:-1;
+    return 0;
+  });
+
+  // Actualizar contadores tags
+  const crit=OB_DATA.filter(p=>p.estado==='vencida'||(p.estado==='pendiente'&&p.fecha_limite<hoy)).length;
+  const warn=OB_DATA.filter(p=>{const d=obDiasRestantes(p.fecha_limite);return p.estado==='pendiente'&&d!==null&&d>=0&&d<=3}).length;
+  const tagCritEl=document.getElementById('tagCritCount');
+  const tagWarnEl=document.getElementById('tagWarnCount');
+  if(tagCritEl) tagCritEl.textContent=crit;
+  if(tagWarnEl) tagWarnEl.textContent=warn;
+
+  // Chips filtros activos
+  obRenderActiveFilters();
+
+  if(!rows.length){
+    body.innerHTML=`<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--w4);font-size:12px">
+      <i class="ti ti-search-off" style="font-size:20px;display:block;margin-bottom:8px;opacity:.4"></i>
+      Sin obligaciones que coincidan con los filtros aplicados
+    </td></tr>`;
+    if(foot) foot.innerHTML='';
+    if(mob) mob.innerHTML='';
+    return;
+  }
+
+  // Renderizar filas desktop
+  body.innerHTML=rows.map(p=>{
+    const ev=obEstadoVisual(p);
+    const nom=(p.nombre_corto||p.razon_social||'—').length>22?(p.nombre_corto||p.razon_social||'—').slice(0,22)+'…':(p.nombre_corto||p.razon_social||'—');
+    const det=(p.detalle||'—').length>28?(p.detalle||'—').slice(0,28)+'…':(p.detalle||'—');
+    const hasSoporte=!!(p.url_soporte&&p.url_soporte.trim());
+    const canEdit=OB_IS_ADMIN||OB_CAN_EDIT;
+    const isPagada=['pagada','pagada_mora'].includes(p.estado);
+
+    const actionBtn=canEdit?
+      (isPagada
+        ? `<button class="btn-ver-soporte" onclick="obAbrirSoporte('${p.pago_id}')" aria-label="Ver soporte">Ver soporte</button>`
+        : `<button class="btn-pago" onclick="obAbrirModalPago('${p.pago_id}')" aria-label="Registrar pago de ${nom}">Registrar pago</button>`)
+      :'';
+
+    const montoCell=canEdit&&!isPagada
+      ? `<td class="monto-cell" id="mc-${p.pago_id}" onclick="obEditarMonto('${p.pago_id}')" title="Clic para editar">${obFmtCOP(p.monto_estimado)}<span class="monto-hint"> ✎</span></td>`
+      : `<td style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;color:var(--navy)">${obFmtCOP(p.monto_real||p.monto_estimado)}</td>`;
+
+    return `<tr class="${ev.rowCls}">
+      <td style="font-weight:600;color:var(--w1)" title="${p.razon_social||''}">${nom}</td>
+      <td style="color:var(--w3);max-width:180px;overflow:hidden;text-overflow:ellipsis" title="${p.detalle||''}">${det}</td>
+      <td><span class="badge badge-blue" style="background:${(p.categoria_color||'#6B7280')}22;color:${p.categoria_color||'#6B7280'}">${p.categoria_nombre||'—'}</span></td>
+      <td><span class="badge badge-gray">${p.sede||'—'}</span></td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;text-align:center;font-weight:600;color:${ev.rowCls.includes('vencida')?'var(--danger)':'var(--w2)'}">${p.dia_pago||'—'}</td>
+      ${montoCell}
+      <td><span class="badge ${ev.cls}">${ev.txt}</span></td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--w4)">${obFmtFecha(p.fecha_pago)}</td>
+      <td style="text-align:center">
+        <i class="ti ti-paperclip clip-icon ${hasSoporte?'has-soporte':'no-soporte'}"
+           onclick="${hasSoporte?`obAbrirSoporte('${p.pago_id}')`:`obAbrirModalPago('${p.pago_id}')`}"
+           aria-label="${hasSoporte?'Ver soporte':'Sin soporte'}" title="${hasSoporte?'Ver comprobante':'Sin comprobante adjunto'}"></i>
+      </td>
+      <td>${actionBtn}</td>
+    </tr>`;
+  }).join('');
+
+  // Footer con totales
+  const montoTotalFiltrado=rows.reduce((s,p)=>s+(p.monto_estimado||0),0);
+  const pagadasFiltradas=rows.filter(p=>['pagada','pagada_mora'].includes(p.estado)).length;
+  if(foot) foot.innerHTML=`<tr>
+    <td colspan="5">TOTAL · ${rows.length} registros mostrados de ${OB_DATA.length}</td>
+    <td>${obFmtCOP(montoTotalFiltrado)}</td>
+    <td colspan="4">Pagadas: ${pagadasFiltradas} · Pendientes: ${rows.length-pagadasFiltradas}</td>
+  </tr>`;
+
+  // Mobile cards
+  if(mob){
+    mob.innerHTML=rows.map(p=>{
+      const ev=obEstadoVisual(p);
+      const mcCls=ev.rowCls.includes('vencida')?'mc-crit':ev.rowCls.includes('warn')?'mc-warn':ev.cls.includes('green')?'mc-ok':'';
+      const nom=p.nombre_corto||p.razon_social||'—';
+      const canEdit=OB_IS_ADMIN||OB_CAN_EDIT;
+      const isPagada=['pagada','pagada_mora'].includes(p.estado);
+      return `<div class="mob-card ${mcCls}" role="listitem">
+        <div class="mob-card-prov">${nom}</div>
+        <div class="mob-card-det">${p.detalle||'—'} · Día ${p.dia_pago||'—'}</div>
+        <div class="mob-card-row">
+          <span class="badge ${ev.cls}">${ev.txt}</span>
+          <span class="mob-card-monto">${obFmtCOP(p.monto_estimado)}</span>
+          ${canEdit&&!isPagada?`<button class="btn-pago" onclick="obAbrirModalPago('${p.pago_id}')">Pagar</button>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+/* ══ FILTROS ══ */
+function obFiltrar(){
+  OB_FILTROS.search=document.getElementById('searchInput')?.value||'';
+  OB_FILTROS.categoria=document.getElementById('filtCategoria')?.value||'';
+  OB_FILTROS.sede=document.getElementById('filtSede')?.value||'';
+  obRenderTabla();
+}
+
+function obToggleTag(tag){
+  OB_FILTROS.tag=tag;
+  ['vencidas','riesgo','todas'].forEach(t=>{
+    const btn=document.getElementById('tag'+(t.charAt(0).toUpperCase()+t.slice(1)));
+    if(btn){btn.classList.toggle('active',t===tag);btn.setAttribute('aria-pressed',String(t===tag))}
+  });
+  obRenderTabla();
+}
+
+function obLimpiarFiltros(){
+  OB_FILTROS={search:'',categoria:'',sede:'',tag:'todas'};
+  const si=document.getElementById('searchInput');if(si) si.value='';
+  const fc=document.getElementById('filtCategoria');if(fc) fc.value='';
+  const fs=document.getElementById('filtSede');if(fs) fs.value='';
+  obToggleTag('todas');
+  obRenderTabla();
+}
+
+function obRenderActiveFilters(){
+  const bar=document.getElementById('activeFilters');
+  const chips=document.getElementById('afChips');
+  if(!bar||!chips) return;
+  const activos=[];
+  if(OB_FILTROS.search) activos.push(`<span class="af-chip">${OB_FILTROS.search}<span class="af-x" onclick="document.getElementById('searchInput').value='';OB_FILTROS.search='';obRenderTabla()">✕</span></span>`);
+  if(OB_FILTROS.categoria) activos.push(`<span class="af-chip">${OB_FILTROS.categoria}<span class="af-x" onclick="document.getElementById('filtCategoria').value='';OB_FILTROS.categoria='';obRenderTabla()">✕</span></span>`);
+  if(OB_FILTROS.sede) activos.push(`<span class="af-chip">${OB_FILTROS.sede}<span class="af-x" onclick="document.getElementById('filtSede').value='';OB_FILTROS.sede='';obRenderTabla()">✕</span></span>`);
+  if(OB_FILTROS.tag!=='todas') activos.push(`<span class="af-chip">${OB_FILTROS.tag}<span class="af-x" onclick="obToggleTag('todas')">✕</span></span>`);
+  chips.innerHTML=activos.join('');
+  bar.classList.toggle('show',activos.length>0);
+}
+
+function obSortBy(col){
+  if(OB_SORT.col===col) OB_SORT.asc=!OB_SORT.asc;
+  else{OB_SORT.col=col;OB_SORT.asc=true}
+  obRenderTabla();
+}
+
+/* ══ EDICIÓN INLINE DE MONTO ══ */
+function obEditarMonto(pagoId){
+  if(!OB_IS_ADMIN&&!OB_CAN_EDIT) return;
+  const cell=document.getElementById('mc-'+pagoId);
+  if(!cell||cell.classList.contains('editing')) return;
+  const pago=OB_DATA.find(p=>p.pago_id===pagoId);
+  if(!pago) return;
+  cell.classList.add('editing');
+  const val=pago.monto_estimado||0;
+  cell.innerHTML=`<input type="number" value="${val}" min="0" step="1000"
+    onblur="obGuardarMonto('${pagoId}',this.value)"
+    onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape')obCancelarMonto('${pagoId}','${val}')"
+    style="border:1px solid var(--navy);border-radius:4px;padding:2px 6px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--navy);background:var(--blue3);outline:none;width:110px"
+    autofocus>`;
+  cell.querySelector('input').select();
+}
+
+async function obGuardarMonto(pagoId,val){
+  const monto=parseFloat(val)||0;
+  const pago=OB_DATA.find(p=>p.pago_id===pagoId);
+  if(!pago) return;
+  if(monto===pago.monto_estimado){obCancelarMonto(pagoId,monto);return}
+  const res=await OB.Pagos.actualizarMonto(pagoId,monto);
+  if(res.ok){
+    pago.monto_estimado=monto;
+    toast('✓ Monto actualizado','ok');
+    obRenderTabla();obRenderKPIs();obRenderDona();
+  } else {
+    toast('Error: '+res.error,'err');
+    obCancelarMonto(pagoId,pago.monto_estimado);
+  }
+}
+
+function obCancelarMonto(pagoId,val){
+  const cell=document.getElementById('mc-'+pagoId);
+  if(!cell) return;
+  cell.classList.remove('editing');
+  cell.innerHTML=`${obFmtCOP(parseFloat(val)||0)}<span class="monto-hint"> ✎</span>`;
+}
+
+/* ══ MODAL PAGO ══ */
+function obAbrirModalPago(pagoId){
+  if(!OB_IS_ADMIN&&!OB_CAN_EDIT){toast('Sin permisos para registrar pagos','err');return}
+  const pago=OB_DATA.find(p=>p.pago_id===pagoId);
+  if(!pago) return;
+  OB_PAGO_ACTIVO=pago;
+
+  document.getElementById('pagoCtxProv').textContent=pago.razon_social||pago.nombre_corto||'—';
+  document.getElementById('pagoCtxDet').textContent=pago.detalle||'—';
+  document.getElementById('pagoCtxFecha').textContent=`Vencimiento: día ${pago.dia_pago||'—'} · Límite: ${obFmtFecha(pago.fecha_limite)}`;
+  document.getElementById('pagoMonto').value=pago.monto_estimado||'';
+  document.getElementById('pagoFecha').value=obHoy();
+  document.getElementById('pagoReferencia').value='';
+  document.getElementById('pagoBanco').value='';
+  document.getElementById('pagoUrl').value='';
+  document.getElementById('pagoNota').value='';
+
+  document.getElementById('modalPago').classList.add('show');
+  setTimeout(()=>document.getElementById('pagoMonto').focus(),100);
+}
+
+function obCerrarModalPago(){
+  document.getElementById('modalPago').classList.remove('show');
+  OB_PAGO_ACTIVO=null;
+}
+
+async function obConfirmarPago(){
+  if(!OB_PAGO_ACTIVO) return;
+  const monto=parseFloat(document.getElementById('pagoMonto').value)||0;
+  const fecha=document.getElementById('pagoFecha').value;
+  const ref=document.getElementById('pagoReferencia').value.trim();
+  const banco=document.getElementById('pagoBanco').value.trim();
+  const url=document.getElementById('pagoUrl').value.trim();
+  const nota=document.getElementById('pagoNota').value.trim();
+
+  if(monto<=0){toast('El monto debe ser mayor a 0','err');document.getElementById('pagoMonto').focus();return}
+  if(!fecha){toast('La fecha de pago es requerida','err');document.getElementById('pagoFecha').focus();return}
+  if(!ref){toast('La referencia del comprobante es requerida','err');document.getElementById('pagoReferencia').focus();return}
+
+  const btn=document.getElementById('btnConfirmarPago');
+  btn.disabled=true;btn.textContent='Guardando…';
+  toast('Registrando pago…','info');
+
+  const res=await OB.Pagos.registrarPago(OB_PAGO_ACTIVO.pago_id,{
+    monto_real:monto,fecha_pago:fecha,referencia:ref,
+    banco_pagador:banco||null,url_soporte:url||null,nota:nota||null
+  });
+
+  btn.disabled=false;btn.innerHTML='<i class="ti ti-check" aria-hidden="true"></i> Confirmar pago';
+
+  if(res.ok){
+    // Actualizar estado local
+    const idx=OB_DATA.findIndex(p=>p.pago_id===OB_PAGO_ACTIVO.pago_id);
+    if(idx>=0){
+      const fechaLim=new Date(OB_DATA[idx].fecha_limite);
+      const fechaPago=new Date(fecha);
+      OB_DATA[idx].estado=fechaPago>fechaLim?'pagada_mora':'pagada';
+      OB_DATA[idx].monto_real=monto;
+      OB_DATA[idx].fecha_pago=fecha;
+      OB_DATA[idx].url_soporte=url||null;
+    }
+    obCerrarModalPago();
+    toast('✓ Pago registrado correctamente','ok');
+    refresh();
+  } else {
+    toast('Error: '+res.error,'err');
+  }
+}
+
+/* ══ MODAL SOPORTE ══ */
+async function obAbrirSoporte(pagoId){
+  const res=await OB.Soportes.obtener(pagoId);
+  if(!res.ok){toast('Error al cargar soporte','err');return}
+  const s=res.data;
+  // Buscar contexto del pago: primero en el panel activo, luego en historial
+  const pago=OB_DATA.find(p=>p.pago_id===pagoId)
+             ||OB_HIS_PAGOS.find(p=>(p.pago_id||p.id)===pagoId);
+  document.getElementById('soporteCtxProv').textContent=pago?.nombre_corto||pago?.razon_social||'—';
+  document.getElementById('soporteRef').textContent=s.referencia||'—';
+  document.getElementById('soporteBanco').textContent=s.banco_pagador||'—';
+  const link=document.getElementById('soporteLink');
+  const wrap=document.getElementById('soporteUrlWrap');
+  if(s.url_soporte){
+    link.href=s.url_soporte;link.textContent=s.url_soporte;
+    wrap.style.display='flex';
+  } else {
+    wrap.style.display='none';
+    document.getElementById('soporteBanco').textContent+=' · Sin soporte digital';
+  }
+  document.getElementById('soporteNota').textContent=s.nota||'Sin notas';
+  document.getElementById('modalSoporte').classList.add('show');
+}
+
+function obCerrarModalSoporte(){document.getElementById('modalSoporte').classList.remove('show')}
+
+function obAbrirSoporte_ext(){
+  const link=document.getElementById('soporteLink');
+  if(link?.href&&link.href!=='#') window.open(link.href,'_blank','noopener,noreferrer');
+}
+// Alias para el botón
+window.obAbrirSoporte=obAbrirSoporte;
+
+/* ══ EXPORTAR .ICS ══ */
+function obDescargarICS(plataforma){
+  if(!OB_DATA||!OB_DATA.length){toast('Sin datos para exportar','err');return}
+  const pendientes=OB_DATA.filter(p=>!['pagada','pagada_mora'].includes(p.estado));
+  if(!pendientes.length){toast('Todas las obligaciones ya están pagadas','info');return}
+
+  const lineas=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//INLOP BI//Obligaciones Financieras//ES','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+
+  pendientes.forEach(p=>{
+    if(!p.fecha_limite) return;
+    const uid=`ob-${p.pago_id||Math.random().toString(36).slice(2)}@inlop.com.co`;
+    const dtstart=p.fecha_limite.replace(/-/g,'');
+    const dtend_d=new Date(p.fecha_limite);dtend_d.setDate(dtend_d.getDate()+1);
+    const dtend=dtend_d.toISOString().split('T')[0].replace(/-/g,'');
+    const summary=`INLOP · ${(p.nombre_corto||p.razon_social||'Obligación').substring(0,50)} · ${obFmtCOP(p.monto_estimado)}`;
+    const desc=`Categoría: ${p.categoria_nombre||'—'}\\nSede: ${p.sede||'—'}\\nDetalle: ${(p.detalle||'—').substring(0,100)}\\nMonto estimado: ${obFmtCOP(p.monto_estimado)}`;
+    const now=new Date().toISOString().replace(/[-:.]/g,'').split('Z')[0]+'Z';
+
+    lineas.push('BEGIN:VEVENT');
+    lineas.push(`UID:${uid}`);
+    lineas.push(`DTSTAMP:${now}`);
+    lineas.push(`DTSTART;VALUE=DATE:${dtstart}`);
+    lineas.push(`DTEND;VALUE=DATE:${dtend}`);
+    lineas.push(`SUMMARY:${summary}`);
+    lineas.push(`DESCRIPTION:${desc}`);
+    lineas.push('BEGIN:VALARM');
+    lineas.push('TRIGGER:-P3D');
+    lineas.push('ACTION:DISPLAY');
+    lineas.push(`DESCRIPTION:Vence en 3 días · ${p.nombre_corto||p.razon_social||'Obligación'}`);
+    lineas.push('END:VALARM');
+    lineas.push('END:VEVENT');
+  });
+
+  lineas.push('END:VCALENDAR');
+  const blob=new Blob([lineas.join('\r\n')],{type:'text/calendar;charset=utf-8'});
+  const a=document.createElement('a');
+  const periodo=OB_PERIODO?.anio_mes||new Date().toISOString().slice(0,7);
+  a.href=URL.createObjectURL(blob);
+  a.download=`INLOP_Obligaciones_${periodo}.ics`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast(`✓ Archivo .ics descargado — ábrelo en ${plataforma==='outlook'?'Outlook':'Google Calendar'}`,  'ok');
+}
+
+/* ══ CREAR PERÍODO ══ */
+async function obCrearPeriodo(){
+  if(!OB_IS_ADMIN){toast('Solo el administrador puede crear períodos','err');return}
+  const hoy=new Date();
+  const anioMes=`${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}`;
+  toast('Creando período '+anioMes+'…','info');
+  const res=await OB.Periodos.crear(anioMes);
+  if(res.ok){
+    toast(`✓ Período ${anioMes} creado · ${res.data.pagos_creados} pagos generados`,'ok');
+    await obCargarDatos();
+  } else {
+    toast('Error: '+res.error,'err');
+  }
+}
+
+/* ══ FILL FILTRO CATEGORÍAS ══ */
+async function obFillCategorias(){
+  const sel=document.getElementById('filtCategoria');
+  const selHis=document.getElementById('hisFiltCat');
+  if(!sel&&!selHis) return;
+  const res=await OB.Categorias.listar();
+  if(!res.ok||!res.data) return;
+  const opts='<option value="">Categoría</option>'+
+    res.data.map(c=>`<option value="${c.codigo}">${c.nombre}</option>`).join('');
+  if(sel) sel.innerHTML=opts;
+  if(selHis) selHis.innerHTML=opts;
+}
+
+/* ══ CARGAR DATOS ══ */
+async function obCargarDatos(){
+  // 1. Período activo
+  const resPer=await OB.Periodos.obtenerActivo();
+  OB_PERIODO=resPer.ok?resPer.data:null;
+
+  const panelMesEl=document.getElementById('panelMes');
+  if(panelMesEl&&OB_PERIODO) panelMesEl.textContent=OB_PERIODO.anio_mes;
+
+  // 2. Mostrar empty state si no hay período
+  const empty=document.getElementById('emptyState');
+  const content=document.getElementById('panelContent');
+  if(!OB_PERIODO){
+    if(empty){empty.style.display='flex'}
+    if(content){content.style.display='none'}
+    const btnCrear=document.getElementById('btnCrearPeriodo');
+    if(btnCrear) btnCrear.style.display=OB_IS_ADMIN?'inline-flex':'none';
+    OB_DATA=[];
+    return;
+  }
+  if(empty){empty.style.display='none'}
+  if(content){content.style.display='block'}
+
+  // 3. Pagos del período
+  const resPagos=await OB.Vistas.cargarPeriodoActivo();
+  OB_DATA=resPagos.ok?resPagos.data:[];
+
+  // 4. Resumen por categoría
+  const resCat=await OB.Vistas.resumenPorCategoria();
+  OB_RESUMEN_CAT=resCat.ok?resCat.data:[];
+
+  // 5. Semáforo por sede
+  const resSema=await OB.Vistas.semaPorSede();
+  OB_SEMA=resSema.ok?resSema.data:[];
+}
+
+/* ══ REFRESH — único punto de re-render ══ */
+async function refresh(){
+  await obCargarDatos();
+  obRenderKPIs();
+  obRenderDona();
+  obRenderSemaforo();
+  obRenderAlertas();
+  obUpdateBanner();
+  obRenderTabla();
+  const fd=document.getElementById('footDate');
+  if(fd) fd.textContent=new Date().toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'});
+}
+
+/* ══ INICIALIZACIÓN ══ */
+
+/**
+ * Callback de autenticación — se llama tanto si el evento llega antes
+ * como después de que DOMContentLoaded registre el listener.
+ * Patrón defensivo: window.INLOP._userReadyDetail guarda el detail si
+ * auth.js dispara antes del listener (sesión en caché → ~0ms latencia).
+ */
+async function obOnUserReady(u){
+
+  // 2. Cargar perfil completo con ob_rol
+  var resProfile=await OB.Auth.obtenerPerfil();
+  if(!resProfile.ok||!resProfile.data){
+    document.getElementById('authOverlay').classList.add('hidden');
+    document.getElementById('accessDenied').style.display='flex';
+    return;
+  }
+
+  var profile=resProfile.data;
+  OB_USER={...u,...profile};
+
+  // Enriquecer currentUser con ob_rol
+  if(window.INLOP) window.INLOP.currentUser={...window.INLOP.currentUser,...profile};
+
+  // 3. Verificar acceso al módulo financiero
+  if(!profile.ob_rol||!profile.ob_activo){
+    document.getElementById('authOverlay').classList.add('hidden');
+    document.getElementById('accessDenied').style.display='flex';
+    return;
+  }
+
+  OB_IS_ADMIN=profile.ob_rol==='admin';
+  OB_CAN_EDIT=profile.ob_rol==='editor'||profile.ob_rol==='admin';
+
+  // 4. Actualizar UI de usuario
+  var nom=profile.nombre||u.email.split('@')[0]||'—';
+  var ini=nom.trim().split(/\s+/).slice(0,2).map(function(w){return w[0]}).join('').toUpperCase();
+  var avEl=document.getElementById('hdrAv');if(avEl) avEl.textContent=ini;
+  var unEl=document.getElementById('hdrUname');if(unEl) unEl.textContent=nom;
+  var urEl=document.getElementById('hdrUrol');if(urEl) urEl.textContent=(profile.ob_rol||'viewer').toUpperCase();
+
+  // 5. Mostrar controles de admin si corresponde
+  if(OB_IS_ADMIN) obMostrarControlesAdmin();
+  else if(OB_CAN_EDIT){
+    document.getElementById('adminTagRegistro')?.classList.add('show');
+  }
+
+  // 6. Verificar sesión PIN guardada
+  obCheckAdminSession();
+
+  // 7. Ocultar overlay auth
+  document.getElementById('authOverlay').classList.add('hidden');
+
+  // 8. Inicializar UI
+  obRestaurarSidebar();
+  startClock();
+  await obFillCategorias();
+
+  // 9. Restaurar tab activo
+  var tabGuardado=localStorage.getItem('ob_tab_v1')||'panel';
+  obShowTab(tabGuardado);
+
+  // 10. Cargar datos
+  await refresh();
+
+  // 11. Auto-refresh cada 30 minutos
+  OB_AUTO_TIMER=setInterval(refresh,1800000);
+
+  // 12. Registrar acceso en auditoría (silencioso)
+  OB.Auth.registrarAcceso().catch(function(){});
+}
+
+document.addEventListener('DOMContentLoaded',function(){
+
+  // ── Patrón defensivo race condition ─────────────────────────────
+  // auth.js puede disparar 'inlop:userReady' antes de que este listener
+  // se registre (sesión Supabase en caché → resolución ~0ms).
+  // auth.js guarda el detail en window.INLOP._userReadyDetail justo antes
+  // de hacer dispatch (ver comentario en auth.js).
+  // Aquí comprobamos si ya llegó; si no, esperamos el evento.
+  if(window.INLOP && window.INLOP._userReadyDetail){
+    // El evento ya llegó antes del listener → ejecutar directamente
+    obOnUserReady(window.INLOP._userReadyDetail);
+  } else {
+    // Registrar listener para cuando llegue
+    document.addEventListener('inlop:userReady',function(e){
+      obOnUserReady(e.detail);
+    },{once:true});
+  }
+
+  // Logo: 5 clics → PIN admin
+  var logoEl=document.getElementById('logoIn');
+  if(logoEl) logoEl.addEventListener('click',obLogoClick);
+
+  // Drag & drop Excel
+  obInitDragDrop();
+
+  // Cerrar modales con Escape
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'){
+      document.querySelectorAll('.modal-bg.show').forEach(function(m){m.classList.remove('show')});
+    }
+  });
+
+  // Cerrar modales al clicar el overlay
+  document.querySelectorAll('.modal-bg').forEach(function(bg){
+    bg.addEventListener('click',function(e){if(e.target===bg) bg.classList.remove('show')});
+  });
+
+});
+
+/* ══════════════════════════════════════════════════════════════
+   CALENDARIO — lógica completa
+   Variables de estado: OB_CAL_*
+   Todas las funciones prefijadas obCal*
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Estado del calendario ── */
+var OB_CAL_ANIO   = new Date().getFullYear();
+var OB_CAL_MES    = new Date().getMonth() + 1;   // 1-based
+var OB_CAL_SEDE   = '';                            // filtro de sede activo
+var OB_CAL_DIA    = null;                          // día seleccionado actualmente
+
+/* ── Nombres de meses en español ── */
+var OB_CAL_MESES = [
+  'Enero','Febrero','Marzo','Abril','Mayo','Junio',
+  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'
+];
+
+/* ── Navegación ── */
+function obCalNavMes(delta){
+  OB_CAL_MES += delta;
+  if(OB_CAL_MES > 12){OB_CAL_MES = 1; OB_CAL_ANIO++;}
+  if(OB_CAL_MES < 1) {OB_CAL_MES = 12;OB_CAL_ANIO--;}
+  obCalCerrarPanel();
+  obRenderCalendario();
+}
+
+function obCalIrHoy(){
+  const hoy = new Date();
+  OB_CAL_ANIO = hoy.getFullYear();
+  OB_CAL_MES  = hoy.getMonth() + 1;
+  obCalCerrarPanel();
+  obRenderCalendario();
+}
+
+function obCalFiltrarSede(btn, sede){
+  OB_CAL_SEDE = sede;
+  document.querySelectorAll('.cal-sede-pill').forEach(p => p.classList.remove('on'));
+  btn.classList.add('on');
+  obRenderCalendario();
+}
+
+/* ── Calcular estado visual de un pago para el calendario ── */
+function obCalChipCls(pago){
+  if(!pago) return 'chip-pend';
+  const e = pago.estado;
+  const dias = obDiasRestantes(pago.fecha_limite);
+  if(['pagada','pagada_mora'].includes(e))                        return 'chip-ok';
+  if(e==='vencida' || (e==='pendiente' && dias !== null && dias < 0))  return 'chip-crit';
+  if(e==='pendiente' && dias !== null && dias === 0)              return 'chip-crit';
+  if(e==='pendiente' && dias !== null && dias <= 3)               return 'chip-warn';
+  return 'chip-pend';
+}
+
+function obCalSpCls(pago){
+  const c = obCalChipCls(pago);
+  return c === 'chip-crit' ? 'sp-crit'
+       : c === 'chip-warn' ? 'sp-warn'
+       : c === 'chip-ok'   ? 'sp-ok'
+       : 'sp-pend';
+}
+
+/* ── Ajustar día de pago al último día del mes si supera el máximo ── */
+function obCalAjustarDia(dia, anio, mes){
+  const ultimoDia = new Date(anio, mes, 0).getDate();
+  return Math.min(dia, ultimoDia);
+}
+
+/* ── Obtener pagos del día desde OB_DATA ── */
+function obCalPagosDel(anio, mes, dia){
+  const fecha = `${anio}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+
+  // Filtro de sede
+  let pool = OB_CAL_SEDE
+    ? OB_DATA.filter(p => p.sede === OB_CAL_SEDE)
+    : OB_DATA;
+
+  return pool.filter(p => {
+    if(!p.fecha_limite) return false;
+    // Coincidencia directa con fecha_limite
+    if(p.fecha_limite === fecha) return true;
+    // Para obligaciones semanales: expandir ocurrencias del mes
+    if(p.frecuencia === 'semanal' && p.dia_semana !== null && p.dia_semana !== undefined){
+      return obCalEsOcurrenciaSemanal(p, anio, mes, dia);
+    }
+    return false;
+  });
+}
+
+/* ── Verificar si un día es ocurrencia semanal de una obligación ── */
+function obCalEsOcurrenciaSemanal(pago, anio, mes, dia){
+  // dia_semana: 0=lunes … 6=domingo (según el esquema DB)
+  const fecha = new Date(anio, mes - 1, dia);
+  // getDay(): 0=domingo, 1=lunes … 6=sábado
+  // Convertir: lunes=0 → getDay()=1 → dia_semana 0
+  const diaSemanaJS = (fecha.getDay() + 6) % 7; // normalizar a lunes=0
+  return diaSemanaJS === pago.dia_semana;
+}
+
+/* ── Render principal del calendario ── */
+function obRenderCalendario(){
+  const grid    = document.getElementById('calDaysGrid');
+  const lblEl   = document.getElementById('calMesLbl');
+  const totalEl = document.getElementById('calTotalMes');
+  if(!grid || !lblEl) return;
+
+  lblEl.textContent = `${OB_CAL_MESES[OB_CAL_MES - 1]} ${OB_CAL_ANIO}`;
+
+  // Primer y último día del mes
+  const primerDia  = new Date(OB_CAL_ANIO, OB_CAL_MES - 1, 1);
+  const ultimoDia  = new Date(OB_CAL_ANIO, OB_CAL_MES, 0).getDate();
+  // Día de la semana del 1° (0=dom … 6=sab) → convertir a lunes=0
+  let startDow = (primerDia.getDay() + 6) % 7;
+
+  const hoyStr = obHoy();
+  const celdas = [];
+
+  // Días del mes anterior (padding)
+  const mesPrev  = OB_CAL_MES === 1 ? 12 : OB_CAL_MES - 1;
+  const anioPrev = OB_CAL_MES === 1 ? OB_CAL_ANIO - 1 : OB_CAL_ANIO;
+  const ultimoPrev = new Date(anioPrev, mesPrev, 0).getDate();
+  for(let i = startDow - 1; i >= 0; i--){
+    celdas.push({dia: ultimoPrev - i, mes: mesPrev, anio: anioPrev, otroMes: true});
+  }
+
+  // Días del mes actual
+  for(let d = 1; d <= ultimoDia; d++){
+    celdas.push({dia: d, mes: OB_CAL_MES, anio: OB_CAL_ANIO, otroMes: false});
+  }
+
+  // Días del mes siguiente (hasta completar filas de 7)
+  let mesSig  = OB_CAL_MES === 12 ? 1 : OB_CAL_MES + 1;
+  let anioSig = OB_CAL_MES === 12 ? OB_CAL_ANIO + 1 : OB_CAL_ANIO;
+  let fill = celdas.length % 7 === 0 ? 0 : 7 - (celdas.length % 7);
+  for(let d = 1; d <= fill; d++){
+    celdas.push({dia: d, mes: mesSig, anio: anioSig, otroMes: true});
+  }
+
+  // Total de obligaciones visibles del mes
+  let totalMes = 0;
+
+  // Generar HTML de cada celda
+  grid.innerHTML = celdas.map(({dia, mes, anio, otroMes}) => {
+    const fechaStr = `${anio}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+    const esHoy = fechaStr === hoyStr && !otroMes;
+    const pagos = otroMes ? [] : obCalPagosDel(anio, mes, dia);
+    if(!otroMes) totalMes += pagos.length;
+
+    // Chips visibles (máx 3, luego "+N más")
+    const MAX_CHIPS = 3;
+    const visibles = pagos.slice(0, MAX_CHIPS);
+    const extras   = pagos.length - MAX_CHIPS;
+
+    // Suma de montos del día
+    const sumaDia = pagos.reduce((s, p) => s + (p.monto_estimado || 0), 0);
+    const hasPagos = pagos.length > 0;
+
+    const clases = [
+      'cal-day',
+      otroMes ? 'other-month' : '',
+      esHoy   ? 'today' : '',
+      hasPagos && !otroMes ? 'has-events' : ''
+    ].filter(Boolean).join(' ');
+
+    const chipsHtml = visibles.map(p => {
+      const chipCls = obCalChipCls(p);
+      const nom = (p.nombre_corto || p.razon_social || '').substring(0, 14);
+      return `<div class="cal-chip ${chipCls}" onclick="event.stopPropagation();obCalAbrirPanel('${fechaStr}')" title="${p.razon_social||''} · ${obFmtCOP(p.monto_estimado)}">
+        <span class="cal-chip-dot"></span>${nom}
+      </div>`;
+    }).join('');
+
+    const masChip = extras > 0
+      ? `<div class="cal-chip chip-more" onclick="event.stopPropagation();obCalAbrirPanel('${fechaStr}')">+${extras} más</div>`
+      : '';
+
+    const totalDia = hasPagos && !otroMes
+      ? `<div class="cal-week-total">${obFmtCOP(sumaDia)}</div>`
+      : '';
+
+    const onclick = hasPagos && !otroMes
+      ? `onclick="obCalAbrirPanel('${fechaStr}')"`
+      : '';
+
+    return `<div class="${clases}" ${onclick} data-fecha="${fechaStr}" aria-label="${dia} de ${OB_CAL_MESES[mes-1]}${hasPagos?' · '+pagos.length+' obligacion(es)':''}">
+      <div class="cal-day-num">${dia}</div>
+      ${chipsHtml}
+      ${masChip}
+      ${totalDia}
+    </div>`;
+  }).join('');
+
+  if(totalEl){
+    const pool = OB_CAL_SEDE ? OB_DATA.filter(p=>p.sede===OB_CAL_SEDE) : OB_DATA;
+    const mesStr = `${OB_CAL_ANIO}-${String(OB_CAL_MES).padStart(2,'0')}`;
+    const delMes = pool.filter(p => p.fecha_limite && p.fecha_limite.startsWith(mesStr));
+    totalEl.textContent = `${delMes.length} obligaciones · ${obFmtCOP(delMes.reduce((s,p)=>s+(p.monto_estimado||0),0))}`;
+  }
+}
+
+/* ── Panel lateral: abrir ── */
+function obCalAbrirPanel(fechaStr){
+  OB_CAL_DIA = fechaStr;
+  const panel  = document.getElementById('calSlidePanel');
+  const fechaEl= document.getElementById('calSpFecha');
+  const countEl= document.getElementById('calSpCount');
+  const body   = document.getElementById('calSpBody');
+  if(!panel || !body) return;
+
+  // Obtener pagos del día
+  const [anio, mes, dia] = fechaStr.split('-').map(Number);
+  const pagos = obCalPagosDel(anio, mes, dia);
+
+  // Cabecera del panel
+  const meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  if(fechaEl) fechaEl.textContent = `${dia} ${meses[mes-1].toUpperCase()} ${anio}`;
+  if(countEl) countEl.textContent = `${pagos.length} obligación(es) con vencimiento`;
+
+  // Items
+  body.innerHTML = pagos.length === 0
+    ? `<div style="padding:20px;text-align:center;font-size:12px;color:var(--w4)">Sin obligaciones este día</div>`
+    : pagos.map(p => {
+        const spCls = obCalSpCls(p);
+        const ev    = obEstadoVisual(p);
+        const nom   = (p.nombre_corto || p.razon_social || '—').substring(0, 30);
+        const canEdit = OB_IS_ADMIN || OB_CAN_EDIT;
+        const isPagada = ['pagada','pagada_mora'].includes(p.estado);
+        const btnPago  = canEdit && !isPagada
+          ? `<button class="cal-sp-btn" onclick="obAbrirModalPago('${p.pago_id}')">
+               <i class="ti ti-credit-card" aria-hidden="true"></i> Registrar pago
+             </button>`
+          : '';
+
+        return `<div class="cal-sp-item ${spCls}">
+          <div class="cal-sp-prov" title="${p.razon_social||''}">${nom}</div>
+          <div class="cal-sp-det">${(p.detalle||'—').substring(0,40)} · ${p.sede||'—'}</div>
+          <div class="cal-sp-row">
+            <span class="badge ${ev.cls}">${ev.txt}</span>
+            <span class="badge badge-gray">${p.categoria_nombre||'—'}</span>
+            <span class="cal-sp-monto">${obFmtCOP(p.monto_estimado)}</span>
+          </div>
+          ${btnPago}
+        </div>`;
+      }).join('');
+
+  // Abrir panel
+  panel.classList.add('open');
+
+  // Resaltar celda seleccionada
+  document.querySelectorAll('.cal-day').forEach(d => d.style.outline = '');
+  const celdaSel = document.querySelector(`.cal-day[data-fecha="${fechaStr}"]`);
+  if(celdaSel) celdaSel.style.outline = '2px solid var(--navy)';
+}
+
+/* ── Panel lateral: cerrar ── */
+function obCalCerrarPanel(){
+  const panel = document.getElementById('calSlidePanel');
+  if(panel) panel.classList.remove('open');
+  document.querySelectorAll('.cal-day').forEach(d => d.style.outline = '');
+  OB_CAL_DIA = null;
+}
+
+/* ── Sincronización con el tab de calendario ── */
+// Override de obShowTab para inicializar el calendario al entrar
+var _obShowTabOrig = obShowTab;
+obShowTab = function(tab){
+  _obShowTabOrig(tab);
+  if(tab === 'calendario'){
+    // Sincronizar mes del calendario con el período activo si existe
+    if(OB_PERIODO && OB_PERIODO.anio_mes){
+      const [a, m] = OB_PERIODO.anio_mes.split('-').map(Number);
+      OB_CAL_ANIO = a;
+      OB_CAL_MES  = m;
+    }
+    obRenderCalendario();
+  }
+};
+
+/* ── Re-render del calendario cuando cambia OB_DATA ── */
+// El refresh() central ya llama a obRenderTabla y otros;
+// extendemos refresh para también actualizar el calendario si está visible
+var _refreshOrig = refresh;
+refresh = async function(){
+  await _refreshOrig();
+  // Si la vista calendario está activa, re-renderizarla con datos frescos
+  const calView = document.getElementById('view-calendario');
+  if(calView && calView.style.display !== 'none'){
+    obRenderCalendario();
+  }
+  // Si la vista historial está activa, re-renderizarla con datos frescos
+  const hisView = document.getElementById('view-historial');
+  if(hisView && hisView.style.display !== 'none'){
+    obHisRender();
+  }
+};
+
+/* ══════════════════════════════════════════════════════════════
+   HISTORIAL — lógica completa
+   Variables de estado: OB_HIS_*
+   Todas las funciones prefijadas obHis*
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Estado del historial ── */
+var OB_HIS_DATA        = [];     // períodos históricos (ob_vista_historial)
+var OB_HIS_PAGOS       = [];     // pagos del período seleccionado
+var OB_HIS_PERIODO_ID  = null;   // UUID del período seleccionado en la tabla
+var OB_HIS_PERIODO_NOM = '';     // nombre legible del período seleccionado
+var OB_HIS_FILTROS     = {search:'', estado:'', sede:'', categoria:''};
+var OB_HIS_SORT        = {col:'fecha_limite', asc:true};
+var OB_HIS_SUBTAB      = 'pagos'; // 'pagos' | 'auditoria'
+
+/* ── Inicializar historial al entrar en la vista ── */
+async function obHisInit(){
+  if(!OB_HIS_DATA || !OB_HIS_DATA.length){
+    const res = await OB.Vistas.historial({limite:24});
+    OB_HIS_DATA = res.ok ? res.data : [];
+  }
+  obHisRender();
+}
+
+/* ── Render principal del historial ── */
+function obHisRender(){
+  obHisRenderKPIs();
+  obHisRenderTablaHistorial();
+  obHisRenderPagos();
+}
+
+/* ── KPIs del historial (últimos N períodos) ── */
+function obHisRenderKPIs(){
+  const cerrados = OB_HIS_DATA.filter(p => p.cerrado);
+  if(!cerrados.length) return;
+
+  const promedioMensual = cerrados.length
+    ? Math.round(cerrados.reduce((s,p) => s + (p.monto_pagado_cop||0), 0) / cerrados.length)
+    : 0;
+  const mejorMes  = cerrados.reduce((a,p) => (!a || (p.compliance_pct||0) > (a.compliance_pct||0)) ? p : a, null);
+  const peorMes   = cerrados.reduce((a,p) => (!a || (p.compliance_pct||0) < (a.compliance_pct||0)) ? p : a, null);
+  const sinMora   = cerrados.filter(p => (p.total_vencidas||0) === 0).length;
+
+  const grid = document.getElementById('hisKpiGrid');
+  if(!grid) return;
+  grid.innerHTML = `
+    <div class="kpi k1 fade">
+      <div class="kpi-lbl">Promedio mensual</div>
+      <div class="kpi-val" style="font-size:22px;color:var(--blue)">${obFmtCOP(promedioMensual)}</div>
+      <div class="kpi-sub">Últimos ${cerrados.length} períodos cerrados</div>
+    </div>
+    <div class="kpi k2 fade" style="animation-delay:.04s">
+      <div class="kpi-lbl">Mejor compliance</div>
+      <div class="kpi-val" style="font-size:26px;color:var(--green)">${mejorMes ? (mejorMes.compliance_pct||0)+'%' : '—'}</div>
+      <div class="kpi-sub">${mejorMes ? mejorMes.anio_mes : '—'}</div>
+    </div>
+    <div class="kpi k4 fade" style="animation-delay:.08s">
+      <div class="kpi-lbl">Peor compliance</div>
+      <div class="kpi-val" style="font-size:26px;color:var(--amber)">${peorMes ? (peorMes.compliance_pct||0)+'%' : '—'}</div>
+      <div class="kpi-sub">${peorMes ? peorMes.anio_mes : '—'}</div>
+    </div>
+    <div class="kpi k5 fade" style="animation-delay:.12s">
+      <div class="kpi-lbl">Meses sin mora</div>
+      <div class="kpi-val" style="font-size:26px;color:var(--w3)">${sinMora}/${cerrados.length}</div>
+      <div class="kpi-sub">Períodos sin vencidas</div>
+    </div>`;
+}
+
+/* ── Tabla de períodos históricos ── */
+function obHisRenderTablaHistorial(){
+  const tbody = document.getElementById('hisTablaPeriodos');
+  if(!tbody) return;
+
+  if(!OB_HIS_DATA.length){
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--w4);font-size:12px">
+      Sin períodos registrados
+    </td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = OB_HIS_DATA.map(p => {
+    const compliance = p.compliance_pct || 0;
+    const compCol    = compliance >= 95 ? 'var(--green)' : compliance >= 70 ? 'var(--amber)' : 'var(--danger)';
+    const cerradoBadge = p.cerrado
+      ? `<span class="badge badge-green">Cerrado</span>`
+      : `<span class="badge badge-amber">En curso</span>`;
+    const seleccionado = p.id === OB_HIS_PERIODO_ID;
+
+    return `<tr class="${seleccionado ? 'his-row-sel' : ''}" onclick="obHisSelPeriodo('${p.id}','${p.anio_mes}')" style="cursor:pointer">
+      <td style="font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--navy);font-size:13px">
+        ${p.anio_mes}${seleccionado ? ' ●' : ''}
+      </td>
+      <td style="text-align:center">${p.total_obligaciones || '—'}</td>
+      <td style="text-align:center;color:var(--green);font-weight:600">${p.total_pagadas || 0}</td>
+      <td style="text-align:center;color:var(--danger)">${p.total_vencidas || 0}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--navy)">${obFmtCOP(p.monto_total_cop)}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--green)">${obFmtCOP(p.monto_pagado_cop)}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;height:4px;background:var(--c4);border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:${compliance}%;background:${compCol};border-radius:2px;transition:width .5s"></div>
+          </div>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:${compCol};min-width:32px">${compliance}%</span>
+        </div>
+      </td>
+      <td>${cerradoBadge}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── Seleccionar un período para ver sus pagos ── */
+async function obHisSelPeriodo(periodoId, anioMes){
+  OB_HIS_PERIODO_ID  = periodoId;
+  OB_HIS_PERIODO_NOM = anioMes;
+  OB_HIS_FILTROS     = {search:'', estado:'', sede:'', categoria:''};
+  OB_HIS_SUBTAB      = 'pagos';
+
+  // Limpiar inputs de filtros
+  ['hisFiltSearch','hisFiltEstado','hisFiltSede','hisFiltCat'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+
+  // Actualizar título del panel de detalle
+  const titEl = document.getElementById('hisPagosTit');
+  if(titEl) titEl.textContent = `Pagos del período ${anioMes}`;
+
+  const subEl = document.getElementById('hisPagosSub');
+  if(subEl) subEl.textContent = 'Cargando…';
+
+  // Mostrar panel de detalle
+  const panel = document.getElementById('hisPagosPanel');
+  if(panel) panel.style.display = 'flex';
+
+  obHisRenderTablaHistorial(); // re-render para marcar la fila seleccionada
+
+  // Cargar pagos del período
+  toast('Cargando pagos de '+anioMes+'…','info');
+  const res = await OB.Pagos.listarPorPeriodo(periodoId);
+  OB_HIS_PAGOS = res.ok ? res.data : [];
+
+  if(subEl) subEl.textContent = `${OB_HIS_PAGOS.length} registros`;
+  obHisRenderPagos();
+  obHisActualizarSubtabs();
+  toast('✓ '+OB_HIS_PAGOS.length+' pagos cargados','ok');
+}
+
+/* ── Render tabla de pagos del período seleccionado ── */
+function obHisRenderPagos(){
+  const wrap = document.getElementById('hisPagosTableWrap');
+  if(!wrap) return;
+
+  if(!OB_HIS_PERIODO_ID){
+    wrap.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:40px;text-align:center">
+      <i class="ti ti-hand-finger" aria-hidden="true" style="font-size:32px;color:var(--line3)"></i>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--w4)">Selecciona un período</div>
+      <div style="font-size:11px;color:var(--w4)">Haz clic en cualquier fila de la tabla de períodos</div>
+    </div>`;
+    return;
+  }
+
+  // Filtrar
+  let rows = [...OB_HIS_PAGOS];
+  const {search, estado, sede, categoria} = OB_HIS_FILTROS;
+  if(search){
+    const q = search.toLowerCase();
+    rows = rows.filter(p =>
+      (p.nombre_corto||'').toLowerCase().includes(q) ||
+      (p.razon_social||'').toLowerCase().includes(q) ||
+      (p.detalle||'').toLowerCase().includes(q)
+    );
+  }
+  if(estado)    rows = rows.filter(p => p.estado === estado);
+  if(sede)      rows = rows.filter(p => p.sede === sede);
+  if(categoria) rows = rows.filter(p => p.categoria_codigo === categoria);
+
+  // Ordenar
+  rows.sort((a,b) => {
+    let va, vb;
+    if(OB_HIS_SORT.col === 'proveedor'){ va = a.nombre_corto||''; vb = b.nombre_corto||''; }
+    else if(OB_HIS_SORT.col === 'monto'){ va = a.monto_real||a.monto_estimado||0; vb = b.monto_real||b.monto_estimado||0; }
+    else if(OB_HIS_SORT.col === 'estado'){ va = a.estado||''; vb = b.estado||''; }
+    else { va = a.fecha_limite||''; vb = b.fecha_limite||''; }
+    if(va < vb) return OB_HIS_SORT.asc ? -1 : 1;
+    if(va > vb) return OB_HIS_SORT.asc ? 1  : -1;
+    return 0;
+  });
+
+  if(!rows.length){
+    wrap.innerHTML = `<div style="text-align:center;padding:28px;color:var(--w4);font-size:12px">
+      <i class="ti ti-search-off" style="font-size:20px;display:block;margin-bottom:8px;opacity:.4"></i>
+      Sin pagos que coincidan con los filtros
+    </div>`;
+    return;
+  }
+
+  const totalMonto = rows.reduce((s,p) => s + (p.monto_real||p.monto_estimado||0), 0);
+  const totalPagadas = rows.filter(p => ['pagada','pagada_mora'].includes(p.estado)).length;
+
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th class="th-sort" onclick="obHisSort('proveedor')">Proveedor</th>
+          <th>Detalle</th>
+          <th>Categoría</th>
+          <th>Sede</th>
+          <th class="th-sort" onclick="obHisSort('fecha_limite')">Vencimiento</th>
+          <th>F. Pago</th>
+          <th class="th-sort" onclick="obHisSort('monto')">Monto COP</th>
+          <th>Días mora</th>
+          <th class="th-sort" onclick="obHisSort('estado')">Estado</th>
+          <th>Referencia</th>
+          <th title="Soporte">Soporte</th>
+          ${OB_IS_ADMIN || OB_CAN_EDIT ? '<th></th>' : ''}
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(p => {
+          const ev = obEstadoVisual(p);
+          const nom = (p.nombre_corto||p.razon_social||'—').substring(0,22);
+          const det = (p.detalle||'—').substring(0,26);
+          const hasSoporte = !!(p.url_soporte && p.url_soporte.trim());
+          const diasMora = p.dias_mora > 0 ? `<span style="color:var(--danger);font-family:'JetBrains Mono',monospace;font-size:10px">${p.dias_mora}d</span>` : '<span style="color:var(--w4);font-size:10px">—</span>';
+          const montoReal = p.monto_real || p.monto_estimado || 0;
+          const refShort = (p.referencia||'—').substring(0,16);
+
+          const editCol = (OB_IS_ADMIN || OB_CAN_EDIT)
+            ? `<td>
+                ${!['pagada','pagada_mora'].includes(p.estado)
+                  ? `<button class="btn-pago" onclick="obAbrirModalPago('${p.pago_id||p.id}')">Pagar</button>`
+                  : `<button class="btn-ver-soporte" onclick="obAbrirSoporte('${p.pago_id||p.id}')">Soporte</button>`
+                }
+               </td>`
+            : '';
+
+          return `<tr class="${ev.rowCls}">
+            <td style="font-weight:600;color:var(--w1)" title="${p.razon_social||''}">${nom}</td>
+            <td style="color:var(--w3);font-size:11px" title="${p.detalle||''}">${det}</td>
+            <td><span class="badge badge-blue" style="background:${(p.categoria_color||'#6B7280')}22;color:${p.categoria_color||'#6B7280'}">${p.categoria_nombre||'—'}</span></td>
+            <td><span class="badge badge-gray">${p.sede||'—'}</span></td>
+            <td style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--w3)">${obFmtFecha(p.fecha_limite)}</td>
+            <td style="font-family:'JetBrains Mono',monospace;font-size:10px;color:${p.fecha_pago?'var(--green)':'var(--w4)'}">${obFmtFecha(p.fecha_pago)}</td>
+            <td style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;color:var(--navy)">${obFmtCOP(montoReal)}</td>
+            <td style="text-align:center">${diasMora}</td>
+            <td><span class="badge ${ev.cls}">${ev.txt}</span></td>
+            <td style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--w4)" title="${p.referencia||''}">${refShort}</td>
+            <td style="text-align:center">
+              <i class="ti ti-paperclip clip-icon ${hasSoporte?'has-soporte':'no-soporte'}"
+                 onclick="${hasSoporte ? `obHisVerSoporte('${p.pago_id||p.id}')` : `obHisCargarSoporte('${p.pago_id||p.id}')`}"
+                 title="${hasSoporte?'Ver comprobante':'Adjuntar soporte'}"
+                 aria-label="${hasSoporte?'Ver soporte':'Sin soporte'}"></i>
+            </td>
+            ${editCol}
+          </tr>`;
+        }).join('')}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="6">Total · ${rows.length} registros · ${totalPagadas} pagados</td>
+          <td>${obFmtCOP(totalMonto)}</td>
+          <td colspan="${(OB_IS_ADMIN||OB_CAN_EDIT)?5:4}"></td>
+        </tr>
+      </tfoot>
+    </table>`;
+}
+
+/* ── Filtros del historial ── */
+function obHisFiltrar(){
+  OB_HIS_FILTROS.search    = document.getElementById('hisFiltSearch')?.value || '';
+  OB_HIS_FILTROS.estado    = document.getElementById('hisFiltEstado')?.value || '';
+  OB_HIS_FILTROS.sede      = document.getElementById('hisFiltSede')?.value   || '';
+  OB_HIS_FILTROS.categoria = document.getElementById('hisFiltCat')?.value    || '';
+  obHisRenderPagos();
+}
+
+function obHisLimpiarFiltros(){
+  OB_HIS_FILTROS = {search:'', estado:'', sede:'', categoria:''};
+  ['hisFiltSearch','hisFiltEstado','hisFiltSede','hisFiltCat'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  obHisRenderPagos();
+}
+
+function obHisSort(col){
+  if(OB_HIS_SORT.col === col) OB_HIS_SORT.asc = !OB_HIS_SORT.asc;
+  else { OB_HIS_SORT.col = col; OB_HIS_SORT.asc = true; }
+  obHisRenderPagos();
+}
+
+/* ── Sub-tabs del panel de pagos ── */
+function obHisSubTab(tab){
+  OB_HIS_SUBTAB = tab;
+  obHisActualizarSubtabs();
+}
+
+function obHisActualizarSubtabs(){
+  ['pagos','auditoria'].forEach(t => {
+    const btn = document.getElementById('hisSubTab-'+t);
+    const con = document.getElementById('hisSubCon-'+t);
+    if(btn) btn.classList.toggle('his-stab-on', t === OB_HIS_SUBTAB);
+    if(con) con.style.display = t === OB_HIS_SUBTAB ? 'flex' : 'none';
+  });
+  if(OB_HIS_SUBTAB === 'auditoria' && OB_HIS_PERIODO_ID) obHisCargarAuditoria();
+}
+
+/* ── Auditoría del período ── */
+async function obHisCargarAuditoria(){
+  if(!OB_IS_ADMIN){ 
+    toast('Solo administradores pueden ver el log de auditoría','err');
+    return;
+  }
+  const wrap = document.getElementById('hisAuditoriaWrap');
+  if(!wrap) return;
+  wrap.innerHTML = `<div style="text-align:center;padding:20px;color:var(--w4);font-size:11px">Cargando auditoría…</div>`;
+  const res = await OB.Auditoria.listar({pagina:1, porPagina:50});
+  if(!res.ok || !res.data || !res.data.length){
+    wrap.innerHTML = `<div style="text-align:center;padding:20px;color:var(--w4);font-size:11px">Sin registros de auditoría</div>`;
+    return;
+  }
+  wrap.innerHTML = res.data.map(a => {
+    const accion = a.accion || '—';
+    const dot = accion.includes('pago') ? 'var(--green)' : accion.includes('periodo') ? 'var(--amber)' : 'var(--blue)';
+    return `<div class="his-aud-item">
+      <div class="his-aud-dot" style="background:${dot}"></div>
+      <div class="his-aud-body">
+        <div class="his-aud-accion">${accion.replace(/_/g,' ').toUpperCase()}</div>
+        <div class="his-aud-desc">${a.descripcion||'—'}</div>
+        <div class="his-aud-meta">${a.usuario_email||'Sistema'} · ${a.created_at ? new Date(a.created_at).toLocaleString('es-CO') : '—'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ── Ver soporte del historial ── */
+async function obHisVerSoporte(pagoId){
+  await obAbrirSoporte(pagoId); // reutiliza el modal de Fase 3
+}
+
+/* ── Cargar/actualizar soporte desde historial ── */
+function obHisCargarSoporte(pagoId){
+  if(!OB_IS_ADMIN && !OB_CAN_EDIT){
+    toast('Sin permisos para adjuntar soportes','err');
+    return;
+  }
+  // Pre-llenar el modal de pago con el ID para que el usuario pueda actualizar la URL
+  const pago = OB_HIS_PAGOS.find(p => (p.pago_id||p.id) === pagoId);
+  if(!pago){ toast('Pago no encontrado','err'); return; }
+  // Abrir modal soporte de carga (modal dedicado)
+  document.getElementById('hisSoportePagoId').value = pagoId;
+  document.getElementById('hisSoporteProv').textContent = pago.nombre_corto || pago.razon_social || '—';
+  document.getElementById('hisSoporteRef').value = pago.referencia || '';
+  document.getElementById('hisSoporteBanco').value = pago.banco_pagador || '';
+  document.getElementById('hisSoporteUrl').value = pago.url_soporte || '';
+  document.getElementById('hisSoporteNota').value = pago.nota || '';
+  document.getElementById('modalHisSoporte').classList.add('show');
+}
+
+async function obHisGuardarSoporte(){
+  const pagoId = document.getElementById('hisSoportePagoId').value;
+  const ref    = document.getElementById('hisSoporteRef').value.trim();
+  const banco  = document.getElementById('hisSoporteBanco').value.trim();
+  const url    = document.getElementById('hisSoporteUrl').value.trim();
+  const nota   = document.getElementById('hisSoporteNota').value.trim();
+
+  if(!ref){ toast('La referencia es requerida','err'); return; }
+
+  const res = await OB.Soportes.guardar({
+    pago_id: pagoId,
+    referencia: ref,
+    banco_pagador: banco || null,
+    url_soporte: url || null,
+    nota: nota || null
+  });
+
+  if(res.ok){
+    // Actualizar el registro local
+    const idx = OB_HIS_PAGOS.findIndex(p => (p.pago_id||p.id) === pagoId);
+    if(idx >= 0){
+      OB_HIS_PAGOS[idx].referencia    = ref;
+      OB_HIS_PAGOS[idx].banco_pagador = banco || null;
+      OB_HIS_PAGOS[idx].url_soporte   = url || null;
+      OB_HIS_PAGOS[idx].nota          = nota || null;
+    }
+    document.getElementById('modalHisSoporte').classList.remove('show');
+    toast('✓ Soporte guardado correctamente','ok');
+    obHisRenderPagos();
+  } else {
+    toast('Error: '+res.error,'err');
+  }
+}
+
+/* ── Exportar a Excel (SheetJS) ── */
+function obHisExportarExcel(){
+  if(!OB_HIS_PAGOS || !OB_HIS_PAGOS.length){
+    toast('Selecciona un período primero','err');
+    return;
+  }
+
+  toast('Generando Excel…','info');
+
+  // Construir datos del worksheet
+  const cabeceras = [
+    'Período','Proveedor','Detalle','Categoría','Sede','Frecuencia',
+    'Día pago','Fecha límite','Fecha pago','Monto estimado','Monto real',
+    'Días mora','Estado','Referencia','Banco pagador','URL soporte','Nota'
+  ];
+
+  const filas = OB_HIS_PAGOS.map(p => [
+    OB_HIS_PERIODO_NOM,
+    p.razon_social || p.nombre_corto || '',
+    p.detalle || '',
+    p.categoria_nombre || '',
+    p.sede || '',
+    p.frecuencia || '',
+    p.dia_pago || '',
+    p.fecha_limite || '',
+    p.fecha_pago || '',
+    p.monto_estimado || 0,
+    p.monto_real || 0,
+    p.dias_mora || 0,
+    p.estado || '',
+    p.referencia || '',
+    p.banco_pagador || '',
+    p.url_soporte || '',
+    p.nota || ''
+  ]);
+
+  // Hoja de pagos
+  const wsPagos = XLSX.utils.aoa_to_sheet([cabeceras, ...filas]);
+
+  // Ancho de columnas
+  wsPagos['!cols'] = [
+    {wch:10},{wch:28},{wch:30},{wch:18},{wch:12},{wch:12},
+    {wch:8},{wch:14},{wch:14},{wch:16},{wch:14},
+    {wch:10},{wch:14},{wch:20},{wch:22},{wch:40},{wch:30}
+  ];
+
+  // Hoja de resumen del período
+  const per = OB_HIS_DATA.find(p => p.id === OB_HIS_PERIODO_ID);
+  const resumenData = per ? [
+    ['Campo','Valor'],
+    ['Período',per.anio_mes],
+    ['Total obligaciones', per.total_obligaciones || '—'],
+    ['Pagadas',per.total_pagadas || 0],
+    ['Vencidas',per.total_vencidas || 0],
+    ['Mora',per.total_mora || 0],
+    ['Monto total COP', per.monto_total_cop || 0],
+    ['Monto pagado COP', per.monto_pagado_cop || 0],
+    ['Monto pendiente COP', per.monto_pendiente_cop || 0],
+    ['Compliance %', per.compliance_pct || 0],
+    ['Cerrado', per.cerrado ? 'Sí' : 'No'],
+    ['Cerrado por', per.cerrado_por_nombre || '—'],
+    ['Fecha cierre', per.cerrado_en ? new Date(per.cerrado_en).toLocaleDateString('es-CO') : '—'],
+  ] : [['Sin datos del período seleccionado']];
+
+  const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
+  wsResumen['!cols'] = [{wch:22},{wch:30}];
+
+  // Workbook
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsPagos,   'Pagos');
+  XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen período');
+
+  const nombre = `INLOP_Obligaciones_${OB_HIS_PERIODO_NOM}_${new Date().toISOString().split('T')[0]}.xlsx`;
+  XLSX.writeFile(wb, nombre);
+  toast('✓ Excel exportado: '+nombre,'ok');
+}
+
+/* ── Exportar Excel de TODOS los períodos ── */
+function obHisExportarTodo(){
+  if(!OB_HIS_DATA || !OB_HIS_DATA.length){
+    toast('Sin historial para exportar','err');
+    return;
+  }
+  toast('Generando Excel de historial completo…','info');
+
+  const cab = [
+    'Período','Total obligaciones','Pagadas','Vencidas','Mora',
+    'Monto total','Monto pagado','Monto pendiente','Compliance %','Estado'
+  ];
+  const filas = OB_HIS_DATA.map(p => [
+    p.anio_mes||'',
+    p.total_obligaciones||0,
+    p.total_pagadas||0,
+    p.total_vencidas||0,
+    p.total_mora||0,
+    p.monto_total_cop||0,
+    p.monto_pagado_cop||0,
+    p.monto_pendiente_cop||0,
+    p.compliance_pct||0,
+    p.cerrado ? 'Cerrado' : 'En curso'
+  ]);
+
+  const ws = XLSX.utils.aoa_to_sheet([cab,...filas]);
+  ws['!cols'] = [{wch:10},{wch:20},{wch:10},{wch:10},{wch:8},{wch:18},{wch:18},{wch:18},{wch:14},{wch:12}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Historial');
+  const nombre = `INLOP_Historial_Obligaciones_${new Date().toISOString().split('T')[0]}.xlsx`;
+  XLSX.writeFile(wb, nombre);
+  toast('✓ Historial exportado','ok');
+}
+
+/* ── Cierre de mes ── */
+async function obHisCerrarMes(){
+  if(!OB_IS_ADMIN){ toast('Solo el administrador puede cerrar períodos','err'); return; }
+  if(!OB_PERIODO){ toast('Sin período activo para cerrar','err'); return; }
+  if(!confirm(`¿Cerrar el período ${OB_PERIODO.anio_mes}?\nEsta acción es irreversible y congelará los KPIs.`)) return;
+
+  toast('Cerrando período '+OB_PERIODO.anio_mes+'…','info');
+  const res = await OB.Periodos.cerrar(OB_PERIODO.id);
+  if(res.ok){
+    toast('✓ Período cerrado · Compliance: '+res.data.compliance+'%','ok');
+    // Recargar historial completo
+    const resHis = await OB.Vistas.historial({limite:24});
+    OB_HIS_DATA = resHis.ok ? resHis.data : [];
+    // Limpiar período activo
+    OB_PERIODO = null;
+    OB_DATA = [];
+    obHisRender();
+    obRenderKPIs();
+    obUpdateBanner();
+  } else {
+    toast('Error: '+res.error,'err');
+  }
+}
+
+/* ── Integración con obShowTab ── */
+var _obShowTabCal = obShowTab;
+obShowTab = function(tab){
+  _obShowTabCal(tab);
+  if(tab === 'historial') obHisInit();
+};
+
+/* ── Integración con el display de la vista historial ── */
+// La vista historial también usa flex (columna)
+// El override de obShowTab ya maneja display:flex para 'historial'
+
+</script>
+
+<!-- ob-excel-parser.js — Parser de carga masiva de PAGOS_RECURRENTES.xlsx
+     Fase 6A · Debe cargarse DESPUÉS de ob-services.js y ANTES de auth.js
+     Extiende window.OB con: window.OB.obParseExcel(workbook, filename)
+     Llamado por obLeerExcel() vía drag&drop sobre la ventana del módulo.
+     Dependencias ya presentes arriba: supabase.js · ob-services.js · xlsx.full.min.js -->
+<script src="../js/ob-excel-parser.js"></script>
+
+<!-- auth.js protege la ruta: sin sesión → redirect a login -->
+<script src="../js/auth.js"></script>
+<script src="../js/logout.js"></script>
+
+</body>
+</html>
