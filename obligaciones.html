@@ -1735,9 +1735,21 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 
 <!-- ══════════════════════════════════════════════
      SCRIPTS — orden obligatorio
+     Detección automática de entorno:
+       GitHub Pages → inlop-logistic.github.io  → js/
+       cPanel       → inloplogistica.com/app/    → ../js/
 ══════════════════════════════════════════════ -->
-<script src="../js/supabase.js"></script>
-<script src="../js/ob-services.js"></script>
+<script>
+(function(){
+  var isGitHubPages = window.location.hostname.indexOf('github.io') !== -1;
+  window._OB_JS_BASE = isGitHubPages ? 'js/' : '../js/';
+  function s(name){
+    document.write('<script src="' + window._OB_JS_BASE + name + '"><\/script>');
+  }
+  s('supabase.js');
+  s('ob-services.js');
+})();
+</script>
 <script>
 /* ══════════════════════════════════════════════════════════════
    OBLIGACIONES FINANCIERAS · Módulo JS principal
@@ -3558,16 +3570,18 @@ obShowTab = function(tab){
 
 </script>
 
-<!-- ob-excel-parser.js — Parser de carga masiva de PAGOS_RECURRENTES.xlsx
-     Fase 6A · Debe cargarse DESPUÉS de ob-services.js y ANTES de auth.js
-     Extiende window.OB con: window.OB.obParseExcel(workbook, filename)
-     Llamado por obLeerExcel() vía drag&drop sobre la ventana del módulo.
-     Dependencias ya presentes arriba: supabase.js · ob-services.js · xlsx.full.min.js -->
-<script src="../js/ob-excel-parser.js"></script>
-
-<!-- auth.js protege la ruta: sin sesión → redirect a login -->
-<script src="../js/auth.js"></script>
-<script src="../js/logout.js"></script>
+<!-- Scripts finales: ob-excel-parser → auth → logout
+     Ruta resuelta por window._OB_JS_BASE (detectada arriba) -->
+<script>
+(function(){
+  function s(name){
+    document.write('<script src="' + window._OB_JS_BASE + name + '"><\/script>');
+  }
+  s('ob-excel-parser.js');
+  s('auth.js');
+  s('logout.js');
+})();
+</script>
 
 </body>
 </html>
