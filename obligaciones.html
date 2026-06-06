@@ -876,14 +876,13 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 /* ── Layout historial ── */
 .his-layout{
   display:grid;
-  grid-template-columns:320px 1fr;
+  grid-template-columns:220px 1fr;
   gap:0;
   flex:1;
   min-height:0;
-  overflow:hidden;
-  height:100%
+  overflow:hidden
 }
-@media(max-width:900px){.his-layout{grid-template-columns:1fr;grid-template-rows:260px 1fr}}
+@media(max-width:900px){.his-layout{grid-template-columns:1fr}}
 
 /* ── Panel izquierdo: tabla de períodos ── */
 .his-left{
@@ -910,7 +909,7 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 .his-export-all-btn:hover{background:var(--green2)}
 .his-export-all-btn i.ti{font-size:12px}
 
-.his-tabla-wrap{flex:1;overflow-y:auto}
+.his-tabla-wrap{flex:1;overflow-y:auto;overflow-x:hidden}
 .his-tabla-wrap::-webkit-scrollbar{width:5px}
 .his-tabla-wrap::-webkit-scrollbar-track{background:transparent}
 .his-tabla-wrap::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
@@ -934,7 +933,7 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 /* ── Panel derecho: pagos del período ── */
 .his-right{
   display:flex;flex-direction:column;overflow:hidden;
-  background:var(--c0);min-height:0
+  background:var(--c0)
 }
 .his-pagos-panel{
   display:flex;flex-direction:column;flex:1;overflow:hidden
@@ -992,7 +991,7 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 
 /* ── Tabla de pagos del historial ── */
 .his-pagos-table-wrap{
-  flex:1;overflow:auto;padding:10px 16px 14px;min-height:0
+  flex:1;overflow:auto;padding:10px 16px 14px
 }
 .his-pagos-table-wrap::-webkit-scrollbar{width:6px;height:6px}
 .his-pagos-table-wrap::-webkit-scrollbar-track{background:transparent}
@@ -1041,7 +1040,7 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 /* ── KPIs del historial ── */
 #hisKpiGrid{
   display:grid;grid-template-columns:repeat(4,1fr);
-  gap:8px;padding:8px 16px;flex-shrink:0;
+  gap:10px;padding:12px 16px;flex-shrink:0;
   border-bottom:1px solid var(--line)
 }
 @media(max-width:768px){
@@ -1741,11 +1740,6 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
             <thead>
               <tr>
                 <th>Mes</th>
-                <th title="Total obligaciones">Total</th>
-                <th title="Pagadas">✓</th>
-                <th title="Vencidas">✗</th>
-                <th>Monto COP</th>
-                <th>Pagado</th>
                 <th>Compliance</th>
                 <th>Estado</th>
               </tr>
@@ -1816,8 +1810,8 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
             </div>
 
             <!-- Tabla de pagos del período -->
-            <div class="his-pagos-table-wrap">
-              <div id="hisPagosTableWrap">
+            <div class="his-pagos-table-wrap his-pagos-panel">
+              <div id="hisPagosTableWrap" style="min-height:120px">
                 <!-- renderizado por JS -->
               </div>
             </div>
@@ -2810,15 +2804,18 @@ function obIcsVevent(uid,dtstart,dtend,rrule,summary,desc,dtstamp,alarmas){
 }
 
 /* ── Función principal — exportación .ICS anual ── */
-async function obDescargarICS(plataforma){
-  // Cargar catálogo real si no está disponible.
-  // OB_DATA tiene pagos (sin frecuencia/dia_pago). OB_CATALOGO tiene ob_obligaciones completo.
-  if(!OB_CATALOGO||!OB_CATALOGO.length){
-    toast('Cargando obligaciones…','info');
-    var resCat=await OB.Obligaciones.listar({soloActivas:true});
-    OB_CATALOGO=resCat.ok&&resCat.data?resCat.data:[];
+function obDescargarICS(plataforma){
+  var catalogo=OB_CATALOGO&&OB_CATALOGO.length?OB_CATALOGO:[];
+
+  // Fallback: deduplicar OB_DATA por obligacion_id si el catálogo aún no cargó
+  if(!catalogo.length&&OB_DATA&&OB_DATA.length){
+    var seen={};
+    OB_DATA.forEach(function(p){
+      if(p.obligacion_id&&!seen[p.obligacion_id])seen[p.obligacion_id]=p;
+    });
+    catalogo=Object.values(seen);
   }
-  var catalogo=OB_CATALOGO;
+
   if(!catalogo.length){toast('Sin obligaciones para exportar','err');return;}
 
   var hoy     =new Date();
@@ -3537,7 +3534,7 @@ function obHisRenderTablaHistorial(){
   if(!tbody) return;
 
   if(!OB_HIS_DATA.length){
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--w4);font-size:12px">
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;padding:28px;color:var(--w4);font-size:12px">
       Sin períodos registrados
     </td></tr>`;
     return;
@@ -3547,28 +3544,23 @@ function obHisRenderTablaHistorial(){
     const compliance = p.compliance_pct || 0;
     const compCol    = compliance >= 95 ? 'var(--green)' : compliance >= 70 ? 'var(--amber)' : 'var(--danger)';
     const cerradoBadge = p.cerrado
-      ? `<span class="badge badge-green">Cerrado</span>`
-      : `<span class="badge badge-amber">En curso</span>`;
+      ? `<span class="badge badge-green">✓</span>`
+      : `<span class="badge badge-amber">●</span>`;
     const seleccionado = p.id === OB_HIS_PERIODO_ID;
 
     return `<tr class="${seleccionado ? 'his-row-sel' : ''}" onclick="obHisSelPeriodo('${p.id}','${p.anio_mes}')" style="cursor:pointer">
-      <td style="font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--navy);font-size:13px">
+      <td style="font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--navy);font-size:13px;white-space:nowrap">
         ${p.anio_mes}${seleccionado ? ' ●' : ''}
       </td>
-      <td style="text-align:center">${p.total_obligaciones || '—'}</td>
-      <td style="text-align:center;color:var(--green);font-weight:600">${p.total_pagadas || 0}</td>
-      <td style="text-align:center;color:var(--danger)">${p.total_vencidas || 0}</td>
-      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--navy)">${obFmtCOP(p.monto_total_cop)}</td>
-      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--green)">${obFmtCOP(p.monto_pagado_cop)}</td>
       <td>
-        <div style="display:flex;align-items:center;gap:6px">
-          <div style="flex:1;height:4px;background:var(--c4);border-radius:2px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:5px">
+          <div style="flex:1;height:4px;background:var(--c4);border-radius:2px;overflow:hidden;min-width:40px">
             <div style="height:100%;width:${compliance}%;background:${compCol};border-radius:2px;transition:width .5s"></div>
           </div>
-          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:${compCol};min-width:32px">${compliance}%</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:${compCol};min-width:28px;text-align:right">${compliance}%</span>
         </div>
       </td>
-      <td>${cerradoBadge}</td>
+      <td style="text-align:center">${cerradoBadge}</td>
     </tr>`;
   }).join('');
 }
