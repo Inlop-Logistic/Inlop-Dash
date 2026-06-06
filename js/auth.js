@@ -61,6 +61,12 @@
     );
 
     // 6. Emitir evento para que la página sepa que el usuario está listo
+    // IMPORTANTE: guardar el detail antes del dispatch para manejar la race
+    // condition en la que el evento se dispara antes de que DOMContentLoaded
+    // haya registrado el listener (ocurre con token Supabase en caché ~0ms).
+    // Los módulos comprueban window.INLOP._userReadyDetail en DOMContentLoaded.
+    window.INLOP._userReadyDetail = window.INLOP.currentUser;
+
     document.dispatchEvent(new CustomEvent('inlop:userReady', {
       detail: window.INLOP.currentUser
     }));
