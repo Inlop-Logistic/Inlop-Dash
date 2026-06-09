@@ -44,3 +44,6 @@ const _supabaseClient = supabase.createClient(
 window.INLOP = window.INLOP || {};
 window.INLOP.config  = INLOP_CONFIG;
 window.INLOP.sb      = _supabaseClient;
+
+window.SUPABASE_URL = INLOP_CONFIG.supabaseUrl;
+window.SUPABASE_KEY = INLOP_CONFIG.supabaseKey;
