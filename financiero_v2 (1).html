@@ -1,0 +1,3214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Financiero V2 — INLOP</title>
+<meta name="description" content="INLOP BI · Módulo Financiero V2 · Integral Logistics Operations SAS">
+
+<!-- ══ TIPOGRAFÍAS ══ -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@500;600;700&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- ══ ICONOS ══ -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+
+<!-- ══ LIBRERÍAS ══ -->
+<!-- Chart.js 4.4.1 — Fase D/E/F: gráficos financieros -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+<!-- XLSX.js 0.18.5 — Fase C: parser del Excel Maestro -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════════
+   INLOP BI · FINANCIERO V2 · SHELL BASE
+   Fase 8A — Solo estructura, layout y empty states
+   Fases siguientes añadirán: CSS de componentes, JS de servicios, renderers
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ══ BLOQUE 02: DESIGN TOKENS — INLOP_CORE_v2 ══════════════════════════════════ */
+:root{
+  /* Superficies */
+  --c0:#F5F7FA; --c1:#FFFFFF; --c3:#F9FAFC; --c4:#EEF2F8;
+  /* Sidebar */
+  --sb-bg:#0A1735; --sb-bg2:#0F1F45; --sb-width:230px;
+  --sb-line:rgba(255,255,255,.06); --sb-line2:rgba(255,255,255,.10);
+  --sb-txt:rgba(255,255,255,.70); --sb-txt2:rgba(255,255,255,.50); --sb-txt3:rgba(255,255,255,.35);
+  /* Marca */
+  --navy:#012A6B; --navy2:#0A3A8F; --navy3:rgba(1,42,107,.50);
+  --red:#E10613;  --red2:#F02030;  --red3:rgba(225,6,19,.40);
+  /* Líneas */
+  --line:rgba(1,42,107,.08); --line2:rgba(1,42,107,.16); --line3:rgba(1,42,107,.28);
+  /* Texto */
+  --w1:#0A0E27; --w2:#1F2937; --w3:#4B5563; --w4:#6B7280;
+  /* Semáforos */
+  --green:#00875F;  --green3:rgba(0,135,95,.10);
+  --amber:#D97706;  --amber2:#B45309; --amber3:rgba(217,119,6,.10);
+  --danger:#DC2626; --danger3:rgba(220,38,38,.10);
+  --blue:#0284C7;   --blue3:rgba(2,132,199,.10);
+  --seca:#C8973A;   --seca3:rgba(200,151,58,.14);
+  /* Gráficos */
+  --ax:#6B7280; --ax-grid:rgba(1,42,107,.06);
+  /* Z-index */
+  --z-content:1; --z-header:10; --z-sidebar:20; --z-drawer:500;
+  --z-modal:999; --z-drag:9998; --z-toast:9999; --z-brand:9999;
+}
+
+/* ══ RESET ══════════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{height:100%}
+body{
+  height:100%;
+  font-family:'DM Sans',system-ui,sans-serif;
+  font-size:14px;
+  color:var(--w1);
+  background:var(--c0);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ══ BARRA MARCA 2px — Firma visual INLOP. Nunca eliminar ══════════════════════ */
+body::before{
+  content:'';
+  position:fixed;
+  top:0; left:0; right:0;
+  height:2px;
+  z-index:var(--z-brand);
+  background:linear-gradient(90deg,var(--navy) 0%,var(--red) 50%,var(--navy) 100%);
+  pointer-events:none;
+}
+
+/* ══ SCROLLBARS PERSONALIZADOS ══════════════════════════════════════════════════ */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--line3)}
+
+/* ══ BLOQUE 03: LAYOUT DEL SHELL ════════════════════════════════════════════════ */
+#finWrapper{
+  position:fixed;
+  inset:0;
+  padding-top:2px; /* compensa la barra de marca */
+}
+.shell{
+  display:flex;
+  flex-direction:column;
+  height:100%;
+  overflow:hidden;
+}
+/* Grid: sidebar + columna principal */
+.ops-body-row{
+  display:grid;
+  grid-template-columns:var(--sb-width) 1fr;
+  flex:1;
+  min-height:0;
+  overflow:hidden;
+  transition:grid-template-columns .22s ease;
+}
+/* Estado colapsado: sidebar de 60px */
+.ops-body-row.sb-collapsed{
+  grid-template-columns:60px 1fr;
+}
+/* Estado modo presentación: sidebar oculto */
+.ops-body-row.present{
+  grid-template-columns:0px 1fr;
+}
+/* Columna principal: flex vertical */
+.ops-body-col{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  overflow:hidden;
+}
+
+/* ══ BLOQUE 04: SIDEBAR ═════════════════════════════════════════════════════════ */
+.tab-row{
+  background:var(--sb-bg);
+  display:flex;
+  flex-direction:column;
+  overflow-y:auto;
+  overflow-x:hidden;
+  position:relative;
+  z-index:var(--z-sidebar);
+  transition:width .22s ease;
+}
+.tab-row::-webkit-scrollbar{width:3px}
+.tab-row::-webkit-scrollbar-thumb{background:var(--sb-line2)}
+
+/* Brand block */
+.sb-brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:18px 16px;
+  cursor:pointer;
+  flex-shrink:0;
+}
+.sb-brand-mark{
+  width:34px; height:34px;
+  background:rgba(255,255,255,.06);
+  border-radius:8px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+  transition:background .15s;
+}
+.sb-brand-mark:hover{background:rgba(255,255,255,.12)}
+.sb-brand-mark span{
+  font-family:Anton,sans-serif;
+  font-size:14px;
+  color:var(--navy);
+  letter-spacing:.12em;
+}
+.sb-brand-name{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:15px;
+  letter-spacing:.08em;
+  color:rgba(255,255,255,.90);
+  text-transform:uppercase;
+  line-height:1;
+}
+.sb-brand-sub{
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px;
+  color:rgba(255,255,255,.40);
+  letter-spacing:.12em;
+  margin-top:3px;
+}
+
+/* Etiqueta de sección */
+.sb-section-label{
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px;
+  letter-spacing:.22em;
+  color:var(--sb-txt3);
+  text-transform:uppercase;
+  padding:14px 16px 6px;
+  flex-shrink:0;
+}
+.sb-section-label.sb-sep{
+  border-top:1px solid var(--sb-line);
+  margin-top:4px;
+}
+
+/* Ítem de navegación */
+.tb{
+  width:100%;
+  background:transparent;
+  border:none;
+  border-left:3px solid transparent;
+  padding:9px 16px;
+  display:flex;
+  align-items:center;
+  gap:11px;
+  color:var(--sb-txt);
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  cursor:pointer;
+  text-align:left;
+  transition:background .15s, color .15s;
+  position:relative;
+  flex-shrink:0;
+}
+.tb i.ti{font-size:17px;color:var(--sb-txt2);flex-shrink:0;transition:color .15s}
+.tb:hover{background:rgba(255,255,255,.04);color:#fff}
+.tb:hover i.ti{color:rgba(255,255,255,.80)}
+.tb.on{
+  background:rgba(225,6,19,.14);
+  border-left-color:var(--red);
+  color:#fff;
+}
+.tb.on i.ti{color:#FF6B6B}
+
+/* Badge de alerta */
+.tb-badge{
+  margin-left:auto;
+  min-width:18px;
+  height:18px;
+  background:var(--red);
+  color:#fff;
+  font-family:'JetBrains Mono',monospace;
+  font-size:8px;
+  font-weight:700;
+  border-radius:10px;
+  padding:0 5px;
+  display:none; /* Fase H: finAlerts.detectar() los activa */
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+}
+
+/* Footer del sidebar */
+.sb-footer{
+  margin-top:auto;
+  padding:14px 0 0;
+  border-top:1px solid var(--sb-line);
+  flex-shrink:0;
+}
+.sb-version{
+  font-family:'JetBrains Mono',monospace;
+  font-size:8px;
+  color:rgba(255,255,255,.25);
+  letter-spacing:.12em;
+  padding:6px 16px 10px;
+}
+
+/* Sidebar colapsado (60px) */
+.ops-body-row.sb-collapsed .sb-brand{justify-content:center;padding:18px 0}
+.ops-body-row.sb-collapsed .sb-brand-name,
+.ops-body-row.sb-collapsed .sb-brand-sub,
+.ops-body-row.sb-collapsed .sb-section-label,
+.ops-body-row.sb-collapsed .sb-version{display:none}
+.ops-body-row.sb-collapsed .tb{
+  padding:11px 0;
+  justify-content:center;
+  font-size:0;
+  letter-spacing:0;
+  gap:0;
+}
+.ops-body-row.sb-collapsed .tb i.ti{font-size:20px}
+.ops-body-row.sb-collapsed .tb-badge{display:none !important}
+.ops-body-row.sb-collapsed .tb[data-label]::after{
+  content:attr(data-label);
+  position:absolute;
+  left:calc(100% + 10px);
+  top:50%;
+  transform:translateY(-50%);
+  background:var(--sb-bg2);
+  color:#fff;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  padding:5px 12px;
+  border-radius:6px;
+  white-space:nowrap;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .15s;
+  z-index:100;
+  box-shadow:0 4px 12px rgba(0,0,0,.35);
+}
+.ops-body-row.sb-collapsed .tb[data-label]:hover::after{opacity:1}
+
+/* Modo presentación: sidebar oculto */
+.ops-body-row.present .tab-row{display:none}
+
+/* ══ BLOQUE 05: HEADER ══════════════════════════════════════════════════════════ */
+.header{
+  height:54px;
+  min-height:54px;
+  background:#fff;
+  border-bottom:1px solid var(--line2);
+  display:flex;
+  align-items:center;
+  padding:0 22px;
+  gap:12px;
+  flex-shrink:0;
+  position:relative;
+  z-index:var(--z-header);
+}
+
+/* Zona izquierda: ícono módulo + título */
+.hdr-l{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-shrink:0;
+}
+.hdr-l .ti{font-size:20px;color:var(--navy)}
+
+.header-module-title{display:flex;flex-direction:column;justify-content:center}
+.hmt-main{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:18px;
+  letter-spacing:.07em;
+  color:var(--navy);
+  text-transform:uppercase;
+  line-height:1;
+}
+.hmt-sub{
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px;
+  color:var(--w4);
+  letter-spacing:.08em;
+  margin-top:3px;
+  white-space:nowrap;
+}
+
+/* Chip estado fuente de datos */
+#finHdrSrcChip{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:2px 8px;
+  border-radius:4px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:8px;
+  font-weight:500;
+  letter-spacing:.08em;
+  /* Fase B: updateHdrChip() cambia clase: .chip-live .chip-local .chip-empty */
+  background:var(--danger3);
+  color:var(--danger);
+  border:1px solid rgba(220,38,38,.20);
+}
+#finHdrSrcChip.chip-live{background:var(--green3);color:var(--green);border-color:rgba(0,135,95,.20)}
+#finHdrSrcChip.chip-local{background:var(--amber3);color:var(--amber);border-color:rgba(217,119,6,.20)}
+
+/* Reloj */
+#finHeaderClock{
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px;
+  color:var(--w4);
+  letter-spacing:.06em;
+  /* Fase B: startClock() lo actualiza cada segundo */
+}
+
+/* Alert pill — oculto por defecto, Fase D+: finAlerts lo activa */
+#finHdrAlertPill{
+  display:none;
+  align-items:center;
+  gap:6px;
+  padding:4px 12px;
+  background:var(--red);
+  color:#fff;
+  border-radius:20px;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  animation:pill-pulse 1.5s ease-in-out infinite;
+}
+@keyframes pill-pulse{0%,100%{opacity:1}50%{opacity:.75}}
+
+/* Zona derecha: botones de acción */
+.hdr-r{
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-shrink:0;
+}
+
+/* Botones del header */
+.hdr-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:5px 12px;
+  border:1px solid var(--line2);
+  border-radius:6px;
+  background:#fff;
+  color:var(--w3);
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  cursor:pointer;
+  transition:all .15s;
+  white-space:nowrap;
+}
+.hdr-btn i.ti{font-size:14px}
+.hdr-btn:hover{border-color:var(--navy);color:var(--navy)}
+/* Botón primario (Cargar Maestro) */
+.hdr-btn.hdr-btn-primary{
+  background:var(--blue);
+  border-color:var(--blue);
+  color:#fff;
+}
+.hdr-btn.hdr-btn-primary:hover{background:var(--navy2);border-color:var(--navy2)}
+
+/* Controles admin — ocultos por defecto, Fase B: PIN los activa */
+#finAdminControls{display:none;align-items:center;gap:8px}
+
+/* Chip admin activo */
+#finAdminChip{
+  display:none; /* Fase B: activarModoAdmin() lo muestra */
+  align-items:center;
+  gap:5px;
+  padding:4px 10px;
+  background:var(--amber3);
+  border:1px solid var(--amber);
+  border-radius:5px;
+  color:var(--amber2);
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  cursor:pointer;
+  transition:all .15s;
+}
+#finAdminChip:hover{background:var(--amber);color:#fff}
+
+/* Barra navegación modo presentación — oculta por defecto, Fase H */
+#finPresentNav{
+  display:none; /* togglePresent() la construye y muestra */
+  align-items:center;
+  gap:4px;
+  padding:0 16px;
+  background:#fff;
+  border-bottom:1px solid var(--line2);
+  height:38px;
+  flex-shrink:0;
+  overflow-x:auto;
+}
+.present-nav-item{
+  padding:8px 12px;
+  border:none;
+  border-bottom:2px solid transparent;
+  background:transparent;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--w4);
+  cursor:pointer;
+  white-space:nowrap;
+  transition:color .15s;
+  height:100%;
+}
+.present-nav-item.on{color:var(--navy);border-bottom-color:var(--red)}
+.present-nav-item:hover{color:var(--navy)}
+
+/* ══ BLOQUE 06: FILTER BAR ══════════════════════════════════════════════════════ */
+.filter-bar{
+  background:var(--c0);
+  border-bottom:1px solid var(--line);
+  padding:9px 22px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-shrink:0;
+  flex-wrap:wrap;
+  min-height:40px;
+}
+
+/* Label del selector */
+.gflbl{
+  font-family:'JetBrains Mono',monospace;
+  font-size:8px;
+  letter-spacing:.12em;
+  color:var(--w4);
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+
+/* Select estilizado */
+.gfsel{
+  height:28px;
+  padding:3px 8px;
+  border:1px solid var(--line2);
+  border-radius:5px;
+  background:var(--c1);
+  color:var(--w2);
+  font-family:'DM Sans',sans-serif;
+  font-size:12px;
+  cursor:pointer;
+  transition:border-color .15s;
+  outline:none;
+}
+.gfsel:hover,.gfsel:focus{border-color:var(--navy3)}
+
+/* Separador */
+.gfsep{
+  width:1px;
+  height:16px;
+  background:var(--line2);
+  flex-shrink:0;
+}
+
+/* Botón limpiar */
+#finGfReset{
+  display:none; /* Fase C: fApplyGlobal lo muestra cuando hay filtros activos */
+  align-items:center;
+  gap:4px;
+  padding:4px 10px;
+  border:1px solid var(--line2);
+  border-radius:5px;
+  background:transparent;
+  color:var(--w4);
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px;
+  cursor:pointer;
+  transition:all .15s;
+}
+#finGfReset:hover{border-color:var(--red);color:var(--red)}
+
+/* Contador de registros */
+#finGfInfo{
+  margin-left:auto;
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px;
+  color:var(--w4);
+  letter-spacing:.06em;
+  white-space:nowrap;
+}
+
+/* ══ ZONA DE CONTENIDO ══════════════════════════════════════════════════════════ */
+.page{
+  flex:1;
+  padding:22px 24px 32px;
+  background:var(--c0);
+  overflow-y:auto;
+  overflow-x:hidden;
+  position:relative;
+  z-index:var(--z-content);
+}
+</style>
+
+/* ══ BREADCRUMB DE DRILL-DOWN ═══════════════════════════════════════════════════ */
+#finBreadcrumb{
+  display:none; /* Fase D: drill-down lo activa */
+  align-items:center;
+  gap:6px;
+  padding:0 0 12px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px;
+  color:var(--w4);
+  flex-wrap:wrap;
+}
+.bc-item{color:var(--w4)}
+.bc-sep{color:var(--w4)}
+.bc-active{color:var(--navy);font-weight:500}
+.bc-clear{
+  cursor:pointer;
+  color:var(--danger);
+  border:none;
+  background:transparent;
+  font-family:inherit;
+  font-size:inherit;
+  padding:0;
+}
+
+/* ══ EMPTY STATE GLOBAL ═════════════════════════════════════════════════════════ */
+#finEmpty{
+  display:none; /* refresh() lo muestra si no hay datos */
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  min-height:calc(100vh - 200px);
+  padding:48px 24px;
+  text-align:center;
+  gap:14px;
+}
+.fin-empty-ico{
+  font-size:48px;
+  line-height:1;
+  margin-bottom:4px;
+}
+.fin-empty-title{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:22px;
+  letter-spacing:.06em;
+  color:var(--navy);
+  text-transform:uppercase;
+}
+.fin-empty-sub{
+  font-family:'DM Sans',sans-serif;
+  font-size:15px;
+  color:var(--w3);
+  max-width:420px;
+  line-height:1.5;
+}
+.fin-empty-desc{
+  font-family:'DM Sans',sans-serif;
+  font-size:13px;
+  color:var(--w4);
+  max-width:380px;
+  line-height:1.5;
+}
+.fin-empty-cta{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:9px 20px;
+  background:var(--blue);
+  color:#fff;
+  border:none;
+  border-radius:7px;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  cursor:pointer;
+  transition:background .15s;
+  margin-top:4px;
+}
+.fin-empty-cta:hover{background:var(--navy2)}
+.fin-empty-cta-sec{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 18px;
+  background:transparent;
+  color:var(--w3);
+  border:1px solid var(--line2);
+  border-radius:7px;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  cursor:pointer;
+  transition:all .15s;
+}
+.fin-empty-cta-sec:hover{border-color:var(--navy);color:var(--navy)}
+.fin-empty-note{
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px;
+  color:var(--w4);
+  letter-spacing:.05em;
+  max-width:440px;
+  margin-top:8px;
+  padding-top:12px;
+  border-top:1px solid var(--line);
+}
+
+/* ══ EMPTY STATE POR VISTA ══════════════════════════════════════════════════════ */
+.view-empty{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  min-height:300px;
+  padding:40px 24px;
+  text-align:center;
+  gap:12px;
+}
+.view-empty .fin-empty-ico{font-size:40px}
+.view-empty .fin-empty-title{font-size:18px}
+
+/* ══ PAGE HEADER DE VISTA ═══════════════════════════════════════════════════════ */
+.view-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  margin-bottom:16px;
+  gap:16px;
+  flex-wrap:wrap;
+}
+.view-title{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:22px;
+  letter-spacing:.06em;
+  color:var(--navy);
+  text-transform:uppercase;
+  line-height:1;
+}
+.view-sub{
+  font-family:'DM Sans',sans-serif;
+  font-size:13px;
+  color:var(--w4);
+  margin-top:4px;
+}
+.view-chips{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+/* ══ CHIPS DE LÍNEA DE NEGOCIO ══════════════════════════════════════════════════ */
+.linea-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:4px 12px;
+  border-radius:5px;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+  transition:all .15s;
+  border:1px solid transparent;
+}
+.linea-chip.liquida{
+  background:var(--blue3);
+  color:var(--blue);
+  border-color:rgba(2,132,199,.25);
+}
+.linea-chip.seca{
+  background:var(--seca3);
+  color:var(--seca);
+  border-color:rgba(200,151,58,.30);
+}
+.linea-chip:hover{opacity:.8}
+.linea-chip.active.liquida{background:var(--blue);color:#fff}
+.linea-chip.active.seca{background:var(--seca);color:#fff}
+
+/* ══ ALERTA INLINE (BANNER) ═════════════════════════════════════════════════════ */
+.fin-alert{
+  border-radius:6px;
+  padding:12px 16px;
+  margin-bottom:16px;
+  border-left:3px solid var(--danger);
+  background:var(--danger3);
+  display:none; /* Fase D+: los renderers lo activan si hay críticos */
+}
+.fin-alert.warn{border-left-color:var(--amber);background:var(--amber3)}
+.fin-alert.info{border-left-color:var(--blue);background:var(--blue3)}
+.fin-alert-title{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:13px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--navy);
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:6px;
+}
+.fin-alert-body{
+  font-family:'DM Sans',sans-serif;
+  font-size:12px;
+  color:var(--w3);
+  line-height:1.5;
+}
+.fin-alert-actions{
+  display:flex;
+  gap:8px;
+  margin-top:10px;
+  flex-wrap:wrap;
+}
+.fin-alert-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:5px 12px;
+  border:1px solid var(--line2);
+  border-radius:5px;
+  background:#fff;
+  color:var(--w3);
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+  transition:all .15s;
+}
+.fin-alert-btn:hover{border-color:var(--navy);color:var(--navy)}
+
+/* ══ KPI CARDS ══════════════════════════════════════════════════════════════════ */
+/* Fase D/E/F: los renderers llenan estas cards con datos reales */
+.kpi-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px;
+  margin-bottom:20px;
+}
+.kpi{
+  background:var(--c1);
+  border:1px solid var(--line);
+  border-left:3px solid var(--blue); /* Fase D: --kpi-accent por clase */
+  border-radius:12px;
+  padding:14px 16px;
+  cursor:default;
+  transition:box-shadow .15s;
+}
+.kpi.kpi-link{cursor:pointer}
+.kpi.kpi-link:hover{box-shadow:0 4px 16px rgba(1,42,107,.08)}
+.kpi-lbl{
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px;
+  letter-spacing:.1em;
+  color:var(--w4);
+  text-transform:uppercase;
+  margin-bottom:6px;
+}
+.kpi-val{
+  font-family:Anton,sans-serif;
+  font-size:28px;
+  color:var(--navy);
+  line-height:1;
+  margin-bottom:4px;
+}
+.kpi-bar-wrap{height:3px;background:var(--line2);border-radius:2px;margin-bottom:6px}
+.kpi-bar-fill{height:100%;border-radius:2px;background:var(--blue);width:0%}
+.kpi-sub{
+  font-family:'DM Sans',sans-serif;
+  font-size:11px;
+  color:var(--w4);
+}
+
+/* ══ CHARTS ═════════════════════════════════════════════════════════════════════ */
+.charts-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
+.charts-1{margin-bottom:20px}
+.card{
+  background:var(--c1);
+  border:1px solid var(--line2);
+  border-radius:12px;
+}
+.cp{padding:18px 20px}
+.card-ttl{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:11px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--navy);
+  margin-bottom:14px;
+}
+
+/* ══ SECTION HEADER ═════════════════════════════════════════════════════════════ */
+.sh{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.sh-bar{width:3px;height:14px;border-radius:2px;background:var(--blue);flex-shrink:0}
+.sh-bar.red{background:var(--red)}
+.sh-bar.green{background:var(--green)}
+.sh-bar.amber{background:var(--amber)}
+.sh-txt{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:11px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--navy);
+}
+.sh-line{flex:1;height:1px;background:var(--line)}
+.sh-meta{
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px;
+  color:var(--w4);
+  white-space:nowrap;
+}
+
+/* ══ TABLAS ═════════════════════════════════════════════════════════════════════ */
+.tbl-fixed-wrap{
+  display:flex;
+  flex-direction:column;
+  border-radius:8px;
+  overflow:hidden;
+  border:1px solid var(--line2);
+  margin-bottom:20px;
+}
+.tbl-head-fixed{
+  width:100%;
+  border-collapse:collapse;
+  table-layout:fixed;
+  flex-shrink:0;
+}
+.tbl-head-fixed thead th{
+  background:var(--c4);
+  padding:10px 16px;
+  text-align:left;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--w3);
+  border-bottom:2px solid var(--line2);
+  white-space:nowrap;
+}
+.tbl-head-fixed thead th.tc{text-align:center}
+.tbl-head-fixed thead th.tr{text-align:right}
+.tbl-scroll-body{max-height:320px;overflow-y:auto;overflow-x:hidden}
+.tbl-scroll-body::-webkit-scrollbar{width:4px}
+.tbl-scroll-body::-webkit-scrollbar-thumb{background:var(--line2)}
+.tbl-main,.tbl-foot{width:100%;border-collapse:collapse;table-layout:fixed}
+.tbl-main tbody tr{border-bottom:1px solid var(--line)}
+.tbl-main tbody tr:last-child{border-bottom:none}
+.tbl-main tbody td{
+  padding:9px 16px;
+  font-family:'DM Sans',sans-serif;
+  font-size:12px;
+  color:var(--w2);
+  vertical-align:middle;
+}
+.tbl-main tbody td.tc{text-align:center}
+.tbl-main tbody td.tr{text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px}
+.tbl-main tbody tr:hover{background:rgba(1,42,107,.02)}
+.tbl-foot tbody tr{border-top:2px solid var(--line2);background:var(--c3)}
+.tbl-foot tbody td{
+  padding:9px 16px;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:12px;
+  font-weight:700;
+  color:var(--navy);
+}
+
+/* Semáforos de fila (cartera, saldos, admin) */
+.row-verde  {background:transparent; border-left:2px solid var(--green)}
+.row-azul   {background:rgba(2,132,199,.03); border-left:2px solid var(--blue)}
+.row-ambar  {background:rgba(217,119,6,.04); border-left:3px solid var(--amber)}
+.row-naranja{background:rgba(249,115,22,.05); border-left:3px solid #F97316}
+.row-rojo   {background:rgba(220,38,38,.04); border-left:3px solid var(--danger)}
+.row-negro  {background:rgba(127,29,29,.06); border-left:4px solid #7F1D1D}
+
+/* Badge de estado en tabla */
+.estado-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:2px 8px;
+  border-radius:4px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:8px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.est-verde  {background:var(--green3);color:var(--green)}
+.est-azul   {background:var(--blue3);color:var(--blue)}
+.est-ambar  {background:var(--amber3);color:var(--amber2)}
+.est-rojo   {background:var(--danger3);color:var(--danger)}
+.est-negro  {background:rgba(127,29,29,.10);color:#7F1D1D}
+
+/* ══ SUB-TABS (Administrativos) ═════════════════════════════════════════════════ */
+.fin-tabs{
+  display:flex;
+  gap:0;
+  border-bottom:1px solid var(--line2);
+  margin-bottom:20px;
+}
+.fin-tab-btn{
+  padding:10px 16px;
+  border:none;
+  border-bottom:2px solid transparent;
+  background:transparent;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:var(--w4);
+  cursor:pointer;
+  transition:all .15s;
+  margin-bottom:-1px;
+}
+.fin-tab-btn:hover{color:var(--navy)}
+.fin-tab-btn.on{color:var(--navy);border-bottom-color:var(--red)}
+.fin-tab-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ══ SKELETON LOADING ═══════════════════════════════════════════════════════════ */
+.skeleton-row{
+  display:flex;
+  gap:12px;
+  padding:10px 0;
+  border-bottom:1px solid var(--line);
+}
+.skeleton-cell{
+  flex:1;
+  height:14px;
+  background:rgba(1,42,107,.06);
+  border-radius:4px;
+  animation:shimmer 1.5s ease-in-out infinite;
+  background-size:200% 100%;
+  background-image:linear-gradient(90deg,rgba(1,42,107,.06) 0%,rgba(1,42,107,.11) 50%,rgba(1,42,107,.06) 100%);
+}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.skeleton-kpi{
+  height:88px;
+  background:rgba(1,42,107,.06);
+  border-radius:12px;
+  animation:shimmer 1.5s ease-in-out infinite;
+  background-size:200% 100%;
+  background-image:linear-gradient(90deg,rgba(1,42,107,.06) 0%,rgba(1,42,107,.11) 50%,rgba(1,42,107,.06) 100%);
+}
+@keyframes pulse-kpi{0%,100%{opacity:1}50%{opacity:.5}}
+@media(prefers-reduced-motion:reduce){
+  .skeleton-cell,.skeleton-kpi{animation:none;background:rgba(1,42,107,.06)}
+}
+
+/* ══ BLOQUE 08: FOOTER ══════════════════════════════════════════════════════════ */
+.footer{
+  background:var(--c1);
+  border-top:1px solid var(--line);
+  padding:8px 22px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-shrink:0;
+  min-height:36px;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.footer-l,.footer-r{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:8px;
+  color:var(--w4);
+  letter-spacing:.06em;
+}
+.footer-sep{color:var(--line3)}
+#finFootSrcChip{
+  display:inline-flex;
+  align-items:center;
+  gap:3px;
+}
+#finFootSrcChip.chip-live{color:var(--green)}
+#finFootSrcChip.chip-local{color:var(--amber)}
+
+/* ══ BLOQUE 09: TOAST ═══════════════════════════════════════════════════════════ */
+#finToast{
+  position:fixed;
+  bottom:24px;
+  right:24px;
+  z-index:var(--z-toast);
+  padding:10px 18px;
+  border-radius:8px;
+  font-family:'DM Sans',sans-serif;
+  font-size:13px;
+  font-weight:500;
+  color:#fff;
+  box-shadow:0 8px 24px rgba(0,0,0,.18);
+  transform:translateY(16px);
+  opacity:0;
+  transition:all .3s;
+  pointer-events:none;
+  max-width:360px;
+}
+#finToast.show{transform:translateY(0);opacity:1}
+#finToast.ok   {background:var(--green)}
+#finToast.err  {background:var(--danger)}
+#finToast.info {background:var(--blue)}
+#finToast.warn {background:var(--amber)}
+
+/* ══ MODAL OVERLAY ══════════════════════════════════════════════════════════════ */
+#finModalBg{
+  position:fixed;
+  inset:0;
+  background:rgba(1,42,107,.55);
+  z-index:var(--z-modal);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+}
+#finModalBg.show{display:flex}
+.fin-modal{
+  background:#fff;
+  border-radius:16px;
+  padding:28px;
+  max-width:520px;
+  width:100%;
+  position:relative;
+  max-height:90vh;
+  overflow-y:auto;
+  box-shadow:0 24px 64px rgba(1,42,107,.20);
+}
+.fin-modal-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:20px;
+  padding-bottom:16px;
+  border-bottom:2px solid var(--line2);
+}
+.fin-modal-title{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:16px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--navy);
+}
+.fin-modal-close{
+  width:28px;height:28px;
+  border:none;
+  background:var(--c4);
+  border-radius:6px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:var(--w3);
+  font-size:16px;
+  transition:all .15s;
+}
+.fin-modal-close:hover{background:var(--danger3);color:var(--danger)}
+
+/* Modal carga Excel */
+.fin-drop-zone{
+  border:2px dashed var(--line2);
+  border-radius:12px;
+  padding:40px 20px;
+  text-align:center;
+  cursor:pointer;
+  transition:all .2s;
+  background:var(--c0);
+}
+.fin-drop-zone:hover,.fin-drop-zone.drag-over{
+  border-color:var(--blue);
+  background:var(--blue3);
+}
+.fin-drop-zone-ico{font-size:36px;margin-bottom:10px;color:var(--w4)}
+.fin-drop-zone-txt{
+  font-family:'DM Sans',sans-serif;
+  font-size:14px;
+  color:var(--w3);
+  margin-bottom:4px;
+}
+.fin-drop-zone-sub{
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px;
+  color:var(--w4);
+  letter-spacing:.08em;
+}
+/* Preview del modal */
+#finModalPreview{display:none;margin-top:16px}
+.preview-item{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:7px 0;
+  border-bottom:1px solid var(--line);
+  font-family:'DM Sans',sans-serif;
+  font-size:12px;
+  color:var(--w2);
+}
+.preview-item:last-child{border-bottom:none}
+.preview-ico{color:var(--green);font-size:14px}
+.preview-warn{color:var(--amber);font-size:14px}
+.preview-n{
+  margin-left:auto;
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px;
+  color:var(--w4);
+}
+
+/* Modal PIN */
+#finModalPin .pin-dots{
+  display:flex;
+  justify-content:center;
+  gap:12px;
+  margin:20px 0;
+}
+.pin-dot{
+  width:14px;height:14px;
+  border-radius:50%;
+  border:2px solid var(--line2);
+  background:transparent;
+  transition:all .15s;
+}
+.pin-dot.filled{background:var(--navy);border-color:var(--navy)}
+.pin-dot.error{background:var(--danger);border-color:var(--danger)}
+#finModalPin .pin-keypad{
+  display:grid;
+  grid-template-columns:repeat(3,56px);
+  gap:8px;
+  justify-content:center;
+  margin-bottom:16px;
+}
+.pin-key{
+  height:48px;
+  border:1px solid var(--line2);
+  border-radius:8px;
+  background:#fff;
+  color:var(--navy);
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:18px;
+  font-weight:700;
+  cursor:pointer;
+  transition:all .15s;
+}
+.pin-key:hover{background:var(--c4);border-color:var(--navy3)}
+.pin-key.del{color:var(--w3)}
+.pin-key.clr{color:var(--danger)}
+#finPinError{
+  text-align:center;
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px;
+  color:var(--danger);
+  height:16px;
+  letter-spacing:.06em;
+}
+
+/* ══ DRAG OVERLAY ═══════════════════════════════════════════════════════════════ */
+#finDragOv{
+  position:fixed;
+  inset:0;
+  background:rgba(1,42,107,.80);
+  backdrop-filter:blur(4px);
+  z-index:var(--z-drag);
+  display:none;
+  align-items:center;
+  justify-content:center;
+}
+#finDragOv.show{display:flex}
+.drag-box{
+  border:3px dashed rgba(255,255,255,.5);
+  border-radius:20px;
+  padding:48px 60px;
+  text-align:center;
+  pointer-events:none;
+}
+.drag-box i.ti{font-size:48px;color:rgba(255,255,255,.70);display:block;margin-bottom:16px}
+.drag-box-txt{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:20px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  color:#fff;
+  margin-bottom:6px;
+}
+.drag-box-sub{
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px;
+  color:rgba(255,255,255,.55);
+  letter-spacing:.1em;
+}
+
+/* ══ OVERLAY ACCESO DENEGADO ════════════════════════════════════════════════════ */
+#finOverlayDenied{
+  position:fixed;
+  inset:0;
+  background:rgba(1,42,107,.92);
+  z-index:9000;
+  display:none;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:24px;
+  gap:16px;
+}
+#finOverlayDenied.show{display:flex}
+.denied-ico{font-size:64px;color:rgba(255,255,255,.50)}
+.denied-title{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:24px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:#fff;
+}
+.denied-sub{
+  font-family:'DM Sans',sans-serif;
+  font-size:14px;
+  color:rgba(255,255,255,.65);
+  max-width:360px;
+  line-height:1.5;
+}
+.denied-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 24px;
+  background:#fff;
+  color:var(--navy);
+  border:none;
+  border-radius:8px;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:14px;
+  font-weight:700;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  cursor:pointer;
+  margin-top:8px;
+  transition:all .15s;
+}
+.denied-btn:hover{background:var(--c4)}
+
+/* ══ RESPONSIVE 1200px (tablet) ════════════════════════════════════════════════ */
+@media(max-width:1200px){
+  .ops-body-row:not(.present){grid-template-columns:60px 1fr}
+  .sb-brand-name,.sb-brand-sub,.sb-section-label,.sb-version{display:none}
+  .sb-brand{justify-content:center;padding:14px 0}
+  .tb{padding:11px 0;justify-content:center;font-size:0;letter-spacing:0;gap:0}
+  .tb i.ti{font-size:20px}
+  .tb-badge{display:none !important}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .charts-2{grid-template-columns:1fr}
+  .gflbl{display:none}
+  #finHeaderClock{display:none}
+}
+
+/* ══ RESPONSIVE 768px (móvil) ══════════════════════════════════════════════════ */
+@media(max-width:768px){
+  /* Sidebar como drawer */
+  .ops-body-row{grid-template-columns:1fr !important}
+  .tab-row{
+    position:fixed;
+    left:-100%;
+    top:2px;
+    bottom:0;
+    width:230px !important;
+    z-index:var(--z-drawer);
+    transition:left .25s ease;
+  }
+  .tab-row.mobile-open{left:0}
+  #finMobileOverlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.45);
+    z-index:calc(var(--z-drawer) - 1);
+  }
+  #finMobileOverlay.show{display:block}
+  /* Mostrar todos los textos del sidebar en drawer móvil */
+  .tab-row .sb-brand-name,.tab-row .sb-brand-sub,.tab-row .sb-section-label,
+  .tab-row .sb-version{display:block !important}
+  .tab-row .sb-brand{justify-content:flex-start !important;padding:18px 16px !important}
+  .tab-row .tb{padding:9px 16px !important;justify-content:flex-start !important;font-size:13px !important;letter-spacing:.06em !important;gap:11px !important}
+  .tab-row .tb i.ti{font-size:17px !important}
+  .tab-row .tb-badge{display:inline-flex !important}
+  /* Header móvil simplificado */
+  .hmt-main{font-size:15px}
+  #finHdrSrcChip,#finHeaderClock,.hdr-btn-text{display:none}
+  .hdr-btn{padding:5px 8px}
+  /* KPIs en columna única */
+  .kpi-grid{grid-template-columns:1fr}
+  /* Bottom nav */
+  #finBottomNav{display:flex}
+  /* Ocultar modo presentación en móvil */
+  #finBtnPresent{display:none !important}
+  .page{padding:16px 16px 80px}
+}
+
+/* ══ BOTTOM NAV (solo móvil) ════════════════════════════════════════════════════ */
+#finBottomNav{
+  display:none; /* activo solo en ≤768px */
+  position:fixed;
+  bottom:0;left:0;right:0;
+  background:#fff;
+  border-top:1px solid var(--line2);
+  z-index:200;
+  height:56px;
+  align-items:stretch;
+}
+.bnav-item{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:2px;
+  border:none;
+  background:transparent;
+  color:var(--w4);
+  font-family:'JetBrains Mono',monospace;
+  font-size:8px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  cursor:pointer;
+  border-top:2px solid transparent;
+  transition:all .15s;
+}
+.bnav-item i.ti{font-size:18px}
+.bnav-item.on{color:var(--navy);border-top-color:var(--red)}
+
+/* ══ PRINT ══════════════════════════════════════════════════════════════════════ */
+@media print{
+  .tab-row,.filter-bar,#finToast,#finModalBg,#finAdminControls,
+  #finBottomNav,.fin-alert-actions{display:none !important}
+  .header{box-shadow:none}
+  .page{padding:0;overflow:visible}
+  body::before{display:none}
+}
+
+/* ══ REDUCED MOTION ═════════════════════════════════════════════════════════════ */
+@media(prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;transition-duration:.01ms !important}
+}
+
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════════════════════
+     TOAST — Notificaciones flotantes
+     Fase B+: función toast(msg, tipo) lo actualiza
+     ══════════════════════════════════════════════════════════════════════════════ -->
+<div id="finToast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════════
+     OVERLAY ACCESO DENEGADO
+     Fase B: finAuth.overlayAccesoDenegado() lo activa
+     ══════════════════════════════════════════════════════════════════════════════ -->
+<div id="finOverlayDenied" role="alertdialog" aria-modal="true" aria-labelledby="deniedTitle">
+  <div class="denied-ico"><i class="ti ti-lock" aria-hidden="true"></i></div>
+  <div class="denied-title" id="deniedTitle">Acceso denegado</div>
+  <div class="denied-sub" id="finDeniedMsg">Tu usuario no tiene permisos para este módulo.</div>
+  <!-- Fase B: onclick llama volverPortal() -->
+  <button class="denied-btn" type="button" onclick="typeof volverPortal==='function'&&volverPortal()">
+    <i class="ti ti-arrow-left" aria-hidden="true"></i>Volver al portal
+  </button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════════
+     DRAG & DROP OVERLAY
+     Fase C: eventos dragover/drop del window lo controlan
+     ══════════════════════════════════════════════════════════════════════════════ -->
+<div id="finDragOv" aria-hidden="true">
+  <div class="drag-box">
+    <i class="ti ti-file-spreadsheet" aria-hidden="true"></i>
+    <div class="drag-box-txt">Suelta el Maestro aquí</div>
+    <div class="drag-box-sub">INLOP_Maestro_Financiero_SXX.xlsx</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════════
+     MODAL OVERLAY — Contenedor de todos los modales
+     Fase C: abrirModalMaestro() · Fase B: abrirModalPin()
+     ══════════════════════════════════════════════════════════════════════════════ -->
+<div id="finModalBg" role="dialog" aria-modal="true">
+
+  <!-- MODAL: CARGA EXCEL MAESTRO ──────────────────────────────────────────────── -->
+  <div class="fin-modal" id="finModalMaestro" style="display:none">
+    <div class="fin-modal-header">
+      <div class="fin-modal-title">
+        <i class="ti ti-upload" aria-hidden="true" style="font-size:16px;margin-right:6px"></i>
+        Cargar Maestro Financiero
+      </div>
+      <!-- Fase C: cerrarModalMaestro() -->
+      <button class="fin-modal-close" type="button" id="finModalMaestroCerrar" aria-label="Cerrar modal">
+        <i class="ti ti-x" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <!-- Zona de carga -->
+    <div class="fin-drop-zone" id="finDropZone" role="button" tabindex="0" aria-label="Zona para soltar el archivo Excel">
+      <div class="fin-drop-zone-ico">
+        <i class="ti ti-table-import" aria-hidden="true"></i>
+      </div>
+      <div class="fin-drop-zone-txt">Click para seleccionar o arrastra el archivo aquí</div>
+      <div class="fin-drop-zone-sub">Solo archivos .xlsx · Máximo 15 MB</div>
+      <!-- Fase C: input file oculto -->
+      <input type="file" id="finFileInput" accept=".xlsx" style="display:none" aria-label="Seleccionar archivo Excel">
+    </div>
+
+    <!-- Estado del proceso -->
+    <div id="finModalEstado" style="margin-top:14px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--w4);letter-spacing:.06em;min-height:16px"></div>
+
+    <!-- Preview (oculto hasta que se selecciona archivo) -->
+    <div id="finModalPreview">
+      <!-- Fase C: finParser.procesarMaestro() lo rellena con los conteos -->
+    </div>
+
+    <!-- Acciones -->
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--line)">
+      <button class="hdr-btn" type="button" id="finModalMaestroCancelar">Cancelar</button>
+      <!-- Fase C: finParser.procesarMaestro() lo habilita tras el preview -->
+      <button class="hdr-btn hdr-btn-primary" type="button" id="finBtnProcesar" disabled aria-disabled="true">
+        <i class="ti ti-check" aria-hidden="true"></i>Procesar y guardar
+      </button>
+    </div>
+  </div><!-- /fin-modal maestro -->
+
+  <!-- MODAL: PIN ADMIN ────────────────────────────────────────────────────────── -->
+  <div class="fin-modal" id="finModalPin" style="display:none;max-width:340px">
+    <div class="fin-modal-header">
+      <div class="fin-modal-title">
+        <i class="ti ti-shield-lock" aria-hidden="true" style="font-size:16px;margin-right:6px"></i>
+        Verificación Admin
+      </div>
+      <!-- Fase B: cerrarModalPin() -->
+      <button class="fin-modal-close" type="button" id="finModalPinCerrar" aria-label="Cerrar modal PIN">
+        <i class="ti ti-x" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <p style="font-family:'DM Sans',sans-serif;font-size:13px;color:var(--w3);text-align:center;margin-bottom:4px">
+      Ingresa el PIN del módulo financiero
+    </p>
+
+    <!-- Indicadores de puntos -->
+    <div class="pin-dots" id="finPinDots" aria-label="PIN ingresado: 0 de 4 dígitos">
+      <div class="pin-dot" id="finPinD1"></div>
+      <div class="pin-dot" id="finPinD2"></div>
+      <div class="pin-dot" id="finPinD3"></div>
+      <div class="pin-dot" id="finPinD4"></div>
+    </div>
+
+    <!-- Teclado numérico -->
+    <!-- Fase B: addPinDigit() maneja los clics -->
+    <div class="pin-keypad" id="finPinKeypad">
+      <button class="pin-key" type="button" data-digit="1">1</button>
+      <button class="pin-key" type="button" data-digit="2">2</button>
+      <button class="pin-key" type="button" data-digit="3">3</button>
+      <button class="pin-key" type="button" data-digit="4">4</button>
+      <button class="pin-key" type="button" data-digit="5">5</button>
+      <button class="pin-key" type="button" data-digit="6">6</button>
+      <button class="pin-key" type="button" data-digit="7">7</button>
+      <button class="pin-key" type="button" data-digit="8">8</button>
+      <button class="pin-key" type="button" data-digit="9">9</button>
+      <button class="pin-key clr" type="button" data-digit="X" aria-label="Cancelar">✕</button>
+      <button class="pin-key" type="button" data-digit="0">0</button>
+      <button class="pin-key del" type="button" data-digit="DEL" aria-label="Borrar último dígito">←</button>
+    </div>
+
+    <!-- Mensaje de error -->
+    <div id="finPinError" role="alert" aria-live="polite"></div>
+  </div><!-- /fin-modal pin -->
+
+</div><!-- /finModalBg -->
+
+<!-- OVERLAY MÓVIL (detrás del drawer del sidebar) -->
+<div id="finMobileOverlay" aria-hidden="true"></div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════════
+     MÓDULO WRAPPER — Contenedor raíz del módulo
+     ID: #finWrapper (referencia en 08_Shell_Architecture)
+     ══════════════════════════════════════════════════════════════════════════════ -->
+<div id="finWrapper">
+<div class="shell">
+
+<!-- ══════════════════════════════════════════════════════════════════════════════
+     .ops-body-row — Grid: sidebar + columna principal
+     ID: #finOpsBodyRow
+     Clases: .sb-collapsed (sidebar 60px) · .present (sidebar oculto)
+     ══════════════════════════════════════════════════════════════════════════════ -->
+<div class="ops-body-row" id="finOpsBodyRow">
+
+  <!-- ══════════════════════════════════════════════════════════════════════════
+       SIDEBAR
+       ID: #finSidebar (.tab-row)
+       Fase A: estructura y CSS
+       Fase B: finAuth actualiza sección ADMINISTRACIÓN + badge sbResAlert
+       Fase D+: finAlerts.detectar() actualiza badges
+       ══════════════════════════════════════════════════════════════════════════ -->
+  <nav class="tab-row" id="finSidebar" role="navigation" aria-label="Módulo Financiero V2">
+
+    <!-- BRAND BLOCK: 5 clics = modal PIN (Fase B: handleBrandClick) -->
+    <div class="sb-brand" id="finLogoIn" role="button" tabindex="0" aria-label="INLOP Business Intelligence — 5 clics para modo admin">
+      <div class="sb-brand-mark">
+        <span aria-hidden="true">IN</span>
+      </div>
+      <div>
+        <div class="sb-brand-name">INLOP</div>
+        <div class="sb-brand-sub">Business Intelligence</div>
+      </div>
+    </div>
+
+    <!-- ── SECCIÓN PRINCIPAL ─────────────────────────────────────── -->
+    <div class="sb-section-label" aria-hidden="true">Principal</div>
+
+    <button class="tb on" id="finTabResumen" type="button"
+            data-label="Resumen"
+            aria-current="page"
+            onclick="typeof showView==='function'&&showView('resumen')">
+      <i class="ti ti-layout-dashboard" aria-hidden="true"></i>
+      <span>Resumen Ejecutivo</span>
+      <!-- Fase H: finAlerts actualiza este badge -->
+      <span class="tb-badge" id="finSbResAlert" aria-label="alertas críticas"></span>
+    </button>
+
+    <button class="tb" id="finTabBalance" type="button"
+            data-label="Balance"
+            onclick="typeof showView==='function'&&showView('balance')">
+      <i class="ti ti-chart-bar" aria-hidden="true"></i>
+      <span>Balance &amp; KPIs CFO</span>
+    </button>
+
+    <button class="tb" id="finTabFlujo" type="button"
+            data-label="Flujo Caja"
+            onclick="typeof showView==='function'&&showView('flujo')">
+      <i class="ti ti-waterfall" aria-hidden="true"></i>
+      <span>Flujo de Caja</span>
+    </button>
+
+    <!-- ── SECCIÓN OPERATIVO ──────────────────────────────────────── -->
+    <div class="sb-section-label sb-sep" aria-hidden="true">Operativo</div>
+
+    <button class="tb" id="finTabFacturacion" type="button"
+            data-label="Facturación"
+            onclick="typeof showView==='function'&&showView('facturacion')">
+      <i class="ti ti-file-invoice" aria-hidden="true"></i>
+      <span>Facturación</span>
+    </button>
+
+    <button class="tb" id="finTabCartera" type="button"
+            data-label="Cartera"
+            onclick="typeof showView==='function'&&showView('cartera')">
+      <i class="ti ti-receipt-2" aria-hidden="true"></i>
+      <span>Cartera</span>
+      <!-- Fase H: finAlerts activa cuando hay aging 61+ días -->
+      <span class="tb-badge" id="finSbCartAlert" aria-label="facturas en aging crítico"></span>
+    </button>
+
+    <button class="tb" id="finTabBancos" type="button"
+            data-label="Bancos"
+            onclick="typeof showView==='function'&&showView('bancos')">
+      <i class="ti ti-building-bank" aria-hidden="true"></i>
+      <span>Bancos</span>
+    </button>
+
+    <button class="tb" id="finTabSaldos" type="button"
+            data-label="Saldos"
+            onclick="typeof showView==='function'&&showView('saldos')">
+      <i class="ti ti-cash" aria-hidden="true"></i>
+      <span>Saldos / Pagos</span>
+      <!-- Fase H: finAlerts activa cuando hay manifiestos vencidos -->
+      <span class="tb-badge" id="finSbSaldAlert" aria-label="manifiestos vencidos"></span>
+    </button>
+
+    <button class="tb" id="finTabAdmin" type="button"
+            data-label="Admin."
+            onclick="typeof showView==='function'&&showView('admin')">
+      <i class="ti ti-briefcase" aria-hidden="true"></i>
+      <span>Administrativos</span>
+      <!-- Fase H: finAlerts activa cuando hay compromisos VENCIDO -->
+      <span class="tb-badge" id="finSbAdmAlert" aria-label="compromisos vencidos"></span>
+    </button>
+
+    <!-- ── SECCIÓN ANÁLISIS ───────────────────────────────────────── -->
+    <div class="sb-section-label sb-sep" aria-hidden="true">Análisis</div>
+
+    <button class="tb" id="finTabIa" type="button"
+            data-label="IA"
+            onclick="typeof showView==='function'&&showView('ia')">
+      <i class="ti ti-robot" aria-hidden="true"></i>
+      <span>Análisis IA Gerencial</span>
+    </button>
+
+    <!-- ── SECCIÓN ADMINISTRACIÓN (oculta hasta PIN admin) ───────── -->
+    <!-- Fase B: finAuth.activarModoAdmin() cambia display a block -->
+    <div id="finSbSectionAdmin" style="display:none">
+      <div class="sb-section-label sb-sep" aria-hidden="true">Administración</div>
+      <button class="tb" id="finTabAuditoria" type="button"
+              data-label="Auditoría"
+              onclick="typeof showView==='function'&&showView('auditoria')">
+        <i class="ti ti-shield-check" aria-hidden="true"></i>
+        <span>Auditoría</span>
+      </button>
+    </div>
+
+    <!-- FOOTER DEL SIDEBAR -->
+    <div class="sb-footer">
+      <!-- Fase A: toggleSidebar() -->
+      <button class="tb" id="finSbCollapseBtn" type="button"
+              data-label="Expandir"
+              aria-label="Colapsar sidebar"
+              onclick="typeof toggleSidebar==='function'&&toggleSidebar()">
+        <i class="ti ti-layout-sidebar-left-collapse" id="finSbCollapseIco" aria-hidden="true"></i>
+        <span>Colapsar</span>
+      </button>
+      <div class="sb-version">v2.0-alpha · Financiero</div>
+    </div>
+
+  </nav><!-- /finSidebar -->
+
+  <!-- ══════════════════════════════════════════════════════════════════════════
+       COLUMNA PRINCIPAL
+       ══════════════════════════════════════════════════════════════════════════ -->
+  <div class="ops-body-col">
+
+    <!-- ══ HEADER GLOBAL ═════════════════════════════════════════════════════
+         ID: #finHeader
+         Fase A: estructura base
+         Fase B: finAuth configura botones por rol · updateHdrChip()
+         Fase B: startClock() activa el reloj
+         ════════════════════════════════════════════════════════════════════ -->
+    <header class="header" id="finHeader" role="banner">
+
+      <!-- Zona izquierda -->
+      <div class="hdr-l">
+        <i class="ti ti-chart-pie" aria-hidden="true"></i>
+        <div class="header-module-title">
+          <div class="hmt-main">Financiero V2</div>
+          <!-- Fase C: refresh() actualiza el subtítulo con la semana activa -->
+          <div class="hmt-sub" id="finHdrSub">Módulo financiero · —</div>
+        </div>
+        <!-- Chip estado fuente de datos -->
+        <!-- Fase B: updateHdrChip() cambia clase y texto -->
+        <div id="finHdrSrcChip" title="Estado de sincronización" aria-live="polite">
+          <i class="ti ti-wifi-off" aria-hidden="true" style="font-size:10px"></i>
+          <span id="finHdrSrcTxt">Sin datos</span>
+        </div>
+        <!-- Reloj — Fase B: startClock() lo activa -->
+        <div id="finHeaderClock" aria-label="Hora actual">—</div>
+      </div>
+
+      <!-- Alert pill — Fase D+: finAlerts.detectar() lo muestra/oculta -->
+      <div id="finHdrAlertPill" role="alert" aria-live="polite" aria-label="Alertas críticas">
+        <i class="ti ti-alert-triangle" aria-hidden="true" style="font-size:12px"></i>
+        <span id="finHdrAlertTxt"></span>
+      </div>
+
+      <!-- Zona derecha: controles -->
+      <div class="hdr-r">
+
+        <!-- Botón volver al portal — Fase A: stub · Fase B: volverPortal() real -->
+        <button class="hdr-btn" type="button" id="finBtnPortada"
+                title="Volver al portal INLOP BI"
+                onclick="typeof volverPortal==='function'&&volverPortal()">
+          <i class="ti ti-arrow-left" aria-hidden="true"></i>
+          <span class="hdr-btn-text">Portada</span>
+        </button>
+
+        <!-- Modo presentación — Fase H: togglePresent() -->
+        <button class="hdr-btn" type="button" id="finBtnPresent"
+                title="Activar modo presentación"
+                onclick="typeof togglePresent==='function'&&togglePresent()">
+          <i class="ti ti-maximize" aria-hidden="true"></i>
+          <span class="hdr-btn-text">Presentación</span>
+        </button>
+
+        <!-- Exportar vista — Fase H: finExport.vista() -->
+        <button class="hdr-btn" type="button" id="finBtnExport"
+                title="Exportar vista activa a XLSX"
+                onclick="typeof finExport!=='undefined'&&finExport.vista()">
+          <i class="ti ti-download" aria-hidden="true"></i>
+          <span class="hdr-btn-text">Exportar</span>
+        </button>
+
+        <!-- Sincronizar — Fase B: finDataSync() -->
+        <button class="hdr-btn" type="button" id="finBtnSync"
+                title="Sincronizar datos desde Supabase"
+                onclick="typeof finDataSync==='function'&&finDataSync()">
+          <i class="ti ti-refresh" aria-hidden="true"></i>
+        </button>
+
+        <!-- Controles admin — Fase B: finAuth los activa según rol/PIN -->
+        <div id="finAdminControls">
+          <!-- Cargar Maestro Excel — solo editor/admin -->
+          <button class="hdr-btn hdr-btn-primary" type="button" id="finBtnCargarMaestro"
+                  title="Cargar Maestro Financiero Excel"
+                  onclick="typeof abrirModalMaestro==='function'&&abrirModalMaestro()">
+            <i class="ti ti-upload" aria-hidden="true"></i>
+            <span>Maestro</span>
+          </button>
+          <!-- Chip admin activo — Fase B: click = cerrarSesionAdmin() -->
+          <div id="finAdminChip" role="button" tabindex="0" title="Sesión admin activa. Clic para cerrar."
+               onclick="typeof cerrarSesionAdmin==='function'&&cerrarSesionAdmin()">
+            <i class="ti ti-shield-check" aria-hidden="true" style="font-size:11px"></i>
+            Admin ✓
+          </div>
+        </div>
+
+      </div><!-- /hdr-r -->
+    </header><!-- /finHeader -->
+
+    <!-- Barra de navegación del modo presentación — Fase H: buildPresentNav() -->
+    <div id="finPresentNav" role="navigation" aria-label="Navegación modo presentación"></div>
+
+    <!-- ══ FILTER BAR ═════════════════════════════════════════════════════════
+         ID: #finFilterBar
+         Fase C: fApplyGlobal() · fResetFilters() · finFilter.rebuild()
+         ════════════════════════════════════════════════════════════════════ -->
+    <div class="filter-bar" id="finFilterBar" role="search" aria-label="Filtros globales">
+
+      <!-- Selector línea de negocio (opciones fijas) -->
+      <span class="gflbl" aria-hidden="true">Línea</span>
+      <select class="gfsel" id="finFilGLinea" aria-label="Filtrar por línea de negocio"
+              onchange="typeof fApplyGlobal==='function'&&fApplyGlobal()">
+        <option value="TODOS">Todas las líneas</option>
+        <option value="CARGA LIQUIDA">🟦 Carga Líquida</option>
+        <option value="CARGA SECA">🟧 Carga Seca</option>
+      </select>
+
+      <span class="gfsep" aria-hidden="true"></span>
+
+      <!-- Selector mes (dinámico — Fase C: finFilter.rebuild() lo llena) -->
+      <span class="gflbl" aria-hidden="true">Mes</span>
+      <select class="gfsel" id="finFilGMes" aria-label="Filtrar por mes"
+              onchange="typeof fApplyGlobal==='function'&&fApplyGlobal()">
+        <option value="TODOS">Todos los meses</option>
+        <!-- Fase C: finFilter.rebuild() agrega las opciones reales -->
+      </select>
+
+      <span class="gfsep" aria-hidden="true"></span>
+
+      <!-- Selector semana (dinámico — Fase C: finFilter.rebuild() lo llena) -->
+      <span class="gflbl" aria-hidden="true">Semana</span>
+      <select class="gfsel" id="finFilGSem" aria-label="Filtrar por semana"
+              onchange="typeof fApplyGlobal==='function'&&fApplyGlobal()">
+        <option value="TODOS">Todas las semanas</option>
+        <!-- Fase C: finFilter.rebuild() agrega S01..S23 -->
+      </select>
+
+      <span class="gfsep" aria-hidden="true"></span>
+
+      <!-- Selector cliente (dinámico — Fase C: finFilter.rebuild() lo llena) -->
+      <span class="gflbl" aria-hidden="true">Cliente</span>
+      <select class="gfsel" id="finFilGCli" style="min-width:180px" aria-label="Filtrar por cliente"
+              onchange="typeof fApplyGlobal==='function'&&fApplyGlobal()">
+        <option value="TODOS">Todos los clientes</option>
+        <!-- Fase C: finFilter.rebuild() agrega los 20 clientes -->
+      </select>
+
+      <!-- Botón limpiar filtros -->
+      <button id="finGfReset" type="button" aria-label="Limpiar todos los filtros"
+              onclick="typeof fResetFilters==='function'&&fResetFilters()">
+        <i class="ti ti-x" aria-hidden="true" style="font-size:10px"></i>Limpiar
+      </button>
+
+      <!-- Contador de registros — Fase C: refresh() lo actualiza -->
+      <span id="finGfInfo" aria-live="polite">— registros</span>
+
+    </div><!-- /finFilterBar -->
+
+    <!-- ══ CONTENIDO — ZONA DE VISTAS ══════════════════════════════════════
+         ID: #finContent (.page)
+         Fase A: estructura de vistas y empty states
+         Fases D–G: renderers llenan cada vista con datos reales
+         ════════════════════════════════════════════════════════════════════ -->
+    <main class="page" id="finContent" role="main">
+
+      <!-- BREADCRUMB DE DRILL-DOWN — Fase D+: drill-down lo activa -->
+      <div id="finBreadcrumb" aria-label="Ruta de navegación actual">
+        <!-- Fase D: se rellena cuando hay filtros de drill-down activos -->
+      </div>
+
+      <!-- EMPTY STATE GLOBAL — refresh() lo muestra si FIN_DATA está vacío -->
+      <div id="finEmpty" role="status">
+        <div class="fin-empty-ico">💼</div>
+        <div class="fin-empty-title">Dashboard Financiero INLOP</div>
+        <div class="fin-empty-sub">No hay datos financieros disponibles.</div>
+        <div class="fin-empty-desc">
+          El administrador debe cargar el Maestro Excel para inicializar el módulo financiero.
+        </div>
+        <!-- Fase B: finAuth determina si mostrar u ocultar este botón -->
+        <button class="fin-empty-cta" type="button" id="finEmptyCargaBtn"
+                style="display:none"
+                onclick="typeof abrirModalMaestro==='function'&&abrirModalMaestro()">
+          <i class="ti ti-upload" aria-hidden="true"></i>Cargar Maestro Excel
+        </button>
+        <button class="fin-empty-cta-sec" type="button"
+                onclick="typeof finDataSync==='function'&&finDataSync()">
+          <i class="ti ti-refresh" aria-hidden="true"></i>Sincronizar desde la nube
+        </button>
+        <div class="fin-empty-note">
+          ⓘ Si acabas de iniciar sesión, los datos pueden tardar unos segundos.<br>
+          Si el problema persiste, contacta al administrador del módulo.
+        </div>
+      </div><!-- /finEmpty -->
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           VISTA: RESUMEN EJECUTIVO
+           ID: #finViewResumen
+           Activa por defecto
+           Fase D: renderResumen() la construye con datos reales
+           ══════════════════════════════════════════════════════════════════ -->
+      <section class="fin-view" id="finViewResumen" aria-labelledby="finTitleResumen">
+
+        <!-- Page header -->
+        <div class="view-header">
+          <div>
+            <div class="view-title" id="finTitleResumen">Resumen Ejecutivo</div>
+            <div class="view-sub">Vista gerencial consolidada · Filtros activos en barra superior</div>
+          </div>
+          <!-- Fase D: renderResumen() llena estos chips con valores reales -->
+          <div class="view-chips" id="finResumenChips">
+            <div class="linea-chip liquida" id="finChipLiquida"
+                 title="Filtrar por Carga Líquida">
+              🟦 Líquida <span id="finChipLiquidaVal">—</span>
+            </div>
+            <div class="linea-chip seca" id="finChipSeca"
+                 title="Filtrar por Carga Seca">
+              🟧 Seca <span id="finChipSecaVal">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alert banner global — Fase D: finAlerts lo activa si hay críticos -->
+        <div class="fin-alert" id="finResumenAlertBanner">
+          <div class="fin-alert-title">
+            <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+            <span id="finResumenAlertTxt">situaciones requieren atención</span>
+          </div>
+          <div class="fin-alert-actions" id="finResumenAlertChips">
+            <!-- Fase D: renderResumen() genera los chips clickeables por tipo -->
+          </div>
+        </div>
+
+        <!-- KPI Row 1 (4 tarjetas) — Fase D: renderResumen() las llena -->
+        <div class="kpi-grid" id="finResumenKpis1">
+          <!-- Fase D: renderResumen() construye los 4 KPIs reales aquí -->
+          <!-- Skeleton placeholder hasta que haya datos -->
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+        </div>
+
+        <!-- KPI Row 2 (4 tarjetas) — Fase D: renderResumen() las llena -->
+        <div class="kpi-grid" id="finResumenKpis2">
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+        </div>
+
+        <!-- Charts Row — Fase D: renderResumen() crea las instancias Chart.js -->
+        <div class="charts-2" id="finResumenCharts">
+          <div class="card cp">
+            <div class="card-ttl">Cartera vs Recaudado</div>
+            <!-- Fase D: dC('finChartRecaudo') → new Chart() -->
+            <canvas id="finChartRecaudo" height="200" aria-label="Gráfico cartera vs recaudado"></canvas>
+          </div>
+          <div class="card cp">
+            <div class="card-ttl">Distribución por Línea</div>
+            <!-- Fase D: dC('finChartLinea') → new Chart() -->
+            <canvas id="finChartLinea" height="200" aria-label="Gráfico distribución por línea de negocio"></canvas>
+          </div>
+        </div>
+
+        <!-- Top Clientes — Fase D: renderResumen() construye las barras -->
+        <div class="card cp" id="finResumenTopClientes">
+          <div class="card-ttl">Participación de facturación · Top clientes</div>
+          <div id="finResumenClientesContent">
+            <!-- Fase D: renderResumen() genera barras horizontales por cliente -->
+            <div class="view-empty" style="min-height:160px">
+              <div class="fin-empty-ico" style="font-size:28px">👥</div>
+              <div class="fin-empty-desc">Los datos de clientes aparecerán aquí tras cargar el Maestro.</div>
+            </div>
+          </div>
+        </div>
+
+      </section><!-- /finViewResumen -->
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           VISTA: BALANCE & KPIs CFO
+           ID: #finViewBalance
+           Fase F: renderBalance() la construye
+           ══════════════════════════════════════════════════════════════════ -->
+      <section class="fin-view" id="finViewBalance" style="display:none" aria-labelledby="finTitleBalance">
+
+        <div class="view-header">
+          <div>
+            <div class="view-title" id="finTitleBalance">Balance &amp; KPIs CFO</div>
+            <div class="view-sub">Posición financiera estructurada · Fuente: 07_FLUJO_CAJA</div>
+          </div>
+          <div id="finBalanceSemLabel" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--w4)">
+            <!-- Fase F: renderBalance() inyecta "S20 · 14-may-26" -->
+          </div>
+        </div>
+
+        <!-- KPI Row CFO (5 tarjetas) — Fase F -->
+        <div id="finBalanceKpiGrid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px">
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+        </div>
+
+        <!-- Gauges Row — Fase F: renderBalance() construye los 3 indicadores -->
+        <div class="charts-2" style="grid-template-columns:1fr 1fr" id="finBalanceGauges">
+          <div class="card cp">
+            <div class="card-ttl">Presión Financiera</div>
+            <canvas id="finChartPresion" height="160" aria-label="Gauge presión financiera"></canvas>
+            <div id="finPresionLabel" style="text-align:center;margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--w4)"></div>
+          </div>
+          <div class="card cp" id="finBalanceIndicadores">
+            <!-- Fase F: renderBalance() agrega cobertura CxC y ratio bancos/pas -->
+          </div>
+        </div>
+
+        <!-- Tablas desglose — Fase F: renderBalance() las construye -->
+        <div class="charts-2" id="finBalanceTables">
+          <div class="card cp">
+            <div class="card-ttl"><i class="ti ti-arrow-down-circle" aria-hidden="true"></i> Activos</div>
+            <div id="finBalanceActivosBody">
+              <div class="view-empty" style="min-height:120px">
+                <div class="fin-empty-desc">Carga el Maestro para ver la posición de activos.</div>
+              </div>
+            </div>
+          </div>
+          <div class="card cp">
+            <div class="card-ttl"><i class="ti ti-arrow-up-circle" aria-hidden="true"></i> Pasivos</div>
+            <div id="finBalancePasivosBody">
+              <div class="view-empty" style="min-height:120px">
+                <div class="fin-empty-desc">Carga el Maestro para ver la posición de pasivos.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Historial de balance — Fase F: renderBalance() agrega chart si hay historial -->
+        <div class="card cp" id="finBalanceHistorial" style="display:none">
+          <div class="card-ttl">Tendencia histórica</div>
+          <canvas id="finChartBalanceHistorial" height="180" aria-label="Tendencia histórica de balance"></canvas>
+        </div>
+
+      </section><!-- /finViewBalance -->
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           VISTA: FLUJO DE CAJA
+           ID: #finViewFlujo
+           Fase F: renderFlujo() la construye
+           ══════════════════════════════════════════════════════════════════ -->
+      <section class="fin-view" id="finViewFlujo" style="display:none" aria-labelledby="finTitleFlujo">
+
+        <div class="view-header">
+          <div>
+            <div class="view-title" id="finTitleFlujo">Flujo de Caja</div>
+            <div class="view-sub">Posición financiera semanal · Activos vs Pasivos estructurados</div>
+          </div>
+        </div>
+
+        <!-- Barra resumen 3 métricas — Fase F -->
+        <div id="finFlujoResumenBar" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+        </div>
+
+        <!-- Waterfall chart — Fase F: dC('finChartWaterfall') → new Chart() -->
+        <div class="card cp charts-1" id="finFlujoWaterfallCard">
+          <div class="card-ttl">Composición de la posición financiera</div>
+          <canvas id="finChartWaterfall" height="220" aria-label="Gráfico waterfall posición financiera"></canvas>
+        </div>
+
+        <!-- Charts secundarios — Fase F -->
+        <div class="charts-2" id="finFlujoCharts2">
+          <div class="card cp">
+            <div class="card-ttl">Composición de Pasivos</div>
+            <canvas id="finChartPasivos" height="180" aria-label="Gráfico composición de pasivos"></canvas>
+          </div>
+          <div class="card cp">
+            <div class="card-ttl">Cobertura Activos CP / Pasivos CP</div>
+            <div id="finFlujoCobertura" style="padding:10px 0">
+              <div class="view-empty" style="min-height:120px">
+                <div class="fin-empty-desc">Datos disponibles tras cargar el Maestro.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tablas expandibles — Fase F: renderFlujo() las construye -->
+        <div id="finFlujoTables">
+          <!-- Fase F: secciones expandibles de ACTIVOS y PASIVOS -->
+          <div class="view-empty">
+            <div class="fin-empty-ico">💧</div>
+            <div class="fin-empty-title" style="font-size:16px">Sin datos de flujo</div>
+            <div class="fin-empty-sub">Carga un Maestro que incluya la hoja 07_FLUJO_CAJA.</div>
+            <button class="fin-empty-cta-sec" type="button" id="finFlujoEmptyCta"
+                    style="display:none"
+                    onclick="typeof abrirModalMaestro==='function'&&abrirModalMaestro()">
+              <i class="ti ti-upload" aria-hidden="true"></i>Cargar Maestro
+            </button>
+          </div>
+        </div>
+
+      </section><!-- /finViewFlujo -->
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           VISTA: FACTURACIÓN
+           ID: #finViewFacturacion
+           Fase D: renderFacturacion() la construye
+           ══════════════════════════════════════════════════════════════════ -->
+      <section class="fin-view" id="finViewFacturacion" style="display:none" aria-labelledby="finTitleFacturacion">
+
+        <div class="view-header">
+          <div>
+            <div class="view-title" id="finTitleFacturacion">Facturación</div>
+            <div class="view-sub">Acumulado histórico · Click en cliente para ver detalle de facturas</div>
+          </div>
+        </div>
+
+        <!-- KPIs (3 tarjetas) — Fase D -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px" id="finFactKpis">
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+        </div>
+
+        <!-- Barras de participación — Fase D: renderFacturacion() las genera -->
+        <div class="card cp" id="finFactParticipacion" style="margin-bottom:20px">
+          <div class="card-ttl">Participación por cliente · Top clientes</div>
+          <div id="finFactPartBody">
+            <div class="view-empty" style="min-height:120px">
+              <div class="fin-empty-desc">Las barras de participación aparecerán aquí.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chart tendencia semanal — Fase D: dC('finChartFact') -->
+        <div class="card cp charts-1" id="finFactChartCard" style="margin-bottom:20px">
+          <div class="card-ttl">Facturación semanal por línea de negocio</div>
+          <canvas id="finChartFact" height="200" aria-label="Gráfico facturación semanal por línea"></canvas>
+        </div>
+
+        <!-- Tabla principal — Fase D: renderFacturacion() la genera -->
+        <div id="finFactTablaWrap">
+          <!-- Controles de tabla -->
+          <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+            <input type="search" id="finFactBuscar" placeholder="Buscar cliente..."
+                   style="height:28px;padding:4px 10px;border:1px solid var(--line2);border-radius:5px;font-family:'DM Sans',sans-serif;font-size:12px;outline:none;flex:1;min-width:180px"
+                   aria-label="Buscar cliente en facturación">
+            <select class="gfsel" id="finFactOrden" aria-label="Ordenar tabla de facturación">
+              <option value="monto_desc">Mayor monto</option>
+              <option value="monto_asc">Menor monto</option>
+              <option value="az">A → Z</option>
+              <option value="facturas">Más facturas</option>
+            </select>
+            <!-- Fase H: finExport._exportFacturacion() -->
+            <button class="hdr-btn" type="button" id="finFactExportBtn"
+                    onclick="typeof finExport!=='undefined'&&finExport._exportFacturacion()">
+              <i class="ti ti-download" aria-hidden="true"></i>XLSX
+            </button>
+          </div>
+          <!-- Tabla — Fase D: renderFacturacion() la llena -->
+          <div id="finFactTablaBody">
+            <div class="view-empty">
+              <div class="fin-empty-ico">🧾</div>
+              <div class="fin-empty-title" style="font-size:16px">Sin facturas</div>
+              <div class="fin-empty-sub">No se encontraron registros para los filtros actuales.</div>
+              <button class="fin-empty-cta-sec" type="button"
+                      onclick="typeof fResetFilters==='function'&&fResetFilters()">
+                <i class="ti ti-x" aria-hidden="true"></i>Limpiar filtros
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </section><!-- /finViewFacturacion -->
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           VISTA: CARTERA
+           ID: #finViewCartera
+           Fase E: renderCartera() la construye
+           ══════════════════════════════════════════════════════════════════ -->
+      <section class="fin-view" id="finViewCartera" style="display:none" aria-labelledby="finTitleCartera">
+
+        <div class="view-header">
+          <div>
+            <div class="view-title" id="finTitleCartera">Cartera</div>
+            <div class="view-sub">Cuentas por cobrar · Aging · Semáforo de riesgo por cliente</div>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--w4)">
+            Corte: <span id="finCarteraSemLabel">—</span>
+          </div>
+        </div>
+
+        <!-- BANNER CI GARU — Fase E: renderCartera() lo activa si hay facturas en aging 61+ -->
+        <div class="fin-alert" id="finCarteraAlertCiGaru">
+          <div class="fin-alert-title">
+            <i class="ti ti-alert-octagon" aria-hidden="true"></i>
+            ALERTA CRÍTICA — CI GARU
+          </div>
+          <div class="fin-alert-body" id="finCiGaruAlertBody">
+            Facturas sin cobrar · Aging crítico · Riesgo MUY ALTO
+          </div>
+          <div class="fin-alert-actions">
+            <!-- Fase E: renderCartera() genera estas acciones con datos reales -->
+            <button class="fin-alert-btn" type="button" id="finBtnVerCiGaru">
+              <i class="ti ti-filter" aria-hidden="true"></i>Ver solo CI GARU
+            </button>
+            <button class="fin-alert-btn" type="button" id="finBtnCiGaruNeg">
+              <i class="ti ti-refresh" aria-hidden="true"></i>Marcar en negociación
+            </button>
+            <button class="fin-alert-btn" type="button" id="finBtnCiGaruIA">
+              <i class="ti ti-robot" aria-hidden="true"></i>Analizar con IA
+            </button>
+          </div>
+        </div>
+
+        <!-- KPIs (4 tarjetas) — Fase E -->
+        <div class="kpi-grid" id="finCarteraKpis">
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+        </div>
+
+        <!-- Semáforo por cliente — Fase E: renderCartera() lo genera -->
+        <div class="card cp" id="finCarteraSemaforo" style="margin-bottom:20px">
+          <div class="card-ttl">Semáforo de riesgo por cliente</div>
+          <div id="finCarteraSemaforoBody">
+            <div class="view-empty" style="min-height:100px">
+              <div class="fin-empty-desc">El semáforo de clientes aparecerá aquí.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts — Fase E -->
+        <div class="charts-2" id="finCarteraCharts">
+          <div class="card cp">
+            <div class="card-ttl">Distribución Aging Total</div>
+            <canvas id="finChartAging" height="200" aria-label="Gráfico distribución de aging"></canvas>
+          </div>
+          <div class="card cp">
+            <div class="card-ttl">Aging por cliente · Top 8</div>
+            <canvas id="finChartAgingCli" height="200" aria-label="Gráfico aging por cliente"></canvas>
+          </div>
+        </div>
+
+        <!-- Tabla cartera — Fase E: renderCartera() la llena -->
+        <div id="finCarteraTablaWrap">
+          <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+            <select class="gfsel" id="finCarteraEstado" aria-label="Filtrar cartera por estado">
+              <option value="TODOS">Todos los estados</option>
+              <option value="AG_61_90">⚫ Aging 61-90+</option>
+              <option value="AG_31_60">🔴 Aging 31-60</option>
+              <option value="AG_0_30">🟠 Aging 0-30</option>
+              <option value="VIGENTE">🟢 Vigente</option>
+            </select>
+            <input type="search" id="finCarteraBuscar" placeholder="Buscar cliente o factura..."
+                   style="height:28px;padding:4px 10px;border:1px solid var(--line2);border-radius:5px;font-family:'DM Sans',sans-serif;font-size:12px;outline:none;flex:1;min-width:180px"
+                   aria-label="Buscar en cartera">
+            <button class="hdr-btn" type="button" id="finCarteraExportBtn"
+                    onclick="typeof finExport!=='undefined'&&finExport._exportCartera()">
+              <i class="ti ti-download" aria-hidden="true"></i>XLSX
+            </button>
+          </div>
+          <div id="finCarteraTablaBody">
+            <div class="view-empty">
+              <div class="fin-empty-ico" style="font-size:36px">✓</div>
+              <div class="fin-empty-title" style="font-size:16px;color:var(--green)">Sin cartera pendiente</div>
+              <div class="fin-empty-sub">No se encontraron facturas por cobrar para los filtros actuales.</div>
+            </div>
+          </div>
+        </div>
+
+      </section><!-- /finViewCartera -->
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           VISTA: BANCOS
+           ID: #finViewBancos
+           Fase E: renderBancos() la construye
+           ══════════════════════════════════════════════════════════════════ -->
+      <section class="fin-view" id="finViewBancos" style="display:none" aria-labelledby="finTitleBancos">
+
+        <div class="view-header">
+          <div>
+            <div class="view-title" id="finTitleBancos">Bancos</div>
+            <div class="view-sub" id="finBancosSubtitle">Movimientos bancarios · Reconciliación</div>
+          </div>
+        </div>
+
+        <!-- KPIs (4 tarjetas) — Fase E -->
+        <div class="kpi-grid" id="finBancosKpis">
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+        </div>
+
+        <!-- Panel reconciliación — Fase E: renderBancos() lo llena -->
+        <div class="card cp" id="finBancosReconCard" style="margin-bottom:20px">
+          <div class="card-ttl">Recaudo efectivo · Reconciliación</div>
+          <div id="finBancosReconBody">
+            <div class="view-empty" style="min-height:100px">
+              <div class="fin-empty-desc">Panel de reconciliación disponible tras cargar el Maestro.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts — Fase E -->
+        <div class="charts-2" id="finBancosCharts">
+          <div class="card cp">
+            <div class="card-ttl">Entradas vs Salidas por semana</div>
+            <canvas id="finChartBancos" height="200" aria-label="Gráfico entradas vs salidas por semana"></canvas>
+          </div>
+          <div class="card cp">
+            <div class="card-ttl">Distribución de Salidas</div>
+            <canvas id="finChartBancosDonut" height="200" aria-label="Gráfico distribución de salidas bancarias"></canvas>
+          </div>
+        </div>
+
+        <!-- Tabla movimientos — Fase E: renderBancos() la llena -->
+        <div id="finBancosTablaWrap">
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+            <button class="hdr-btn" type="button" id="finBancosFilterTodos" class="active">Todos</button>
+            <button class="hdr-btn" type="button" id="finBancosFilterEntradas">Solo Entradas</button>
+            <button class="hdr-btn" type="button" id="finBancosFilterSalidas">Solo Salidas</button>
+            <input type="search" id="finBancosBuscar" placeholder="Buscar tercero..."
+                   style="height:28px;padding:4px 10px;border:1px solid var(--line2);border-radius:5px;font-family:'DM Sans',sans-serif;font-size:12px;outline:none;flex:1;min-width:160px"
+                   aria-label="Buscar tercero en movimientos bancarios">
+            <button class="hdr-btn" type="button" id="finBancosExportBtn"
+                    onclick="typeof finExport!=='undefined'&&finExport._exportBancos()">
+              <i class="ti ti-download" aria-hidden="true"></i>XLSX
+            </button>
+          </div>
+          <div id="finBancosTablaBody">
+            <div class="view-empty">
+              <div class="fin-empty-ico">🏦</div>
+              <div class="fin-empty-title" style="font-size:16px">Sin movimientos bancarios</div>
+              <div class="fin-empty-sub">Carga un Maestro con la hoja 03_BANCOS para ver los movimientos.</div>
+            </div>
+          </div>
+        </div>
+
+      </section><!-- /finViewBancos -->
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           VISTA: SALDOS / PAGOS
+           ID: #finViewSaldos
+           Fase E: renderSaldos() la construye
+           ══════════════════════════════════════════════════════════════════ -->
+      <section class="fin-view" id="finViewSaldos" style="display:none" aria-labelledby="finTitleSaldos">
+
+        <div class="view-header">
+          <div>
+            <div class="view-title" id="finTitleSaldos">Saldos / Pagos</div>
+            <div class="view-sub">Manifiestos pendientes de liquidación a poseedores</div>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--w4)">
+            Corte: <span id="finSaldosSemLabel">—</span>
+          </div>
+        </div>
+
+        <!-- Banner urgente — Fase E: renderSaldos() lo activa si hay vencidos -->
+        <div class="fin-alert" id="finSaldosAlertBanner">
+          <div class="fin-alert-title">
+            <i class="ti ti-clock-exclamation" aria-hidden="true"></i>
+            <span id="finSaldosAlertTxt">Manifiestos vencidos pendientes</span>
+          </div>
+        </div>
+
+        <!-- KPIs (3 tarjetas + chips) — Fase E -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px" id="finSaldosKpis">
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+          <div class="skeleton-kpi"></div>
+        </div>
+
+        <!-- Chips de estado — Fase E: renderSaldos() los genera con conteos -->
+        <div id="finSaldosChips" style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+          <button class="fin-alert-btn" type="button" id="finSaldosChipVigente">VIGENTE: —</button>
+          <button class="fin-alert-btn" type="button" id="finSaldosChipUrgente">URGENTE: —</button>
+          <button class="fin-alert-btn" type="button" id="finSaldosChipVencido">VENCIDO: —</button>
+        </div>
+
+        <!-- Mapa de rutas — Fase E: renderSaldos() lo genera -->
+        <div class="card cp" id="finSaldosRutasCard" style="margin-bottom:20px">
+          <div class="card-ttl">Top rutas por valor pendiente</div>
+          <div id="finSaldosRutasBody">
+            <div class="view-empty" style="min-height:100px">
+              <div class="fin-empty-desc">Las rutas más críticas aparecerán aquí.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabla manifiestos — Fase E: renderSaldos() la llena -->
+        <div id="finSaldosTablaWrap">
+          <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+            <select class="gfsel" id="finSaldosEstado" aria-label="Filtrar saldos por estado">
+              <option value="TODOS">Todos los estados</option>
+              <option value="VENCIDO">🔴 Vencido</option>
+              <option value="URGENTE">🟠 Urgente</option>
+              <option value="PRONTO">🔵 Pronto</option>
+              <option value="VIGENTE">🟢 Vigente</option>
+            </select>
+            <input type="search" id="finSaldosBuscar" placeholder="Buscar manifiesto o poseedor..."
+                   style="height:28px;padding:4px 10px;border:1px solid var(--line2);border-radius:5px;font-family:'DM Sans',sans-serif;font-size:12px;outline:none;flex:1;min-width:200px"
+                   aria-label="Buscar manifiesto o poseedor">
+            <button class="hdr-btn" type="button" id="finSaldosExportBtn"
+                    onclick="typeof finExport!=='undefined'&&finExport._exportSaldos()">
+              <i class="ti ti-download" aria-hidden="true"></i>XLSX
+            </button>
+          </div>
+          <div id="finSaldosTablaBody">
+            <div class="view-empty">
+              <div class="fin-empty-ico" style="font-size:36px">✓</div>
+              <div class="fin-empty-title" style="font-size:16px;color:var(--green)">Sin manifiestos pendientes</div>
+              <div class="fin-empty-sub">Todos los saldos con poseedores han sido cancelados.</div>
+            </div>
+          </div>
+        </div>
+
+      </section><!-- /finViewSaldos -->
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           VISTA: ADMINISTRATIVOS
+           ID: #finViewAdmin
+           Fase D: renderAdmin() la construye
+           Sub-tab Auditoría: Fase H
+           ══════════════════════════════════════════════════════════════════ -->
+      <section class="fin-view" id="finViewAdmin" style="display:none" aria-labelledby="finTitleAdmin">
+
+        <!-- Sub-tabs -->
+        <div class="fin-tabs" id="finAdminTabs" role="tablist">
+          <button class="fin-tab-btn on" role="tab" aria-selected="true" aria-controls="finAdminTabCompromisos"
+                  id="finAdminTabBtnCompromisos" type="button"
+                  onclick="typeof switchAdminTab==='function'&&switchAdminTab('compromisos')">
+            Compromisos
+          </button>
+          <!-- Fase H: Auditoría — oculto hasta que admin+PIN esté activo -->
+          <button class="fin-tab-btn" role="tab" aria-selected="false" aria-controls="finAdminTabAuditoria"
+                  id="finAdminTabBtnAuditoria" type="button" style="display:none"
+                  onclick="typeof switchAdminTab==='function'&&switchAdminTab('auditoria')">
+            Auditoría
+          </button>
+        </div>
+
+        <!-- TAB: COMPROMISOS ──────────────────────────────────────────────── -->
+        <div id="finAdminTabCompromisos" role="tabpanel" aria-labelledby="finAdminTabBtnCompromisos">
+
+          <div class="view-header">
+            <div>
+              <div class="view-title" id="finTitleAdmin">Administrativos</div>
+              <div class="view-sub">Compromisos de pago · Estado · Vencimientos · Provisiones</div>
+            </div>
+          </div>
+
+          <!-- Banner vencidos — Fase D: renderAdmin() lo activa si hay VENCIDO -->
+          <div class="fin-alert" id="finAdminAlertBanner">
+            <div class="fin-alert-title">
+              <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+              <span id="finAdminAlertTxt">Compromisos vencidos</span>
+            </div>
+            <div class="fin-alert-body" id="finAdminAlertBody"></div>
+          </div>
+
+          <!-- KPIs (4 tarjetas) — Fase D -->
+          <div class="kpi-grid" id="finAdminKpis">
+            <div class="skeleton-kpi"></div>
+            <div class="skeleton-kpi"></div>
+            <div class="skeleton-kpi"></div>
+            <div class="skeleton-kpi"></div>
+          </div>
+
+          <!-- Charts — Fase D -->
+          <div class="charts-2" id="finAdminCharts">
+            <div class="card cp">
+              <div class="card-ttl">Distribución por categoría</div>
+              <canvas id="finChartAdmin" height="200" aria-label="Gráfico distribución gastos administrativos"></canvas>
+            </div>
+            <div class="card cp">
+              <div class="card-ttl">Vencimientos próximos 30 días</div>
+              <canvas id="finChartAdminTimeline" height="200" aria-label="Gráfico timeline de vencimientos"></canvas>
+            </div>
+          </div>
+
+          <!-- Tabla compromisos — Fase D: renderAdmin() la llena -->
+          <div id="finAdminTablaWrap">
+            <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+              <select class="gfsel" id="finAdminEstado" aria-label="Filtrar compromisos por estado">
+                <option value="TODOS">Todos los estados</option>
+                <option value="VENCIDO">🔴 Vencido</option>
+                <option value="HOY_PRONTO">🟡 Hoy / Pronto</option>
+                <option value="VIGENTE">🟢 Vigente</option>
+              </select>
+              <input type="search" id="finAdminBuscar" placeholder="Buscar beneficiario..."
+                     style="height:28px;padding:4px 10px;border:1px solid var(--line2);border-radius:5px;font-family:'DM Sans',sans-serif;font-size:12px;outline:none;flex:1;min-width:180px"
+                     aria-label="Buscar beneficiario en compromisos">
+              <button class="hdr-btn" type="button" id="finAdminExportBtn"
+                      onclick="typeof finExport!=='undefined'&&finExport._exportAdmin()">
+                <i class="ti ti-download" aria-hidden="true"></i>XLSX
+              </button>
+            </div>
+            <div id="finAdminTablaBody">
+              <div class="view-empty">
+                <div class="fin-empty-ico" style="font-size:36px">✓</div>
+                <div class="fin-empty-title" style="font-size:16px;color:var(--green)">Sin compromisos pendientes</div>
+                <div class="fin-empty-sub">No hay gastos administrativos registrados para los filtros actuales.</div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /tab compromisos -->
+
+        <!-- TAB: AUDITORÍA ────────────────────────────────────────────────── -->
+        <!-- Fase H: renderAuditoria() la construye · Solo visible admin+PIN -->
+        <div id="finAdminTabAuditoria" role="tabpanel" aria-labelledby="finAdminTabBtnAuditoria" style="display:none">
+
+          <div class="view-header">
+            <div>
+              <div class="view-title">Log de Auditoría</div>
+              <div class="view-sub">Acciones críticas del módulo · Solo administradores · Últimos 30 días</div>
+            </div>
+            <button class="hdr-btn" type="button" id="finAuditExportBtn">
+              <i class="ti ti-download" aria-hidden="true"></i>Exportar log
+            </button>
+          </div>
+
+          <!-- Chips por categoría — Fase H: renderAuditoria() los genera con conteos -->
+          <div id="finAuditChips" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+            <button class="fin-alert-btn" type="button" id="finAuditChipA">A · Acceso: —</button>
+            <button class="fin-alert-btn" type="button" id="finAuditChipB">B · Datos: —</button>
+            <button class="fin-alert-btn" type="button" id="finAuditChipC">C · IA: —</button>
+            <button class="fin-alert-btn" type="button" id="finAuditChipD">D · Nav: —</button>
+          </div>
+
+          <!-- Filtros — Fase H -->
+          <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+            <select class="gfsel" id="finAuditFiltCat" aria-label="Filtrar auditoría por categoría">
+              <option value="TODOS">Todas las categorías</option>
+              <option value="A">A — Acceso</option>
+              <option value="B">B — Datos</option>
+              <option value="C">C — IA</option>
+              <option value="D">D — Navegación</option>
+            </select>
+            <select class="gfsel" id="finAuditFiltUser" aria-label="Filtrar auditoría por usuario">
+              <option value="TODOS">Todos los usuarios</option>
+            </select>
+          </div>
+
+          <!-- Tabla auditoría — Fase H: renderAuditoria() la llena -->
+          <div id="finAuditTablaBody">
+            <div class="view-empty">
+              <div class="fin-empty-ico">📋</div>
+              <div class="fin-empty-title" style="font-size:16px">Sin eventos de auditoría</div>
+              <div class="fin-empty-sub">Las acciones críticas aparecerán aquí automáticamente.</div>
+            </div>
+          </div>
+
+        </div><!-- /tab auditoria -->
+
+      </section><!-- /finViewAdmin -->
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           VISTA: ANÁLISIS IA GERENCIAL
+           ID: #finViewIa
+           Fase G: renderIA() la construye · finAI gestiona la API
+           ══════════════════════════════════════════════════════════════════ -->
+      <section class="fin-view" id="finViewIa" style="display:none" aria-labelledby="finTitleIa">
+
+        <div class="view-header">
+          <div>
+            <div class="view-title" id="finTitleIa">Análisis IA Gerencial</div>
+            <div class="view-sub">
+              Diagnóstico financiero automático · On-demand ·
+              <span style="font-family:'JetBrains Mono',monospace;font-size:9px">🤖 Claude Sonnet 4</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel de contexto — Fase G: renderIA() lo actualiza con datos actuales -->
+        <div class="card cp" id="finIaContextPanel" style="margin-bottom:20px">
+          <div class="card-ttl">
+            <i class="ti ti-database" aria-hidden="true" style="font-size:13px;margin-right:4px"></i>
+            Datos que se incluirán en el análisis
+          </div>
+          <div id="finIaContextBody" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--w4);line-height:1.8;letter-spacing:.04em">
+            <!-- Fase G: renderIA() inyecta el contexto financiero actual -->
+            Sin datos disponibles. Carga el Maestro Excel para generar el análisis.
+          </div>
+
+          <!-- Botón generar análisis — Fase G: finAI.analyze() -->
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <button class="fin-empty-cta" type="button" id="finBtnGenAnalysis"
+                    onclick="typeof finAI!=='undefined'&&finAI.analyze()">
+              <i class="ti ti-robot" aria-hidden="true"></i>Generar análisis gerencial
+            </button>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--w4)">
+              Última generación: <span id="finIaLastGenLabel">—</span>
+            </div>
+          </div>
+
+          <!-- Mensaje si IA no disponible (CORS) — Fase G: finAI.checkDisponibilidad() -->
+          <div id="finIaNoDisponible" style="display:none;margin-top:12px;padding:10px 14px;background:var(--amber3);border-radius:6px;border-left:3px solid var(--amber)">
+            <div style="font-family:'DM Sans',sans-serif;font-size:12px;color:var(--amber2)">
+              ⚠ El análisis IA no está disponible en este entorno.
+              api.anthropic.com no es accesible desde aquí.
+            </div>
+          </div>
+        </div>
+
+        <!-- Grid 2x2 análisis — Fase G: finAI.analyze() lo rellena -->
+        <div class="charts-2" id="finIaGrid" style="margin-bottom:20px">
+          <!-- Card 1: Diagnóstico -->
+          <div class="card cp" id="finIaCard1">
+            <div class="card-ttl">
+              <i class="ti ti-target" aria-hidden="true" style="font-size:12px;margin-right:4px"></i>
+              🎯 Diagnóstico ejecutivo
+            </div>
+            <div id="finIaCard1Body" class="view-empty" style="min-height:120px">
+              <div class="fin-empty-desc">Genera el análisis para ver el diagnóstico.</div>
+            </div>
+          </div>
+          <!-- Card 2: Riesgo crítico -->
+          <div class="card cp" id="finIaCard2">
+            <div class="card-ttl">
+              <i class="ti ti-alert-hexagon" aria-hidden="true" style="font-size:12px;margin-right:4px"></i>
+              ⚠ Riesgo financiero crítico
+            </div>
+            <div id="finIaCard2Body" class="view-empty" style="min-height:120px">
+              <div class="fin-empty-desc">Genera el análisis para ver los riesgos.</div>
+            </div>
+          </div>
+          <!-- Card 3: Oportunidad -->
+          <div class="card cp" id="finIaCard3">
+            <div class="card-ttl">
+              <i class="ti ti-bulb" aria-hidden="true" style="font-size:12px;margin-right:4px"></i>
+              💡 Oportunidad de acción
+            </div>
+            <div id="finIaCard3Body" class="view-empty" style="min-height:120px">
+              <div class="fin-empty-desc">Genera el análisis para ver oportunidades.</div>
+            </div>
+          </div>
+          <!-- Card 4: Decisión estratégica -->
+          <div class="card cp" id="finIaCard4">
+            <div class="card-ttl">
+              <i class="ti ti-chess-knight" aria-hidden="true" style="font-size:12px;margin-right:4px"></i>
+              ✦ Decisión estratégica
+            </div>
+            <div id="finIaCard4Body" class="view-empty" style="min-height:120px">
+              <div class="fin-empty-desc">Genera el análisis para ver la decisión recomendada.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preguntas sugeridas — Fase G: renderIA() las genera -->
+        <div class="card cp" id="finIaSugeridas" style="margin-bottom:20px">
+          <div class="card-ttl">Análisis adicionales disponibles</div>
+          <!-- Fase G: renderIA() inyecta los botones de preguntas sugeridas -->
+          <div id="finIaSugeridasBody" style="display:flex;flex-direction:column;gap:8px">
+            <!-- Placeholders — Fase G: se reemplazan con preguntas dinámicas -->
+            <div class="view-empty" style="min-height:80px">
+              <div class="fin-empty-desc">Las preguntas sugeridas aparecerán cuando haya datos cargados.</div>
+            </div>
+          </div>
+
+          <!-- Input pregunta personalizada — Fase G -->
+          <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+            <div style="font-family:'DM Sans',sans-serif;font-size:12px;color:var(--w3);margin-bottom:8px">
+              O escribe tu propia pregunta financiera:
+            </div>
+            <div style="display:flex;gap:8px">
+              <input type="text" id="finIaInputPregunta"
+                     placeholder="¿Cuál sería el impacto si CI GARU no paga en los próximos 60 días?"
+                     style="flex:1;height:36px;padding:6px 12px;border:1px solid var(--line2);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:12px;outline:none"
+                     aria-label="Escribir pregunta financiera personalizada">
+              <button class="fin-empty-cta" type="button" id="finIaBtnEnviar" style="height:36px;padding:6px 16px"
+                      onclick="typeof finAI!=='undefined'&&finAI.analyze(document.getElementById('finIaInputPregunta').value)">
+                <i class="ti ti-send" aria-hidden="true"></i>Enviar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Historial de sesión — Fase G: finAI guarda y muestra -->
+        <div class="card cp" id="finIaHistorial" style="display:none;margin-bottom:20px">
+          <div class="card-ttl">
+            Análisis anteriores de esta sesión
+            <button type="button" id="finIaHistorialToggle"
+                    style="margin-left:auto;font-size:12px;background:transparent;border:none;color:var(--blue);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700">
+              Ver ▼
+            </button>
+          </div>
+          <div id="finIaHistorialBody" style="display:none"></div>
+        </div>
+
+        <!-- Disclaimer -->
+        <div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--w4);letter-spacing:.05em;padding:12px 0;border-top:1px solid var(--line)">
+          ⓘ Análisis generado por IA (Claude Sonnet 4) · No reemplaza el criterio financiero profesional · Basado en los datos del Maestro Excel cargado
+        </div>
+
+      </section><!-- /finViewIa -->
+
+    </main><!-- /finContent -->
+
+    <!-- ══ FOOTER ═════════════════════════════════════════════════════════════
+         ID: #finFooter
+         Fase A: estructura y fecha dinámica
+         Fase B+: refresh() actualiza los datos de sincronización
+         ════════════════════════════════════════════════════════════════════ -->
+    <footer class="footer" id="finFooter" role="contentinfo">
+      <div class="footer-l">
+        <span>INLOP · Integral Logistics Operations SAS</span>
+        <span class="footer-sep">·</span>
+        <!-- Fase A: JS al fondo actualiza la fecha -->
+        <span id="finFootDate"></span>
+        <span class="footer-sep">·</span>
+        <span>Financiero v2.0-alpha</span>
+      </div>
+      <div class="footer-r">
+        <!-- Fase B+: updateHdrChip() actualiza este chip -->
+        <span id="finFootSrcChip">
+          <i class="ti ti-wifi-off" aria-hidden="true" style="font-size:10px"></i>
+          <span id="finFootSrcTxt">Sin datos</span>
+        </span>
+        <span class="footer-sep" id="finFootSepSem" style="display:none">·</span>
+        <span id="finFootSemLabel" style="display:none">Semana <span id="finFootSem">—</span></span>
+        <span class="footer-sep" id="finFootSepTs" style="display:none">·</span>
+        <span id="finFootTimestamp" style="display:none">
+          Actualizado <span id="finFootTs">—</span>
+        </span>
+      </div>
+    </footer><!-- /finFooter -->
+
+  </div><!-- /ops-body-col -->
+
+</div><!-- /finOpsBodyRow -->
+</div><!-- /shell -->
+</div><!-- /finWrapper -->
+
+<!-- ══ BOTTOM NAV (solo móvil) ════════════════════════════════════════════════ -->
+<nav id="finBottomNav" aria-label="Navegación rápida">
+  <button class="bnav-item on" type="button" id="finBnavResumen"
+          onclick="typeof showView==='function'&&showView('resumen')">
+    <i class="ti ti-layout-dashboard" aria-hidden="true"></i>Resumen
+  </button>
+  <button class="bnav-item" type="button" id="finBnavCartera"
+          onclick="typeof showView==='function'&&showView('cartera')">
+    <i class="ti ti-receipt-2" aria-hidden="true"></i>Cartera
+  </button>
+  <button class="bnav-item" type="button" id="finBnavSaldos"
+          onclick="typeof showView==='function'&&showView('saldos')">
+    <i class="ti ti-cash" aria-hidden="true"></i>Saldos
+  </button>
+  <button class="bnav-item" type="button" id="finBnavIa"
+          onclick="typeof showView==='function'&&showView('ia')">
+    <i class="ti ti-robot" aria-hidden="true"></i>IA
+  </button>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════════════════════════
+     JAVASCRIPT SHELL — Fase 8A
+     Solo funciones mínimas para que el shell funcione sin datos:
+       · Fecha del footer
+       · showView() básico
+       · toggleSidebar() básico
+       · toast() básico
+       · Mobile drawer
+     Las demás funciones (finAuth, finData, finParser, refresh, etc.)
+     se añadirán en las Fases B, C, D... siguiendo el orden de
+     07_Backend_Services_Financiero_V2.md sección "Orden de declaración"
+     ══════════════════════════════════════════════════════════════════════════════ -->
+<script>
+/* ══ FASE 8A: JAVASCRIPT SHELL BASE ══════════════════════════════════════════ */
+/* Solo lo necesario para que el shell sea interactivo.                        */
+/* Ninguna función de negocio, parsers, Supabase ni IA.                        */
+/* ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Variables globales declaradas (stubs para fases B+) ─────────────────── */
+/* Fase B: se asignan valores reales en finAuth.init() y finData.loadCloud()  */
+var FIN_DATA       = { semanaActual:'', semanas:[], fact:[], cartera:[], bancos:[], saldos:[], adm:[], balance:{}, flujo:[], historico_balance:[], flags:{} };
+var FIN_META       = { updatedAt:null, src:'', version:'v2', totalFacturas:0, semanaDetectada:'', archivoCargado:'' };
+var FIN_USER       = { id:null, email:'', nombre:'', rol_portal:'', rol:'viewer', activo:true, resolvedAt:null };
+var FIN_FILTERS    = { linea:'TODOS', mes:'TODOS', sem:'TODOS', cli:'TODOS' };
+var FIN_CHARTS     = {};
+var FIN_CURRENT_VIEW   = 'resumen';
+var FIN_IS_ADMIN       = false;
+var FIN_CAN_EDIT       = false;
+var FIN_SRC            = '';
+var FIN_LOGO_CLICKS    = 0;
+var FIN_LOGO_TIMEOUT   = null;
+var FIN_IA_HISTORY     = [];
+var FIN_IA_AVAILABLE   = true;
+var FIN_SYNC_TIMER     = null;
+var FIN_DEBOUNCE_T     = null;
+var FIN_PIN_INPUT      = '';
+var FIN_PIN_FAILS      = 0;
+var FIN_CLOCK_T        = null;
+/* Constantes */
+var MODULE_ID = 4;
+var K_DATA    = 'inlop_fin_v2';
+var K_META    = 'inlop_fin_meta_v2';
+var PIN_KEY   = 'inlop_fin_admin';
+var FIN_PIN   = '2604';
+/* IDs de canvases registrados para dC() */
+var FIN_CANVAS_IDS = [
+  'finChartRecaudo','finChartLinea','finChartFact',
+  'finChartAging','finChartAgingCli','finChartBancos','finChartBancosDonut',
+  'finChartWaterfall','finChartPasivos','finChartPresion','finChartBalanceHistorial',
+  'finChartAdmin','finChartAdminTimeline'
+];
+
+/* ── Footer: fecha dinámica ───────────────────────────────────────────────── */
+(function setFooterDate(){
+  var el = document.getElementById('finFootDate');
+  if(!el) return;
+  var d = new Date();
+  var meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  el.textContent = ('0'+d.getDate()).slice(-2)+'-'+meses[d.getMonth()]+'-'+String(d.getFullYear()).slice(-2);
+})();
+
+/* ── toast() — notificaciones flotantes ──────────────────────────────────── */
+/* Fase B+: el sistema completo usa esta función                               */
+function toast(msg, tipo){
+  var el = document.getElementById('finToast');
+  if(!el) return;
+  clearTimeout(el._t);
+  el.className = 'show ' + (tipo||'info');
+  el.textContent = msg;
+  el._t = setTimeout(function(){ el.className=''; }, 3200);
+}
+
+/* ── showView() — navegación entre vistas ────────────────────────────────── */
+/* Fase A: shell solo. Fase C+: llama refresh() al final                       */
+function showView(vista){
+  var vistas = ['resumen','balance','flujo','facturacion','cartera','bancos','saldos','admin','ia','auditoria'];
+  if(!vistas.includes(vista)) return;
+
+  /* Ocultar todas las vistas */
+  var views = document.querySelectorAll('.fin-view');
+  views.forEach(function(v){ v.style.display='none'; });
+
+  /* Mostrar la vista solicitada */
+  var target = document.getElementById('finView'+capitalize(vista));
+  if(target) target.style.display='block';
+
+  /* Actualizar sidebar */
+  var tabs = document.querySelectorAll('.tb[id^="finTab"]');
+  tabs.forEach(function(t){
+    t.classList.remove('on');
+    t.removeAttribute('aria-current');
+  });
+  var activeTab = document.getElementById('finTab'+capitalize(vista));
+  if(activeTab){ activeTab.classList.add('on'); activeTab.setAttribute('aria-current','page'); }
+
+  /* Actualizar bottom nav */
+  var bnavs = document.querySelectorAll('.bnav-item');
+  bnavs.forEach(function(b){ b.classList.remove('on'); });
+  var bnMap = {resumen:'finBnavResumen',cartera:'finBnavCartera',saldos:'finBnavSaldos',ia:'finBnavIa'};
+  if(bnMap[vista]){ var bn=document.getElementById(bnMap[vista]); if(bn) bn.classList.add('on'); }
+
+  FIN_CURRENT_VIEW = vista;
+
+  /* Cerrar drawer móvil si está abierto */
+  closeMobileDrawer();
+
+  /* Fase C+: llamar refresh() cuando esté disponible */
+  if(typeof refresh==='function') refresh();
+}
+
+function capitalize(s){
+  /* Convierte 'resumen' → 'Resumen', 'facturacion' → 'Facturacion', etc. */
+  return s.charAt(0).toUpperCase()+s.slice(1);
+}
+
+/* ── toggleSidebar() — colapsar/expandir sidebar ─────────────────────────── */
+function toggleSidebar(){
+  var row = document.getElementById('finOpsBodyRow');
+  if(!row) return;
+  var collapsed = row.classList.toggle('sb-collapsed');
+  localStorage.setItem('inlop_sb_fin_collapsed', collapsed?'1':'0');
+  /* Cambiar ícono del botón */
+  var ico = document.getElementById('finSbCollapseIco');
+  var btn = document.getElementById('finSbCollapseBtn');
+  if(ico){
+    ico.className = collapsed
+      ? 'ti ti-layout-sidebar-left-expand'
+      : 'ti ti-layout-sidebar-left-collapse';
+  }
+  if(btn){
+    btn.setAttribute('aria-label', collapsed?'Expandir sidebar':'Colapsar sidebar');
+    btn.setAttribute('data-label', collapsed?'Expandir':'Colapsar');
+  }
+  /* Redimensionar gráficos si Chart.js está disponible */
+  setTimeout(function(){
+    Object.values(FIN_CHARTS).forEach(function(c){ if(c&&c.resize) c.resize(); });
+  }, 250);
+}
+
+function restoreSidebar(){
+  var row = document.getElementById('finOpsBodyRow');
+  if(!row) return;
+  /* En tablet (<= 1200px): colapsar por defecto */
+  if(window.innerWidth<=1200 && window.innerWidth>768){
+    row.classList.add('sb-collapsed');
+    return;
+  }
+  var saved = localStorage.getItem('inlop_sb_fin_collapsed');
+  if(saved==='1'){
+    row.classList.add('sb-collapsed');
+    var ico = document.getElementById('finSbCollapseIco');
+    if(ico) ico.className='ti ti-layout-sidebar-left-expand';
+    var btn = document.getElementById('finSbCollapseBtn');
+    if(btn){ btn.setAttribute('data-label','Expandir'); }
+  }
+}
+
+/* ── Mobile drawer ────────────────────────────────────────────────────────── */
+function openMobileDrawer(){
+  var sb = document.getElementById('finSidebar');
+  var ov = document.getElementById('finMobileOverlay');
+  if(sb) sb.classList.add('mobile-open');
+  if(ov){ ov.classList.add('show'); ov.setAttribute('aria-hidden','false'); }
+}
+function closeMobileDrawer(){
+  var sb = document.getElementById('finSidebar');
+  var ov = document.getElementById('finMobileOverlay');
+  if(sb) sb.classList.remove('mobile-open');
+  if(ov){ ov.classList.remove('show'); ov.setAttribute('aria-hidden','true'); }
+}
+
+/* ── handleBrandClick() — 5 clics → PIN admin ───────────────────────────── */
+/* Fase B: validarPin() se implementa en finAuth                               */
+function handleBrandClick(){
+  FIN_LOGO_CLICKS++;
+  clearTimeout(FIN_LOGO_TIMEOUT);
+  FIN_LOGO_TIMEOUT = setTimeout(function(){ FIN_LOGO_CLICKS=0; }, 3000);
+  if(FIN_LOGO_CLICKS>=5){
+    FIN_LOGO_CLICKS=0;
+    if(FIN_IS_ADMIN){ toast('Ya estás en modo administrador','info'); }
+    else if(typeof abrirModalPin==='function'){ abrirModalPin(); }
+    else { toast('Sistema PIN no disponible en esta fase','warn'); }
+  }
+}
+
+/* ── volverPortal() — stub para Fase B ──────────────────────────────────── */
+function volverPortal(){
+  if(typeof window.parent!=='undefined' && window.parent!==window){
+    try{
+      window.parent.postMessage({type:'INLOP_VOLVERPORTAL',modulo:'fin'},'*');
+      if(typeof window.parent.volverPortal==='function') window.parent.volverPortal();
+    } catch(e){
+      window.history.back();
+    }
+  } else {
+    window.history.back();
+  }
+}
+
+/* ── Atajos de teclado (desktop) ─────────────────────────────────────────── */
+/* Fase A: navegación básica. Fase H: se añade tecla P para presentación      */
+document.addEventListener('keydown', function(e){
+  var tag = e.target.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT') return;
+  var map = {'1':'resumen','2':'balance','3':'flujo','4':'facturacion',
+             '5':'cartera','6':'bancos','7':'saldos','8':'admin','9':'ia'};
+  if(map[e.key]){ e.preventDefault(); showView(map[e.key]); }
+  if(e.key==='Escape'){ e.preventDefault(); volverPortal(); }
+  if(e.key==='p'||e.key==='P'){
+    e.preventDefault();
+    if(typeof togglePresent==='function') togglePresent();
+  }
+});
+
+/* ── togglePresent() — stub para Fase H ──────────────────────────────────── */
+function togglePresent(){
+  /* Fase H: implementación completa en buildPresentNav() y CSS .present */
+  var row = document.getElementById('finOpsBodyRow');
+  if(!row) return;
+  var presenting = row.classList.toggle('present');
+  var btn = document.getElementById('finBtnPresent');
+  var ico = btn && btn.querySelector('i.ti');
+  if(btn){
+    var txt = btn.querySelector('.hdr-btn-text');
+    if(ico) ico.className = presenting?'ti ti-minimize':'ti ti-maximize';
+    if(txt) txt.textContent = presenting?'Salir':'Presentación';
+  }
+  setTimeout(function(){
+    Object.values(FIN_CHARTS).forEach(function(c){ if(c&&c.resize) c.resize(); });
+  }, 250);
+  toast(presenting?'Modo presentación activo · P para salir':'Modo presentación cerrado','info');
+}
+
+/* ── switchAdminTab() — alternar tabs de Administrativos ─────────────────── */
+function switchAdminTab(tab){
+  var compromisos = document.getElementById('finAdminTabCompromisos');
+  var auditoria   = document.getElementById('finAdminTabAuditoria');
+  var btnC = document.getElementById('finAdminTabBtnCompromisos');
+  var btnA = document.getElementById('finAdminTabBtnAuditoria');
+  if(tab==='compromisos'){
+    if(compromisos) compromisos.style.display='block';
+    if(auditoria)   auditoria.style.display='none';
+    if(btnC){ btnC.classList.add('on'); btnC.setAttribute('aria-selected','true'); }
+    if(btnA){ btnA.classList.remove('on'); btnA.setAttribute('aria-selected','false'); }
+  } else {
+    if(compromisos) compromisos.style.display='none';
+    if(auditoria)   auditoria.style.display='block';
+    if(btnC){ btnC.classList.remove('on'); btnC.setAttribute('aria-selected','false'); }
+    if(btnA){ btnA.classList.add('on'); btnA.setAttribute('aria-selected','true'); }
+  }
+}
+
+/* ── Deep link parser — stub para Fase C ────────────────────────────────── */
+function parseDeepLink(){
+  try{
+    var params = new URLSearchParams(window.location.search);
+    var vistas = ['resumen','balance','flujo','facturacion','cartera','bancos','saldos','admin','ia'];
+    var vista = params.get('vista');
+    if(vista && vistas.includes(vista)) FIN_CURRENT_VIEW = vista;
+    if(params.get('linea'))   FIN_FILTERS.linea = decodeURIComponent(params.get('linea'));
+    if(params.get('semana'))  FIN_FILTERS.sem   = decodeURIComponent(params.get('semana'));
+    if(params.get('cliente')) FIN_FILTERS.cli   = decodeURIComponent(params.get('cliente'));
+  } catch(e){}
+}
+
+/* ── updateHdrChip() — actualiza chips de fuente en header y footer ──────── */
+/* Fase B: finData.loadCloud() llama esta función tras cada carga             */
+function updateHdrChip(src){
+  FIN_SRC = src;
+  var chip    = document.getElementById('finHdrSrcChip');
+  var chipTxt = document.getElementById('finHdrSrcTxt');
+  var chipIco = chip && chip.querySelector('i.ti');
+  var fchip   = document.getElementById('finFootSrcChip');
+  var ftxt    = document.getElementById('finFootSrcTxt');
+  var configs = {
+    'supabase': { cls:'chip-live',  ico:'ti-wifi',        txt:'En vivo' },
+    'local':    { cls:'chip-local', ico:'ti-database',    txt:'Local'   },
+    '':         { cls:'chip-empty', ico:'ti-wifi-off',    txt:'Sin datos'}
+  };
+  var cfg = configs[src] || configs[''];
+  if(chip){ chip.className=''; chip.classList.add(cfg.cls); }
+  if(chipIco) chipIco.className='ti '+cfg.ico;
+  if(chipTxt) chipTxt.textContent=cfg.txt;
+  if(fchip){ fchip.className=''; fchip.classList.add(cfg.cls); }
+  if(ftxt) ftxt.textContent=cfg.txt;
+  var ico2 = fchip && fchip.querySelector('i.ti');
+  if(ico2) ico2.className='ti '+cfg.ico;
+}
+
+/* ── DOMContentLoaded ─────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', function(){
+
+  /* Restaurar estado del sidebar */
+  restoreSidebar();
+
+  /* Activar vista inicial (desde deep link o default) */
+  parseDeepLink();
+  showView(FIN_CURRENT_VIEW);
+
+  /* Chip inicial: sin datos (se actualiza en Fase B tras loadCloud) */
+  updateHdrChip('');
+
+  /* Logo → handleBrandClick */
+  var logo = document.getElementById('finLogoIn');
+  if(logo){
+    logo.addEventListener('click', handleBrandClick);
+    logo.addEventListener('keydown',function(e){
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); handleBrandClick(); }
+    });
+  }
+
+  /* Overlay móvil → cerrar drawer */
+  var mobileOv = document.getElementById('finMobileOverlay');
+  if(mobileOv) mobileOv.addEventListener('click', closeMobileDrawer);
+
+  /* Modal backdrop → cerrar modales al click fuera */
+  var modalBg = document.getElementById('finModalBg');
+  if(modalBg){
+    modalBg.addEventListener('click', function(e){
+      if(e.target===modalBg){
+        modalBg.classList.remove('show');
+        /* Ocultar todos los modales hijos */
+        var modales = modalBg.querySelectorAll('.fin-modal');
+        modales.forEach(function(m){ m.style.display='none'; });
+      }
+    });
+  }
+
+  /* Modal maestro: botón cerrar */
+  var cBtnM = document.getElementById('finModalMaestroCerrar');
+  var cBtnC = document.getElementById('finModalMaestroCancelar');
+  function cerrarModalMaestro(){
+    var bg=document.getElementById('finModalBg');
+    var m=document.getElementById('finModalMaestro');
+    if(bg) bg.classList.remove('show');
+    if(m) m.style.display='none';
+  }
+  if(cBtnM) cBtnM.addEventListener('click', cerrarModalMaestro);
+  if(cBtnC) cBtnC.addEventListener('click', cerrarModalMaestro);
+
+  /* Modal PIN: botón cerrar */
+  var cBtnP = document.getElementById('finModalPinCerrar');
+  if(cBtnP) cBtnP.addEventListener('click', function(){
+    var bg=document.getElementById('finModalBg');
+    var m=document.getElementById('finModalPin');
+    if(bg) bg.classList.remove('show');
+    if(m) m.style.display='none';
+  });
+
+  /* Teclas de teclado numérico del PIN */
+  var keypad = document.getElementById('finPinKeypad');
+  if(keypad){
+    keypad.addEventListener('click', function(e){
+      var btn = e.target.closest('.pin-key');
+      if(!btn) return;
+      var d = btn.getAttribute('data-digit');
+      /* Fase B: addPinDigit() procesará estos dígitos cuando esté disponible */
+      if(typeof addPinDigit==='function'){ addPinDigit(d); return; }
+      /* Stub mínimo para Fase A */
+      if(d==='X'||d==='DEL'){
+        FIN_PIN_INPUT=FIN_PIN_INPUT.slice(0,-1);
+      } else {
+        if(FIN_PIN_INPUT.length<4) FIN_PIN_INPUT+=d;
+      }
+      /* Actualizar puntos visualmente */
+      for(var i=1;i<=4;i++){
+        var dot=document.getElementById('finPinD'+i);
+        if(dot) dot.className='pin-dot'+(i<=FIN_PIN_INPUT.length?' filled':'');
+      }
+    });
+  }
+
+  /* Hamburger móvil (el botón está en el header pero no se mostró aún;
+     se agrega via JS porque depende del breakpoint) */
+  var hamburgerExist = document.getElementById('finBtnHamburger');
+  if(!hamburgerExist){
+    var hdr = document.getElementById('finHeader');
+    if(hdr){
+      var hambBtn = document.createElement('button');
+      hambBtn.id='finBtnHamburger';
+      hambBtn.className='hdr-btn';
+      hambBtn.type='button';
+      hambBtn.setAttribute('aria-label','Abrir menú de navegación');
+      hambBtn.style.cssText='display:none';
+      hambBtn.innerHTML='<i class="ti ti-menu-2" aria-hidden="true"></i>';
+      hambBtn.addEventListener('click', openMobileDrawer);
+      hdr.insertBefore(hambBtn, hdr.firstChild);
+    }
+  }
+
+  /* Mostrar hamburger solo en móvil */
+  function checkMobileUI(){
+    var hb = document.getElementById('finBtnHamburger');
+    if(!hb) return;
+    hb.style.display = window.innerWidth<=768 ? 'inline-flex':'none';
+  }
+  checkMobileUI();
+  window.addEventListener('resize', checkMobileUI);
+
+  /* Footer date actualizada */
+  (function setFooterDate(){
+    var el = document.getElementById('finFootDate');
+    if(!el) return;
+    var d = new Date();
+    var meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    el.textContent = ('0'+d.getDate()).slice(-2)+'-'+meses[d.getMonth()]+'-'+String(d.getFullYear()).slice(-2);
+  })();
+
+  /* Drag & Drop: mostrar overlay (Fase C completará el procesamiento) */
+  document.addEventListener('dragover',function(e){
+    e.preventDefault();
+    var ov=document.getElementById('finDragOv');
+    if(ov) ov.classList.add('show');
+  });
+  document.addEventListener('dragleave',function(e){
+    if(!e.relatedTarget||!document.body.contains(e.relatedTarget)){
+      var ov=document.getElementById('finDragOv');
+      if(ov) ov.classList.remove('show');
+    }
+  });
+  document.addEventListener('drop',function(e){
+    e.preventDefault();
+    var ov=document.getElementById('finDragOv');
+    if(ov) ov.classList.remove('show');
+    /* Fase C: finParser.procesarMaestro() manejará el archivo soltado */
+    if(typeof abrirModalMaestro==='function'){
+      toast('Archivo recibido · Iniciando procesamiento...','info');
+    } else {
+      toast('Parser no disponible en esta fase','warn');
+    }
+  });
+
+  /* Toast de confirmación de carga del shell */
+  /* Solo en desarrollo — remover antes de Fase B */
+  /* toast('Shell Fase 8A cargado · ✓','ok'); */
+
+}); /* /DOMContentLoaded */
+/* ════════════════════════════════════════════════════════════════════════════
+   FIN JAVASCRIPT FASE 8A
+   Próximas fases añadirán aquí (en este orden — ver 07_Backend_Services):
+   FASE B: finAuth · finData (sbQ, loadCloud, saveCloud, saveMem, loadLocal)
+           checkAdminSession · abrirModalPin · addPinDigit · validarPin
+           activarModoAdmin · cerrarSesionAdmin · finAudit
+   FASE C: LINEA_MAP · ALIAS_MAP · SEMANA_MES_MAP
+           normSem · normNit · normNumero · normLinea · normCliente
+           parseFecha · getLineaCli · getAliasCli · inferirMes
+           finParser (parseFact · parseCartera · parseBancos · parseSaldos ·
+                      parseAdmin · parseBalance · parseFlujo · procesarMaestro)
+           finFilter.rebuild · finFilter.apply · fApplyGlobal · fResetFilters
+           calcDias · bucketAging · estadoSaldo · estadoAdmin · montoEfectivoAdmin
+           finAlerts.detectar · refresh()
+   FASE D: renderResumen · renderFacturacion · renderAdmin
+   FASE E: renderCartera · renderBancos · renderSaldos
+   FASE F: renderBalance · renderFlujo
+   FASE G: finAI (buildPrompt · analyze · checkDisponibilidad)
+           renderIA
+   FASE H: finExport (vista · _exportXXX · downloadMaestro)
+           buildPresentNav · renderAuditoria · startClock
+   ════════════════════════════════════════════════════════════════════════════ */
+</script>
+</body>
+</html>
