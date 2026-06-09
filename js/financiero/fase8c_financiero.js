@@ -1,30 +1,3 @@
-/* ════════════════════════════════════════════════════════════════════════════
-   FASE 8C — Núcleo de datos: Parser · Filtros · Alertas · Runtime · refresh()
-   ─────────────────────────────────────────────────────────────────────────────
-   PUNTO DE INSERCIÓN EN financiero_v2.html:
-     Localizar el comentario:  /* ════ FIN JAVASCRIPT FASE 8B ════ */
-     Insertar INMEDIATAMENTE DESPUÉS de esa línea, antes de </script>
-
-   DEPENDENCIAS PREVIAS (deben existir):
-     Fase 8A: toast(), showView(), updateHdrChip(), FIN_DATA, FIN_FILTERS,
-              FIN_META, FIN_CURRENT_VIEW, FIN_CHARTS, capitalize()
-     Fase 8B: finData.saveCloud(), finData.saveMem(), finAudit.registrar(),
-              sbQ(), _actualizarFooterMeta()
-
-   Referencia canónica:
-     07_Backend_Services_Financiero_V2.md  (secciones 6, 7, 8, 9, 15, 18, 19)
-     03_Modelo_Datos_Financiero_V2.md      (secciones 2, 3, 6, 8)
-   ════════════════════════════════════════════════════════════════════════════ */
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   BLOQUE C-1 · CATÁLOGOS Y CONSTANTES
-   ══════════════════════════════════════════════════════════════════════════════ */
-
-/*
- * LINEA_MAP — mapeo nombre de cliente normalizado → línea de negocio
- * Claves: razón social en MAYÚSCULAS, sin puntos, sin diacríticos, trim
- * 20 clientes activos · fuente: 00_CONFIG del Excel Maestro / 03_Modelo_Datos
- */
 var LINEA_MAP = {
   /* CARGA LÍQUIDA (8) */
   'ATLANTIC MARINE FUELS SAS':                           'CARGA LIQUIDA',
