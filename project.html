@@ -1849,7 +1849,7 @@ window.updatePortalStats=updatePortalStats;
     <i class="ti ti-radar" aria-hidden="true"></i>Seguimiento en vivo
     <span class="tb-soon-badge">Soon</span>
   </button>
-  <button class="tb" id="tab-proj" onclick="showTab('proj')" data-label="Project">
+  <button class="tb" id="tab-proj" onclick="showTab('proj');setTimeout(function(){if(typeof projRender==='function')projRender();},50);" data-label="Project">
     <i class="ti ti-clipboard-check" aria-hidden="true"></i>Project
   </button>
 
@@ -5426,18 +5426,18 @@ async function renderHseqHistory(){
   `).join('');
 }
 
-/* ══════════════════════════════════════
+/* ══════════════════════
    INIT
-══════════════════════════════════════ */
-document.addEventListener('DOMContentLoaded',function(){
-  if(document.getElementById('tc-proj')?.classList.contains('show')) projRender();
-});
-
-const _origShowTab=window.showTab;
-window.showTab=function(id){
-  _origShowTab(id);
-  if(id==='proj') projRender();
-};
+══════════════════════ */
+function _tryInitProj(){
+  const tc=document.getElementById('tc-proj');
+  if(tc&&tc.classList.contains('show')) projRender();
+}
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',_tryInitProj);
+} else {
+  setTimeout(_tryInitProj,100);
+}
 
 })();
 </script>
