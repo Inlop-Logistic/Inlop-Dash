@@ -2111,6 +2111,126 @@ window.updatePortalStats=updatePortalStats;
 
 
 
+
+
+<!-- ══════════ PROJECT · TAREAS DEL COMITÉ ══════════ -->
+<div class="tc" id="tc-proj">
+<div class="page" style="max-width:1400px">
+
+<!-- KPI strip -->
+<div class="sh" style="margin-bottom:14px">
+  <div class="sh-bar" style="background:var(--navy2)"></div>
+  <span class="sh-txt">Tareas del comité · semana activa</span>
+  <div class="sh-line"></div>
+  <span id="proj-week-badge" style="font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;text-transform:uppercase;padding:4px 12px;border-radius:4px;background:var(--navy);color:#fff;margin-left:10px">S—</span>
+</div>
+
+<div id="proj-kpis" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:20px"></div>
+
+<!-- TABLA -->
+<div class="card" style="margin-bottom:20px;overflow:visible">
+  <div class="tbl-hdr" style="flex-wrap:wrap;gap:8px">
+    <span class="tbl-title"><i class="ti ti-clipboard-check" aria-hidden="true" style="margin-right:6px"></i>Informe de tareas</span>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span id="proj-encargado-chip" style="display:none;align-items:center;gap:5px;font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:4px 12px;border-radius:20px;background:rgba(245,158,11,.15);color:#f59e0b;border:.5px solid rgba(245,158,11,.4)">
+        <i class="ti ti-shield-check" aria-hidden="true"></i><span id="proj-encargado-txt"></span>
+      </span>
+      <button onclick="projAddRow()" style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:5px 12px;border-radius:5px;background:transparent;border:1px solid var(--line2);color:var(--w3);cursor:pointer;display:flex;align-items:center;gap:5px">
+        <i class="ti ti-plus" aria-hidden="true"></i>Nueva tarea
+      </button>
+      <button onclick="projSave()" style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:5px 14px;border-radius:5px;background:var(--navy);border:1px solid var(--navy2);color:#fff;cursor:pointer;display:flex;align-items:center;gap:5px">
+        <i class="ti ti-device-floppy" aria-hidden="true"></i>Guardar semana
+      </button>
+    </div>
+  </div>
+  <div style="overflow-x:auto">
+    <table style="width:100%;min-width:780px">
+      <thead>
+        <tr>
+          <th style="width:30%">Tema</th>
+          <th class="c" style="width:11%">% Real</th>
+          <th class="c" style="width:10%">Brecha</th>
+          <th class="c" style="width:11%">Meta <span style="font-size:9px;opacity:.6;font-weight:400">(editable)</span></th>
+          <th class="c" style="width:10%">Estado</th>
+          <th style="width:23%">Observaciones</th>
+          <th class="c" style="width:5%"></th>
+        </tr>
+      </thead>
+      <tbody id="proj-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- RULETA HSEQ -->
+<div class="sh" style="margin-bottom:14px;margin-top:8px">
+  <div class="sh-bar" style="background:var(--red)"></div>
+  <span class="sh-txt">Ruleta HSEQ · asignar encargado</span>
+  <div class="sh-line"></div>
+</div>
+
+<div style="display:grid;grid-template-columns:340px 1fr;gap:24px;align-items:start">
+
+  <!-- Columna ruleta -->
+  <div style="display:flex;flex-direction:column;align-items:center;gap:14px">
+    <div style="position:relative;width:300px;height:300px;flex-shrink:0">
+      <div id="proj-pointer" style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:11px solid transparent;border-right:11px solid transparent;border-top:20px solid var(--red);z-index:10"></div>
+      <canvas id="proj-wheel" width="300" height="300" style="border-radius:50%;display:block"></canvas>
+    </div>
+    <button id="proj-spin-btn" onclick="projSpin()" style="font-family:'Oswald',sans-serif;font-size:12px;letter-spacing:2px;text-transform:uppercase;padding:9px 28px;border-radius:5px;background:var(--navy);border:1px solid var(--navy2);color:#fff;cursor:pointer;display:flex;align-items:center;gap:7px">
+      <i class="ti ti-rotate-clockwise" aria-hidden="true"></i>Girar ruleta
+    </button>
+  </div>
+
+  <!-- Columna controles -->
+  <div style="display:flex;flex-direction:column;gap:16px">
+
+    <!-- Participantes -->
+    <div class="card cp" style="padding:16px 18px">
+      <div class="card-ttl" style="margin-bottom:10px">Participantes</div>
+      <div id="proj-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+      <div style="display:flex;gap:6px">
+        <input id="proj-new-name" type="text" placeholder="Agregar nombre..." maxlength="24"
+          style="flex:1;background:var(--c3);border:1px solid var(--line2);border-radius:5px;color:var(--w1);font-size:12px;padding:6px 10px;outline:none"
+          onkeydown="if(event.key==='Enter')projAddPerson()">
+        <button onclick="projAddPerson()" style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:6px 12px;border-radius:5px;background:transparent;border:1px solid var(--line2);color:var(--w3);cursor:pointer">
+          <i class="ti ti-plus" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Resultado ruleta -->
+    <div id="proj-winner-box" style="display:none">
+      <div class="card cp" style="padding:16px 18px;border:1px solid rgba(1,42,107,.5)">
+        <div style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--w4);margin-bottom:6px">
+          <i class="ti ti-shield-check" aria-hidden="true" style="margin-right:4px"></i>Encargado momento HSEQ
+        </div>
+        <div id="proj-winner-name" style="font-family:'Oswald',sans-serif;font-size:28px;font-weight:700;color:var(--w1);line-height:1;margin-bottom:4px"></div>
+        <div id="proj-winner-meta" style="font-size:11px;color:var(--w4)"></div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+          <button id="proj-assign-btn" onclick="projAssignHseq()" style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:6px 16px;border-radius:5px;background:var(--green2);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:5px">
+            <i class="ti ti-check" aria-hidden="true"></i><span id="proj-assign-label">Asignar a S—</span>
+          </button>
+          <button onclick="projCancelWinner()" style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:6px 12px;border-radius:5px;background:transparent;border:1px solid var(--line2);color:var(--w4);cursor:pointer">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Historial HSEQ reciente -->
+    <div class="card cp" style="padding:16px 18px">
+      <div class="card-ttl" style="margin-bottom:10px">Historial encargados HSEQ</div>
+      <div id="proj-hseq-history" style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--w3)">
+        <span style="color:var(--w4);font-size:11px">Sin registros aún.</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</div><!-- /page -->
+</div><!-- /tc-proj -->
+
 </div><!-- /page -->
 
 <footer>
@@ -3316,7 +3436,11 @@ function renderHisAnalysis(){
 
 /* ════════════ MAIN ════════════ */
 function setFlt(f){flt=f;renderTable()}
-function selWk(id){wkId=id;refresh();if(typeof projRender==='function')projRender();}
+function selWk(id){wkId=id;refresh();
+  // Limpiar cache de PROJECT para esa semana para garantizar datos frescos
+  if(typeof _cache!=='undefined') { try{ delete _cache[id]; }catch(e){} }
+  if(typeof projRender==='function')projRender();
+}
 
 function refresh(){
   renderNav();updateBanner();renderKPIs();renderGauge();renderAlerts();renderResAnalysis();
@@ -4846,134 +4970,20 @@ document.addEventListener('DOMContentLoaded', function(){
   </div>
 </div>
 
-<!-- ══════════ PROJECT · TAREAS DEL COMITÉ ══════════ -->
-<div class="tc" id="tc-proj">
-<div class="page" style="max-width:1400px">
-
-<!-- KPI strip -->
-<div class="sh" style="margin-bottom:14px">
-  <div class="sh-bar" style="background:var(--navy2)"></div>
-  <span class="sh-txt">Tareas del comité · semana activa</span>
-  <div class="sh-line"></div>
-  <span id="proj-week-badge" style="font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;text-transform:uppercase;padding:4px 12px;border-radius:4px;background:var(--navy);color:#fff;margin-left:10px">S—</span>
-</div>
-
-<div id="proj-kpis" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:20px"></div>
-
-<!-- TABLA -->
-<div class="card" style="margin-bottom:20px;overflow:visible">
-  <div class="tbl-hdr" style="flex-wrap:wrap;gap:8px">
-    <span class="tbl-title"><i class="ti ti-clipboard-check" aria-hidden="true" style="margin-right:6px"></i>Informe de tareas</span>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <span id="proj-encargado-chip" style="display:none;align-items:center;gap:5px;font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:4px 12px;border-radius:20px;background:rgba(245,158,11,.15);color:#f59e0b;border:.5px solid rgba(245,158,11,.4)">
-        <i class="ti ti-shield-check" aria-hidden="true"></i><span id="proj-encargado-txt"></span>
-      </span>
-      <button onclick="projAddRow()" style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:5px 12px;border-radius:5px;background:transparent;border:1px solid var(--line2);color:var(--w3);cursor:pointer;display:flex;align-items:center;gap:5px">
-        <i class="ti ti-plus" aria-hidden="true"></i>Nueva tarea
-      </button>
-      <button onclick="projSave()" style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:5px 14px;border-radius:5px;background:var(--navy);border:1px solid var(--navy2);color:#fff;cursor:pointer;display:flex;align-items:center;gap:5px">
-        <i class="ti ti-device-floppy" aria-hidden="true"></i>Guardar semana
-      </button>
-    </div>
-  </div>
-  <div style="overflow-x:auto">
-    <table style="width:100%;min-width:780px">
-      <thead>
-        <tr>
-          <th style="width:30%">Tema</th>
-          <th class="c" style="width:11%">% Real</th>
-          <th class="c" style="width:11%">Pendiente</th>
-          <th class="c" style="width:10%">Meta</th>
-          <th class="c" style="width:10%">Estado</th>
-          <th style="width:23%">Observaciones</th>
-          <th class="c" style="width:5%"></th>
-        </tr>
-      </thead>
-      <tbody id="proj-tbody"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- RULETA HSEQ -->
-<div class="sh" style="margin-bottom:14px;margin-top:8px">
-  <div class="sh-bar" style="background:var(--red)"></div>
-  <span class="sh-txt">Ruleta HSEQ · asignar encargado</span>
-  <div class="sh-line"></div>
-</div>
-
-<div style="display:grid;grid-template-columns:340px 1fr;gap:24px;align-items:start">
-
-  <!-- Columna ruleta -->
-  <div style="display:flex;flex-direction:column;align-items:center;gap:14px">
-    <div style="position:relative;width:300px;height:300px;flex-shrink:0">
-      <div id="proj-pointer" style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:11px solid transparent;border-right:11px solid transparent;border-top:20px solid var(--red);z-index:10"></div>
-      <canvas id="proj-wheel" width="300" height="300" style="border-radius:50%;display:block"></canvas>
-    </div>
-    <button id="proj-spin-btn" onclick="projSpin()" style="font-family:'Oswald',sans-serif;font-size:12px;letter-spacing:2px;text-transform:uppercase;padding:9px 28px;border-radius:5px;background:var(--navy);border:1px solid var(--navy2);color:#fff;cursor:pointer;display:flex;align-items:center;gap:7px">
-      <i class="ti ti-rotate-clockwise" aria-hidden="true"></i>Girar ruleta
-    </button>
-  </div>
-
-  <!-- Columna controles -->
-  <div style="display:flex;flex-direction:column;gap:16px">
-
-    <!-- Participantes -->
-    <div class="card cp" style="padding:16px 18px">
-      <div class="card-ttl" style="margin-bottom:10px">Participantes</div>
-      <div id="proj-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
-      <div style="display:flex;gap:6px">
-        <input id="proj-new-name" type="text" placeholder="Agregar nombre..." maxlength="24"
-          style="flex:1;background:rgba(255,255,255,.06);border:1px solid var(--line2);border-radius:5px;color:#fff;font-size:12px;padding:6px 10px;outline:none"
-          onkeydown="if(event.key==='Enter')projAddPerson()">
-        <button onclick="projAddPerson()" style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:6px 12px;border-radius:5px;background:transparent;border:1px solid var(--line2);color:var(--w3);cursor:pointer">
-          <i class="ti ti-plus" aria-hidden="true"></i>
-        </button>
-      </div>
-    </div>
-
-    <!-- Resultado ruleta -->
-    <div id="proj-winner-box" style="display:none">
-      <div class="card cp" style="padding:16px 18px;border:1px solid rgba(1,42,107,.5)">
-        <div style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--w4);margin-bottom:6px">
-          <i class="ti ti-shield-check" aria-hidden="true" style="margin-right:4px"></i>Encargado momento HSEQ
-        </div>
-        <div id="proj-winner-name" style="font-family:'Oswald',sans-serif;font-size:28px;font-weight:700;color:#fff;line-height:1;margin-bottom:4px"></div>
-        <div id="proj-winner-meta" style="font-size:11px;color:var(--w4)"></div>
-        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-          <button id="proj-assign-btn" onclick="projAssignHseq()" style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:6px 16px;border-radius:5px;background:var(--green2);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:5px">
-            <i class="ti ti-check" aria-hidden="true"></i><span id="proj-assign-label">Asignar a S—</span>
-          </button>
-          <button onclick="projCancelWinner()" style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:6px 12px;border-radius:5px;background:transparent;border:1px solid var(--line2);color:var(--w4);cursor:pointer">
-            Cancelar
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Historial HSEQ reciente -->
-    <div class="card cp" style="padding:16px 18px">
-      <div class="card-ttl" style="margin-bottom:10px">Historial encargados HSEQ</div>
-      <div id="proj-hseq-history" style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--w3)">
-        <span style="color:var(--w4);font-size:11px">Sin registros aún.</span>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-</div><!-- /page -->
-</div><!-- /tc-proj -->
-
 <!-- ══════════ PROJECT JS ══════════ -->
 <style>
 .proj-badge-ok{background:rgba(0,217,126,.15);color:var(--green);border:.5px solid rgba(0,217,126,.35)}
 .proj-badge-warn{background:rgba(245,158,11,.15);color:#f59e0b;border:.5px solid rgba(245,158,11,.4)}
 .proj-badge-crit{background:rgba(239,68,68,.15);color:var(--danger);border:.5px solid rgba(239,68,68,.4)}
 .proj-badge-none{background:rgba(255,255,255,.06);color:var(--w4);border:.5px solid var(--line2)}
-.proj-pct-input{width:62px;text-align:center;background:rgba(255,255,255,.07);border:1px solid var(--line3);border-radius:4px;color:#fff;font-family:'Oswald',sans-serif;font-size:13px;padding:4px 6px;outline:none}
-.proj-pct-input:focus{border-color:var(--navy2)}
-.proj-obs-input{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--line2);border-radius:4px;color:var(--w2);font-size:11px;padding:4px 7px;outline:none;resize:none;min-height:32px}
-.proj-obs-input:focus{border-color:var(--navy2)}
+.proj-pct-input{width:62px;text-align:center;background:var(--c3);border:1px solid var(--line3);border-radius:4px;color:var(--w1);font-family:'Oswald',sans-serif;font-size:13px;padding:4px 6px;outline:none}
+.proj-pct-input:focus{border-color:var(--navy2);background:var(--c4)}
+.proj-meta-input{background:var(--c4)!important;border-color:var(--line2)!important;color:var(--w3)!important;font-size:12px!important}
+.proj-meta-input:focus{border-color:var(--amber)!important;color:var(--w1)!important}
+.proj-obs-input{width:100%;background:var(--c3);border:1px solid var(--line2);border-radius:4px;color:var(--w1);font-size:11px;padding:4px 7px;outline:none;resize:none;min-height:32px}
+.proj-obs-input:focus{border-color:var(--navy2);background:var(--c4)}
+.proj-pct-input::placeholder{color:var(--w4)}
+.proj-obs-input::placeholder{color:var(--w4)}
 .proj-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:4px 10px;border-radius:20px;border:.5px solid var(--line2);background:rgba(255,255,255,.05);color:var(--w2);cursor:pointer;transition:.15s;user-select:none}
 .proj-chip:hover{border-color:var(--line3)}
 .proj-chip.off{opacity:.35;text-decoration:line-through}
@@ -4984,17 +4994,27 @@ document.addEventListener('DOMContentLoaded', function(){
 (function(){
 
 /* ══════════════════════════════════════
-   SUPABASE CONFIG
+   SUPABASE CONFIG — usa credenciales globales si están disponibles
 ══════════════════════════════════════ */
-const SB_URL  = 'https://gtyydandwcgoaratmnqh.supabase.co';
-const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0eXlkYW5kd2Nnb2FyYXRtbnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDAyMTcsImV4cCI6MjA5MjYxNjIxN30.utGZtr0L5t9hIpRABTtfhsKEsrSCBJLHcP_gQ5Hq0EI';
+const SB_URL  = (typeof SUPABASE_URL!=='undefined')?SUPABASE_URL:'https://gtyydandwcgoaratmnqh.supabase.co';
+const SB_KEY  = (typeof SUPABASE_KEY!=='undefined')?SUPABASE_KEY:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0eXlkYW5kd2Nnb2FyYXRtbnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDAyMTcsImV4cCI6MjA5MjYxNjIxN30.utGZtr0L5t9hIpRABTtfhsKEsrSCBJLHcP_gQ5Hq0EI';
 const HEADERS = {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY};
 
 async function sbGet(table, params){
   const qs=params?'?'+params:'';
-  const r=await fetch(SB_URL+'/rest/v1/'+table+qs,{headers:{...HEADERS,'Accept':'application/json'}});
-  if(!r.ok) return [];
-  return r.json();
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/'+table+qs,{headers:{...HEADERS,'Accept':'application/json'}});
+    if(!r.ok){
+      console.warn('[Project sbGet] Error',r.status,'on',table,qs);
+      return [];
+    }
+    const data=await r.json();
+    console.log('[Project sbGet]',table,qs,'→',data.length,'rows');
+    return data;
+  } catch(e){
+    console.error('[Project sbGet] fetch failed:',table,e.message);
+    return [];
+  }
 }
 async function sbUpsert(table, body){
   const r=await fetch(SB_URL+'/rest/v1/'+table,{
@@ -5038,7 +5058,16 @@ let _people=null;
    HELPERS SEMANA
 ══════════════════════════════════════ */
 function currentWkId(){
-  if(typeof wkId!=='undefined'&&wkId&&wkId!=='ALL') return wkId;
+  // Leer wkId del scope global del módulo de operaciones
+  try{
+    const gWkId=(typeof wkId!=='undefined')?wkId:null;
+    if(gWkId&&gWkId!=='ALL'&&gWkId!=='') return gWkId;
+    // Si es ALL o vacío, usar la semana más reciente disponible
+    if(typeof WKS==='function'){
+      const wks=WKS();
+      if(wks&&wks.length) return wks[wks.length-1].id;
+    }
+  }catch(e){}
   return 'S'+getISOWeek(new Date());
 }
 function nextWkId(id){
@@ -5064,19 +5093,7 @@ let projWheelAngle=0;
 async function loadPeople(){
   if(_people) return _people;
   const rows=await sbGet('project_people','order=orden.asc');
-  if(!rows.length){
-    _people=[
-      {nombre:'Maria Camila Díaz',activo:true,orden:1},
-      {nombre:'Juan Pérez',activo:true,orden:2},
-      {nombre:'Andrés Martínez',activo:true,orden:3},
-      {nombre:'Laura Gómez',activo:true,orden:4},
-      {nombre:'Carlos Ruiz',activo:true,orden:5},
-      {nombre:'Sofía Herrera',activo:true,orden:6},
-    ];
-    await sbUpsert('project_people',_people);
-  } else {
-    _people=rows;
-  }
+  _people=rows.length?rows:[];
   return _people;
 }
 async function savePerson(p){
@@ -5100,13 +5117,18 @@ async function loadWeekData(wk){
   // Cargar tareas de esa semana
   const taskRows=await sbGet('project_tareas','semana=eq.'+wk+'&order=orden.asc');
 
-  // Merge con defaults (garantiza que siempre aparecen las tareas base)
-  const merged=DEFAULT_TASKS.map(dt=>{
-    const found=taskRows.find(t=>t.task_id===dt.task_id);
-    return found ? {...dt,...found} : {...dt,real:null,obs:'',semana:wk};
-  });
-  // Extra = tareas custom agregadas para esa semana
-  const extra=taskRows.filter(t=>!DEFAULT_TASKS.find(d=>d.task_id===t.task_id));
+  // IDs de tareas default eliminadas para esta semana (marcadas con deleted=true)
+  const deletedIds=new Set(taskRows.filter(t=>t.deleted===true).map(t=>t.task_id));
+
+  // Merge con defaults — excluir las eliminadas para esta semana
+  const merged=DEFAULT_TASKS
+    .filter(dt=>!deletedIds.has(dt.task_id))
+    .map(dt=>{
+      const found=taskRows.find(t=>t.task_id===dt.task_id&&!t.deleted);
+      return found ? {...dt,...found} : {...dt,real:null,obs:'',semana:wk};
+    });
+  // Extra = tareas custom agregadas para esa semana (no eliminadas)
+  const extra=taskRows.filter(t=>!DEFAULT_TASKS.find(d=>d.task_id===t.task_id)&&!t.deleted);
 
   _cache[wk]={tasks:[...merged,...extra], hseq};
   return _cache[wk];
@@ -5141,78 +5163,210 @@ function showProjLoading(show){
 }
 
 /* ══════════════════════════════════════
+   HELPERS ROL
+══════════════════════════════════════ */
+function getProjUserRol(){
+  try{
+    const raw=sessionStorage.getItem('inlop_user');
+    if(!raw) return 'operativo';
+    const u=JSON.parse(raw);
+    return (u&&u.rol)?u.rol:'operativo';
+  }catch(e){return 'operativo';}
+}
+function canEditProject(){
+  const rol=getProjUserRol();
+  return ['master','operativo','trafico'].includes(rol);
+}
+
+/* ══════════════════════════════════════
    RENDER PRINCIPAL
 ══════════════════════════════════════ */
 window.projRender = async function(){
-  const wk=currentWkId();
-  document.getElementById('proj-week-badge').textContent=wk;
-  showProjLoading(true);
+  try {
+    const wk=currentWkId();
+    const badge=document.getElementById('proj-week-badge');
+    // Badge con rango de fechas si está disponible
+    if(badge){
+      const allWks=(typeof WKS==='function')?WKS():[];
+      const found=allWks.find(w=>w.id===wk);
+      badge.textContent=found?`${wk} · ${found.rango}`:wk;
+    }
+    showProjLoading(true);
 
-  const {tasks, hseq}=await loadWeekData(wk);
+    let tasks=[], hseq=null;
+    try {
+      const data=await loadWeekData(wk);
+      tasks=data.tasks||[];
+      hseq=data.hseq||null;
+    } catch(e){
+      console.warn('[Project] Supabase fetch error, using defaults:', e);
+      tasks=DEFAULT_TASKS.map(t=>({...t,real:null,obs:'',semana:wk}));
+    }
 
-  // Chip encargado
-  const chip=document.getElementById('proj-encargado-chip');
-  const chipTxt=document.getElementById('proj-encargado-txt');
-  if(hseq){chip.style.display='inline-flex';chipTxt.textContent='HSEQ: '+hseq;}
-  else{chip.style.display='none';}
+    // Chip encargado
+    const chip=document.getElementById('proj-encargado-chip');
+    const chipTxt=document.getElementById('proj-encargado-txt');
+    if(chip){
+      if(hseq){chip.style.display='inline-flex';if(chipTxt)chipTxt.textContent='HSEQ: '+hseq;}
+      else{chip.style.display='none';}
+    }
 
-  // Label botón asignar
-  const nxt=nextWkId(wk);
-  const assignLabel=document.getElementById('proj-assign-label');
-  if(assignLabel) assignLabel.textContent='Asignar a '+nxt;
+    // Label botón asignar
+    const nxt=nextWkId(wk);
+    const assignLabel=document.getElementById('proj-assign-label');
+    if(assignLabel) assignLabel.textContent='Asignar a '+nxt;
 
-  renderProjKPIs(tasks);
-  renderProjTable(wk, tasks);
-  await renderProjChips();
-  renderProjWheel();
-  await renderHseqHistory();
+    // Control de acceso por rol
+    const editable=canEditProject();
+    const btnAdd=document.querySelector('[onclick="projAddRow()"]');
+    const btnSave=document.querySelector('[onclick="projSave()"]');
+    if(btnAdd) btnAdd.style.display=editable?'':'none';
+    if(btnSave) btnSave.style.display=editable?'':'none';
+    if(!editable){
+      const roChip=document.getElementById('proj-encargado-chip');
+      // Mostrar badge de solo lectura si no tiene permisos de edición
+      const existing=document.getElementById('proj-readonly-badge');
+      if(!existing){
+        const b=document.createElement('span');
+        b.id='proj-readonly-badge';
+        b.style.cssText='font-family:"Oswald",sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,.07);color:var(--w4);border:.5px solid var(--line2)';
+        b.textContent='Solo lectura';
+        if(roChip&&roChip.parentNode) roChip.parentNode.appendChild(b);
+      }
+    }
+
+    renderProjKPIs(tasks);
+    renderProjTable(wk, tasks, editable);
+    try{ await renderProjChips(); } catch(e){ console.warn('[Project] chips error:',e); }
+    try{ renderProjWheel(); } catch(e){ console.warn('[Project] wheel error:',e); }
+    try{ await renderHseqHistory(); } catch(e){ console.warn('[Project] history error:',e); }
+  } catch(e){
+    console.error('[Project] projRender fatal error:', e);
+    const tbody=document.getElementById('proj-tbody');
+    if(tbody) tbody.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--danger);font-size:12px">Error al cargar: ${e.message}</td></tr>`;
+  }
 };
 
+/* ══════════════════════════════════════
+   LÓGICA GERENCIAL DE INDICADORES
+   meta=0  → minimización (novedades, incidentes): mejor = 0
+   meta>0  → maximización (cumplimiento, ejecución): mejor = 100
+══════════════════════════════════════ */
+function calcIndicador(real, meta){
+  // real y meta son números. Devuelve {estado, brecha, brechaDisplay, isMin, pct}
+  const r = parseFloat(real);
+  const m = parseFloat(meta);
+  const isMin = (m === 0); // indicador de minimización
+
+  if(isMin){
+    // Meta: que no ocurra nada (0). Real: cuántas veces ocurrió.
+    // Brecha = exceso sobre 0 = real mismo
+    const brecha = r; // si real=0 → OK; si real>0 → es negativo
+    let estado, brechaDisplay;
+    if(r === 0){
+      estado = 'ok';
+      brechaDisplay = `<span style="color:var(--green)">0</span>`;
+    } else if(r <= 3){
+      estado = 'risk';
+      brechaDisplay = `<span style="color:var(--amber)">+${r}</span>`;
+    } else {
+      estado = 'crit';
+      brechaDisplay = `<span style="color:var(--danger)">+${r}</span>`;
+    }
+    // pct: 100 si real=0, decrece. Usamos una curva simple para KPI global.
+    const pct = r === 0 ? 100 : Math.max(0, 100 - r * 20);
+    return {estado, brecha, brechaDisplay, isMin, pct};
+  } else {
+    // Meta > 0: maximización
+    const brecha = Math.max(0, m - r);
+    let estado, brechaDisplay;
+    if(brecha <= 0){
+      estado = 'ok';
+      brechaDisplay = `<span style="color:var(--green)">0%</span>`;
+    } else if(brecha <= 15){
+      estado = 'risk';
+      brechaDisplay = `<span style="color:var(--amber)">${brecha}%</span>`;
+    } else {
+      estado = 'crit';
+      brechaDisplay = `<span style="color:var(--danger)">${brecha}%</span>`;
+    }
+    const pct = m > 0 ? Math.min(100, Math.round(r / m * 100)) : 0;
+    return {estado, brecha, brechaDisplay, isMin, pct};
+  }
+}
+
 function renderProjKPIs(tasks){
-  let ok=0,crit=0,risk=0;
+  let ok=0,crit=0,risk=0,withData=0,pctSum=0;
   tasks.forEach(t=>{
     if(t.real===null||t.real==='') return;
-    const pend=parseFloat(t.meta)-parseFloat(t.real);
-    if(pend<=0) ok++;
-    else if(pend<=15) risk++;
+    withData++;
+    const {estado,pct}=calcIndicador(t.real, t.meta);
+    pctSum+=pct;
+    if(estado==='ok') ok++;
+    else if(estado==='risk') risk++;
     else crit++;
   });
+  const globalPct=withData>0?Math.round(pctSum/withData):null;
+  const pctColor=globalPct===null?'var(--w4)':globalPct>=90?'var(--green)':globalPct>=70?'var(--amber)':'var(--danger)';
   document.getElementById('proj-kpis').innerHTML=`
     <div class="kpi k1"><div class="kpi-lbl">Tareas totales</div><div class="kpi-val">${tasks.length}</div></div>
     <div class="kpi k2"><div class="kpi-lbl">En meta</div><div class="kpi-val" style="color:var(--green)">${ok}</div></div>
     <div class="kpi k3"><div class="kpi-lbl">Críticas</div><div class="kpi-val" style="color:var(--danger)">${crit}</div></div>
     <div class="kpi k4"><div class="kpi-lbl">En riesgo</div><div class="kpi-val" style="color:var(--amber)">${risk}</div></div>
+    <div class="kpi k5"><div class="kpi-lbl">% Efectividad global</div><div class="kpi-val" style="color:${pctColor}">${globalPct!==null?globalPct+'%':'—'}</div><div class="kpi-sub" style="font-size:10px">${withData} de ${tasks.length} con dato</div></div>
   `;
 }
 
-function renderProjTable(wk, tasks){
+function renderProjTable(wk, tasks, editable){
+  if(editable===undefined) editable=true;
   const tbody=document.getElementById('proj-tbody');
   tbody.innerHTML='';
-  tasks.forEach((t,idx)=>{
-    const r=t.real===null||t.real===''?'':parseFloat(t.real);
-    const m=parseFloat(t.meta)||0;
-    const pend=r===''?null:Math.max(0,m-r);
-    const pendDisplay=pend===null?'—':(pend===0?`<span style="color:var(--green)">0%</span>`:`<span style="color:var(--danger)">${pend}%</span>`);
-    let estado='';
-    if(r==='') estado='<span class="badge proj-badge-none">Sin dato</span>';
-    else if(pend<=0) estado='<span class="badge proj-badge-ok">OK</span>';
-    else if(pend<=15) estado='<span class="badge proj-badge-warn">Riesgo</span>';
-    else estado='<span class="badge proj-badge-crit">Crítico</span>';
-    const isNew=!DEFAULT_TASKS.find(d=>d.task_id===t.task_id);
-    const tr=document.createElement('tr');
-    if(r!==''&&pend>15) tr.classList.add('crit-row');
+  tasks.forEach((t)=>{
+    const r = t.real===null||t.real==='' ? '' : parseFloat(t.real);
+    const m = parseFloat(t.meta);
+    const isCustom = !DEFAULT_TASKS.find(d=>d.task_id===t.task_id);
+    const hasData = r !== '';
+    const ind = hasData ? calcIndicador(r, m) : null;
+
+    // Brecha display
+    const brechaDisplay = !hasData ? '—' : ind.brechaDisplay;
+
+    // Estado badge
+    let estadoBadge = '';
+    if(!hasData){
+      estadoBadge = '<span class="badge proj-badge-none">Sin dato</span>';
+    } else if(ind.estado==='ok'){
+      estadoBadge = '<span class="badge proj-badge-ok">OK</span>';
+    } else if(ind.estado==='risk'){
+      estadoBadge = '<span class="badge proj-badge-warn">Riesgo</span>';
+    } else {
+      estadoBadge = '<span class="badge proj-badge-crit">Crítico</span>';
+    }
+
+    // Tipo de indicador — pequeña etiqueta visual
+    const tipoTag = `<span style="font-size:9px;padding:1px 5px;border-radius:3px;margin-left:5px;opacity:.7;background:${m===0?'rgba(239,68,68,.12)':'rgba(0,217,126,.10)'};color:${m===0?'var(--danger)':'var(--green)'}">${m===0?'↓min':'↑max'}</span>`;
+
+    const tr = document.createElement('tr');
+    if(hasData && ind.estado==='crit') tr.classList.add('crit-row');
+    const disAttr = editable ? '' : 'disabled readonly';
+
     tr.innerHTML=`
-      <td style="font-size:12px;${isNew?'color:var(--blue)':''};">${t.tema}</td>
-      <td class="c"><input class="proj-pct-input" type="number" min="0" max="100" step="1"
-        value="${r===''?'':r}" placeholder="—" data-taskid="${t.task_id}"
-        onchange="projUpdateReal(this,'${wk}','${t.task_id}',${m})"></td>
-      <td class="c">${pendDisplay}</td>
-      <td class="c"><span style="font-size:12px;color:var(--w3)">${m}%</span></td>
-      <td class="c">${estado}</td>
+      <td style="font-size:12px;${isCustom?'color:var(--blue)':''}">${t.tema}${tipoTag}</td>
+      <td class="c"><input class="proj-pct-input" type="number" min="0" step="1"
+        value="${r===''?'':r}" placeholder="—" data-taskid="${t.task_id}" ${disAttr}
+        ${editable?`onchange="projUpdateReal(this,'${wk}','${t.task_id}')"`:''}
+        style="${!editable?'opacity:.6;cursor:default':''}"></td>
+      <td class="c">${brechaDisplay}</td>
+      <td class="c"><input class="proj-pct-input proj-meta-input" type="number" min="0" max="100" step="1"
+        value="${m}" data-taskid="${t.task_id}" data-field="meta" ${disAttr}
+        ${editable?`onchange="projUpdateMeta(this,'${wk}','${t.task_id}')"`:''}
+        style="width:54px;${!editable?'opacity:.6;cursor:default':''}"></td>
+      <td class="c">${estadoBadge}</td>
       <td><textarea class="proj-obs-input" rows="1" data-taskid="${t.task_id}"
-        placeholder="Observación..."
-        onblur="projUpdateObs(this,'${wk}','${t.task_id}')">${t.obs||''}</textarea></td>
-      <td class="c">${isNew?`<button onclick="projDeleteRow('${wk}','${t.task_id}')" title="Eliminar" style="background:none;border:none;color:var(--w4);cursor:pointer;font-size:13px"><i class="ti ti-trash" aria-hidden="true"></i></button>`:''}</td>
+        placeholder="${editable?'Observación...':'—'}" ${disAttr}
+        ${editable?`onblur="projUpdateObs(this,'${wk}','${t.task_id}')"`:''}
+        style="${!editable?'opacity:.6;cursor:default':''}">${t.obs||''}</textarea></td>
+      <td class="c">${editable?`<button onclick="projDeleteRow('${wk}','${t.task_id}',${!isCustom})" title="Eliminar fila" style="background:none;border:none;color:var(--w4);cursor:pointer;font-size:13px;opacity:.6;transition:.15s" onmouseenter="this.style.opacity=1;this.style.color='var(--danger)'" onmouseleave="this.style.opacity=.6;this.style.color='var(--w4)'"><i class="ti ti-trash" aria-hidden="true"></i></button>`:''}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -5221,67 +5375,133 @@ function renderProjTable(wk, tasks){
 /* ══════════════════════════════════════
    ACCIONES TABLA
 ══════════════════════════════════════ */
-window.projUpdateReal=async function(input, wk, task_id, meta){
+window.projUpdateReal=async function(input, wk, task_id){
   const raw=input.value.trim();
-  const real=raw===''?null:Math.min(100,Math.max(0,parseFloat(raw)));
+  const real=raw===''?null:Math.max(0,parseFloat(raw));
   if(real!==null) input.value=real;
+  // Solo actualizar estado en memoria — guardado via botón "Guardar semana"
   const data=await loadWeekData(wk);
   const task=data.tasks.find(t=>t.task_id===task_id);
-  if(task){task.real=real;}
-  const obs=input.closest('tr')?.querySelector('.proj-obs-input')?.value||'';
-  await saveTaskRow(wk,{task_id,tema:task?.tema||'',meta,real,obs,semana:wk,orden:data.tasks.findIndex(t=>t.task_id===task_id)+1});
+  if(task) task.real=real;
   renderProjKPIs(data.tasks);
-  renderProjTable(wk,data.tasks);
+};
+
+window.projUpdateMeta=async function(input, wk, task_id){
+  const raw=input.value.trim();
+  const meta=raw===''?0:Math.max(0,parseFloat(raw));
+  input.value=meta;
+  // Actualizar en memoria
+  const data=await loadWeekData(wk);
+  const task=data.tasks.find(t=>t.task_id===task_id);
+  if(task) task.meta=meta;
+  renderProjKPIs(data.tasks);
+  // Re-render para actualizar brecha y estado inmediatamente
+  renderProjTable(wk, data.tasks, canEditProject());
 };
 
 window.projUpdateObs=async function(ta, wk, task_id){
+  // Solo actualizar estado en memoria — guardado via botón "Guardar semana"
   const data=await loadWeekData(wk);
   const task=data.tasks.find(t=>t.task_id===task_id);
-  if(!task) return;
-  task.obs=ta.value;
-  await saveTaskRow(wk,{task_id,tema:task.tema,meta:task.meta,real:task.real,obs:ta.value,semana:wk,orden:data.tasks.findIndex(t=>t.task_id===task_id)+1});
+  if(task) task.obs=ta.value;
 };
 
 window.projAddRow=async function(){
   const wk=currentWkId();
-  const tema=prompt('Nombre de la nueva tarea:');
-  if(!tema||!tema.trim()) return;
-  const metaStr=prompt('Meta (%) — ingresa un número de 0 a 100:','100');
-  const meta=Math.min(100,Math.max(0,parseInt(metaStr)||0));
+  const tbody=document.getElementById('proj-tbody');
+  if(!tbody) return;
+  // Evitar doble fila de edición
+  if(document.getElementById('proj-new-row')) return;
+  const tr=document.createElement('tr');
+  tr.id='proj-new-row';
+  tr.style.background='rgba(1,42,107,.08)';
+  tr.innerHTML=`
+    <td colspan="5">
+      <div style="display:flex;gap:6px;align-items:center;padding:2px 0">
+        <input id="proj-new-tema" type="text" placeholder="Nombre de la tarea..." maxlength="80"
+          style="flex:1;background:var(--c3);border:1px solid var(--navy2);border-radius:4px;color:var(--w1);font-size:12px;padding:5px 8px;outline:none"
+          onkeydown="if(event.key==='Enter')projConfirmNewRow();if(event.key==='Escape')projCancelNewRow()">
+        <span style="font-size:11px;color:var(--w4);white-space:nowrap">Meta %:</span>
+        <input id="proj-new-meta" type="number" min="0" max="100" value="100"
+          style="width:56px;background:var(--c3);border:1px solid var(--navy2);border-radius:4px;color:var(--w1);font-family:'Oswald',sans-serif;font-size:12px;padding:5px 6px;outline:none;text-align:center"
+          onkeydown="if(event.key==='Enter')projConfirmNewRow();if(event.key==='Escape')projCancelNewRow()">
+      </div>
+    </td>
+    <td colspan="1"></td>
+    <td class="c" style="white-space:nowrap">
+      <button onclick="projConfirmNewRow()" title="Confirmar" style="background:var(--navy);border:none;color:#fff;border-radius:4px;padding:5px 8px;cursor:pointer;font-size:12px;margin-right:4px"><i class="ti ti-check" aria-hidden="true"></i></button>
+      <button onclick="projCancelNewRow()" title="Cancelar" style="background:none;border:1px solid var(--line2);color:var(--w4);border-radius:4px;padding:5px 8px;cursor:pointer;font-size:12px"><i class="ti ti-x" aria-hidden="true"></i></button>
+    </td>
+  `;
+  tbody.appendChild(tr);
+  setTimeout(()=>{ const el=document.getElementById('proj-new-tema'); if(el) el.focus(); },50);
+};
+
+window.projConfirmNewRow=async function(){
+  const temaEl=document.getElementById('proj-new-tema');
+  const metaEl=document.getElementById('proj-new-meta');
+  if(!temaEl) return;
+  const tema=temaEl.value.trim();
+  if(!tema){ temaEl.focus(); return; }
+  const meta=Math.min(100,Math.max(0,parseInt(metaEl?.value||'100')||0));
+  const wk=currentWkId();
   const task_id='custom_'+Date.now();
   const data=await loadWeekData(wk);
   const orden=data.tasks.length+1;
-  const newTask={task_id,tema:tema.trim(),meta,real:null,obs:'',semana:wk,orden};
+  const newTask={task_id,tema,meta,real:null,obs:'',semana:wk,orden};
   data.tasks.push(newTask);
   await saveTaskRow(wk,newTask);
   renderProjKPIs(data.tasks);
-  renderProjTable(wk,data.tasks);
+  renderProjTable(wk,data.tasks,canEditProject());
+  if(typeof toast==='function') toast('Tarea "'+tema+'" agregada.','ok');
 };
 
-window.projDeleteRow=async function(wk, task_id){
-  await deleteTaskRow(wk,task_id);
+window.projCancelNewRow=function(){
+  const tr=document.getElementById('proj-new-row');
+  if(tr) tr.remove();
+};
+
+window.projDeleteRow=async function(wk, task_id, isDefault){
+  if(isDefault){
+    // Tarea base: guardar en Supabase como deleted=true para esta semana
+    // No afecta semanas anteriores
+    await sbUpsert('project_tareas',{task_id,semana:wk,deleted:true,real:null,obs:'',tema:'',meta:0,orden:999});
+    if(_cache[wk]){
+      _cache[wk].tasks=_cache[wk].tasks.filter(t=>t.task_id!==task_id);
+    }
+  } else {
+    // Tarea custom: borrar completamente
+    await deleteTaskRow(wk,task_id);
+  }
   const data=await loadWeekData(wk);
   renderProjKPIs(data.tasks);
   renderProjTable(wk,data.tasks);
+  if(typeof toast==='function') toast('Tarea eliminada de '+wk,'info');
 };
 
 window.projSave=async function(){
   const wk=currentWkId();
-  const inputs=document.querySelectorAll('#proj-tbody .proj-pct-input');
-  const obsEls=document.querySelectorAll('#proj-tbody .proj-obs-input');
   const data=await loadWeekData(wk);
   const saves=[];
-  inputs.forEach((inp,i)=>{
-    const task=data.tasks[i]; if(!task) return;
+  // Iterar por task_id desde el DOM, no por índice posicional
+  // Seleccionar solo inputs de % Real (no los de meta)
+  document.querySelectorAll('#proj-tbody .proj-pct-input:not(.proj-meta-input)').forEach(inp=>{
+    const task_id=inp.dataset.taskid;
+    const task=data.tasks.find(t=>t.task_id===task_id);
+    if(!task) return;
     const raw=inp.value.trim();
-    task.real=raw===''?null:Math.min(100,Math.max(0,parseFloat(raw)));
-    task.obs=obsEls[i]?.value||task.obs||'';
-    saves.push(saveTaskRow(wk,{task_id:task.task_id,tema:task.tema,meta:task.meta,real:task.real,obs:task.obs,semana:wk,orden:i+1}));
+    task.real=raw===''?null:Math.max(0,parseFloat(raw));
+    // Leer meta editable del DOM
+    const metaEl=inp.closest('tr')?.querySelector('.proj-meta-input');
+    if(metaEl) task.meta=Math.max(0,parseFloat(metaEl.value)||0);
+    const obsEl=inp.closest('tr')?.querySelector('.proj-obs-input');
+    task.obs=obsEl?obsEl.value:task.obs||'';
+    saves.push(saveTaskRow(wk,{task_id:task.task_id,tema:task.tema,meta:task.meta,real:task.real,obs:task.obs,semana:wk,orden:data.tasks.findIndex(t=>t.task_id===task_id)+1}));
   });
   await Promise.all(saves);
   if(typeof toast==='function') toast('Project guardado · '+wk,'ok');
   renderProjKPIs(data.tasks);
-  renderProjTable(wk,data.tasks);
+  renderProjTable(wk,data.tasks,canEditProject());
 };
 
 /* ══════════════════════════════════════
@@ -5369,20 +5589,38 @@ window.projSpin=function(){
   document.getElementById('proj-winner-box').style.display='none';
   const n=active.length;
   const arc=(Math.PI*2)/n;
+
+  // Elegir ganador al azar
   const winnerSlot=Math.floor(Math.random()*n);
-  const totalRot=(6+Math.random()*5)*Math.PI*2;
-  const slotMid=winnerSlot*arc+arc/2;
-  const remaining=(projWheelAngle%(Math.PI*2)+Math.PI*2)%(Math.PI*2);
-  const targetAngle=totalRot-remaining-slotMid+Math.PI*2;
+
+  // El puntero está en la parte superior = ángulo 0 en nuestro sistema
+  // (renderProjWheel dibuja slot[i] empezando en projWheelAngle + i*arc - PI/2)
+  // Para que el slot ganador quede bajo el puntero (top), necesitamos que:
+  // projWheelAngle + winnerSlot*arc - PI/2 + arc/2 ≡ -PI/2  (mod 2PI)
+  // => projWheelAngle ≡ -winnerSlot*arc - arc/2  (mod 2PI)
+  // Calculamos cuánto debemos girar desde el ángulo actual:
+  const fullSpins = (6 + Math.floor(Math.random()*5)) * Math.PI * 2; // 6-10 vueltas
+  // Ángulo final deseado para que el slot ganador quede centrado bajo el puntero
+  const targetFinalAngle = -winnerSlot * arc - arc/2;
+  // Normalizar ángulo actual
+  const currentNorm = ((projWheelAngle % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+  const targetNorm  = ((targetFinalAngle % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+  // Delta para llegar al target desde el ángulo actual (siempre positivo = giro horario)
+  let delta = targetNorm - currentNorm;
+  if(delta <= 0) delta += Math.PI*2;
+  const totalRot = fullSpins + delta;
+
   const duration=4800;
   const startT=performance.now();
   const startAngle=projWheelAngle;
+
   function frame(now){
     const t=Math.min((now-startT)/duration,1);
-    projWheelAngle=startAngle+targetAngle*(1-Math.pow(1-t,4));
+    projWheelAngle=startAngle+totalRot*(1-Math.pow(1-t,4));
     renderProjWheel();
-    if(t<1){requestAnimationFrame(frame);}
-    else{
+    if(t<1){
+      requestAnimationFrame(frame);
+    } else {
       projSpinning=false;
       document.getElementById('proj-spin-btn').disabled=false;
       projWinnerPerson=active[winnerSlot].nombre;
