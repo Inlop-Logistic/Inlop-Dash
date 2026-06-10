@@ -3184,7 +3184,7 @@ function saveCauseEdit(idx,val){
   const key=`${cargo}_${wkId}`;
   if(!causesEdits[key])causesEdits[key]={};
   causesEdits[key][idx]=val;
-  saveLocal();
+  saveMem("");
 }
 function toggleCauseEdit(idx){
   const ta=document.getElementById(`cta_${idx}`);
@@ -3197,7 +3197,7 @@ function toggleCauseEdit(idx){
     toast('Causa actualizada y guardada.','ok');
   }
 }
-function saveAction(){if(!editingAction)return;const acts=getActions();const d={id:Date.now(),txt:document.getElementById('mTxt').value,resp:document.getElementById('mResp').value,date:document.getElementById('mDate').value,status:document.getElementById('mStatus').value};if(editingAction.idx>=0)acts[editingAction.idx]=d;else acts.push(d);saveLocal();closeModal();renderActions();toast('Acción guardada.','ok')}
+function saveAction(){if(!editingAction)return;const acts=getActions();const d={id:Date.now(),txt:document.getElementById('mTxt').value,resp:document.getElementById('mResp').value,date:document.getElementById('mDate').value,status:document.getElementById('mStatus').value};if(editingAction.idx>=0)acts[editingAction.idx]=d;else acts.push(d);saveMem("");closeModal();renderActions();toast('Acción guardada.','ok')}
 
 /* ════════════ HISTÓRICO TABLE ════════════ */
 function renderHisTable(){
@@ -3539,7 +3539,7 @@ function applyAiResults(r){
       <div class="ha-item"><div class="ha-item-title">Semanas destacadas</div><div class="ha-item-body">${r.historico.semanas_destacadas||''}</div></div>
       <div class="ha-item"><div class="ha-item-title">Clientes a priorizar</div><div class="ha-item-body">${r.historico.clientes_priorizar||''}</div></div>`;
   }
-  saveLocal();
+  saveMem("");
 }
 
 function showAiLoading(show){
@@ -4119,7 +4119,7 @@ async function generateAllWeeksCauses(){
   }
 
   saveAiCache();
-  saveLocal();
+  saveMem("");
   updateAiStatus();
   refresh();
 
@@ -4371,7 +4371,7 @@ async function buildCausesFromExcel(){
 
   // Persist to localStorage
   try{ localStorage.setItem(KCA,JSON.stringify(aiCausesData)); }catch(e){}
-  saveLocal();
+  saveMem("");
   renderCausas();
   renderActions();
   toast('✓ Causas y acciones generadas desde Excel.','ok');
