@@ -3197,7 +3197,7 @@ function toggleCauseEdit(idx){
     toast('Causa actualizada y guardada.','ok');
   }
 }
-function saveAction(){if(!editingAction)return;const acts=getActions();const d={id:Date.now(),txt:document.getElementById('mTxt').value,resp:document.getElementById('mResp').value,date:document.getElementById('mDate').value,status:document.getElementById('mStatus').value};if(editingAction.idx>=0)acts[editingAction.idx]=d;else acts.push(d);saveMem("");closeModal();renderActions();toast('Acción guardada.','ok')}
+function saveAction(){if(!editingAction)return;const acts=getActions();const d={id:Date.now(),txt:document.getElementById('mTxt').value,resp:document.getElementById('mResp').value,date:document.getElementById('mDate').value,status:document.getElementById('mStatus').value};if(editingAction.idx>=0)acts[editingAction.idx]=d;else acts.push(d);saveMem("");closeModal();if(typeof renderActions==='function') renderActions();toast('Acción guardada.','ok')}
 
 /* ════════════ HISTÓRICO TABLE ════════════ */
 function renderHisTable(){
@@ -3515,13 +3515,13 @@ function applyAiResults(r){
     if(!causesEdits[key])causesEdits[key]={};
     // Store AI causes as the base for this week
     aiCausesData[key]=r.causas;
-    renderCausasFromAi(r.causas);
+    if(typeof renderCausasFromAi==='function') renderCausasFromAi(r.causas);
   }
   // 3. Acciones
   if(r.acciones&&r.acciones.length){
     if(!actions[cargo])actions[cargo]={};
     actions[cargo][wkId]=r.acciones.map((a,i)=>({...a,id:Date.now()+i}));
-    renderActions();
+    if(typeof renderActions==='function') renderActions();
   }
   // 4. Ruta cards (update descriptions)
   if(r.ruta_cards){
@@ -4372,8 +4372,8 @@ async function buildCausesFromExcel(){
   // Persist to localStorage
   try{ localStorage.setItem(KCA,JSON.stringify(aiCausesData)); }catch(e){}
   saveMem("");
-  renderCausas();
-  renderActions();
+  if(typeof renderResAnalysis==='function') renderResAnalysis();
+  if(typeof renderActions==='function') renderActions();
   toast('✓ Causas y acciones generadas desde Excel.','ok');
 }
 
