@@ -2135,11 +2135,13 @@ window.updatePortalStats=updatePortalStats;
       <span id="proj-encargado-chip" style="display:none;align-items:center;gap:5px;font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:4px 12px;border-radius:20px;background:rgba(245,158,11,.15);color:#f59e0b;border:.5px solid rgba(245,158,11,.4)">
         <i class="ti ti-shield-check" aria-hidden="true"></i><span id="proj-encargado-txt"></span>
       </span>
-      <button onclick="projAddRow()" style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:5px 12px;border-radius:5px;background:transparent;border:1px solid var(--line2);color:var(--w3);cursor:pointer;display:flex;align-items:center;gap:5px">
+      <!-- Botón Nueva tarea — solo visible en modo edición -->
+      <button id="proj-btn-add" onclick="projAddRow()" style="display:none;font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:5px 12px;border-radius:5px;background:transparent;border:1px solid var(--line2);color:var(--w3);cursor:pointer;align-items:center;gap:5px">
         <i class="ti ti-plus" aria-hidden="true"></i>Nueva tarea
       </button>
-      <button onclick="projSave()" style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:5px 14px;border-radius:5px;background:var(--navy);border:1px solid var(--navy2);color:#fff;cursor:pointer;display:flex;align-items:center;gap:5px">
-        <i class="ti ti-device-floppy" aria-hidden="true"></i>Guardar semana
+      <!-- Botón toggle Editar / Guardar -->
+      <button id="proj-btn-toggle" onclick="projToggleEdit()" style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:5px 14px;border-radius:5px;background:transparent;border:1px solid var(--line2);color:var(--w3);cursor:pointer;display:flex;align-items:center;gap:5px">
+        <i class="ti ti-pencil" aria-hidden="true" id="proj-btn-icon"></i><span id="proj-btn-label">Editar</span>
       </button>
     </div>
   </div>
@@ -2149,11 +2151,11 @@ window.updatePortalStats=updatePortalStats;
         <tr>
           <th style="width:30%">Tema</th>
           <th class="c" style="width:11%">% Real</th>
-          <th class="c" style="width:10%">Brecha</th>
-          <th class="c" style="width:11%">Meta <span style="font-size:9px;opacity:.6;font-weight:400">(editable)</span></th>
+          <th class="c" style="width:10%">Variación</th>
+          <th class="c" style="width:11%" id="proj-th-meta">Meta</th>
           <th class="c" style="width:10%">Estado</th>
           <th style="width:23%">Observaciones</th>
-          <th class="c" style="width:5%"></th>
+          <th class="c" style="width:5%" id="proj-th-actions"></th>
         </tr>
       </thead>
       <tbody id="proj-tbody"></tbody>
@@ -5086,6 +5088,7 @@ function getISOWeek(d){
 let projSpinning=false;
 let projWinnerPerson=null;
 let projWheelAngle=0;
+let _projEditMode=false; // false = vista, true = edición
 
 /* ══════════════════════════════════════
    SUPABASE — PERSONAS
@@ -5181,11 +5184,72 @@ function canEditProject(){
 /* ══════════════════════════════════════
    RENDER PRINCIPAL
 ══════════════════════════════════════ */
+/* ══════════════════════════════════════
+   MODO VISTA / EDICIÓN
+══════════════════════════════════════ */
+function setProjEditMode(editing, roleCanEdit){
+  _projEditMode = editing;
+  const btnToggle = document.getElementById('proj-btn-toggle');
+  const btnAdd    = document.getElementById('proj-btn-add');
+  const btnIcon   = document.getElementById('proj-btn-icon');
+  const btnLabel  = document.getElementById('proj-btn-label');
+  const thMeta    = document.getElementById('proj-th-meta');
+  const thActions = document.getElementById('proj-th-actions');
+
+  if(!roleCanEdit){
+    // Sin permisos de rol: ocultar botón toggle, siempre modo vista
+    if(btnToggle) btnToggle.style.display='none';
+    if(btnAdd) btnAdd.style.display='none';
+    return;
+  }
+
+  if(editing){
+    // Modo edición
+    if(btnToggle){
+      btnToggle.style.display='flex';
+      btnToggle.style.background='var(--navy)';
+      btnToggle.style.borderColor='var(--navy2)';
+      btnToggle.style.color='#fff';
+    }
+    if(btnIcon) btnIcon.className='ti ti-device-floppy';
+    if(btnLabel) btnLabel.textContent='Guardar semana';
+    if(btnAdd) btnAdd.style.display='flex';
+    if(thMeta) thMeta.innerHTML='Meta <span style="font-size:9px;opacity:.6;font-weight:400">(editable)</span>';
+    if(thActions) thActions.textContent='';
+  } else {
+    // Modo vista
+    if(btnToggle){
+      btnToggle.style.display='flex';
+      btnToggle.style.background='transparent';
+      btnToggle.style.borderColor='var(--line2)';
+      btnToggle.style.color='var(--w3)';
+    }
+    if(btnIcon) btnIcon.className='ti ti-pencil';
+    if(btnLabel) btnLabel.textContent='Editar';
+    if(btnAdd) btnAdd.style.display='none';
+    if(thMeta) thMeta.textContent='Meta';
+    if(thActions) thActions.textContent='';
+  }
+}
+
+window.projToggleEdit = async function(){
+  if(_projEditMode){
+    // Estaba editando → guardar y pasar a vista
+    await projSave();
+  } else {
+    // Estaba en vista → pasar a edición
+    const wk = currentWkId();
+    const data = await loadWeekData(wk);
+    _projEditMode = true;
+    setProjEditMode(true, canEditProject());
+    renderProjTable(wk, data.tasks, true);
+  }
+};
+
 window.projRender = async function(){
   try {
     const wk=currentWkId();
     const badge=document.getElementById('proj-week-badge');
-    // Badge con rango de fechas si está disponible
     if(badge){
       const allWks=(typeof WKS==='function')?WKS():[];
       const found=allWks.find(w=>w.id===wk);
@@ -5203,7 +5267,7 @@ window.projRender = async function(){
       tasks=DEFAULT_TASKS.map(t=>({...t,real:null,obs:'',semana:wk}));
     }
 
-    // Chip encargado
+    // Chip encargado HSEQ
     const chip=document.getElementById('proj-encargado-chip');
     const chipTxt=document.getElementById('proj-encargado-txt');
     if(chip){
@@ -5211,32 +5275,36 @@ window.projRender = async function(){
       else{chip.style.display='none';}
     }
 
-    // Label botón asignar
+    // Label botón asignar ruleta
     const nxt=nextWkId(wk);
     const assignLabel=document.getElementById('proj-assign-label');
     if(assignLabel) assignLabel.textContent='Asignar a '+nxt;
 
-    // Control de acceso por rol
-    const editable=canEditProject();
-    const btnAdd=document.querySelector('[onclick="projAddRow()"]');
-    const btnSave=document.querySelector('[onclick="projSave()"]');
-    if(btnAdd) btnAdd.style.display=editable?'':'none';
-    if(btnSave) btnSave.style.display=editable?'':'none';
-    if(!editable){
-      const roChip=document.getElementById('proj-encargado-chip');
-      // Mostrar badge de solo lectura si no tiene permisos de edición
+    // Determinar si el rol permite editar
+    const roleCanEdit=canEditProject();
+
+    // Badge solo lectura para roles sin permiso
+    if(!roleCanEdit){
       const existing=document.getElementById('proj-readonly-badge');
       if(!existing){
         const b=document.createElement('span');
         b.id='proj-readonly-badge';
         b.style.cssText='font-family:"Oswald",sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,.07);color:var(--w4);border:.5px solid var(--line2)';
         b.textContent='Solo lectura';
-        if(roChip&&roChip.parentNode) roChip.parentNode.appendChild(b);
+        const ref=document.getElementById('proj-encargado-chip');
+        if(ref&&ref.parentNode) ref.parentNode.appendChild(b);
       }
     }
 
+    // Determinar modo inicial:
+    // Si la semana no tiene ningún dato real ingresado → arrancar en edición
+    // Si ya tiene datos → arrancar en vista
+    const hasAnyData = tasks.some(t=>t.real!==null&&t.real!=='');
+    _projEditMode = roleCanEdit && !hasAnyData; // sin datos = modo edición automático
+
+    setProjEditMode(_projEditMode, roleCanEdit);
     renderProjKPIs(tasks);
-    renderProjTable(wk, tasks, editable);
+    renderProjTable(wk, tasks, _projEditMode);
     try{ await renderProjChips(); } catch(e){ console.warn('[Project] chips error:',e); }
     try{ renderProjWheel(); } catch(e){ console.warn('[Project] wheel error:',e); }
     try{ await renderHseqHistory(); } catch(e){ console.warn('[Project] history error:',e); }
@@ -5318,7 +5386,7 @@ function renderProjKPIs(tasks){
 }
 
 function renderProjTable(wk, tasks, editable){
-  if(editable===undefined) editable=true;
+  if(editable===undefined) editable=_projEditMode||false;
   const tbody=document.getElementById('proj-tbody');
   tbody.innerHTML='';
   tasks.forEach((t)=>{
@@ -5328,10 +5396,8 @@ function renderProjTable(wk, tasks, editable){
     const hasData = r !== '';
     const ind = hasData ? calcIndicador(r, m) : null;
 
-    // Brecha display
-    const brechaDisplay = !hasData ? '—' : ind.brechaDisplay;
+    const brechaDisplay = !hasData ? '<span style="color:var(--w4)">—</span>' : ind.brechaDisplay;
 
-    // Estado badge
     let estadoBadge = '';
     if(!hasData){
       estadoBadge = '<span class="badge proj-badge-none">Sin dato</span>';
@@ -5343,31 +5409,50 @@ function renderProjTable(wk, tasks, editable){
       estadoBadge = '<span class="badge proj-badge-crit">Crítico</span>';
     }
 
-    // Tipo de indicador — pequeña etiqueta visual
     const tipoTag = `<span style="font-size:9px;padding:1px 5px;border-radius:3px;margin-left:5px;opacity:.7;background:${m===0?'rgba(239,68,68,.12)':'rgba(0,217,126,.10)'};color:${m===0?'var(--danger)':'var(--green)'}">${m===0?'↓min':'↑max'}</span>`;
 
     const tr = document.createElement('tr');
-    if(hasData && ind.estado==='crit') tr.classList.add('crit-row');
-    const disAttr = editable ? '' : 'disabled readonly';
+    if(hasData && ind&&ind.estado==='crit') tr.classList.add('crit-row');
 
-    tr.innerHTML=`
-      <td style="font-size:12px;${isCustom?'color:var(--blue)':''}">${t.tema}${tipoTag}</td>
-      <td class="c"><input class="proj-pct-input" type="number" min="0" step="1"
-        value="${r===''?'':r}" placeholder="—" data-taskid="${t.task_id}" ${disAttr}
-        ${editable?`onchange="projUpdateReal(this,'${wk}','${t.task_id}')"`:''}
-        style="${!editable?'opacity:.6;cursor:default':''}"></td>
-      <td class="c">${brechaDisplay}</td>
-      <td class="c"><input class="proj-pct-input proj-meta-input" type="number" min="0" max="100" step="1"
-        value="${m}" data-taskid="${t.task_id}" data-field="meta" ${disAttr}
-        ${editable?`onchange="projUpdateMeta(this,'${wk}','${t.task_id}')"`:''}
-        style="width:54px;${!editable?'opacity:.6;cursor:default':''}"></td>
-      <td class="c">${estadoBadge}</td>
-      <td><textarea class="proj-obs-input" rows="1" data-taskid="${t.task_id}"
-        placeholder="${editable?'Observación...':'—'}" ${disAttr}
-        ${editable?`onblur="projUpdateObs(this,'${wk}','${t.task_id}')"`:''}
-        style="${!editable?'opacity:.6;cursor:default':''}">${t.obs||''}</textarea></td>
-      <td class="c">${editable?`<button onclick="projDeleteRow('${wk}','${t.task_id}',${!isCustom})" title="Eliminar fila" style="background:none;border:none;color:var(--w4);cursor:pointer;font-size:13px;opacity:.6;transition:.15s" onmouseenter="this.style.opacity=1;this.style.color='var(--danger)'" onmouseleave="this.style.opacity=.6;this.style.color='var(--w4)'"><i class="ti ti-trash" aria-hidden="true"></i></button>`:''}</td>
-    `;
+    if(editable){
+      // ── MODO EDICIÓN: inputs visibles ──
+      tr.innerHTML=`
+        <td style="font-size:12px;${isCustom?'color:var(--blue)':''}">${t.tema}${tipoTag}</td>
+        <td class="c"><input class="proj-pct-input" type="number" min="0" step="1"
+          value="${r===''?'':r}" placeholder="—" data-taskid="${t.task_id}"
+          onchange="projUpdateReal(this,'${wk}','${t.task_id}')"></td>
+        <td class="c">${brechaDisplay}</td>
+        <td class="c"><input class="proj-pct-input proj-meta-input" type="number" min="0" max="100" step="1"
+          value="${m}" data-taskid="${t.task_id}" data-field="meta"
+          onchange="projUpdateMeta(this,'${wk}','${t.task_id}')"
+          style="width:54px"></td>
+        <td class="c">${estadoBadge}</td>
+        <td><textarea class="proj-obs-input" rows="1" data-taskid="${t.task_id}"
+          placeholder="Observación..."
+          onblur="projUpdateObs(this,'${wk}','${t.task_id}')">${t.obs||''}</textarea></td>
+        <td class="c"><button onclick="projDeleteRow('${wk}','${t.task_id}',${!isCustom})" title="Eliminar fila"
+          style="background:none;border:none;color:var(--w4);cursor:pointer;font-size:13px;opacity:.6;transition:.15s"
+          onmouseenter="this.style.opacity=1;this.style.color='var(--danger)'"
+          onmouseleave="this.style.opacity=.6;this.style.color='var(--w4)'">
+          <i class="ti ti-trash" aria-hidden="true"></i></button></td>
+      `;
+    } else {
+      // ── MODO VISTA: texto limpio, sin inputs ──
+      const realDisplay = r==='' ? '<span style="color:var(--w4)">—</span>'
+        : `<span style="font-family:\'Oswald\',sans-serif;font-size:14px;font-weight:600;color:var(--w1)">${r}%</span>`;
+      const obsDisplay = t.obs ? `<span style="font-size:11px;color:var(--w3);line-height:1.5">${t.obs}</span>`
+        : '<span style="color:var(--w4);font-size:11px">—</span>';
+      const metaDisplay = `<span style="font-family:\'Oswald\',sans-serif;font-size:12px;color:var(--w3)">${m}${m>0?'%':''}</span>`;
+      tr.innerHTML=`
+        <td style="font-size:12px;${isCustom?'color:var(--blue)':''}">${t.tema}${tipoTag}</td>
+        <td class="c">${realDisplay}</td>
+        <td class="c">${brechaDisplay}</td>
+        <td class="c">${metaDisplay}</td>
+        <td class="c">${estadoBadge}</td>
+        <td>${obsDisplay}</td>
+        <td></td>
+      `;
+    }
     tbody.appendChild(tr);
   });
 }
@@ -5452,7 +5537,7 @@ window.projConfirmNewRow=async function(){
   data.tasks.push(newTask);
   await saveTaskRow(wk,newTask);
   renderProjKPIs(data.tasks);
-  renderProjTable(wk,data.tasks,canEditProject());
+  renderProjTable(wk,data.tasks,true); // mantener modo edición
   if(typeof toast==='function') toast('Tarea "'+tema+'" agregada.','ok');
 };
 
@@ -5463,19 +5548,16 @@ window.projCancelNewRow=function(){
 
 window.projDeleteRow=async function(wk, task_id, isDefault){
   if(isDefault){
-    // Tarea base: guardar en Supabase como deleted=true para esta semana
-    // No afecta semanas anteriores
     await sbUpsert('project_tareas',{task_id,semana:wk,deleted:true,real:null,obs:'',tema:'',meta:0,orden:999});
     if(_cache[wk]){
       _cache[wk].tasks=_cache[wk].tasks.filter(t=>t.task_id!==task_id);
     }
   } else {
-    // Tarea custom: borrar completamente
     await deleteTaskRow(wk,task_id);
   }
   const data=await loadWeekData(wk);
   renderProjKPIs(data.tasks);
-  renderProjTable(wk,data.tasks);
+  renderProjTable(wk,data.tasks,true); // mantener modo edición
   if(typeof toast==='function') toast('Tarea eliminada de '+wk,'info');
 };
 
@@ -5499,9 +5581,12 @@ window.projSave=async function(){
     saves.push(saveTaskRow(wk,{task_id:task.task_id,tema:task.tema,meta:task.meta,real:task.real,obs:task.obs,semana:wk,orden:data.tasks.findIndex(t=>t.task_id===task_id)+1}));
   });
   await Promise.all(saves);
-  if(typeof toast==='function') toast('Project guardado · '+wk,'ok');
+  if(typeof toast==='function') toast('✓ Project guardado · '+wk,'ok');
+  // Pasar a modo vista tras guardar
+  _projEditMode=false;
+  setProjEditMode(false, canEditProject());
   renderProjKPIs(data.tasks);
-  renderProjTable(wk,data.tasks,canEditProject());
+  renderProjTable(wk, data.tasks, false);
 };
 
 /* ══════════════════════════════════════
