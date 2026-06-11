@@ -91,20 +91,42 @@ setInterval(async () => {
 // ─── FETCH SEGURO ───────────────────────────────────────
 async function safeFetch(path, fallback = []) {
   const token = await getToken();
+
   const response = await fetch(`${BASE_URL}${path}`, {
     method: "GET",
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json"
+    }
   });
+
   const text = await response.text();
+
+  console.log("================================");
+  console.log("URL:", `${BASE_URL}${path}`);
+  console.log("STATUS:", response.status);
+  console.log("CONTENT-TYPE:", response.headers.get("content-type"));
+  console.log("BODY:", text.substring(0, 2000));
+  console.log("================================");
+
   try {
     const data = JSON.parse(text);
-    if (data && data.Message && data.Message.toLowerCase().includes('denied')) {
-      console.warn(`⚠️  ${path} bloqueado por permisos`);
+
+    if (
+      data &&
+      data.Message &&
+      data.Message.toLowerCase().includes("denied")
+    ) {
+      console.warn(`⚠️ ${path} bloqueado por permisos`);
       return fallback;
     }
+
     return data;
-  } catch(e) {
-    console.warn(`⚠️  ${path} respuesta no-JSON`);
+
+  } catch (e) {
+    console.warn(`⚠️ ${path} respuesta no-JSON`);
+    console.error("ERROR PARSE:", e.message);
+
     return fallback;
   }
 }
