@@ -737,6 +737,7 @@ body::after{
   flex:1;
   min-width:0;
   overflow:hidden;
+  position:relative;
 }
 
 /* ════════════════ SIDEBAR OSCURO — desde el tope ════════════════ */
@@ -1309,6 +1310,37 @@ tbody td{color:var(--w2) !important;font-size:12px !important}
 .ops-body-col{z-index:1}
 /* z-index limpiado - no necesario en opción A */
 
+/* ── iframes TorreControl embebidos ── */
+.tc-iframe-wrap{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;}
+.tc-iframe-header{display:flex;align-items:center;gap:10px;padding:10px 20px;background:#fff;border-bottom:1px solid var(--line2);flex-shrink:0;}
+.tc-iframe-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.tc-iframe-title{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);line-height:1;}
+.tc-iframe-sub{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--w4);letter-spacing:.06em;margin-top:2px;}
+.tc-iframe-badge{margin-left:auto;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.08em;padding:3px 9px;border-radius:4px;background:rgba(2,132,199,.1);color:var(--blue);border:.5px solid rgba(2,132,199,.3);}
+.tc-iframe-frame{flex:1;border:none;width:100%;min-height:0;display:block;background:#04060E;}
+
+/* Secciones iframe: ocultas por defecto, flex cuando activas */
+#tc-seg,#tc-pla{
+  display:none;
+  flex-direction:column;
+  flex:1;
+  min-height:0;
+  overflow:hidden;
+  /* Cuando están activas deben cubrir todo el ops-body-col debajo del header fijo */
+  position:absolute;
+  top:54px; /* altura del header blanco */
+  left:0;right:0;bottom:0;
+  z-index:5;
+  background:#fff;
+}
+#tc-seg.show,#tc-pla.show{display:flex !important;}
+
+/* Cuando hay iframe activo: ocultar week-row y ai-statusbar que no aplican */
+body:has(#tc-seg.show) .week-row,
+body:has(#tc-seg.show) .ai-statusbar,
+body:has(#tc-pla.show) .week-row,
+body:has(#tc-pla.show) .ai-statusbar{display:none !important;}
+
 
 /* ── Pill de alerta en el header ── */
 .hdr-alert-pill{
@@ -1840,14 +1872,12 @@ window.updatePortalStats=updatePortalStats;
     <i class="ti ti-chart-bar" aria-hidden="true"></i>Operaciones
   </button>
 
-  <div class="sb-section-label upcoming">Próximamente</div>
-  <button class="tb soon" type="button" data-label="Planeación Operativa" disabled aria-disabled="true" title="Módulo en construcción">
-    <i class="ti ti-calendar-stats" aria-hidden="true"></i>Planeación Operativa
-    <span class="tb-soon-badge">Soon</span>
-  </button>
-  <button class="tb soon" type="button" data-label="Seguimiento en vivo" disabled aria-disabled="true" title="Módulo en construcción">
+  <div class="sb-section-label upcoming">Control · Tiempo Real</div>
+  <button class="tb" id="tab-seg" onclick="showTab('seg')" data-label="Seguimiento en vivo">
     <i class="ti ti-radar" aria-hidden="true"></i>Seguimiento en vivo
-    <span class="tb-soon-badge">Soon</span>
+  </button>
+  <button class="tb" id="tab-pla" onclick="showTab('pla')" data-label="Planeación Operativa">
+    <i class="ti ti-calendar-stats" aria-hidden="true"></i>Planeación Operativa
   </button>
   <button class="tb" id="tab-proj" onclick="showTab('proj');setTimeout(function(){if(typeof projRender==='function')projRender();},50);" data-label="Project">
     <i class="ti ti-clipboard-check" aria-hidden="true"></i>Project
@@ -2248,6 +2278,54 @@ window.updatePortalStats=updatePortalStats;
      Inspiración: Linear · Vercel · Datadog (minimalismo refinado).
      Para revertir: eliminar SOLO este bloque <style>.
      ═══════════════════════════════════════════════════════════════ -->
+<!-- ══════════ SEGUIMIENTO EN VIVO · iframe TorreControl ══════════ -->
+<div id="tc-seg">
+  <div class="tc-iframe-wrap">
+    <div class="tc-iframe-header">
+      <div class="tc-iframe-icon" style="background:rgba(2,132,199,.1)">
+        <i class="ti ti-radar" style="font-size:15px;color:var(--blue)" aria-hidden="true"></i>
+      </div>
+      <div>
+        <div class="tc-iframe-title">Seguimiento en vivo</div>
+        <div class="tc-iframe-sub">Viajes activos · GPS · Alarmas · Vehículos — Torre de Control en tiempo real</div>
+      </div>
+      <span class="tc-iframe-badge">En vivo</span>
+    </div>
+    <iframe
+      id="iframe-seg"
+      class="tc-iframe-frame"
+      src="TorreControl.html?vista=viajes"
+      title="Seguimiento en vivo — Torre de Control INLOP"
+      loading="lazy"
+      allow="same-origin"
+    ></iframe>
+  </div>
+</div>
+
+<!-- ══════════ PLANEACIÓN OPERATIVA · iframe TorreControl ══════════ -->
+<div id="tc-pla">
+  <div class="tc-iframe-wrap">
+    <div class="tc-iframe-header">
+      <div class="tc-iframe-icon" style="background:rgba(0,135,95,.1)">
+        <i class="ti ti-calendar-stats" style="font-size:15px;color:var(--green)" aria-hidden="true"></i>
+      </div>
+      <div>
+        <div class="tc-iframe-title">Planeación Operativa</div>
+        <div class="tc-iframe-sub">Viajes programados vs activos · fecha · cliente · estado — Supabase + ControlT</div>
+      </div>
+      <span class="tc-iframe-badge" style="background:rgba(0,135,95,.1);color:var(--green);border-color:rgba(0,135,95,.3)">Planeados</span>
+    </div>
+    <iframe
+      id="iframe-pla"
+      class="tc-iframe-frame"
+      src="TorreControl.html?vista=planeados"
+      title="Planeación Operativa — Torre de Control INLOP"
+      loading="lazy"
+      allow="same-origin"
+    ></iframe>
+  </div>
+</div>
+
 </div><!-- /ops-body-col -->
 </div><!-- /ops-body-row -->
 </div><!-- /shell -->
@@ -2818,11 +2896,36 @@ function setCargo(m){
 /* ════════════ TABS ════════════ */
 function showTab(id){
   document.querySelectorAll('.tc').forEach(el=>el.classList.remove('show'));
+  document.querySelectorAll('#tc-seg,#tc-pla').forEach(el=>el.classList.remove('show'));
   document.querySelectorAll('.tb').forEach(el=>{el.classList.remove('on','sec')});
-  document.getElementById('tc-'+id).classList.add('show');
+
+  // Pestañas iframe — no usan .tc, tienen su propio div con position:absolute
+  if(id==='seg'||id==='pla'){
+    const el=document.getElementById('tc-'+id);
+    if(el) el.classList.add('show');
+    const btn=document.getElementById('tab-'+id);
+    if(btn) btn.classList.add('on');
+    // Ocultar controles que no aplican a la vista de iframe
+    const wr=document.querySelector('.week-row');
+    const ai=document.getElementById('aiStatusBar');
+    if(wr) wr.style.display='none';
+    if(ai) ai.style.display='none';
+    return;
+  }
+
+  // Pestañas normales — restaurar controles
+  const wr=document.querySelector('.week-row');
+  const ai=document.getElementById('aiStatusBar');
+  if(wr) wr.style.display='';
+  if(ai){ if(typeof updateAiStatus==='function') updateAiStatus(); }
+
+  const el=document.getElementById('tc-'+id);
+  if(el) el.classList.add('show');
   const btn=document.getElementById('tab-'+id);
-  btn.classList.add('on');
-  if(isSec())btn.classList.add('sec');
+  if(btn){
+    btn.classList.add('on');
+    if(isSec()) btn.classList.add('sec');
+  }
 }
 
 /* ════════════ HELPERS ════════════ */
