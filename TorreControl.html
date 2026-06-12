@@ -436,6 +436,15 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.73rem;font
 .sidebar-kpis{display:none !important}
 
 </style>
+<!-- Ocultar header antes del primer paint cuando viene como iframe embebido -->
+<script>
+(function(){
+  var v=new URLSearchParams(location.search).get('vista');
+  if(v==='viajes'||v==='planeados'||v==='cumplidos'){
+    document.write('<style>header{display:none!important}.app{padding-top:0!important}</style>');
+  }
+})();
+</script>
 </head>
 <body>
 <div class="app">
