@@ -1311,32 +1311,34 @@ tbody td{color:var(--w2) !important;font-size:12px !important}
 /* z-index limpiado - no necesario en opción A */
 
 /* ── iframes TorreControl embebidos ── */
-.tc-iframe-frame{border:none;width:100%;height:100%;display:block;background:#04060E;}
+.tc-iframe-wrap{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;}
+.tc-iframe-header{display:flex;align-items:center;gap:10px;padding:10px 20px;background:#fff;border-bottom:1px solid var(--line2);flex-shrink:0;}
+.tc-iframe-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.tc-iframe-title{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);line-height:1;}
+.tc-iframe-sub{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--w4);letter-spacing:.06em;margin-top:2px;}
+.tc-iframe-badge{margin-left:auto;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:.08em;padding:3px 9px;border-radius:4px;background:rgba(2,132,199,.1);color:var(--blue);border:.5px solid rgba(2,132,199,.3);}
+.tc-iframe-frame{flex:1;border:none;width:100%;min-height:0;display:block;background:#04060E;}
 
-/* Secciones iframe: position:absolute desde el borde del sidebar */
+/* Secciones iframe: ocultas por defecto, flex cuando activas */
 #tc-seg,#tc-pla{
   display:none;
   flex-direction:column;
+  flex:1;
+  min-height:0;
+  overflow:hidden;
   position:absolute;
   top:54px;
-  left:var(--sb-width, 230px);
-  right:0;
-  bottom:0;
+  left:0;right:0;bottom:36px; /* respeta el footer */
   z-index:5;
+  background:#fff;
 }
 #tc-seg.show,#tc-pla.show{display:flex !important;}
 
-/* Header dinámico para pestañas iframe */
-.hdr-module-iframe{display:flex;align-items:center;gap:10px}
-.hdr-mi-icon{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.hdr-mi-title{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);line-height:1;}
-.hdr-mi-sub{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--w4);letter-spacing:.06em;margin-top:2px;}
-
-/* Sidebar colapsado: ajustar left del iframe */
-.ops-body-row.sb-collapsed #tc-seg,
-.ops-body-row.sb-collapsed #tc-pla{
-  left:60px !important;
-}
+/* Cuando hay iframe activo: ocultar week-row y ai-statusbar que no aplican */
+body:has(#tc-seg.show) .week-row,
+body:has(#tc-seg.show) .ai-statusbar,
+body:has(#tc-pla.show) .week-row,
+body:has(#tc-pla.show) .ai-statusbar{display:none !important;}
 
 
 /* ── Pill de alerta en el header ── */
@@ -1893,16 +1895,9 @@ window.updatePortalStats=updatePortalStats;
   <div class="brand" id="brandBlock" style="display:none"></div>
 
   <div class="hdr-r">
-    <div class="header-module-title" id="hdrModuleTitle">
-      <div class="hmt-main" id="hdrModuleMain">Centro de Operaciones</div>
-      <div class="hmt-sub" id="hdrModuleSub">Planificación, seguimiento y control Operativo</div>
-    </div>
-    <div class="hdr-module-iframe" id="hdrModuleIframe" style="display:none">
-      <div class="hdr-mi-icon" id="hdrMiIcon"></div>
-      <div>
-        <div class="hdr-mi-title" id="hdrMiTitle"></div>
-        <div class="hdr-mi-sub" id="hdrMiSub"></div>
-      </div>
+    <div class="header-module-title">
+      <div class="hmt-main" id="hdrMain">Centro de Operaciones</div>
+      <div class="hmt-sub" id="hdrSub">Planificación, seguimiento y control Operativo</div>
     </div>
 
     <div class="hdr-alert-pill" id="hdrAlertPill" style="display:none">
@@ -2283,26 +2278,51 @@ window.updatePortalStats=updatePortalStats;
      Para revertir: eliminar SOLO este bloque <style>.
      ═══════════════════════════════════════════════════════════════ -->
 <!-- ══════════ SEGUIMIENTO EN VIVO · iframe TorreControl ══════════ -->
-<!-- ══════════ SEGUIMIENTO EN VIVO · iframe TorreControl ══════════ -->
 <div id="tc-seg">
-  <iframe
-    id="iframe-seg"
-    class="tc-iframe-frame"
-    src="TorreControl.html?vista=viajes"
-    title="Seguimiento en vivo — Torre de Control INLOP"
-    allow="same-origin"
-  ></iframe>
+  <div class="tc-iframe-wrap">
+    <div class="tc-iframe-header">
+      <div class="tc-iframe-icon" style="background:rgba(2,132,199,.1)">
+        <i class="ti ti-radar" style="font-size:15px;color:var(--blue)" aria-hidden="true"></i>
+      </div>
+      <div>
+        <div class="tc-iframe-title">Seguimiento en vivo</div>
+        <div class="tc-iframe-sub">Viajes activos · GPS · Alarmas · Vehículos — Torre de Control en tiempo real</div>
+      </div>
+      <span class="tc-iframe-badge">En vivo</span>
+    </div>
+    <iframe
+      id="iframe-seg"
+      class="tc-iframe-frame"
+      src="TorreControl.html?vista=viajes"
+      title="Seguimiento en vivo — Torre de Control INLOP"
+      loading="lazy"
+      allow="same-origin"
+    ></iframe>
+  </div>
 </div>
 
 <!-- ══════════ PLANEACIÓN OPERATIVA · iframe TorreControl ══════════ -->
 <div id="tc-pla">
-  <iframe
-    id="iframe-pla"
-    class="tc-iframe-frame"
-    src="TorreControl.html?vista=planeados"
-    title="Planeación Operativa — Torre de Control INLOP"
-    allow="same-origin"
-  ></iframe>
+  <div class="tc-iframe-wrap">
+    <div class="tc-iframe-header">
+      <div class="tc-iframe-icon" style="background:rgba(0,135,95,.1)">
+        <i class="ti ti-calendar-stats" style="font-size:15px;color:var(--green)" aria-hidden="true"></i>
+      </div>
+      <div>
+        <div class="tc-iframe-title">Planeación Operativa</div>
+        <div class="tc-iframe-sub">Viajes programados vs activos · fecha · cliente · estado — Supabase + ControlT</div>
+      </div>
+      <span class="tc-iframe-badge" style="background:rgba(0,135,95,.1);color:var(--green);border-color:rgba(0,135,95,.3)">Planeados</span>
+    </div>
+    <iframe
+      id="iframe-pla"
+      class="tc-iframe-frame"
+      src="TorreControl.html?vista=planeados"
+      title="Planeación Operativa — Torre de Control INLOP"
+      loading="lazy"
+      allow="same-origin"
+    ></iframe>
+  </div>
 </div>
 
 </div><!-- /ops-body-col -->
@@ -2873,57 +2893,22 @@ function setCargo(m){
 }
 
 /* ════════════ TABS ════════════ */
-// ── Configuración de pestañas iframe ──
-const IFRAME_TABS = {
-  seg: {
-    title: 'Seguimiento en vivo',
-    sub: 'Viajes activos · GPS · Alarmas · Vehículos — Torre de Control en tiempo real',
-    icon: 'ti ti-radar',
-    iconBg: 'rgba(2,132,199,.1)',
-    iconColor: 'var(--blue)'
-  },
-  pla: {
-    title: 'Planeación Operativa',
-    sub: 'Viajes programados vs activos · fecha · cliente · estado — Supabase + ControlT',
-    icon: 'ti ti-calendar-stats',
-    iconBg: 'rgba(0,135,95,.1)',
-    iconColor: 'var(--green)'
-  }
-};
-
-function updateHeader(id) {
-  const normal = document.getElementById('hdrModuleTitle');
-  const iframe = document.getElementById('hdrModuleIframe');
-  const pill   = document.getElementById('hdrAlertPill');
-
-  if (IFRAME_TABS[id]) {
-    const cfg = IFRAME_TABS[id];
-    // Ocultar título normal y alerta
-    if (normal) normal.style.display = 'none';
-    if (pill)   pill.style.display   = 'none';
-    // Mostrar título iframe
-    if (iframe) {
-      iframe.style.display = 'flex';
-      document.getElementById('hdrMiIcon').innerHTML  = `<i class="${cfg.icon}" style="font-size:16px;color:${cfg.iconColor}" aria-hidden="true"></i>`;
-      document.getElementById('hdrMiIcon').style.background = cfg.iconBg;
-      document.getElementById('hdrMiTitle').textContent = cfg.title;
-      document.getElementById('hdrMiSub').textContent   = cfg.sub;
-    }
-  } else {
-    // Pestañas normales: restaurar título estático
-    if (normal) normal.style.display = '';
-    if (iframe) iframe.style.display = 'none';
-    // La pill la maneja updateBanner()
-  }
-}
-
 function showTab(id){
   document.querySelectorAll('.tc').forEach(el=>el.classList.remove('show'));
   document.querySelectorAll('#tc-seg,#tc-pla').forEach(el=>el.classList.remove('show'));
   document.querySelectorAll('.tb').forEach(el=>{el.classList.remove('on','sec')});
 
-  // Actualizar header según pestaña
-  updateHeader(id);
+  const HDR = {
+    seg: { main:'Seguimiento en vivo',       sub:'Viajes activos · GPS · Alarmas · Vehículos — Torre de Control en tiempo real' },
+    pla: { main:'Planeación Operativa',       sub:'Viajes programados vs activos · fecha · cliente · estado — Supabase + ControlT' },
+    res: { main:'Centro de Operaciones',      sub:'Planificación, seguimiento y control Operativo' },
+    proj:{ main:'Centro de Operaciones',      sub:'Planificación, seguimiento y control Operativo' },
+  };
+  const hdr = HDR[id] || HDR.res;
+  const elMain = document.getElementById('hdrMain');
+  const elSub  = document.getElementById('hdrSub');
+  if(elMain) elMain.textContent = hdr.main;
+  if(elSub)  elSub.textContent  = hdr.sub;
 
   // Pestañas iframe
   if(id==='seg'||id==='pla'){
@@ -2931,15 +2916,17 @@ function showTab(id){
     if(el) el.classList.add('show');
     const btn=document.getElementById('tab-'+id);
     if(btn) btn.classList.add('on');
-    // Ocultar controles que no aplican
+    // Ocultar week-row, ai-statusbar y alerta roja
     const wr=document.querySelector('.week-row');
     const ai=document.getElementById('aiStatusBar');
-    if(wr) wr.style.display='none';
-    if(ai) ai.style.display='none';
+    const pill=document.getElementById('hdrAlertPill');
+    if(wr)   wr.style.display='none';
+    if(ai)   ai.style.display='none';
+    if(pill) pill.style.display='none';
     return;
   }
 
-  // Pestañas normales: restaurar controles
+  // Pestañas normales — restaurar controles
   const wr=document.querySelector('.week-row');
   const ai=document.getElementById('aiStatusBar');
   if(wr) wr.style.display='';
