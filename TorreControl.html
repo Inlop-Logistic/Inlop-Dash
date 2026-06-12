@@ -546,12 +546,12 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.73rem;font
 
       <!-- ── CONTENIDO VIAJES ── -->
       <div id="content-viajes" class="content-section" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
-        <div class="unified-toolbar">
-          <div class="search-wrap" style="min-width:160px;max-width:220px">
+        <div class="unified-toolbar" style="background:#F9FAFC;border-bottom:1px solid rgba(1,42,107,.08);gap:.5rem;padding:.45rem .75rem;flex-wrap:nowrap">
+          <div class="search-wrap" style="min-width:150px;max-width:200px">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="search-v" placeholder="Placa, conductor, viaje…" oninput="applyFilters()"/>
+            <input type="text" id="search-v" placeholder="Placa, conductor, viaje…" oninput="applyFilters()" style="background:#fff;border:1px solid rgba(1,42,107,.18);border-radius:6px;color:#374151;font-size:.72rem"/>
           </div>
-          <select id="sel-estado" onchange="applyFilters()" style="padding:.38rem .7rem;background:var(--bg1);border:1px solid var(--border);border-radius:6px;color:var(--text1);font-size:.72rem">
+          <select id="sel-estado" onchange="applyFilters()" style="padding:.38rem .7rem;background:#fff;border:1px solid rgba(1,42,107,.18);border-radius:6px;color:#374151;font-size:.72rem;font-family:var(--sans)">
             <option value="">Todos los estados</option>
             <option value="en transíto">En Tránsito</option>
             <option value="iniciado">Iniciado</option>
@@ -564,22 +564,22 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.73rem;font
             <option value="sin activar">Sin Activar</option>
             <option value="sin asignar">Sin Asignar</option>
           </select>
-          <select id="sel-cliente" onchange="applyFilters()" style="padding:.38rem .7rem;background:var(--bg1);border:1px solid var(--border);border-radius:6px;color:var(--text1);font-size:.72rem"><option value="">Todos los clientes</option></select>
-          <input type="date" id="sel-fecha" onchange="applyFilters()" style="padding:.38rem .7rem;background:var(--bg1);border:1px solid var(--border);border-radius:6px;color:var(--text1);font-size:.72rem;outline:none"/>
-          <button class="btn-clear-filters" onclick="clearFiltersViajes()">
-            <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Limpiar
+          <select id="sel-cliente" onchange="applyFilters()" style="padding:.38rem .7rem;background:#fff;border:1px solid rgba(1,42,107,.18);border-radius:6px;color:#374151;font-size:.72rem;font-family:var(--sans)"><option value="">Todos los clientes</option></select>
+          <input type="date" id="sel-fecha" onchange="applyFilters()" style="padding:.38rem .7rem;background:#fff;border:1px solid rgba(1,42,107,.18);border-radius:6px;color:#6B7280;font-size:.72rem;outline:none;font-family:var(--mono)"/>
+          <button class="btn-clear-filters" onclick="clearFiltersViajes()" style="background:#fff;border:1px solid rgba(1,42,107,.18);border-radius:6px;color:#6B7280;font-family:var(--sans);font-size:.72rem;padding:.38rem .7rem;cursor:pointer;display:inline-flex;align-items:center;gap:.3rem;transition:border-color .15s,color .15s">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:currentColor;stroke-width:2.5;fill:none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Limpiar
           </button>
-          <button class="btn-expand-table" onclick="toggleExpand()" id="btn-expand-viajes">
-            <svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>Expandir
+          <button class="btn-expand-table" onclick="toggleExpand()" id="btn-expand-viajes" style="background:#fff;border:1px solid rgba(1,42,107,.18);border-radius:6px;color:#6B7280;font-family:var(--sans);font-size:.72rem;padding:.38rem .7rem;cursor:pointer;display:inline-flex;align-items:center;gap:.3rem;transition:border-color .15s,color .15s">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:currentColor;stroke-width:2.5;fill:none"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>Expandir
           </button>
-          <span class="count-badge" id="count-v"></span>
+          <span class="count-badge" id="count-v" style="margin-left:auto"></span>
         </div>
         <div id="loading-v" class="loading-state"><div class="spinner"></div><span>Conectando con ControlT…</span></div>
         <div id="wrap-v" class="tbl-wrap" style="display:none;flex:1;overflow-y:auto">
           <table>
             <thead><tr>
-              <th># Viaje</th><th>Placa</th><th>Conductor</th><th>Origen</th><th>Destino</th>
-              <th>Cliente</th><th>Operación</th><th>Estado</th><th>Alarma</th><th>Avance</th><th>GPS</th><th></th>
+              <th># Viaje</th><th>Placa</th><th>Conductor</th><th>Origen → Destino</th>
+              <th>Cliente</th><th>Estado</th><th>Avance</th><th>GPS</th><th></th>
             </tr></thead>
             <tbody id="tbody-v"></tbody>
           </table>
@@ -882,71 +882,6 @@ window._inlopUser = (function(){
     return null;
   }
 })();
-
-// ── HELPERS ROL CLIENTE ─────────────────────────────────
-const _esCliente = (window._inlopUser?.rol||'').toLowerCase() === 'cliente';
-const _clienteFiltro = (window._inlopUser?.cliente_filtro||'').toUpperCase().trim();
-const _clienteNombre = window._inlopUser?.cliente_nombre || window._inlopUser?.cliente_filtro || '';
-
-// Normalizar nombre de cliente — unifica variantes SAS / S.A.S
-function normalizarCliente(nombre){
-  return (nombre||'')
-    .replace(/\bPRODUCTOS\s+RAMO\s+SAS\b/gi,'PRODUCTOS RAMO S.A.S')
-    .replace(/\bPRODUCTOS\s+RAMO\s+S\.A\.S\.?\s*$/gi,'PRODUCTOS RAMO S.A.S')
-    .trim();
-}
-
-// Filtra un array de viajes por cliente si el rol es 'cliente'
-function filtrarPorCliente(viajes){
-  if(!_esCliente || !_clienteFiltro) return viajes;
-  return viajes.filter(v => {
-    const cn = normalizarCliente((v.company_customer_name||'').toUpperCase());
-    return cn.includes(_clienteFiltro);
-  });
-}
-
-// Aplica restricciones de UI para rol cliente al arrancar
-function initClienteMode(){
-  if(!_esCliente) return;
-
-  // 1. Badge en header identificando al cliente
-  const headerRight = document.querySelector('.header-right');
-  if(headerRight){
-    const badge = document.createElement('div');
-    badge.id = 'cliente-badge';
-    badge.style.cssText = `
-      display:flex;align-items:center;gap:.4rem;
-      padding:.3rem .75rem;border-radius:20px;
-      background:rgba(1,42,107,.12);border:1px solid rgba(1,42,107,.25);
-      font-family:var(--mono);font-size:.68rem;color:var(--inlop-navy,#012A6B);
-      font-weight:600;letter-spacing:.04em;white-space:nowrap
-    `;
-    badge.innerHTML = `
-      <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;stroke-width:2;fill:none">
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-        <circle cx="12" cy="7" r="4"/>
-      </svg>
-      ${_clienteNombre}
-    `;
-    headerRight.insertBefore(badge, headerRight.firstChild);
-  }
-
-  // 2. Ocultar pestañas que no aplican al cliente: Cumplidos, Planeados
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    const txt = btn.textContent.trim().toLowerCase();
-    if(txt.startsWith('cumplido') || txt.startsWith('planeado')) {
-      btn.style.display = 'none';
-    }
-  });
-
-  // 3. Ocultar selector de clientes en toolbar (no tiene sentido para cliente)
-  const selCliente = document.getElementById('sel-cliente');
-  if(selCliente) selCliente.style.display = 'none';
-
-  // 4. Ocultar botón Sync (no queremos que el cliente fuerce recargas)
-  const refreshBtn = document.querySelector('.refresh-btn');
-  if(refreshBtn) refreshBtn.style.display = 'none';
-}
 
 
 let dataViajes = [], dataAlarmas = [], dataPendientes = [];
@@ -1260,22 +1195,15 @@ async function loadAll(){
     if(r1.status==='fulfilled'){
       const raw=r1.value;
       dataViajes=Array.isArray(raw)?raw:raw.data||raw.result||[];
-      dataViajes = filtrarPorCliente(dataViajes); // ← filtro cliente
       cache_viajes_local=[...dataViajes];
     }
     if(r2.status==='fulfilled'){
       const raw=r2.value;
       dataAlarmas=Array.isArray(raw)?raw:raw.data||raw.result||[];
-      // Filtrar alarmas por placas del cliente
-      if(_esCliente){
-        const placasCliente = new Set(dataViajes.map(v=>v.license_plate).filter(Boolean));
-        dataAlarmas = dataAlarmas.filter(a => placasCliente.has(a.license_plate));
-      }
     }
     if(r3.status==='fulfilled'){
       const raw=r3.value;
       dataPendientes=Array.isArray(raw)?raw:raw.data||raw.result||[];
-      dataPendientes = filtrarPorCliente(dataPendientes); // ← filtro cliente
       // DEBUG pendientes
       if(dataPendientes.length>0){
         console.log('⏳ CAMPOS PENDIENTES:', Object.keys(dataPendientes[0]).join(', '));
@@ -1390,9 +1318,16 @@ function clearFiltersCumplidos(){
 }
 
 // SELECTS
+function normalizarCliente(nombre){
+  // Unificar variantes: PRODUCTOS RAMO SAS → PRODUCTOS RAMO S.A.S
+  return (nombre||'')
+    .replace(/\bPRODUCTOS\s+RAMO\s+SAS\b/gi,'PRODUCTOS RAMO S.A.S')
+    .replace(/\bPRODUCTOS\s+RAMO\s+S\.A\.S\.?\s*$/gi,'PRODUCTOS RAMO S.A.S')
+    .trim();
+}
+
 function populateSelects(){
-  // Normalizar clientes — deduplicar ignorando mayúsculas y espacios extra
-  const rawClientes = dataViajes.map(d=>(d.company_customer_name||'').split(',')[0].trim()).filter(Boolean);
+  const rawClientes = dataViajes.map(d=>normalizarCliente((d.company_customer_name||'').split(',')[0].trim())).filter(Boolean);
   const seen = new Map();
   rawClientes.forEach(c => {
     const key = c.toUpperCase().replace(/\s+/g,' ');
@@ -1408,6 +1343,33 @@ function populateSelects(){
   }
 }
 
+// ── GPS tiempo relativo con color semántico ──────────────
+function gpsRelativo(str){
+  const gps = parseFechaMDY(str);
+  if(!gps) return {txt:'Sin señal', color:'#DC2626'};
+  const h = (Date.now() - gps.getTime()) / (1000*3600);
+  if(h < 0.5)  return {txt:`hace ${Math.round(h*60)}m`,   color:'#00875F'};
+  if(h < 2)    return {txt:`hace ${Math.round(h*60)}m`,   color:'#00875F'};
+  if(h < 6)    return {txt:`hace ${h.toFixed(1)}h ⚠`,    color:'#D97706'};
+  return              {txt:`hace ${h.toFixed(0)}h`,       color:'#DC2626'};
+}
+
+// ── Badge de estado modo claro con chip pill ──────────────
+function stateBadgeClaro(s){
+  const st=(s||'').toLowerCase().trim();
+  if(st.includes('complet'))  return`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:100px;font-family:var(--syne-alt);font-size:.66rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:.5px solid;background:rgba(0,135,95,.1);border-color:rgba(0,135,95,.25);color:#00875F"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;flex-shrink:0"></span>Completado</span>`;
+  if(st.includes('tr\u00e1ns')||st.includes('trans\u00edto')||st.includes('transito')||st.includes('tr\u00e1nsito')) return`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:100px;font-family:var(--syne-alt);font-size:.66rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:.5px solid;background:rgba(2,132,199,.1);border-color:rgba(2,132,199,.25);color:#0284C7"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;flex-shrink:0"></span>En Tránsito</span>`;
+  if(st.includes('inici'))    return`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:100px;font-family:var(--syne-alt);font-size:.66rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:.5px solid;background:rgba(217,119,6,.1);border-color:rgba(217,119,6,.25);color:#D97706"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;flex-shrink:0"></span>Iniciado</span>`;
+  if(st.includes('descarg'))  return`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:100px;font-family:var(--syne-alt);font-size:.66rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:.5px solid;background:rgba(124,58,237,.08);border-color:rgba(124,58,237,.2);color:#7c3aed"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;flex-shrink:0"></span>Descargando</span>`;
+  if(st.includes('cargand'))  return`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:100px;font-family:var(--syne-alt);font-size:.66rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:.5px solid;background:rgba(13,148,136,.08);border-color:rgba(13,148,136,.2);color:#0d9488"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;flex-shrink:0"></span>Cargando</span>`;
+  if(st.includes('pernoc'))   return`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:100px;font-family:var(--syne-alt);font-size:.66rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:.5px solid;background:rgba(234,88,12,.08);border-color:rgba(234,88,12,.2);color:#ea580c"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;flex-shrink:0"></span>Pernoctando</span>`;
+  if(st.includes('cancel'))   return`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:100px;font-family:var(--syne-alt);font-size:.66rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:.5px solid;background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.2);color:#DC2626"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;flex-shrink:0"></span>Cancelado</span>`;
+  if(st.includes('finaliz'))  return`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:100px;font-family:var(--syne-alt);font-size:.66rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:.5px solid;background:rgba(219,39,119,.08);border-color:rgba(219,39,119,.2);color:#db2777"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;flex-shrink:0"></span>Finalizado</span>`;
+  if(st.includes('sin activ')) return`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:100px;font-family:var(--syne-alt);font-size:.66rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:.5px solid;background:rgba(107,114,128,.08);border-color:rgba(107,114,128,.2);color:#6B7280"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;flex-shrink:0"></span>Sin Activar</span>`;
+  if(st.includes('sin asig'))  return`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:100px;font-family:var(--syne-alt);font-size:.66rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:.5px solid;background:rgba(107,114,128,.08);border-color:rgba(107,114,128,.2);color:#6B7280"><span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;flex-shrink:0"></span>Sin Asignar</span>`;
+  return`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:100px;font-family:var(--syne-alt);font-size:.66rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:.5px solid;background:rgba(107,114,128,.08);border-color:rgba(107,114,128,.2);color:#6B7280">${s||'—'}</span>`;
+}
+
 // FILTERS — VIAJES
 function applyFilters(){
   const q=(document.getElementById('search-v')?.value||'').toLowerCase();
@@ -1416,7 +1378,7 @@ function applyFilters(){
   const fecha=(document.getElementById('sel-fecha')?.value||'');
   let rows=dataViajes;
   if(est) rows=rows.filter(d=>(d.state_travel||'').toLowerCase()===est||(d.state_travel||'').toLowerCase().includes(est));
-  if(cli) rows=rows.filter(d=>(d.company_customer_name||'').toUpperCase().replace(/\s+/g,' ').includes(cli.toUpperCase()));
+  if(cli) rows=rows.filter(d=>normalizarCliente((d.company_customer_name||'')).toUpperCase().replace(/\s+/g,' ').includes(cli.toUpperCase()));
   if(fecha){
     rows=rows.filter(d=>{
       const f=parseFechaMDY(d.activated_on||d.created_on);
@@ -1432,24 +1394,30 @@ function applyFilters(){
   loading.style.display='none';
   if(!rows.length){wrap.style.display='none';empty.style.display='flex';return;}
   empty.style.display='none';wrap.style.display='block';
-  document.getElementById('tbody-v').innerHTML=rows.map((d,i)=>`
-    <tr class="fade-row" style="animation-delay:${Math.min(i*.022,.4)}s" onclick="focusMapVehiculo('${d.trip_number}')" style="cursor:pointer">
-      <td>${d.trip_number||'—'}</td>
+  document.getElementById('tbody-v').innerHTML=rows.map((d,i)=>{
+    const isPanic=(d.last_alarm_name||'').toLowerCase().includes('pánico')||(d.last_alarm_name||'').toLowerCase().includes('panico');
+    const gps=gpsRelativo(d.latest_gps_report);
+    const pct=Math.min(100,Math.max(0,parseFloat(d.percentage_travel)||0));
+    const pc=pct>=100?'#00875F':pct>50?'#0284C7':'#D97706';
+    const ruta=`${short(d.origin_city_name,14)} → ${short(d.destiny_city_name,14)}`;
+    const clienteNorm=normalizarCliente((d.company_customer_name||'').split(',')[0].trim());
+    return`<tr class="fade-row" style="animation-delay:${Math.min(i*.022,.4)}s;${isPanic?'background:rgba(220,38,38,.03);':''}" onclick="focusMapVehiculo('${d.trip_number}');event.stopPropagation()">
+      <td style="font-family:var(--mono);color:#0284C7;font-size:.73rem">${d.trip_number||'—'}</td>
       <td><span class="plate">${d.license_plate||'—'}</span></td>
-      <td style="color:var(--text0)">${short(d.driver_name,22)}</td>
-      <td>${short(d.origin_city_name,16)}</td>
-      <td>${short(d.destiny_city_name,16)}</td>
-      <td style="font-size:.7rem">${clientShort(d.company_customer_name)}</td>
-      <td style="font-size:.68rem;color:var(--text2)">${short(d.type_operation,18)}</td>
-      <td>${stateBadge(d.state_travel)}</td>
-      <td>${(d.last_alarm_name||'').toLowerCase().includes('pánico')||(d.last_alarm_name||'').toLowerCase().includes('panico')?
-        `<span class="panic-tag">🚨 ${short(d.last_alarm_name,20)}</span>`:
-        d.last_alarm_name?`<span class="alarm-tag" title="${d.last_alarm_name}">${short(d.last_alarm_name,20)}</span>`:
-        '<span style="color:var(--text2);font-size:.68rem">—</span>'}</td>
-      <td>${progCell(d.percentage_travel)}</td>
-      <td style="font-family:var(--mono);font-size:.62rem;color:var(--text2)">${fmtGPS(d.latest_gps_report)}</td>
-      <td onclick="event.stopPropagation()" style="white-space:nowrap"><button style="padding:.2rem .55rem;border-radius:4px;background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.3);color:var(--accent);font-family:var(--syne);font-size:.6rem;font-weight:700;cursor:pointer" onclick="openModal('${d.id_monitoring_order||d.trip_number}')">Ver →</button></td>
-    </tr>`).join('');
+      <td style="color:#0A0E27;font-weight:500">${short(d.driver_name,22)}</td>
+      <td style="font-size:.72rem;color:#6B7280">${ruta}</td>
+      <td style="font-size:.7rem;color:#374151">${clientShort(clienteNorm)}</td>
+      <td>${stateBadgeClaro(d.state_travel)}</td>
+      <td><div style="display:flex;align-items:center;gap:5px"><div style="width:54px;height:4px;background:#EEF2F8;border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${pc};border-radius:3px"></div></div><span style="font-family:var(--mono);font-size:.66rem;font-weight:500;color:${pc}">${pct.toFixed(0)}%</span></div></td>
+      <td style="font-family:var(--mono);font-size:.62rem;color:${gps.color};white-space:nowrap">${gps.txt}</td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">
+        ${isPanic
+          ?`<button style="padding:.25rem .6rem;border-radius:5px;background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.3);color:#DC2626;font-family:var(--syne-alt);font-size:.66rem;font-weight:700;cursor:pointer;letter-spacing:.04em;text-transform:uppercase" onclick="openModal('${d.id_monitoring_order||d.trip_number}')">Atender</button>`
+          :`<button style="padding:.25rem .6rem;border-radius:5px;background:#012A6B;border:1px solid #012A6B;color:#fff;font-family:var(--syne-alt);font-size:.66rem;font-weight:700;cursor:pointer;letter-spacing:.04em;text-transform:uppercase" onclick="openModal('${d.id_monitoring_order||d.trip_number}')">Ver →</button>`
+        }
+      </td>
+    </tr>`;
+  }).join('');
 }
 
 // ALARMAS
@@ -2159,12 +2127,7 @@ function cumBadge(estado){
 // ── SUPABASE — LEER CUMPLIDOS ──────────────────────────
 async function sbGetCumplidos(){
   try{
-    let url = `${SB_URL}/cumplidos?select=*&order=created_at.desc`;
-    // Si es cliente, filtrar directamente en Supabase por nombre cliente
-    if(_esCliente && _clienteFiltro){
-      url += `&cliente=ilike.*${encodeURIComponent(_clienteFiltro)}*`;
-    }
-    const r=await fetch(url,{headers:SB_HEADERS});
+    const r=await fetch(`${SB_URL}/cumplidos?select=*&order=created_at.desc`,{headers:SB_HEADERS});
     if(!r.ok) throw new Error(await r.text());
     return await r.json();
   }catch(e){console.error('sbGetCumplidos',e);return[];}
@@ -2877,8 +2840,6 @@ async function loadPlaneados() {
       { headers: SB_HDR_TC }
     );
     dataPlaneados = r.ok ? await r.json() : [];
-    // Filtrar por cliente si aplica
-    dataPlaneados = filtrarPorCliente(dataPlaneados);
     planeadosPopulateClientes();
     planeadosApplyFilters();
     planeadosUpdateKPIs();
@@ -2999,7 +2960,13 @@ function planeadosRenderTabla() {
     const fmtPlan = fPlan ? fPlan.toLocaleDateString('es-CO', {day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' +
       fPlan.toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit',hour12:false}) : '—';
     const fmtProg = fProg ? fmtActivatedOn(v.schedulate_origin) : '—';
-    const cliente = v.company_customer_name ? (v.company_customer_name.split(',')[0].trim().slice(0, 22)) : '—';
+    // Si el viaje está activo en resumen, tomar el nombre del cliente desde cache_viajes_local
+    // para mostrar el cliente real en vez del valor de Supabase (ej. "Integral Logistic")
+    const viajeActivo = v.activo_en_resume
+      ? (cache_viajes_local || []).find(x => x.trip_number === v.trip_number)
+      : null;
+    const clienteRaw = (viajeActivo?.company_customer_name || v.company_customer_name || '');
+    const cliente = clienteRaw ? (clienteRaw.split(',')[0].trim().slice(0, 22)) : '—';
 
     return `<tr class="fade-row" style="animation-delay:${Math.min(i * .02, .4)}s">
       <td style="font-family:var(--mono);font-size:.65rem;color:var(--text2)">${fmtPlan}</td>
@@ -3034,9 +3001,6 @@ function syncPlaneadosConResume() {
 
 
 // INIT
-// Aplicar restricciones de UI para rol cliente (antes de cualquier render)
-initClienteMode();
-
 if(URL_VISTA === 'cumplidos'){
   // Vista restringida: solo cumplidos, sin navegación ni mapa
   loadAll();
