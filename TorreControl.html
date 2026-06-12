@@ -883,6 +883,71 @@ window._inlopUser = (function(){
   }
 })();
 
+// ── HELPERS ROL CLIENTE ─────────────────────────────────
+const _esCliente = (window._inlopUser?.rol||'').toLowerCase() === 'cliente';
+const _clienteFiltro = (window._inlopUser?.cliente_filtro||'').toUpperCase().trim();
+const _clienteNombre = window._inlopUser?.cliente_nombre || window._inlopUser?.cliente_filtro || '';
+
+// Normalizar nombre de cliente — unifica variantes SAS / S.A.S
+function normalizarCliente(nombre){
+  return (nombre||'')
+    .replace(/\bPRODUCTOS\s+RAMO\s+SAS\b/gi,'PRODUCTOS RAMO S.A.S')
+    .replace(/\bPRODUCTOS\s+RAMO\s+S\.A\.S\.?\s*$/gi,'PRODUCTOS RAMO S.A.S')
+    .trim();
+}
+
+// Filtra un array de viajes por cliente si el rol es 'cliente'
+function filtrarPorCliente(viajes){
+  if(!_esCliente || !_clienteFiltro) return viajes;
+  return viajes.filter(v => {
+    const cn = normalizarCliente((v.company_customer_name||'').toUpperCase());
+    return cn.includes(_clienteFiltro);
+  });
+}
+
+// Aplica restricciones de UI para rol cliente al arrancar
+function initClienteMode(){
+  if(!_esCliente) return;
+
+  // 1. Badge en header identificando al cliente
+  const headerRight = document.querySelector('.header-right');
+  if(headerRight){
+    const badge = document.createElement('div');
+    badge.id = 'cliente-badge';
+    badge.style.cssText = `
+      display:flex;align-items:center;gap:.4rem;
+      padding:.3rem .75rem;border-radius:20px;
+      background:rgba(1,42,107,.12);border:1px solid rgba(1,42,107,.25);
+      font-family:var(--mono);font-size:.68rem;color:var(--inlop-navy,#012A6B);
+      font-weight:600;letter-spacing:.04em;white-space:nowrap
+    `;
+    badge.innerHTML = `
+      <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;stroke-width:2;fill:none">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+        <circle cx="12" cy="7" r="4"/>
+      </svg>
+      ${_clienteNombre}
+    `;
+    headerRight.insertBefore(badge, headerRight.firstChild);
+  }
+
+  // 2. Ocultar pestañas que no aplican al cliente: Cumplidos, Planeados
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    const txt = btn.textContent.trim().toLowerCase();
+    if(txt.startsWith('cumplido') || txt.startsWith('planeado')) {
+      btn.style.display = 'none';
+    }
+  });
+
+  // 3. Ocultar selector de clientes en toolbar (no tiene sentido para cliente)
+  const selCliente = document.getElementById('sel-cliente');
+  if(selCliente) selCliente.style.display = 'none';
+
+  // 4. Ocultar botón Sync (no queremos que el cliente fuerce recargas)
+  const refreshBtn = document.querySelector('.refresh-btn');
+  if(refreshBtn) refreshBtn.style.display = 'none';
+}
+
 
 let dataViajes = [], dataAlarmas = [], dataPendientes = [];
 let cache_viajes_local = [];
@@ -1195,15 +1260,22 @@ async function loadAll(){
     if(r1.status==='fulfilled'){
       const raw=r1.value;
       dataViajes=Array.isArray(raw)?raw:raw.data||raw.result||[];
+      dataViajes = filtrarPorCliente(dataViajes); // ← filtro cliente
       cache_viajes_local=[...dataViajes];
     }
     if(r2.status==='fulfilled'){
       const raw=r2.value;
       dataAlarmas=Array.isArray(raw)?raw:raw.data||raw.result||[];
+      // Filtrar alarmas por placas del cliente
+      if(_esCliente){
+        const placasCliente = new Set(dataViajes.map(v=>v.license_plate).filter(Boolean));
+        dataAlarmas = dataAlarmas.filter(a => placasCliente.has(a.license_plate));
+      }
     }
     if(r3.status==='fulfilled'){
       const raw=r3.value;
       dataPendientes=Array.isArray(raw)?raw:raw.data||raw.result||[];
+      dataPendientes = filtrarPorCliente(dataPendientes); // ← filtro cliente
       // DEBUG pendientes
       if(dataPendientes.length>0){
         console.log('⏳ CAMPOS PENDIENTES:', Object.keys(dataPendientes[0]).join(', '));
@@ -2087,7 +2159,12 @@ function cumBadge(estado){
 // ── SUPABASE — LEER CUMPLIDOS ──────────────────────────
 async function sbGetCumplidos(){
   try{
-    const r=await fetch(`${SB_URL}/cumplidos?select=*&order=created_at.desc`,{headers:SB_HEADERS});
+    let url = `${SB_URL}/cumplidos?select=*&order=created_at.desc`;
+    // Si es cliente, filtrar directamente en Supabase por nombre cliente
+    if(_esCliente && _clienteFiltro){
+      url += `&cliente=ilike.*${encodeURIComponent(_clienteFiltro)}*`;
+    }
+    const r=await fetch(url,{headers:SB_HEADERS});
     if(!r.ok) throw new Error(await r.text());
     return await r.json();
   }catch(e){console.error('sbGetCumplidos',e);return[];}
@@ -2800,6 +2877,8 @@ async function loadPlaneados() {
       { headers: SB_HDR_TC }
     );
     dataPlaneados = r.ok ? await r.json() : [];
+    // Filtrar por cliente si aplica
+    dataPlaneados = filtrarPorCliente(dataPlaneados);
     planeadosPopulateClientes();
     planeadosApplyFilters();
     planeadosUpdateKPIs();
@@ -2955,6 +3034,9 @@ function syncPlaneadosConResume() {
 
 
 // INIT
+// Aplicar restricciones de UI para rol cliente (antes de cualquier render)
+initClienteMode();
+
 if(URL_VISTA === 'cumplidos'){
   // Vista restringida: solo cumplidos, sin navegación ni mapa
   loadAll();
