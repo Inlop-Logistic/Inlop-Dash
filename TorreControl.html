@@ -1927,6 +1927,57 @@ function initCumplidosView(){
   switchTab('cumplidos', btn);
 }
 
+// ── VISTA VIAJES STANDALONE (iframe desde Operaciones) ──────────────
+function initViajesView(){
+  // Ocultar header — dentro del iframe Operaciones ya tiene su propio header
+  const header = document.querySelector('header');
+  if(header) header.style.display = 'none';
+
+  // Expandir .app al 100% sin padding-top
+  const app = document.querySelector('.app');
+  if(app) app.style.paddingTop = '0';
+
+  // Ajustar body para que no tenga el padding del ::before (línea gradiente)
+  document.body.style.paddingTop = '0';
+
+  // Activar pestaña Viajes con el layout normal (mapa + tabla)
+  const btn = document.querySelector('.tab-btn');
+  switchTab('viajes', btn);
+
+  // Invalidar mapa después de que el iframe tenga dimensiones reales
+  setTimeout(()=>{ if(mapInstance) mapInstance.invalidateSize(); }, 300);
+}
+
+// ── VISTA PLANEADOS STANDALONE (iframe desde Operaciones) ────────────
+function initPlaneadosView(){
+  // Ocultar header — dentro del iframe Operaciones ya tiene su propio header
+  const header = document.querySelector('header');
+  if(header) header.style.display = 'none';
+
+  // Expandir .app al 100% sin padding-top
+  const app = document.querySelector('.app');
+  if(app) app.style.paddingTop = '0';
+
+  document.body.style.paddingTop = '0';
+
+  // Ocultar mapa superior y sidebar — tabla planeados a pantalla completa
+  const mapZone = document.getElementById('main-map-zone');
+  if(mapZone) mapZone.style.display = 'none';
+
+  const sidebar = document.getElementById('sidebar-kpis');
+  if(sidebar) sidebar.style.display = 'none';
+
+  // Expandir zona inferior
+  const bottom = document.querySelector('.main-bottom');
+  if(bottom) bottom.style.flex = '1';
+
+  // Activar pestaña Planeados
+  const btn = document.getElementById
+    ? Array.from(document.querySelectorAll('.tab-btn')).find(b => b.textContent.trim().startsWith('Planeados'))
+    : null;
+  switchTab('planeados', btn);
+}
+
 // ── ACTIVAR VISTA SEGÚN URL ──────────────────────────────
 function initVista(){
   if(URL_VISTA==='split'){
@@ -1935,6 +1986,10 @@ function initVista(){
     initTVView();
   } else if(URL_VISTA==='cumplidos'){
     initCumplidosView();
+  } else if(URL_VISTA==='viajes'){
+    initViajesView();
+  } else if(URL_VISTA==='planeados'){
+    initPlaneadosView();
   }
 }
 
@@ -1946,6 +2001,10 @@ function postLoadHook(){
   }
   if(URL_VISTA==='mapa-tv' && window._tvRenderFn){
     window._tvRenderFn();
+  }
+  if(URL_VISTA==='viajes'){
+    // Re-invalidar mapa por si el iframe aún estaba ajustando dimensiones
+    setTimeout(()=>{ if(mapInstance) mapInstance.invalidateSize(); }, 200);
   }
 }
 // ═══════════════════════════════════════════════════════
@@ -2865,6 +2924,18 @@ if(URL_VISTA === 'cumplidos'){
   loadAll();
   initCumplidos();
   initVista(); // llama initCumplidosView() que configura todo
+} else if(URL_VISTA === 'planeados'){
+  // Vista restringida: solo planeados, sin navegación ni mapa
+  loadAll();
+  initCumplidos();
+  initVista(); // llama initPlaneadosView()
+} else if(URL_VISTA === 'viajes'){
+  // Vista iframe: viajes con mapa, sin header de TorreControl
+  switchTab('viajes', document.querySelector('.tab-btn'));
+  renderSidebar('viajes');
+  loadAll();
+  initCumplidos();
+  initVista(); // llama initViajesView() que oculta header
 } else {
   // Vista normal: arrancar en viajes
   switchTab('viajes', document.querySelector('.tab-btn'));
