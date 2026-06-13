@@ -88,6 +88,90 @@ setInterval(async () => {
   catch(e) { console.error("❌ Error renovando token:", e.message); }
 }, TOKEN_TTL);
 
+// ─── API PÚBLICA CONTROLT (Get_Details + Binnacle) ─────
+// Credenciales separadas — API pública usa oauth distinto
+const CT_PUBLIC_URL      = 'https://app.controlt.com.co/apipublic/api';
+const CT_PUBLIC_USER     = process.env.CT_PUBLIC_USER || 'Inlop';
+const CT_PUBLIC_PASS     = process.env.CT_PUBLIC_PASS || 'InLoPC4rg*24';
+const CT_PUBLIC_TOKEN_TTL = 23 * 60 * 60 * 1000; // 23h (token dura 24h)
+
+let ctPublicToken    = null;
+let ctPublicTokenTs  = null;
+
+async function getCtPublicToken() {
+  const expired = !ctPublicTokenTs || (Date.now() - ctPublicTokenTs) > CT_PUBLIC_TOKEN_TTL;
+  if (!expired && ctPublicToken) return ctPublicToken;
+
+  console.log('🔑 Renovando token ControlT API Pública...');
+  const res = await fetch(`${CT_PUBLIC_URL}/login/oauth`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `username=${encodeURIComponent(CT_PUBLIC_USER)}&password=${encodeURIComponent(CT_PUBLIC_PASS)}`
+  });
+  const data = await res.json();
+  if (!data.access_token) throw new Error('CT Public login fallido: ' + JSON.stringify(data));
+  ctPublicToken   = data.access_token;
+  ctPublicTokenTs = Date.now();
+  console.log('✅ Token API Pública OK — vigencia:', data.expires_in, 'min');
+  return ctPublicToken;
+}
+
+// GET /api/ct/travel/:id — detalle completo de un viaje (paradas, productos, etc.)
+app.get('/api/ct/travel/:id', async (req, res) => {
+  try {
+    const token = await getCtPublicToken();
+    const r = await fetch(`${CT_PUBLIC_URL}/Travel/${req.params.id}`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      console.error(`❌ CT Travel/${req.params.id} → ${r.status}: ${txt.slice(0,200)}`);
+      return res.status(r.status).json({ error: 'ControlT error', status: r.status });
+    }
+    const data = await r.json();
+    res.json(data);
+  } catch(e) {
+    console.error('❌ /api/ct/travel error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/ct/binnacle — bitácora/trazabilidad de un viaje
+app.use(express.json());
+app.post('/api/ct/binnacle', async (req, res) => {
+  try {
+    const token = await getCtPublicToken();
+    const { trip_number, id_monitoring_order, date_start, date_end, take = 100, page = 1 } = req.body;
+
+    // Construir fecha de inicio = fecha de activación del viaje o últimos 30 días
+    const body = { take, page };
+    if (trip_number)         body.trip_number         = trip_number;
+    if (id_monitoring_order) body.id_monitoring_order = id_monitoring_order;
+    if (date_start)          body.date_start          = date_start;
+    if (date_end)            body.date_end            = date_end;
+
+    const r = await fetch(`${CT_PUBLIC_URL}/ControlTower/binnacle`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      console.error(`❌ CT Binnacle → ${r.status}: ${txt.slice(0,200)}`);
+      return res.status(r.status).json({ error: 'ControlT error', status: r.status });
+    }
+    const data = await r.json();
+    res.json(data);
+  } catch(e) {
+    console.error('❌ /api/ct/binnacle error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── FETCH SEGURO ───────────────────────────────────────
 async function safeFetch(path, fallback = []) {
   const token = await getToken();
