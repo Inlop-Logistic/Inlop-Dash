@@ -663,6 +663,26 @@ app.post('/auth/recuperar', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── EMPRESA ────────────────────────────────────────────
+app.get('/empresa', requireClienteAuth, async (req, res) => {
+  try {
+    const rows = await sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(req.empresaId)}&limit=1`) || [];
+    if (!rows.length) return res.status(404).json({ error: 'Empresa no encontrada' });
+    const e = rows[0];
+    const agencias = await sbFetch(`/agencias_cliente?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&select=id`) || [];
+    res.json({
+      id:       e.id,
+      nombre:   e.nombre   || '',
+      nit:      e.nit      || '',
+      ciudad:   e.ciudad   || '',
+      direccion: e.direccion || '',
+      telefono: e.telefono || '',
+      email:    e.email    || '',
+      agencias_activas: agencias.length,
+    });
+  } catch(e) { console.error('❌ GET /empresa:', e.message); res.status(500).json({ error: e.message }); }
+});
+
 app.get('/servicios', requireClienteAuth, async (req, res) => {
   try {
     const { estado, tipoOperacion, tipoVehiculo, agenciaIds, busqueda, desde, hasta } = req.query;
@@ -762,8 +782,7 @@ app.patch('/servicios/:id', requireClienteAuth, async (req, res) => {
 app.post('/servicios/:id/cancelar', requireClienteAuth, async (req, res) => {
   try {
     const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&limit=1`) || [];
-    if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
-    const sol = sols[0];
+    if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });    const sol = sols[0];
     if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
     if (!['pendiente','confirmado'].includes(sol.estado)) return res.status(400).json({ error: `No cancelable en estado: ${sol.estado}` });
     const fecha_cancelacion = new Date().toISOString();
