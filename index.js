@@ -223,6 +223,14 @@ const ESTADO_PRIORIDAD = {
   'completado':  8, 'finalizado':  9, 'cancelado':  10,
 };
 
+// ─── GRUPOS DE ESTADO — PORTAL CLIENTE ──────────────────
+const GRUPO_CONFIRMADO  = new Set(['sin asignar', 'sin activar']);
+const GRUPO_EN_RUTA     = new Set(['iniciado', 'cargando', 'en tránsito', 'en transito', 'pernoctando', 'descargando']);
+const GRUPO_COMPLETADO  = new Set(['completado', 'finalizado']);
+const GRUPO_CANCELADO   = new Set(['cancelado']);
+const ORPHAN_HOURS      = parseInt(process.env.ORPHAN_HOURS || '4', 10);
+let   _diagSolDone      = false;
+
 function getPrioridad(state_travel) {
   const s = (state_travel || '').toLowerCase().trim();
   for (const [key, prio] of Object.entries(ESTADO_PRIORIDAD)) {
@@ -608,6 +616,209 @@ async function syncCumplidos() {
   }
 }
 
+// ─── SYNC SOLICITUDES — portal cliente, corre cada 65s ──
+async function syncSolicitudes() {
+  try {
+    if (!cache.viajes.data.length) {
+      console.log('📋 syncSolicitudes: cache.viajes vacío, omitiendo ciclo.');
+      return;
+    }
+
+    // PASO 1 — Diagnóstico única vez al arrancar
+    if (!_diagSolDone) {
+      const kv = cache.viajes.data.length    ? Object.keys(cache.viajes.data[0])    : [];
+      const kp = cache.pendientes.data.length ? Object.keys(cache.pendientes.data[0]) : [];
+      console.log('🔍 [SOL-DIAG] Campos viajes:',       kv.join(', '));
+      console.log('🔍 [SOL-DIAG] ¿remission viajes?:',   kv.includes('remission'));
+      console.log('🔍 [SOL-DIAG] ¿number_order viajes?:', kv.includes('number_order'));
+      console.log('🔍 [SOL-DIAG] Campos pendientes:',   kp.join(', '));
+      console.log('🔍 [SOL-DIAG] ¿remission pendientes?:', kp.includes('remission'));
+      const mv = cache.viajes.data.filter(v=>(v.remission||'').startsWith('SOL-')).slice(0,3).map(v=>`${v.trip_number}→${v.remission}`);
+      const mp = cache.pendientes.data.filter(v=>(v.remission||'').startsWith('SOL-')).slice(0,3).map(v=>`${v.trip_number}→${v.remission}`);
+      console.log('🔍 [SOL-DIAG] Muestra SOL viajes:',    mv.join(' | ') || 'ninguna');
+      console.log('🔍 [SOL-DIAG] Muestra SOL pendientes:', mp.join(' | ') || 'ninguna');
+      _diagSolDone = true;
+    }
+
+    // PASO 2 — Índices en memoria O(1)
+    const resumeByRemission     = new Map();
+    const resumeByTripNumber    = new Map();
+    const pendientesByRemission = new Map();
+    for (const v of cache.viajes.data) {
+      const rem = (v.remission || '').trim();
+      if (rem.startsWith('SOL-')) resumeByRemission.set(rem, v);
+      if (v.trip_number)          resumeByTripNumber.set(String(v.trip_number), v);
+    }
+    for (const v of cache.pendientes.data) {
+      const rem = (v.remission || '').trim();
+      if (rem.startsWith('SOL-')) pendientesByRemission.set(rem, v);
+    }
+
+    // PASO 3 — Leer solicitudes activas (sin LIMIT)
+    const solicitudes = await sbFetch(
+      '/solicitudes?estado=in.(pendiente,confirmado,en_ruta)' +
+      '&select=id,codigo_solicitud,estado,controlt_trip_number,' +
+              'creado_por,empresa_cliente_id,fecha_requerida,' +
+              'observacion_coordinadora,manifiesto'
+    );
+    if (!solicitudes?.length) {
+      console.log('📋 syncSolicitudes: sin solicitudes activas.');
+      return;
+    }
+    console.log(`📋 syncSolicitudes: evaluando ${solicitudes.length} solicitudes.`);
+
+    // PASO 4 — Evaluar cada solicitud
+    const ahora        = new Date().toISOString();
+    const orphanCutoff = new Date(Date.now() - ORPHAN_HOURS * 3600 * 1000).toISOString();
+    const updates      = [];
+    const insertsNotif = [];
+    const pendVerif    = [];
+
+    for (const sol of solicitudes) {
+      const { id, codigo_solicitud, estado, controlt_trip_number,
+              creado_por, fecha_requerida, observacion_coordinadora } = sol;
+
+      if (estado === 'pendiente') {
+        // Detección de huérfanas: log únicamente, sin cambio de estado
+        if (fecha_requerida < orphanCutoff &&
+            !resumeByRemission.has(codigo_solicitud) &&
+            !pendientesByRemission.has(codigo_solicitud)) {
+          console.warn(`⚠️ [HUÉRFANA] ${codigo_solicitud} | requerida: ${fecha_requerida}`);
+          continue;
+        }
+        // Buscar en Resume (viajes activos)
+        const vR = resumeByRemission.get(codigo_solicitud);
+        if (vR) {
+          const g  = _grupo(vR.state_travel);
+          const ne = g || 'confirmado';
+          updates.push({ id, fields: _fields(vR, ne, ahora, true) });
+          insertsNotif.push(..._notifs(sol, ne, vR, 'pendiente'));
+          continue;
+        }
+        // Buscar en pendientes (Travel/search)
+        const vP = pendientesByRemission.get(codigo_solicitud);
+        if (vP) {
+          const g  = _grupo(vP.state_travel);
+          const ne = (g === 'en_ruta' || g === 'completado' || g === 'cancelado') ? g : 'confirmado';
+          updates.push({ id, fields: _fields(vP, ne, ahora, true) });
+          insertsNotif.push(..._notifs(sol, ne, vP, 'pendiente'));
+        }
+
+      } else if (estado === 'confirmado') {
+        const vR = controlt_trip_number
+          ? resumeByTripNumber.get(controlt_trip_number)
+          : resumeByRemission.get(codigo_solicitud);
+        if (vR) {
+          const g = _grupo(vR.state_travel);
+          if (g === 'en_ruta' || g === 'completado' || g === 'cancelado') {
+            updates.push({ id, fields: _fields(vR, g, ahora, false) });
+            insertsNotif.push(..._notifs(sol, g, vR, 'confirmado'));
+          } else {
+            // Sigue confirmado — actualizar solo estado_controlt
+            updates.push({ id, fields: { estado_controlt: (vR.state_travel||'').toLowerCase().trim(), ultima_actualizacion_controlt: ahora } });
+          }
+        } else if (controlt_trip_number) {
+          // Trip ya no está en Resume — verificar en cumplidos
+          pendVerif.push({ trip_number: controlt_trip_number, solicitud_id: id, estado_actual: estado, sol });
+        } else {
+          console.warn(`⚠️ [syncSolicitudes] ${codigo_solicitud}: confirmado sin controlt_trip_number`);
+        }
+
+      } else if (estado === 'en_ruta') {
+        const vR = controlt_trip_number ? resumeByTripNumber.get(controlt_trip_number) : null;
+        if (vR) {
+          const g = _grupo(vR.state_travel);
+          if (g === 'completado' || g === 'cancelado') {
+            updates.push({ id, fields: _fields(vR, g, ahora, false) });
+            insertsNotif.push(..._notifs(sol, g, vR, 'en_ruta'));
+          } else {
+            // Sigue en ruta — actualizar solo estado_controlt
+            updates.push({ id, fields: { estado_controlt: (vR.state_travel||'').toLowerCase().trim(), ultima_actualizacion_controlt: ahora } });
+          }
+        } else if (controlt_trip_number) {
+          // Trip ya no está en Resume — verificar en cumplidos
+          pendVerif.push({ trip_number: controlt_trip_number, solicitud_id: id, estado_actual: estado, sol });
+        }
+      }
+    }
+
+    // Resolución de trips que desaparecieron del Resume
+    if (pendVerif.length > 0) {
+      const tripIds = [...new Set(pendVerif.map(t => t.trip_number))];
+      const idsStr  = tripIds.map(encodeURIComponent).join(',');
+      const cumplidos = await sbFetch(`/cumplidos?id=in.(${idsStr})&select=id,estado_cumplido`) || [];
+      const cumplMap  = new Map(cumplidos.map(c => [c.id, c]));
+      for (const { trip_number, solicitud_id, estado_actual, sol } of pendVerif) {
+        const cumpl = cumplMap.get(trip_number);
+        if (cumpl) {
+          updates.push({ id: solicitud_id, fields: { estado: 'completado', estado_controlt: cumpl.estado_cumplido, ultima_actualizacion_controlt: ahora } });
+          insertsNotif.push(..._notifs(sol, 'completado', null, estado_actual));
+        } else {
+          console.warn(`⚠️ [syncSolicitudes] ANOMALÍA: trip ${trip_number} (${sol.codigo_solicitud}) desapareció de Resume sin registrarse en cumplidos. Estado mantenido: ${estado_actual}`);
+          updates.push({ id: solicitud_id, fields: { ultima_actualizacion_controlt: ahora } });
+        }
+      }
+    }
+
+    // PASO 5 — Batch writes
+    let updOk = 0;
+    for (const { id, fields } of updates) {
+      const r = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(id)}`, 'PATCH', fields);
+      if (r !== null) updOk++;
+    }
+    for (let i = 0; i < insertsNotif.length; i += 50) {
+      await sbFetch('/notificaciones_cliente', 'POST', insertsNotif.slice(i, i + 50));
+    }
+
+    console.log(`📋 syncSolicitudes OK: ${updOk}/${updates.length} upd | ${insertsNotif.length} notifs | ${pendVerif.length} verif cumplidos`);
+  } catch(e) {
+    console.error('❌ Error syncSolicitudes:', e.message);
+  }
+}
+
+function _grupo(stateTravel) {
+  const s = (stateTravel || '').toLowerCase().trim();
+  if (GRUPO_CONFIRMADO.has(s)) return 'confirmado';
+  if (GRUPO_EN_RUTA.has(s))    return 'en_ruta';
+  if (GRUPO_COMPLETADO.has(s)) return 'completado';
+  if (GRUPO_CANCELADO.has(s))  return 'cancelado';
+  return null;
+}
+
+function _fields(viaje, nuevoEstado, ahora, esPrimerEnlace) {
+  const f = {
+    estado:                          nuevoEstado,
+    estado_controlt:                 (viaje?.state_travel || '').toLowerCase().trim() || null,
+    ultima_actualizacion_controlt:   ahora,
+  };
+  if (viaje?.trip_number)  f.controlt_trip_number = String(viaje.trip_number);
+  if (viaje?.number_order) f.manifiesto            = String(viaje.number_order);
+  if (esPrimerEnlace)      f.fecha_confirmacion    = ahora;
+  if (nuevoEstado === 'cancelado') f.fecha_cancelacion = ahora;
+  return f;
+}
+
+function _notifs(sol, nuevoEstado, viaje, estadoAnterior) {
+  const cod   = sol.codigo_solicitud;
+  const placa = viaje?.license_plate || '';
+  const cond  = viaje?.driver_name   || '';
+  const obs   = sol.observacion_coordinadora ? `\n${sol.observacion_coordinadora}` : '';
+  const uid   = sol.creado_por;
+  const sid   = sol.id;
+  const n = (tipo, titulo, mensaje) => ({ usuario_id: uid, solicitud_id: sid, tipo, titulo, mensaje });
+  if (nuevoEstado === 'confirmado' && estadoAnterior === 'pendiente')
+    return [n('confirmacion', 'Servicio confirmado', `Tu servicio ${cod} ha sido confirmado. Vehículo: ${placa}. Conductor: ${cond}.${obs}`)];
+  if (nuevoEstado === 'en_ruta' && estadoAnterior === 'pendiente')
+    return [n('confirmacion', 'Servicio en camino', `Tu servicio ${cod} fue confirmado y ya está en operación. Vehículo: ${placa}. Conductor: ${cond}.${obs}`)];
+  if (nuevoEstado === 'en_ruta' && estadoAnterior === 'confirmado')
+    return [n('info', 'Tu servicio está en camino', `El servicio ${cod} inició operación.`)];
+  if (nuevoEstado === 'completado')
+    return [n('info', 'Servicio completado', `El servicio ${cod} fue completado exitosamente.`)];
+  if (nuevoEstado === 'cancelado')
+    return [n('cancelacion', 'Servicio cancelado', `El servicio ${cod} fue cancelado. Si tienes dudas, comunícate con INLOP.`)];
+  return [];
+}
+
 // Planeados — desde Supabase
 app.get("/api/planeados", async (req, res) => {
   try {
@@ -662,13 +873,15 @@ app.listen(process.env.PORT || 3000, async () => {
     await syncPendientes();
     await syncPlaneados();
     await syncCumplidos();
+    await syncSolicitudes();
   } catch(e) {
     console.error("❌ Error inicialización:", e.message);
   }
 
-  setInterval(syncViajes,    60 * 1000);
-  setInterval(syncAlarmas,   70 * 1000);
-  setInterval(syncPendientes, 5 * 60 * 1000);
-  setInterval(syncPlaneados,  5 * 60 * 1000);
-  setInterval(syncCumplidos,  60 * 1000); // Cumplidos cada 60s — mismo ciclo que viajes
+  setInterval(syncViajes,       60 * 1000);
+  setInterval(syncAlarmas,      70 * 1000);
+  setInterval(syncPendientes,    5 * 60 * 1000);
+  setInterval(syncPlaneados,     5 * 60 * 1000);
+  setInterval(syncCumplidos,    60 * 1000); // Cumplidos cada 60s — mismo ciclo que viajes
+  setInterval(syncSolicitudes,  65 * 1000); // Solicitudes portal cliente cada 65s
 });
