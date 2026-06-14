@@ -325,7 +325,7 @@ async function syncPlaneados() {
     console.log(`📅 Planeados: ${arr.length} en Travel/search → ${viajesFuturos.length} hoy o futuros`);
     if (!viajesFuturos.length) return;
 
-    const existentes = await sbFetch('/planeados?select=trip_number,fecha_detectado,company_customer_name');
+    const existentes = await sbFetch('/planeados?select=trip_number,fecha_detectado,company_customer_name,activo_en_resume');
     const existMap = {};
     (existentes || []).forEach(e => { existMap[e.trip_number] = e; });
 
@@ -338,6 +338,7 @@ async function syncPlaneados() {
       const viajeResume = cache.viajes.data.find(r => r.trip_number === v.trip_number);
       const cliente = viajeResume?.company_customer_name || v.company_customer_name || null;
 
+      // activado_en siempre presente para que todos los objetos del batch tengan las mismas claves
       const row = {
         trip_number:           v.trip_number,
         license_plate:         v.license_plate || null,
@@ -349,6 +350,8 @@ async function syncPlaneados() {
         schedulate_origin:     v.schedulate_origin || null,
         fecha_programada_dia:  f ? f.toISOString().slice(0, 10) : null,
         activo_en_resume:      estaActivo,
+        fecha_detectado:       null,
+        activado_en:           null,
       };
 
       if (yaExiste) {
