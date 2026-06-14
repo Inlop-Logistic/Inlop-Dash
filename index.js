@@ -331,46 +331,38 @@ async function syncPlaneados() {
 
     const activeIds = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
 
-    const rows = viajesFuturos.map(v => {
+    let upsertados = 0;
+    for (const v of viajesFuturos) {
       const f = parseSchedulate(v.schedulate_origin);
       const yaExiste = existMap[v.trip_number];
       const estaActivo = activeIds.has(v.trip_number);
       const viajeResume = cache.viajes.data.find(r => r.trip_number === v.trip_number);
       const cliente = viajeResume?.company_customer_name || v.company_customer_name || null;
 
-      // activado_en siempre presente para que todos los objetos del batch tengan las mismas claves
       const row = {
         trip_number:           v.trip_number,
-        license_plate:         v.license_plate || null,
-        driver_name:           v.driver_name || null,
+        license_plate:         v.license_plate         || null,
+        driver_name:           v.driver_name           || null,
         company_customer_name: cliente,
-        city_origin:           v.city_origin || null,
-        city_destination:      v.city_destination || null,
-        origin_address:        v.origin_address || null,
-        schedulate_origin:     v.schedulate_origin || null,
+        city_origin:           v.city_origin           || null,
+        city_destination:      v.city_destination      || null,
+        origin_address:        v.origin_address        || null,
+        schedulate_origin:     v.schedulate_origin     || null,
         fecha_programada_dia:  f ? f.toISOString().slice(0, 10) : null,
         activo_en_resume:      estaActivo,
-        fecha_detectado:       null,
-        activado_en:           null,
+        fecha_detectado:       yaExiste ? yaExiste.fecha_detectado : new Date().toISOString(),
+        activado_en:           (estaActivo && yaExiste && !yaExiste.activo_en_resume) || (estaActivo && !yaExiste)
+                                 ? new Date().toISOString()
+                                 : null,
       };
 
-      if (yaExiste) {
-        row.fecha_detectado = yaExiste.fecha_detectado;
-        if (estaActivo && !yaExiste.activo_en_resume) row.activado_en = new Date().toISOString();
-      } else {
-        row.fecha_detectado = new Date().toISOString();
-        if (estaActivo) row.activado_en = new Date().toISOString();
-      }
-      return row;
-    });
-
-    for (let i = 0; i < rows.length; i += 50) {
-      await sbFetch('/planeados', 'POST', rows.slice(i, i + 50));
+      await sbFetch('/planeados', 'POST', row);
+      upsertados++;
     }
 
     const hoyStr = hoyInicio.toISOString().slice(0, 10);
     await sbFetch(`/planeados?fecha_programada_dia=lt.${hoyStr}`, 'DELETE');
-    console.log(`📅 Planeados: ${rows.length} upsertados, limpieza de anteriores a ${hoyStr}`);
+    console.log(`📅 Planeados: ${upsertados} upsertados, limpieza de anteriores a ${hoyStr}`);
 
     const sinCliente = (existentes || []).filter(e => !e.company_customer_name);
     for (const e of sinCliente) {
