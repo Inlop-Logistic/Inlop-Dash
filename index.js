@@ -6,6 +6,7 @@ import cors from "cors";
 // ─── SUPABASE ───────────────────────────────────────────
 const SB_URL = "https://gtyydandwcgoaratmnqh.supabase.co/rest/v1";
 const SB_KEY = process.env.SUPABASE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0eXlkYW5kd2Nnb2FyYXRtbnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDAyMTcsImV4cCI6MjA5MjYxNjIxN30.utGZtr0L5t9hIpRABTtfhsKEsrSCBJLHcP_gQ5Hq0EI";
+const SB_AUTH_URL = 'https://gtyydandwcgoaratmnqh.supabase.co/auth/v1';
 
 const SB_HEADERS = {
   "apikey": SB_KEY,
@@ -39,6 +40,7 @@ function parseSchedulate(str) {
 
 const app = express();
 app.use(cors());
+app.use(express.json());
 
 const LOGIN_URL = "https://integrations.controlt.io/Auth/login";
 const BASE_URL  = "https://app.controlt.com.co/apipublic/api";
@@ -137,7 +139,6 @@ app.get('/api/ct/travel/:id', async (req, res) => {
 });
 
 // POST /api/ct/binnacle
-app.use(express.json());
 app.post('/api/ct/binnacle', async (req, res) => {
   try {
     const token = await getCtPublicToken();
@@ -765,6 +766,363 @@ function _notifs(sol, nuevoEstado, viaje, estadoAnterior) {
     return [n('cancelacion', 'Servicio cancelado', `El servicio ${cod} fue cancelado. Si tienes dudas, comunícate con INLOP.`)];
   return [];
 }
+
+// ─── PORTAL CLIENTE — AUTH + SERVICIOS + NOTIFICACIONES ─
+
+async function requireClienteAuth(req, res, next) {
+  const hdr = req.headers.authorization || '';
+  if (!hdr.startsWith('Bearer ')) return res.status(401).json({ error: 'No autenticado' });
+  const token = hdr.slice(7);
+  try {
+    const r = await fetch(`${SB_AUTH_URL}/user`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'apikey': SB_KEY }
+    });
+    if (!r.ok) return res.status(401).json({ error: 'Token inválido o expirado' });
+    const sbUser = await r.json();
+    const perfiles = await sbFetch(`/usuarios_cliente?id=eq.${sbUser.id}&limit=1`) || [];
+    if (!perfiles.length) return res.status(403).json({ error: 'Perfil no configurado' });
+    req.userId     = sbUser.id;
+    req.userEmail  = sbUser.email;
+    req.empresaId  = perfiles[0].empresa_cliente_id;
+    req.userPerfil = perfiles[0];
+    next();
+  } catch(e) {
+    console.error('❌ requireClienteAuth:', e.message);
+    res.status(500).json({ error: 'Error de autenticación' });
+  }
+}
+
+function mapSolicitud(sol, cumplido = null) {
+  return {
+    id:                sol.id,
+    codigo_solicitud:  sol.codigo_solicitud,
+    inlop_key:         sol.manifiesto      || '',
+    external_ref:      sol.external_ref    || null,
+    empresa_id:        sol.empresa_cliente_id,
+    agencia_id:        sol.agencia_id      || '',
+    agencia_nombre:    sol.agencia_nombre  || '',
+    tipo_vehiculo:     sol.tipo_vehiculo   || '',
+    tipo_operacion:    sol.tipo_operacion  || '',
+    origen:            sol.origen          || '',
+    destino:           sol.destino         || '',
+    fecha_solicitud:   sol.creado_en       || sol.fecha_requerida,
+    fecha_requerida:   sol.fecha_requerida,
+    fecha_aprobacion:  sol.fecha_confirmacion || null,
+    fecha_inicio_real: cumplido?.fecha_viaje        || null,
+    fecha_fin_real:    cumplido?.fecha_finalizacion || null,
+    fecha_cancelacion: sol.fecha_cancelacion || null,
+    estado:            sol.estado === 'confirmado' ? 'aprobado' : sol.estado,
+    controlt_trip_number: sol.controlt_trip_number || null,
+    placa_asignada:    cumplido?.placa     || sol.placa_asignada   || null,
+    conductor_nombre:  cumplido?.conductor || sol.conductor_nombre || null,
+    observaciones:     sol.observacion_coordinadora || null,
+  };
+}
+
+// POST /auth/login
+app.post('/auth/login', async (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) return res.status(400).json({ error: 'email y password requeridos' });
+  try {
+    const r = await fetch(`${SB_AUTH_URL}/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SB_KEY },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await r.json();
+    if (!r.ok || !data.access_token) {
+      return res.status(401).json({ error: data.error_description || 'Credenciales inválidas' });
+    }
+    const perfiles = await sbFetch(`/usuarios_cliente?id=eq.${data.user.id}&limit=1`) || [];
+    if (!perfiles.length) return res.status(403).json({ error: 'Usuario no configurado en el portal' });
+    const p = perfiles[0];
+    res.json({
+      token: data.access_token,
+      usuario: {
+        id: data.user.id,   empresa_id: p.empresa_cliente_id,
+        agencia_id: p.agencia_id || null, nombre: p.nombre,
+        email: data.user.email,  cargo: p.cargo || '', rol: p.rol || 'encargado',
+      }
+    });
+  } catch(e) {
+    console.error('❌ /auth/login:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /auth/me
+app.get('/auth/me', requireClienteAuth, (req, res) => {
+  const p = req.userPerfil;
+  res.json({
+    id: req.userId,   empresa_id: p.empresa_cliente_id,
+    agencia_id: p.agencia_id || null, nombre: p.nombre,
+    email: req.userEmail, cargo: p.cargo || '', rol: p.rol || 'encargado',
+  });
+});
+
+// POST /auth/logout
+app.post('/auth/logout', (req, res) => res.json({ ok: true }));
+
+// POST /auth/cambiar-password
+app.post('/auth/cambiar-password', requireClienteAuth, async (req, res) => {
+  const { passwordNueva } = req.body || {};
+  if (!passwordNueva) return res.status(400).json({ error: 'passwordNueva requerido' });
+  try {
+    const token = (req.headers.authorization || '').slice(7);
+    const r = await fetch(`${SB_AUTH_URL}/user`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${token}`, 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: passwordNueva })
+    });
+    if (!r.ok) { const e = await r.json(); return res.status(400).json({ error: e.message || 'Error al cambiar contraseña' }); }
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /auth/recuperar
+app.post('/auth/recuperar', async (req, res) => {
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'email requerido' });
+  try {
+    await fetch(`${SB_AUTH_URL}/recover`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SB_KEY },
+      body: JSON.stringify({ email })
+    });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /servicios
+app.get('/servicios', requireClienteAuth, async (req, res) => {
+  try {
+    const { estado, tipoOperacion, tipoVehiculo, agenciaIds, busqueda, desde, hasta } = req.query;
+    let qs = `/solicitudes?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&order=creado_en.desc&limit=200`;
+    if (estado)        qs += `&estado=eq.${encodeURIComponent(estado === 'aprobado' ? 'confirmado' : estado)}`;
+    if (tipoOperacion) qs += `&tipo_operacion=eq.${encodeURIComponent(tipoOperacion)}`;
+    if (tipoVehiculo)  qs += `&tipo_vehiculo=in.(${String(tipoVehiculo).split(',').map(encodeURIComponent).join(',')})`;
+    if (agenciaIds)    qs += `&agencia_id=in.(${String(agenciaIds).split(',').map(encodeURIComponent).join(',')})`;
+    if (desde)         qs += `&fecha_requerida=gte.${encodeURIComponent(desde)}`;
+    if (hasta)         qs += `&fecha_requerida=lte.${encodeURIComponent(hasta + 'T23:59:59Z')}`;
+
+    let solicitudes = await sbFetch(qs) || [];
+
+    if (busqueda) {
+      const q = busqueda.toLowerCase();
+      solicitudes = solicitudes.filter(s =>
+        [s.codigo_solicitud, s.origen, s.destino, s.manifiesto, s.external_ref]
+          .some(v => v && String(v).toLowerCase().includes(q))
+      );
+    }
+
+    const tripIds = [...new Set(solicitudes.filter(s => s.controlt_trip_number).map(s => s.controlt_trip_number))];
+    const cumplMap = {};
+    if (tripIds.length) {
+      const cs = await sbFetch(`/cumplidos?id=in.(${tripIds.map(encodeURIComponent).join(',')})&select=id,placa,conductor,fecha_viaje,fecha_finalizacion`) || [];
+      cs.forEach(c => { cumplMap[c.id] = c; });
+    }
+
+    res.json(solicitudes.map(s => mapSolicitud(s, cumplMap[s.controlt_trip_number])));
+  } catch(e) {
+    console.error('❌ GET /servicios:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /servicios/:id
+app.get('/servicios/:id', requireClienteAuth, async (req, res) => {
+  try {
+    const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&limit=1`) || [];
+    if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
+    const sol = sols[0];
+    if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
+    let cumplido = null;
+    if (sol.controlt_trip_number) {
+      const cs = await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(sol.controlt_trip_number)}&select=id,placa,conductor,fecha_viaje,fecha_finalizacion&limit=1`) || [];
+      cumplido = cs[0] || null;
+    }
+    res.json(mapSolicitud(sol, cumplido));
+  } catch(e) {
+    console.error('❌ GET /servicios/:id:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /servicios/:id/paradas
+app.get('/servicios/:id/paradas', requireClienteAuth, (req, res) => res.json([]));
+
+// GET /servicios/:id/vehiculo
+app.get('/servicios/:id/vehiculo', requireClienteAuth, async (req, res) => {
+  try {
+    const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&select=controlt_trip_number&limit=1`) || [];
+    const tripNum = sols[0]?.controlt_trip_number;
+    if (!tripNum) return res.status(404).json({ error: 'Sin vehículo asignado' });
+    const viaje = cache.viajes.data.find(v => String(v.trip_number) === String(tripNum));
+    if (!viaje?.lat || !viaje?.lng) return res.status(404).json({ error: 'Sin posición GPS' });
+    res.json({
+      lat: parseFloat(viaje.lat), lng: parseFloat(viaje.lng),
+      placa: viaje.license_plate || '',
+      ultima_actualizacion: viaje.latest_gps_report || new Date().toISOString(),
+    });
+  } catch(e) {
+    console.error('❌ GET /servicios/:id/vehiculo:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /servicios
+app.post('/servicios', requireClienteAuth, async (req, res) => {
+  try {
+    const { tipo_vehiculo, tipo_operacion, origen, destino, fecha_requerida,
+            observaciones, agencia_id, agencia_nombre, external_ref } = req.body || {};
+    if (!fecha_requerida) return res.status(400).json({ error: 'fecha_requerida requerido' });
+
+    const last = await sbFetch('/solicitudes?select=codigo_solicitud&order=creado_en.desc&limit=1') || [];
+    const lastCode = last[0]?.codigo_solicitud;
+    const n = lastCode?.startsWith('SOL-') ? parseInt(lastCode.slice(4), 10) : 0;
+    const codigo_solicitud = 'SOL-' + String((isNaN(n) ? 0 : n) + 1).padStart(5, '0');
+
+    const row = {
+      codigo_solicitud,
+      empresa_cliente_id: req.empresaId,
+      creado_por:         req.userId,
+      tipo_vehiculo:      tipo_vehiculo  || null,
+      tipo_operacion:     tipo_operacion || null,
+      origen:             origen         || null,
+      destino:            destino        || null,
+      agencia_id:         agencia_id     || null,
+      agencia_nombre:     agencia_nombre || null,
+      external_ref:       external_ref   || null,
+      fecha_requerida,
+      observacion_coordinadora: observaciones || null,
+      estado:    'pendiente',
+      creado_en: new Date().toISOString(),
+    };
+
+    const created = await sbFetch('/solicitudes', 'POST', row);
+    if (!created) return res.status(500).json({ error: 'Error creando solicitud' });
+    const sol = Array.isArray(created) ? created[0] : created;
+    res.status(201).json(mapSolicitud(sol || row));
+  } catch(e) {
+    console.error('❌ POST /servicios:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /servicios/:id
+app.patch('/servicios/:id', requireClienteAuth, async (req, res) => {
+  try {
+    const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&limit=1`) || [];
+    if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
+    const sol = sols[0];
+    if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
+    if (sol.estado !== 'pendiente') return res.status(400).json({ error: `No editable en estado: ${sol.estado}` });
+
+    const { fecha_requerida, observaciones, origen, destino, tipo_vehiculo, tipo_operacion } = req.body || {};
+    const patch = {};
+    if (fecha_requerida) patch.fecha_requerida          = fecha_requerida;
+    if (observaciones)   patch.observacion_coordinadora = observaciones;
+    if (origen)          patch.origen                   = origen;
+    if (destino)         patch.destino                  = destino;
+    if (tipo_vehiculo)   patch.tipo_vehiculo             = tipo_vehiculo;
+    if (tipo_operacion)  patch.tipo_operacion            = tipo_operacion;
+
+    await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}`, 'PATCH', patch);
+    res.json(mapSolicitud({ ...sol, ...patch }));
+  } catch(e) {
+    console.error('❌ PATCH /servicios/:id:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /servicios/:id/cancelar
+app.post('/servicios/:id/cancelar', requireClienteAuth, async (req, res) => {
+  try {
+    const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&limit=1`) || [];
+    if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
+    const sol = sols[0];
+    if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
+    if (!['pendiente', 'confirmado'].includes(sol.estado))
+      return res.status(400).json({ error: `No cancelable en estado: ${sol.estado}` });
+    const fecha_cancelacion = new Date().toISOString();
+    await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}`, 'PATCH', { estado: 'cancelado', fecha_cancelacion });
+    res.json(mapSolicitud({ ...sol, estado: 'cancelado', fecha_cancelacion }));
+  } catch(e) {
+    console.error('❌ POST /servicios/:id/cancelar:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /notificaciones
+app.get('/notificaciones', requireClienteAuth, async (req, res) => {
+  try {
+    const notifs = await sbFetch(
+      `/notificaciones_cliente?usuario_id=eq.${encodeURIComponent(req.userId)}&order=creado_en.desc&limit=100`
+    ) || [];
+    const solIds = [...new Set(notifs.filter(n => n.solicitud_id).map(n => n.solicitud_id))];
+    const solMap = {};
+    if (solIds.length) {
+      const sols = await sbFetch(`/solicitudes?id=in.(${solIds.map(encodeURIComponent).join(',')})&select=id,codigo_solicitud`) || [];
+      sols.forEach(s => { solMap[s.id] = s.codigo_solicitud; });
+    }
+    res.json(notifs.map(n => ({
+      id:               n.id,
+      servicio_id:      n.solicitud_id || null,
+      codigo_solicitud: solMap[n.solicitud_id] || null,
+      tipo:             n.tipo === 'confirmacion' ? 'estado' : (n.tipo || 'info'),
+      titulo:           n.titulo,
+      mensaje:          n.mensaje,
+      fecha:            n.creado_en,
+      leida:            n.leida || false,
+    })));
+  } catch(e) {
+    console.error('❌ GET /notificaciones:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /notificaciones/:id/leer
+app.patch('/notificaciones/:id/leer', requireClienteAuth, async (req, res) => {
+  try {
+    await sbFetch(
+      `/notificaciones_cliente?id=eq.${encodeURIComponent(req.params.id)}&usuario_id=eq.${encodeURIComponent(req.userId)}`,
+      'PATCH', { leida: true, leida_en: new Date().toISOString() }
+    );
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /notificaciones/marcar-todas-leidas
+app.post('/notificaciones/marcar-todas-leidas', requireClienteAuth, async (req, res) => {
+  try {
+    await sbFetch(
+      `/notificaciones_cliente?usuario_id=eq.${encodeURIComponent(req.userId)}&leida=eq.false`,
+      'PATCH', { leida: true, leida_en: new Date().toISOString() }
+    );
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /notificaciones
+app.delete('/notificaciones', requireClienteAuth, async (req, res) => {
+  try {
+    await sbFetch(`/notificaciones_cliente?usuario_id=eq.${encodeURIComponent(req.userId)}`, 'DELETE');
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /catalogos/agencias
+app.get('/catalogos/agencias', requireClienteAuth, async (req, res) => {
+  try {
+    const rows = await sbFetch(`/agencias_cliente?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&order=nombre.asc`) || [];
+    res.json(rows.map(a => ({ id: a.id, empresa_id: a.empresa_cliente_id, nombre: a.nombre, ciudad: a.ciudad || '' })));
+  } catch(e) { res.json([]); }
+});
+
+// GET /catalogos/vehiculos
+app.get('/catalogos/vehiculos', (req, res) => {
+  res.json(['NHR', 'TURBO', 'NPR', 'NQR', 'MINIMULA', 'TURBO PLATÓN']);
+});
 
 // Planeados — desde Supabase
 app.get("/api/planeados", async (req, res) => {
