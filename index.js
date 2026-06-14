@@ -42,8 +42,8 @@ app.use(cors());
 
 const LOGIN_URL = "https://integrations.controlt.io/Auth/login";
 const BASE_URL  = "https://app.controlt.com.co/apipublic/api";
-const TOKEN_TTL = 20 * 60 * 60 * 1000;
-const CACHE_TTL = 60 * 1000; // 60 segundos — ControlT se consulta máximo 1 vez por minuto
+const TOKEN_TTL = 60 * 60 * 1000; // 1 hora — renovación proactiva cada hora
+const CACHE_TTL = 60 * 1000;
 
 let currentToken = null;
 let lastLogin    = null;
@@ -83,17 +83,17 @@ async function getToken() {
   return currentToken;
 }
 
+// Renovación proactiva cada hora
 setInterval(async () => {
   try { await refreshToken(); }
   catch(e) { console.error("❌ Error renovando token:", e.message); }
 }, TOKEN_TTL);
 
 // ─── API PÚBLICA CONTROLT (Get_Details + Binnacle) ─────
-// Credenciales separadas — API pública usa oauth distinto
 const CT_PUBLIC_URL      = 'https://app.controlt.com.co/apipublic/api';
 const CT_PUBLIC_USER     = process.env.CT_PUBLIC_USER || 'Inlop';
 const CT_PUBLIC_PASS     = process.env.CT_PUBLIC_PASS || 'InLoPC4rg*24';
-const CT_PUBLIC_TOKEN_TTL = 23 * 60 * 60 * 1000; // 23h (token dura 24h)
+const CT_PUBLIC_TOKEN_TTL = 23 * 60 * 60 * 1000;
 
 let ctPublicToken    = null;
 let ctPublicTokenTs  = null;
@@ -116,7 +116,7 @@ async function getCtPublicToken() {
   return ctPublicToken;
 }
 
-// GET /api/ct/travel/:id — detalle completo de un viaje (paradas, productos, etc.)
+// GET /api/ct/travel/:id
 app.get('/api/ct/travel/:id', async (req, res) => {
   try {
     const token = await getCtPublicToken();
@@ -136,14 +136,13 @@ app.get('/api/ct/travel/:id', async (req, res) => {
   }
 });
 
-// POST /api/ct/binnacle — bitácora/trazabilidad de un viaje
+// POST /api/ct/binnacle
 app.use(express.json());
 app.post('/api/ct/binnacle', async (req, res) => {
   try {
     const token = await getCtPublicToken();
     const { trip_number, id_monitoring_order, date_start, date_end, take = 100, page = 1 } = req.body;
 
-    // Construir fecha de inicio = fecha de activación del viaje o últimos 30 días
     const body = { take, page };
     if (trip_number)         body.trip_number         = trip_number;
     if (id_monitoring_order) body.id_monitoring_order = id_monitoring_order;
@@ -174,15 +173,33 @@ app.post('/api/ct/binnacle', async (req, res) => {
 
 // ─── FETCH SEGURO ───────────────────────────────────────
 async function safeFetch(path, fallback = []) {
-  const token = await getToken();
+  const doRequest = async () => {
+    const token = currentToken;
+    return fetch(`${BASE_URL}${path}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
+    });
+  };
 
-  const response = await fetch(`${BASE_URL}${path}`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json"
+  let response = await doRequest();
+
+  // Si el servidor devuelve 401, el token expiró — renovar y reintentar una vez
+  if (response.status === 401) {
+    console.warn(`⚠️ safeFetch 401 en ${path} — token expirado, renovando...`);
+    try {
+      await refreshToken();
+      response = await doRequest();
+    } catch(e) {
+      console.error(`❌ safeFetch: refreshToken falló tras 401 en ${path}:`, e.message);
+      return fallback;
     }
-  });
+  }
+
+  if (!response.ok) {
+    const txt = await response.text();
+    console.error(`❌ safeFetch ${path} → ${response.status}: ${txt.slice(0, 200)}`);
+    return fallback;
+  }
 
   const text = await response.text();
 
@@ -195,22 +212,14 @@ async function safeFetch(path, fallback = []) {
 
   try {
     const data = JSON.parse(text);
-
-    if (
-      data &&
-      data.Message &&
-      data.Message.toLowerCase().includes("denied")
-    ) {
+    if (data && data.Message && data.Message.toLowerCase().includes("denied")) {
       console.warn(`⚠️ ${path} bloqueado por permisos`);
       return fallback;
     }
-
     return data;
-
   } catch (e) {
     console.warn(`⚠️ ${path} respuesta no-JSON`);
     console.error("ERROR PARSE:", e.message);
-
     return fallback;
   }
 }
@@ -260,16 +269,12 @@ function parseCreated(str) {
 
 async function syncPendientes() {
   try {
-    // Travel/search necesita parámetros — buscar viajes de hoy hasta 7 días adelante
     const ahora   = new Date();
     const en7dias = new Date(ahora.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-    // Formato DD/MM/YYYY para ControlT
     const fmt = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
     const desde = fmt(ahora);
     const hasta  = fmt(en7dias);
 
-    // Probar con parámetros de fecha
     const path = `/Travel/search?dateStart=${encodeURIComponent(desde)}&dateEnd=${encodeURIComponent(hasta)}&size=200&page=1`;
     console.log(`⏳ Consultando: ${path}`);
 
@@ -282,7 +287,6 @@ async function syncPendientes() {
       console.log(`⏳ CAMPOS: ${Object.keys(arr[0]).join(', ')}`);
       console.log(`⏳ Muestra: ${arr.slice(0,3).map(v=>`${v.trip_number}=${v.schedulate_origin||v.license_plate}`).join(' | ')}`);
     } else {
-      // Fallback: intentar sin parámetros de fecha pero con size grande
       console.log(`⏳ Sin resultados con fechas — intentando sin filtro de fecha...`);
       const data2 = await safeFetch(`/Travel/search?size=200&page=1`, []);
       const arr2 = Array.isArray(data2) ? data2 : data2.data || data2.result || [];
@@ -299,19 +303,16 @@ async function syncPendientes() {
 // ─── SYNC PLANEADOS ─────────────────────────────────────
 async function syncPlaneados() {
   try {
-    // 1. Traer Travel/search con size grande
     const path = `/Travel/search?size=200&page=1`;
     const data = await safeFetch(path, []);
     const arr = Array.isArray(data) ? data : data.data || data.result || [];
-    
+
     if (!arr.length) {
       console.log('📅 Planeados: Travel/search devolvió 0 viajes');
       return;
     }
 
     const ahora = new Date();
-
-    // 2. Filtrar solo viajes con schedulate_origin >= hoy 00:00
     const hoyInicio = new Date(ahora);
     hoyInicio.setHours(0, 0, 0, 0);
 
@@ -322,24 +323,18 @@ async function syncPlaneados() {
     });
 
     console.log(`📅 Planeados: ${arr.length} en Travel/search → ${viajesFuturos.length} hoy o futuros`);
-
     if (!viajesFuturos.length) return;
 
-    // 3. Obtener los que ya existen en Supabase para no pisar fecha_detectado
     const existentes = await sbFetch('/planeados?select=trip_number,fecha_detectado,company_customer_name');
     const existMap = {};
     (existentes || []).forEach(e => { existMap[e.trip_number] = e; });
 
-    // 4. IDs activos en Resume para marcar activo_en_resume
     const activeIds = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
 
-    // 5. Upsert cada viaje — solo insertar nuevos, actualizar estado de activos
     const rows = viajesFuturos.map(v => {
       const f = parseSchedulate(v.schedulate_origin);
       const yaExiste = existMap[v.trip_number];
       const estaActivo = activeIds.has(v.trip_number);
-      
-      // Cliente: del viaje activo en Resume si existe, si no del Travel/search
       const viajeResume = cache.viajes.data.find(r => r.trip_number === v.trip_number);
       const cliente = viajeResume?.company_customer_name || v.company_customer_name || null;
 
@@ -356,33 +351,24 @@ async function syncPlaneados() {
         activo_en_resume:      estaActivo,
       };
 
-      // Si ya existe → mantener fecha_detectado original
       if (yaExiste) {
         row.fecha_detectado = yaExiste.fecha_detectado;
-        // Solo actualizar activado_en si acaba de activarse
-        if (estaActivo && !yaExiste.activo_en_resume) {
-          row.activado_en = new Date().toISOString();
-        }
+        if (estaActivo && !yaExiste.activo_en_resume) row.activado_en = new Date().toISOString();
       } else {
         row.fecha_detectado = new Date().toISOString();
         if (estaActivo) row.activado_en = new Date().toISOString();
       }
-
       return row;
     });
 
-    // Upsert en lotes de 50
     for (let i = 0; i < rows.length; i += 50) {
-      const lote = rows.slice(i, i + 50);
-      await sbFetch('/planeados', 'POST', lote);
+      await sbFetch('/planeados', 'POST', rows.slice(i, i + 50));
     }
 
-    // 6. Limpiar viajes de días anteriores (fecha_programada_dia < hoy)
     const hoyStr = hoyInicio.toISOString().slice(0, 10);
     await sbFetch(`/planeados?fecha_programada_dia=lt.${hoyStr}`, 'DELETE');
     console.log(`📅 Planeados: ${rows.length} upsertados, limpieza de anteriores a ${hoyStr}`);
 
-    // 7. Actualizar cliente en viajes ya activos que no tenían cliente
     const sinCliente = (existentes || []).filter(e => !e.company_customer_name);
     for (const e of sinCliente) {
       const viajeResume = cache.viajes.data.find(r => r.trip_number === e.trip_number);
@@ -394,7 +380,6 @@ async function syncPlaneados() {
         );
       }
     }
-
   } catch(e) {
     console.error("❌ Error sync planeados:", e.message);
   }
@@ -402,7 +387,6 @@ async function syncPlaneados() {
 
 async function syncViajes() {
   try {
-    // Página 1 — viajes activos principales
     const data1 = await safeFetch("/Resume?size=100&page=1", null);
     if (!data1) return;
     const arr1 = Array.isArray(data1) ? data1 : data1.data || data1.result || [];
@@ -413,7 +397,6 @@ async function syncViajes() {
 
     let todos = [...arr1];
 
-    // Si la página 1 llegó llena (100 registros) puede haber más — traer página 2
     if (arr1.length >= 100) {
       try {
         const data2 = await safeFetch("/Resume?size=100&page=2", null);
@@ -421,8 +404,6 @@ async function syncViajes() {
         if (arr2.length > 0) {
           todos = [...todos, ...arr2];
           console.log(`📄 Página 2 cargada: ${arr2.length} viajes adicionales`);
-
-          // Si página 2 también llena, traer página 3
           if (arr2.length >= 100) {
             try {
               const data3 = await safeFetch("/Resume?size=100&page=3", null);
@@ -437,7 +418,6 @@ async function syncViajes() {
       } catch(e) { console.warn("⚠️  Página 2 no disponible:", e.message); }
     }
 
-    // Deduplicar por trip_number
     const seen = new Set();
     const dedup = todos.filter(v => {
       const k = v.trip_number || v.id_monitoring_order;
@@ -473,20 +453,16 @@ async function syncAlarmas() {
 
 // ─── ENDPOINTS — responden siempre del caché ────────────
 
-// Viajes activos
 app.get("/api/data", (req, res) => {
   res.json(cache.viajes.data);
 });
 
-// Alarmas
 app.get("/api/alarmas", (req, res) => {
   res.json(cache.alarmas.data);
 });
 
-// Pendientes — Travel/search: incluye pasado (3 días) y futuro (7 días)
 app.get("/api/pendientes", async (req, res) => {
   try {
-    // Usar caché si está vigente (5 min), si no refrescar
     if ((Date.now() - cache.pendientes.ts) > 5 * 60 * 1000 || cache.pendientes.data.length === 0) {
       await syncPendientes();
     }
@@ -506,13 +482,9 @@ app.get("/api/pendientes", async (req, res) => {
     const activeIds = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
 
     const filtrados = arr.filter(v => {
-      // Si ya está activo en Resume → no mostrar
       if (activeIds.has(v.trip_number)) return false;
       const fecha = parseSchedulate(v.schedulate_origin);
-      // Sin fecha parseable → incluir igual (no descartar por falta de dato)
       if (!fecha || isNaN(fecha.getTime())) return true;
-      // Mostrar desde ayer hasta 7 días adelante
-      // (ayer por si hay viajes programados de hoy temprano que aún no se activaron)
       return fecha >= hace1dia && fecha <= en7dias;
     });
 
@@ -523,9 +495,7 @@ app.get("/api/pendientes", async (req, res) => {
     });
 
     console.log(`⏳ Cache pendientes: ${arr.length} total, activeIds: ${activeIds.size}`);
-    if(arr.length > 0){
-      console.log(`⏳ Muestra schedulate_origin:`, arr.slice(0,3).map(v=>`${v.trip_number}=${v.schedulate_origin}`).join(' | '));
-    }
+    if(arr.length > 0) console.log(`⏳ Muestra schedulate_origin:`, arr.slice(0,3).map(v=>`${v.trip_number}=${v.schedulate_origin}`).join(' | '));
     console.log(`⏳ Resultado filtrado: ${filtrados.length} futuros pendientes`);
     res.json(filtrados);
   } catch(err) {
@@ -549,14 +519,12 @@ async function syncCumplidos() {
   try {
     if (!cache.viajes.data.length) return;
 
-    // 1. Leer todos los cumplidos existentes en Supabase
     const existentesRaw = await sbFetch('/cumplidos?select=id,estado_cumplido,tiene_soporte,cliente&limit=1000');
     const existentes = new Map((existentesRaw || []).map(c => [c.id, c]));
 
     const ESTADOS_ACTIVOS = new Set(['LIVE', 'SOLICITADO', 'CUMPLIDO RECIBIDO']);
     const apiSet = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
 
-    // 2. Insertar viajes nuevos que aparecieron en el Resume
     let insertados = 0, actualizados = 0;
     for (const v of cache.viajes.data) {
       if (!v.trip_number) continue;
@@ -564,7 +532,6 @@ async function syncCumplidos() {
       const cliente = (v.company_customer_name || '').split(',')[0].trim();
 
       if (!existe) {
-        // Nuevo viaje — insertar con estado LIVE
         const row = {
           id:              v.trip_number,
           manifiesto:      v.number_order || '',
@@ -583,7 +550,6 @@ async function syncCumplidos() {
         await sbFetch('/cumplidos', 'POST', row);
         insertados++;
       } else {
-        // Actualizar estado_controlt, pct y cliente si antes estaba vacío
         const patch = {
           estado_controlt: v.state_travel || '',
           pct:             parseFloat(v.percentage_travel) || 0,
@@ -594,7 +560,6 @@ async function syncCumplidos() {
       }
     }
 
-    // 3. Detectar viajes que desaparecieron del Resume → finalizar en Supabase
     let finalizados = 0;
     for (const [id, c] of existentes) {
       const estadoActivo = ESTADOS_ACTIVOS.has((c.estado_cumplido || '').toUpperCase());
@@ -624,7 +589,6 @@ async function syncSolicitudes() {
       return;
     }
 
-    // PASO 1 — Diagnóstico única vez al arrancar
     if (!_diagSolDone) {
       const kv = cache.viajes.data.length    ? Object.keys(cache.viajes.data[0])    : [];
       const kp = cache.pendientes.data.length ? Object.keys(cache.pendientes.data[0]) : [];
@@ -640,7 +604,6 @@ async function syncSolicitudes() {
       _diagSolDone = true;
     }
 
-    // PASO 2 — Índices en memoria O(1)
     const resumeByRemission     = new Map();
     const resumeByTripNumber    = new Map();
     const pendientesByRemission = new Map();
@@ -654,7 +617,6 @@ async function syncSolicitudes() {
       if (rem.startsWith('SOL-')) pendientesByRemission.set(rem, v);
     }
 
-    // PASO 3 — Leer solicitudes activas (sin LIMIT)
     const solicitudes = await sbFetch(
       '/solicitudes?estado=in.(pendiente,confirmado,en_ruta)' +
       '&select=id,codigo_solicitud,estado,controlt_trip_number,' +
@@ -667,7 +629,6 @@ async function syncSolicitudes() {
     }
     console.log(`📋 syncSolicitudes: evaluando ${solicitudes.length} solicitudes.`);
 
-    // PASO 4 — Evaluar cada solicitud
     const ahora        = new Date().toISOString();
     const orphanCutoff = new Date(Date.now() - ORPHAN_HOURS * 3600 * 1000).toISOString();
     const updates      = [];
@@ -679,14 +640,12 @@ async function syncSolicitudes() {
               creado_por, fecha_requerida, observacion_coordinadora } = sol;
 
       if (estado === 'pendiente') {
-        // Detección de huérfanas: log únicamente, sin cambio de estado
         if (fecha_requerida < orphanCutoff &&
             !resumeByRemission.has(codigo_solicitud) &&
             !pendientesByRemission.has(codigo_solicitud)) {
           console.warn(`⚠️ [HUÉRFANA] ${codigo_solicitud} | requerida: ${fecha_requerida}`);
           continue;
         }
-        // Buscar en Resume (viajes activos)
         const vR = resumeByRemission.get(codigo_solicitud);
         if (vR) {
           const g  = _grupo(vR.state_travel);
@@ -695,7 +654,6 @@ async function syncSolicitudes() {
           insertsNotif.push(..._notifs(sol, ne, vR, 'pendiente'));
           continue;
         }
-        // Buscar en pendientes (Travel/search)
         const vP = pendientesByRemission.get(codigo_solicitud);
         if (vP) {
           const g  = _grupo(vP.state_travel);
@@ -714,11 +672,9 @@ async function syncSolicitudes() {
             updates.push({ id, fields: _fields(vR, g, ahora, false) });
             insertsNotif.push(..._notifs(sol, g, vR, 'confirmado'));
           } else {
-            // Sigue confirmado — actualizar solo estado_controlt
             updates.push({ id, fields: { estado_controlt: (vR.state_travel||'').toLowerCase().trim(), ultima_actualizacion_controlt: ahora } });
           }
         } else if (controlt_trip_number) {
-          // Trip ya no está en Resume — verificar en cumplidos
           pendVerif.push({ trip_number: controlt_trip_number, solicitud_id: id, estado_actual: estado, sol });
         } else {
           console.warn(`⚠️ [syncSolicitudes] ${codigo_solicitud}: confirmado sin controlt_trip_number`);
@@ -732,17 +688,14 @@ async function syncSolicitudes() {
             updates.push({ id, fields: _fields(vR, g, ahora, false) });
             insertsNotif.push(..._notifs(sol, g, vR, 'en_ruta'));
           } else {
-            // Sigue en ruta — actualizar solo estado_controlt
             updates.push({ id, fields: { estado_controlt: (vR.state_travel||'').toLowerCase().trim(), ultima_actualizacion_controlt: ahora } });
           }
         } else if (controlt_trip_number) {
-          // Trip ya no está en Resume — verificar en cumplidos
           pendVerif.push({ trip_number: controlt_trip_number, solicitud_id: id, estado_actual: estado, sol });
         }
       }
     }
 
-    // Resolución de trips que desaparecieron del Resume
     if (pendVerif.length > 0) {
       const tripIds = [...new Set(pendVerif.map(t => t.trip_number))];
       const idsStr  = tripIds.map(encodeURIComponent).join(',');
@@ -760,7 +713,6 @@ async function syncSolicitudes() {
       }
     }
 
-    // PASO 5 — Batch writes
     let updOk = 0;
     for (const { id, fields } of updates) {
       const r = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(id)}`, 'PATCH', fields);
@@ -787,9 +739,9 @@ function _grupo(stateTravel) {
 
 function _fields(viaje, nuevoEstado, ahora, esPrimerEnlace) {
   const f = {
-    estado:                          nuevoEstado,
-    estado_controlt:                 (viaje?.state_travel || '').toLowerCase().trim() || null,
-    ultima_actualizacion_controlt:   ahora,
+    estado:                        nuevoEstado,
+    estado_controlt:               (viaje?.state_travel || '').toLowerCase().trim() || null,
+    ultima_actualizacion_controlt: ahora,
   };
   if (viaje?.trip_number)  f.controlt_trip_number = String(viaje.trip_number);
   if (viaje?.number_order) f.manifiesto            = String(viaje.number_order);
@@ -825,7 +777,6 @@ app.get("/api/planeados", async (req, res) => {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
     const hoyStr = hoy.toISOString().slice(0, 10);
-    // Traer hoy y futuros ordenado por schedulate_origin
     const data = await sbFetch(
       `/planeados?fecha_programada_dia=gte.${hoyStr}&order=schedulate_origin.asc&limit=500`
     );
@@ -836,7 +787,7 @@ app.get("/api/planeados", async (req, res) => {
   }
 });
 
-// Health check con info del caché
+// Health check
 app.get("/health", (req, res) => {
   const estados = {};
   cache.viajes.data.forEach(v => {
@@ -882,6 +833,6 @@ app.listen(process.env.PORT || 3000, async () => {
   setInterval(syncAlarmas,      70 * 1000);
   setInterval(syncPendientes,    5 * 60 * 1000);
   setInterval(syncPlaneados,     5 * 60 * 1000);
-  setInterval(syncCumplidos,    60 * 1000); // Cumplidos cada 60s — mismo ciclo que viajes
-  setInterval(syncSolicitudes,  65 * 1000); // Solicitudes portal cliente cada 65s
+  setInterval(syncCumplidos,    60 * 1000);
+  setInterval(syncSolicitudes,  65 * 1000);
 });
