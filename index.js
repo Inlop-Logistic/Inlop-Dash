@@ -8,15 +8,23 @@ const SB_URL = "https://gtyydandwcgoaratmnqh.supabase.co/rest/v1";
 const SB_KEY = process.env.SUPABASE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0eXlkYW5kd2Nnb2FyYXRtbnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDAyMTcsImV4cCI6MjA5MjYxNjIxN30.utGZtr0L5t9hIpRABTtfhsKEsrSCBJLHcP_gQ5Hq0EI";
 const SB_AUTH_URL = 'https://gtyydandwcgoaratmnqh.supabase.co/auth/v1';
 
-const SB_HEADERS = {
+// Headers separados: POST (upsert) vs PATCH/GET (update/read)
+const SB_HEADERS_BASE = {
   "apikey": SB_KEY,
   "Authorization": `Bearer ${SB_KEY}`,
   "Content-Type": "application/json",
-  "Prefer": "resolution=merge-duplicates,return=representation"
 };
+const SB_HEADERS_POST  = { ...SB_HEADERS_BASE, "Prefer": "resolution=merge-duplicates,return=representation" };
+const SB_HEADERS_PATCH = { ...SB_HEADERS_BASE, "Prefer": "return=representation" };
+const SB_HEADERS_GET   = { ...SB_HEADERS_BASE };
 
 async function sbFetch(path, method="GET", body=null) {
-  const opts = { method, headers: SB_HEADERS };
+  let headers;
+  if (method === "POST")  headers = SB_HEADERS_POST;
+  else if (method === "PATCH") headers = SB_HEADERS_PATCH;
+  else headers = SB_HEADERS_GET;
+
+  const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(`${SB_URL}${path}`, opts);
   if (!r.ok) {
@@ -24,9 +32,10 @@ async function sbFetch(path, method="GET", body=null) {
     console.error(`Supabase ${method} ${path} → ${r.status}: ${txt}`);
     return null;
   }
-  if (method === "DELETE") return null;
+  if (method === "DELETE") return true;
   const text = await r.text();
-  return text ? JSON.parse(text) : null;
+  if (!text) return method === "PATCH" ? [] : null;
+  return JSON.parse(text);
 }
 
 function parseSchedulate(str) {
@@ -786,7 +795,8 @@ app.post('/servicios/:id/cancelar', requireClienteAuth, async (req, res) => {
     if (!['pendiente','confirmado'].includes(sol.estado)) return res.status(400).json({ error: `No cancelable en estado: ${sol.estado}` });
     const fecha_cancelacion = new Date().toISOString();
     const result = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}`, 'PATCH', { estado: 'cancelado', fecha_cancelacion });
-    if (result === null) return res.status(500).json({ error: 'Error al cancelar el servicio' });
+    if (result === null) return res.status(500).json({ error: 'Error al cancelar: Supabase rechazó el update' });
+    console.log(`✅ Cancelado ${req.params.id}, Supabase result:`, JSON.stringify(result));
     res.json(mapSolicitud({ ...sol, estado: 'cancelado', fecha_cancelacion }));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
