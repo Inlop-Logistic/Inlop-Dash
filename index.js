@@ -771,7 +771,8 @@ app.patch('/servicios/:id', requireClienteAuth, async (req, res) => {
     if (destino)         patch.destino = destino;
     if (tipo_vehiculo)   patch.tipo_vehiculo = tipo_vehiculo;
     if (tipo_operacion)  patch.tipo_operacion = tipo_operacion;
-    await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}`, 'PATCH', patch);
+    const result = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}`, 'PATCH', patch);
+    if (result === null) return res.status(500).json({ error: 'Error actualizando solicitud' });
     res.json(mapSolicitud({ ...sol, ...patch }));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -784,7 +785,8 @@ app.post('/servicios/:id/cancelar', requireClienteAuth, async (req, res) => {
     if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
     if (!['pendiente','confirmado'].includes(sol.estado)) return res.status(400).json({ error: `No cancelable en estado: ${sol.estado}` });
     const fecha_cancelacion = new Date().toISOString();
-    await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}`, 'PATCH', { estado: 'cancelado', fecha_cancelacion });
+    const result = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}`, 'PATCH', { estado: 'cancelado', fecha_cancelacion });
+    if (result === null) return res.status(500).json({ error: 'Error al cancelar el servicio' });
     res.json(mapSolicitud({ ...sol, estado: 'cancelado', fecha_cancelacion }));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -826,19 +828,14 @@ app.delete('/notificaciones', requireClienteAuth, async (req, res) => {
 // ─── CATÁLOGOS ───────────────────────────────────────────
 app.get('/catalogos/agencias', requireClienteAuth, async (req, res) => {
   try {
-    // Buscar agencias asignadas al usuario en usuario_agencias
     const asignadas = await sbFetch(`/usuario_agencias?usuario_id=eq.${encodeURIComponent(req.userId)}&select=agencia_id`) || [];
-
     let rows;
     if (asignadas.length > 0) {
-      // Usuario tiene agencias específicas asignadas — mostrar solo esas
       const ids = asignadas.map(a => encodeURIComponent(a.agencia_id)).join(',');
       rows = await sbFetch(`/agencias_cliente?id=in.(${ids})&order=nombre.asc`) || [];
     } else {
-      // Sin asignación específica — mostrar todas las de la empresa
       rows = await sbFetch(`/agencias_cliente?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&order=nombre.asc`) || [];
     }
-
     res.json(rows.map(a => ({ id: a.id, empresa_id: a.empresa_cliente_id, nombre: a.nombre, ciudad: a.ciudad||'' })));
   } catch(e) { console.error('❌ GET /catalogos/agencias:', e.message); res.json([]); }
 });
