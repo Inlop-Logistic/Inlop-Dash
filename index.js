@@ -43,7 +43,7 @@ app.use(express.json());
 
 const LOGIN_URL = "https://integrations.controlt.io/Auth/login";
 const BASE_URL  = "https://app.controlt.com.co/apipublic/api";
-const TOKEN_TTL = 60 * 60 * 1000; // 1 hora
+const TOKEN_TTL = 60 * 60 * 1000;
 const CACHE_TTL = 60 * 1000;
 
 let currentToken = null;
@@ -116,10 +116,7 @@ app.get('/api/ct/travel/:id', async (req, res) => {
     const r = await fetch(`${CT_PUBLIC_URL}/Travel/${req.params.id}`, {
       headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
     });
-    if (!r.ok) {
-      const txt = await r.text();
-      return res.status(r.status).json({ error: 'ControlT error', status: r.status });
-    }
+    if (!r.ok) return res.status(r.status).json({ error: 'ControlT error', status: r.status });
     res.json(await r.json());
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -731,7 +728,7 @@ app.get('/servicios/:id/vehiculo', requireClienteAuth, async (req, res) => {
     const tripNum = sols[0]?.controlt_trip_number;
     if (!tripNum) return res.status(404).json({ error: 'Sin vehículo asignado' });
     const viaje = cache.viajes.data.find(v => String(v.trip_number) === String(tripNum));
-    if (!viaje?.lat || !viaje?.lng) return res.status(404).json({ error: 'Sin posición GPS' });
+    if (!viaje?.lat || !viaje?.lng) return res.status(404).json({ error: 'Sin posición GPS' });  
     res.json({ lat: parseFloat(viaje.lat), lng: parseFloat(viaje.lng), placa: viaje.license_plate||'', ultima_actualizacion: viaje.latest_gps_report||new Date().toISOString() });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -782,7 +779,8 @@ app.patch('/servicios/:id', requireClienteAuth, async (req, res) => {
 app.post('/servicios/:id/cancelar', requireClienteAuth, async (req, res) => {
   try {
     const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&limit=1`) || [];
-    if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });    const sol = sols[0];
+    if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
+    const sol = sols[0];
     if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
     if (!['pendiente','confirmado'].includes(sol.estado)) return res.status(400).json({ error: `No cancelable en estado: ${sol.estado}` });
     const fecha_cancelacion = new Date().toISOString();
@@ -825,11 +823,24 @@ app.delete('/notificaciones', requireClienteAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── CATÁLOGOS ───────────────────────────────────────────
 app.get('/catalogos/agencias', requireClienteAuth, async (req, res) => {
   try {
-    const rows = await sbFetch(`/agencias_cliente?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&order=nombre.asc`) || [];
+    // Buscar agencias asignadas al usuario en usuario_agencias
+    const asignadas = await sbFetch(`/usuario_agencias?usuario_id=eq.${encodeURIComponent(req.userId)}&select=agencia_id`) || [];
+
+    let rows;
+    if (asignadas.length > 0) {
+      // Usuario tiene agencias específicas asignadas — mostrar solo esas
+      const ids = asignadas.map(a => encodeURIComponent(a.agencia_id)).join(',');
+      rows = await sbFetch(`/agencias_cliente?id=in.(${ids})&order=nombre.asc`) || [];
+    } else {
+      // Sin asignación específica — mostrar todas las de la empresa
+      rows = await sbFetch(`/agencias_cliente?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&order=nombre.asc`) || [];
+    }
+
     res.json(rows.map(a => ({ id: a.id, empresa_id: a.empresa_cliente_id, nombre: a.nombre, ciudad: a.ciudad||'' })));
-  } catch(e) { res.json([]); }
+  } catch(e) { console.error('❌ GET /catalogos/agencias:', e.message); res.json([]); }
 });
 
 app.get('/catalogos/vehiculos', (req, res) => {
