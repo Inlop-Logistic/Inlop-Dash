@@ -1187,8 +1187,8 @@ app.post('/agencias', requireClienteAuth, requireAdminCliente, async (req, res) 
   try {
     const created = await sbFetch('/agencias_cliente', 'POST', {
       empresa_cliente_id: req.empresaId,
-      nombre:             nombre.trim().toUpperCase(),
-      ciudad:             ciudad ? ciudad.trim().toUpperCase() : null,
+      nombre:             nombre.trim(),
+      ciudad:             ciudad ? ciudad.trim() : null,
       activa:             true,
       creado_en:          new Date().toISOString(),
     });
@@ -1219,8 +1219,8 @@ app.patch('/agencias/:id', requireClienteAuth, requireAdminCliente, async (req, 
 
     const { nombre, ciudad, activa } = req.body || {};
     const patch = {};
-    if (nombre !== undefined) patch.nombre = nombre.trim().toUpperCase();
-    if (ciudad !== undefined) patch.ciudad = ciudad ? ciudad.trim().toUpperCase() : null;
+    if (nombre !== undefined) patch.nombre = nombre.trim();
+    if (ciudad !== undefined) patch.ciudad = ciudad ? ciudad.trim() : null;
     if (activa !== undefined) patch.activa = Boolean(activa);
     if (!Object.keys(patch).length) return res.status(400).json({ error: 'Sin campos para actualizar' });
 
@@ -1579,7 +1579,7 @@ app.delete('/notificaciones', requireClienteAuth, async (req, res) => {
 // GET /catalogos/agencias
 app.get('/catalogos/agencias', requireClienteAuth, async (req, res) => {
   try {
-    const rows = await sbFetch(`/agencias_cliente?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&order=nombre.asc`) || [];
+    const rows = await sbFetch(`/agencias_cliente?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&activa=eq.true&order=nombre.asc`) || [];
     res.json(rows.map(a => ({ id: a.id, empresa_id: a.empresa_cliente_id, nombre: a.nombre, ciudad: a.ciudad || '' })));
   } catch(e) { res.json([]); }
 });
