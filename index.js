@@ -1030,7 +1030,7 @@ app.post('/usuarios', requireClienteAuth, requireAdminCliente, async (req, res) 
   const { nombre, email, password, cargo, rol, agencia_id } = req.body || {};
   if (!nombre || !email || !password) return res.status(400).json({ error: 'nombre, email y password son requeridos' });
 
-  const ROLES_VALIDOS = ['admin_cliente', 'encargado'];
+  const ROLES_VALIDOS = ['admin_cliente', 'encargado', 'coordinador'];
   if (rol && !ROLES_VALIDOS.includes(rol)) return res.status(400).json({ error: `Rol inválido. Permitidos: ${ROLES_VALIDOS.join(', ')}` });
 
   try {
@@ -1081,6 +1081,11 @@ app.patch('/usuarios/:id', requireClienteAuth, requireAdminCliente, async (req, 
     if (!objetivo) return res.status(404).json({ error: 'Usuario no encontrado en esta empresa' });
 
     const { nombre, cargo, rol, agencia_id, activo } = req.body || {};
+
+    const ROLES_VALIDOS = ['admin_cliente', 'encargado', 'coordinador'];
+    if (rol !== undefined && !ROLES_VALIDOS.includes(rol))
+      return res.status(400).json({ error: `Rol inválido. Permitidos: ${ROLES_VALIDOS.join(', ')}` });
+
     const patch = {};
     if (nombre     !== undefined) patch.nombre    = nombre;
     if (cargo      !== undefined) patch.cargo     = cargo;
@@ -1136,6 +1141,8 @@ app.delete('/usuarios/:id', requireClienteAuth, requireAdminCliente, async (req,
     res.json({ ok: true });
   } catch(e) { console.error('❌ DELETE /usuarios/:id:', e.message); res.status(500).json({ error: e.message }); }
 });
+
+// ─── SERVICIOS ───────────────────────────────────────────
 app.get('/servicios', requireClienteAuth, async (req, res) => {
   try {
     const { estado, tipoOperacion, tipoVehiculo, agenciaIds, busqueda, desde, hasta } = req.query;
