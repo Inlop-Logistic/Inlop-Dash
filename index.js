@@ -807,13 +807,11 @@ async function buildSessionData(userId, email, perfil) {
       activo:       perfil.activo       !== false,
     },
     empresa: {
-      id:        emp.id        || empresaId,
-      nombre:    emp.nombre    || '',
-      nit:       emp.nit       || '',
-      ciudad:    emp.ciudad    || '',
-      direccion: emp.direccion || '',
-      telefono:  emp.telefono  || '',
-      email:     emp.email     || '',
+      id:             emp.id             || empresaId,
+      nombre:         emp.razon_social   || '',
+      nit:            emp.nit            || '',
+      nombre_controlt: emp.nombre_controlt || '',
+      activa:         emp.activa         !== false,
     },
     agencias,
     permisos: {
