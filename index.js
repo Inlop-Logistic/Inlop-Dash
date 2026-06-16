@@ -1086,6 +1086,22 @@ app.patch('/usuarios/:id', requireClienteAuth, requireAdminCliente, async (req, 
     if (rol !== undefined && !ROLES_VALIDOS.includes(rol))
       return res.status(400).json({ error: `Rol inválido. Permitidos: ${ROLES_VALIDOS.join(', ')}` });
 
+    // Bloquear cambio de rol propio
+    if (rol !== undefined && req.params.id === req.userId)
+      return res.status(400).json({ error: 'No puedes cambiar tu propio rol' });
+
+    // Guardia último administrador: bloquear desactivación o degradación de rol si es el único admin activo
+    const esAdminObjetivo = objetivo.rol === 'admin_cliente';
+    const seDesactiva = activo !== undefined && !activo && objetivo.activo !== false;
+    const seDegrada   = rol !== undefined && rol !== 'admin_cliente' && esAdminObjetivo;
+    if (esAdminObjetivo && (seDesactiva || seDegrada)) {
+      const admins = await sbFetch(
+        `/usuarios_cliente?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&rol=eq.admin_cliente&activo=eq.true&select=id`
+      ) || [];
+      if (admins.length <= 1)
+        return res.status(400).json({ error: 'No puedes dejar la empresa sin un administrador activo' });
+    }
+
     const patch = {};
     if (nombre     !== undefined) patch.nombre    = nombre;
     if (cargo      !== undefined) patch.cargo     = cargo;
@@ -1136,6 +1152,15 @@ app.delete('/usuarios/:id', requireClienteAuth, requireAdminCliente, async (req,
     const objetivo = await verificarMismaEmpresa(req.params.id, req.empresaId);
     if (!objetivo) return res.status(404).json({ error: 'Usuario no encontrado en esta empresa' });
     if (req.params.id === req.userId) return res.status(400).json({ error: 'No puedes desactivarte a ti mismo' });
+
+    // Guardia último administrador
+    if (objetivo.rol === 'admin_cliente' && objetivo.activo !== false) {
+      const admins = await sbFetch(
+        `/usuarios_cliente?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&rol=eq.admin_cliente&activo=eq.true&select=id`
+      ) || [];
+      if (admins.length <= 1)
+        return res.status(400).json({ error: 'No puedes dejar la empresa sin un administrador activo' });
+    }
 
     await sbFetch(`/usuarios_cliente?id=eq.${encodeURIComponent(req.params.id)}`, 'PATCH', { activo: false });
     res.json({ ok: true });
@@ -1329,34 +1354,6 @@ app.get('/empresa/config', requireClienteAuth, requireAdminCliente, async (req, 
   }
 });
 
-// PATCH /empresa/config — solo razon_social es editable
-app.patch('/empresa/config', requireClienteAuth, requireAdminCliente, async (req, res) => {
-  try {
-    const { razon_social } = req.body || {};
-    if (!razon_social || !razon_social.trim()) return res.status(400).json({ error: 'razon_social es requerido' });
-
-    const result = await sbFetch(
-      `/empresas_cliente?id=eq.${encodeURIComponent(req.empresaId)}`,
-      'PATCH', { razon_social: razon_social.trim() }
-    );
-    if (result === null) return res.status(500).json({ error: 'Error actualizando empresa' });
-
-    const rows = await sbFetch(
-      `/empresas_cliente?id=eq.${encodeURIComponent(req.empresaId)}&limit=1`
-    ) || [];
-    const e = rows[0] || {};
-    res.json({
-      id:              e.id             || req.empresaId,
-      razon_social:    e.razon_social   || '',
-      nit:             e.nit            || '',
-      nombre_controlt: e.nombre_controlt|| '',
-      activa:          e.activa         !== false,
-    });
-  } catch(e) {
-    console.error('❌ PATCH /empresa/config:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
 
 // ─── SERVICIOS ───────────────────────────────────────────
 app.get('/servicios', requireClienteAuth, async (req, res) => {
