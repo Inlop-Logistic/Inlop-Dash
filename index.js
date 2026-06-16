@@ -955,7 +955,187 @@ app.post('/auth/recuperar', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /servicios
+// ─── GESTIÓN DE USUARIOS (admin_cliente only) ────────────
+// Requiere SUPABASE_SERVICE_KEY en Railway (service_role key de Supabase).
+
+const SB_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || SB_KEY;
+
+async function sbAuthAdmin(path, method = 'GET', body = null) {
+  const opts = {
+    method,
+    headers: { 'apikey': SB_SERVICE_KEY, 'Authorization': `Bearer ${SB_SERVICE_KEY}`, 'Content-Type': 'application/json' }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(`${SB_AUTH_URL}${path}`, opts);
+  if (!r.ok) {
+    const txt = await r.text();
+    console.error(`SbAuthAdmin ${method} ${path} → ${r.status}: ${txt}`);
+    return null;
+  }
+  const text = await r.text();
+  return text ? JSON.parse(text) : null;
+}
+
+// Verifica que el usuario pertenece a la empresa del admin autenticado
+async function verificarMismaEmpresa(usuarioId, empresaId) {
+  const rows = await sbFetch(
+    `/usuarios_cliente?id=eq.${encodeURIComponent(usuarioId)}&empresa_cliente_id=eq.${encodeURIComponent(empresaId)}&limit=1`
+  ) || [];
+  return rows[0] || null;
+}
+
+// GET /usuarios — lista usuarios de la empresa con agencias asignadas
+app.get('/usuarios', requireClienteAuth, requireAdminCliente, async (req, res) => {
+  try {
+    const perfiles = await sbFetch(
+      `/usuarios_cliente?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&order=nombre.asc`
+    ) || [];
+    if (!perfiles.length) return res.json([]);
+
+    const userIds = perfiles.map(p => encodeURIComponent(p.id)).join(',');
+    const [asignaciones, agencias, authData] = await Promise.all([
+      sbFetch(`/usuario_agencias?usuario_id=in.(${userIds})&select=usuario_id,agencia_id`).catch(() => []),
+      sbFetch(`/agencias_cliente?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&select=id,nombre,ciudad`).catch(() => []),
+      sbAuthAdmin(`/admin/users?per_page=1000`).catch(() => null),
+    ]);
+
+    const agenciasMap = {};
+    (agencias || []).forEach(a => { agenciasMap[a.id] = a; });
+    const emailMap = {};
+    ((authData || {}).users || []).forEach(u => { emailMap[u.id] = u.email || ''; });
+
+    res.json(perfiles.map(p => {
+      const userAgencias = (asignaciones || [])
+        .filter(a => a.usuario_id === p.id)
+        .map(a => agenciasMap[a.agencia_id] ? { id: a.agencia_id, nombre: agenciasMap[a.agencia_id].nombre, ciudad: agenciasMap[a.agencia_id].ciudad || '' } : null)
+        .filter(Boolean);
+      return {
+        id:           p.id,
+        nombre:       p.nombre       || '',
+        email:        emailMap[p.id] || '',
+        cargo:        p.cargo        || '',
+        rol:          p.rol          || 'encargado',
+        tipo_usuario: p.tipo_usuario || 'cliente',
+        agencia_id:   p.agencia_id   || null,
+        activo:       p.activo       !== false,
+        created_at:   p.created_at,
+        agencias:     userAgencias,
+      };
+    }));
+  } catch(e) { console.error('❌ GET /usuarios:', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// POST /usuarios — crea usuario en Auth (trigger crea perfil automáticamente)
+app.post('/usuarios', requireClienteAuth, requireAdminCliente, async (req, res) => {
+  const { nombre, email, password, cargo, rol, agencia_id } = req.body || {};
+  if (!nombre || !email || !password) return res.status(400).json({ error: 'nombre, email y password son requeridos' });
+
+  const ROLES_VALIDOS = ['admin_cliente', 'encargado'];
+  if (rol && !ROLES_VALIDOS.includes(rol)) return res.status(400).json({ error: `Rol inválido. Permitidos: ${ROLES_VALIDOS.join(', ')}` });
+
+  try {
+    const authRes = await sbAuthAdmin('/admin/users', 'POST', {
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        nombre,
+        cargo:              cargo              || '',
+        rol:                rol                || 'encargado',
+        tipo_usuario:       'cliente',
+        empresa_cliente_id: req.empresaId,
+        agencia_id:         agencia_id         || '',
+      }
+    });
+    if (!authRes || !authRes.id) return res.status(500).json({ error: 'Error creando usuario en Auth' });
+
+    // Esperar al trigger (async en Supabase)
+    await new Promise(r => setTimeout(r, 300));
+
+    let perfiles = await sbFetch(`/usuarios_cliente?id=eq.${encodeURIComponent(authRes.id)}&limit=1`) || [];
+
+    // Fallback: trigger no ejecutó — insertar perfil manualmente
+    if (!perfiles.length) {
+      await sbFetch('/usuarios_cliente', 'POST', {
+        id: authRes.id, empresa_cliente_id: req.empresaId,
+        agencia_id: agencia_id || null, nombre, cargo: cargo || null,
+        rol: rol || 'encargado', tipo_usuario: 'cliente', activo: true,
+      });
+      perfiles = await sbFetch(`/usuarios_cliente?id=eq.${encodeURIComponent(authRes.id)}&limit=1`) || [];
+    }
+
+    if (!perfiles.length) return res.status(500).json({ error: 'Perfil no creado correctamente' });
+    const p = perfiles[0];
+    res.status(201).json({
+      id: p.id, nombre: p.nombre, email: authRes.email,
+      cargo: p.cargo || '', rol: p.rol, tipo_usuario: p.tipo_usuario,
+      agencia_id: p.agencia_id || null, activo: p.activo !== false, agencias: [],
+    });
+  } catch(e) { console.error('❌ POST /usuarios:', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /usuarios/:id — editar perfil (nombre, cargo, rol, agencia_id, activo)
+app.patch('/usuarios/:id', requireClienteAuth, requireAdminCliente, async (req, res) => {
+  try {
+    const objetivo = await verificarMismaEmpresa(req.params.id, req.empresaId);
+    if (!objetivo) return res.status(404).json({ error: 'Usuario no encontrado en esta empresa' });
+
+    const { nombre, cargo, rol, agencia_id, activo } = req.body || {};
+    const patch = {};
+    if (nombre     !== undefined) patch.nombre    = nombre;
+    if (cargo      !== undefined) patch.cargo     = cargo;
+    if (rol        !== undefined) patch.rol       = rol;
+    if (agencia_id !== undefined) patch.agencia_id = agencia_id || null;
+    if (activo     !== undefined) patch.activo    = activo;
+    if (!Object.keys(patch).length) return res.status(400).json({ error: 'Sin campos para actualizar' });
+
+    const result = await sbFetch(`/usuarios_cliente?id=eq.${encodeURIComponent(req.params.id)}`, 'PATCH', patch);
+    if (result === null) return res.status(500).json({ error: 'Error actualizando usuario' });
+
+    const rows = await sbFetch(`/usuarios_cliente?id=eq.${encodeURIComponent(req.params.id)}&limit=1`) || [];
+    const p = rows[0] || { ...objetivo, ...patch };
+    res.json({ id: p.id, nombre: p.nombre, cargo: p.cargo || '', rol: p.rol, agencia_id: p.agencia_id || null, activo: p.activo !== false });
+  } catch(e) { console.error('❌ PATCH /usuarios/:id:', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// PUT /usuarios/:id/agencias — reemplazar lista completa de agencias asignadas
+app.put('/usuarios/:id/agencias', requireClienteAuth, requireAdminCliente, async (req, res) => {
+  try {
+    const objetivo = await verificarMismaEmpresa(req.params.id, req.empresaId);
+    if (!objetivo) return res.status(404).json({ error: 'Usuario no encontrado en esta empresa' });
+
+    const { agencia_ids } = req.body || {};
+    if (!Array.isArray(agencia_ids)) return res.status(400).json({ error: 'agencia_ids debe ser un array' });
+
+    // Verificar que todas las agencias pertenecen a esta empresa
+    if (agencia_ids.length > 0) {
+      const ids = agencia_ids.map(encodeURIComponent).join(',');
+      const validas = await sbFetch(`/agencias_cliente?id=in.(${ids})&empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&select=id`) || [];
+      if (validas.length !== agencia_ids.length) return res.status(400).json({ error: 'Una o más agencias no pertenecen a esta empresa' });
+    }
+
+    await sbFetch(`/usuario_agencias?usuario_id=eq.${encodeURIComponent(req.params.id)}`, 'DELETE');
+
+    if (agencia_ids.length > 0) {
+      const rows = agencia_ids.map(agencia_id => ({ usuario_id: req.params.id, agencia_id }));
+      await sbFetch('/usuario_agencias', 'POST', rows);
+    }
+
+    res.json({ ok: true, usuario_id: req.params.id, agencia_ids });
+  } catch(e) { console.error('❌ PUT /usuarios/:id/agencias:', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /usuarios/:id — soft delete (activo = false)
+app.delete('/usuarios/:id', requireClienteAuth, requireAdminCliente, async (req, res) => {
+  try {
+    const objetivo = await verificarMismaEmpresa(req.params.id, req.empresaId);
+    if (!objetivo) return res.status(404).json({ error: 'Usuario no encontrado en esta empresa' });
+    if (req.params.id === req.userId) return res.status(400).json({ error: 'No puedes desactivarte a ti mismo' });
+
+    await sbFetch(`/usuarios_cliente?id=eq.${encodeURIComponent(req.params.id)}`, 'PATCH', { activo: false });
+    res.json({ ok: true });
+  } catch(e) { console.error('❌ DELETE /usuarios/:id:', e.message); res.status(500).json({ error: e.message }); }
+});
 app.get('/servicios', requireClienteAuth, async (req, res) => {
   try {
     const { estado, tipoOperacion, tipoVehiculo, agenciaIds, busqueda, desde, hasta } = req.query;
