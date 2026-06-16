@@ -1217,10 +1217,11 @@ app.patch('/agencias/:id', requireClienteAuth, requireAdminCliente, async (req, 
     ) || [];
     if (!agencias.length) return res.status(404).json({ error: 'Agencia no encontrada en esta empresa' });
 
-    const { nombre, ciudad } = req.body || {};
+    const { nombre, ciudad, activa } = req.body || {};
     const patch = {};
     if (nombre !== undefined) patch.nombre = nombre.trim().toUpperCase();
     if (ciudad !== undefined) patch.ciudad = ciudad ? ciudad.trim().toUpperCase() : null;
+    if (activa !== undefined) patch.activa = Boolean(activa);
     if (!Object.keys(patch).length) return res.status(400).json({ error: 'Sin campos para actualizar' });
 
     const result = await sbFetch(
