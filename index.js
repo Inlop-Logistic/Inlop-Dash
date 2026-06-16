@@ -1142,6 +1142,221 @@ app.delete('/usuarios/:id', requireClienteAuth, requireAdminCliente, async (req,
   } catch(e) { console.error('❌ DELETE /usuarios/:id:', e.message); res.status(500).json({ error: e.message }); }
 });
 
+// ─── GESTIÓN DE AGENCIAS (admin_cliente only) ────────────
+
+// GET /agencias — lista agencias de la empresa con contador de usuarios
+app.get('/agencias', requireClienteAuth, requireAdminCliente, async (req, res) => {
+  try {
+    const rows = await sbFetch(
+      `/agencias_cliente?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&order=nombre.asc`
+    ) || [];
+
+    const ids = rows.map(a => encodeURIComponent(a.id)).join(',');
+    let asignaciones = [];
+    if (ids.length) {
+      asignaciones = await sbFetch(
+        `/usuario_agencias?agencia_id=in.(${ids})&select=agencia_id`
+      ).catch(() => []) || [];
+    }
+
+    const conteoMap = {};
+    for (const a of asignaciones) {
+      conteoMap[a.agencia_id] = (conteoMap[a.agencia_id] || 0) + 1;
+    }
+
+    res.json(rows.map(a => ({
+      id:           a.id,
+      empresa_id:   a.empresa_cliente_id,
+      nombre:       a.nombre      || '',
+      ciudad:       a.ciudad      || '',
+      activa:       a.activa      !== false,
+      creado_en:    a.creado_en   || null,
+      total_usuarios: conteoMap[a.id] || 0,
+    })));
+  } catch(e) {
+    console.error('❌ GET /agencias:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /agencias — crear nueva agencia
+app.post('/agencias', requireClienteAuth, requireAdminCliente, async (req, res) => {
+  const { nombre, ciudad } = req.body || {};
+  if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'nombre es requerido' });
+
+  try {
+    const created = await sbFetch('/agencias_cliente', 'POST', {
+      empresa_cliente_id: req.empresaId,
+      nombre:             nombre.trim().toUpperCase(),
+      ciudad:             ciudad ? ciudad.trim().toUpperCase() : null,
+      activa:             true,
+      creado_en:          new Date().toISOString(),
+    });
+    if (!created) return res.status(500).json({ error: 'Error creando agencia' });
+    const a = Array.isArray(created) ? created[0] : created;
+    res.status(201).json({
+      id:         a.id,
+      empresa_id: a.empresa_cliente_id,
+      nombre:     a.nombre     || '',
+      ciudad:     a.ciudad     || '',
+      activa:     a.activa     !== false,
+      creado_en:  a.creado_en  || null,
+      total_usuarios: 0,
+    });
+  } catch(e) {
+    console.error('❌ POST /agencias:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /agencias/:id — editar nombre y/o ciudad
+app.patch('/agencias/:id', requireClienteAuth, requireAdminCliente, async (req, res) => {
+  try {
+    const agencias = await sbFetch(
+      `/agencias_cliente?id=eq.${encodeURIComponent(req.params.id)}&empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&limit=1`
+    ) || [];
+    if (!agencias.length) return res.status(404).json({ error: 'Agencia no encontrada en esta empresa' });
+
+    const { nombre, ciudad } = req.body || {};
+    const patch = {};
+    if (nombre !== undefined) patch.nombre = nombre.trim().toUpperCase();
+    if (ciudad !== undefined) patch.ciudad = ciudad ? ciudad.trim().toUpperCase() : null;
+    if (!Object.keys(patch).length) return res.status(400).json({ error: 'Sin campos para actualizar' });
+
+    const result = await sbFetch(
+      `/agencias_cliente?id=eq.${encodeURIComponent(req.params.id)}`,
+      'PATCH', patch
+    );
+    if (result === null) return res.status(500).json({ error: 'Error actualizando agencia' });
+
+    const rows = await sbFetch(
+      `/agencias_cliente?id=eq.${encodeURIComponent(req.params.id)}&limit=1`
+    ) || [];
+    const a = rows[0] || { ...agencias[0], ...patch };
+    res.json({
+      id:         a.id,
+      empresa_id: a.empresa_cliente_id,
+      nombre:     a.nombre    || '',
+      ciudad:     a.ciudad    || '',
+      activa:     a.activa    !== false,
+      creado_en:  a.creado_en || null,
+    });
+  } catch(e) {
+    console.error('❌ PATCH /agencias/:id:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /agencias/:id — soft delete (activa = false)
+app.delete('/agencias/:id', requireClienteAuth, requireAdminCliente, async (req, res) => {
+  try {
+    const agencias = await sbFetch(
+      `/agencias_cliente?id=eq.${encodeURIComponent(req.params.id)}&empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&limit=1`
+    ) || [];
+    if (!agencias.length) return res.status(404).json({ error: 'Agencia no encontrada en esta empresa' });
+    if (agencias[0].activa === false) return res.status(400).json({ error: 'La agencia ya está inactiva' });
+
+    await sbFetch(
+      `/agencias_cliente?id=eq.${encodeURIComponent(req.params.id)}`,
+      'PATCH', { activa: false }
+    );
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('❌ DELETE /agencias/:id:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /agencias/:id/usuarios — usuarios asignados a una agencia
+app.get('/agencias/:id/usuarios', requireClienteAuth, requireAdminCliente, async (req, res) => {
+  try {
+    const agencias = await sbFetch(
+      `/agencias_cliente?id=eq.${encodeURIComponent(req.params.id)}&empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&limit=1`
+    ) || [];
+    if (!agencias.length) return res.status(404).json({ error: 'Agencia no encontrada en esta empresa' });
+
+    const asignaciones = await sbFetch(
+      `/usuario_agencias?agencia_id=eq.${encodeURIComponent(req.params.id)}&select=usuario_id`
+    ) || [];
+
+    if (!asignaciones.length) return res.json([]);
+
+    const uids = asignaciones.map(a => encodeURIComponent(a.usuario_id)).join(',');
+    const perfiles = await sbFetch(
+      `/usuarios_cliente?id=in.(${uids})&empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&order=nombre.asc`
+    ) || [];
+
+    const authData = await sbAuthAdmin('/admin/users?per_page=1000').catch(() => null);
+    const emailMap = {};
+    ((authData || {}).users || []).forEach(u => { emailMap[u.id] = u.email || ''; });
+
+    res.json(perfiles.map(p => ({
+      id:           p.id,
+      nombre:       p.nombre       || '',
+      email:        emailMap[p.id] || '',
+      cargo:        p.cargo        || '',
+      rol:          p.rol          || 'encargado',
+      activo:       p.activo       !== false,
+    })));
+  } catch(e) {
+    console.error('❌ GET /agencias/:id/usuarios:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── EMPRESA CONFIG (admin_cliente only) ──────────────────
+
+// GET /empresa/config
+app.get('/empresa/config', requireClienteAuth, requireAdminCliente, async (req, res) => {
+  try {
+    const rows = await sbFetch(
+      `/empresas_cliente?id=eq.${encodeURIComponent(req.empresaId)}&limit=1`
+    ) || [];
+    if (!rows.length) return res.status(404).json({ error: 'Empresa no encontrada' });
+    const e = rows[0];
+    res.json({
+      id:              e.id,
+      razon_social:    e.razon_social    || '',
+      nit:             e.nit             || '',
+      nombre_controlt: e.nombre_controlt || '',
+      activa:          e.activa          !== false,
+      creado_en:       e.created_at      || null,
+    });
+  } catch(e) {
+    console.error('❌ GET /empresa/config:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /empresa/config — solo razon_social es editable
+app.patch('/empresa/config', requireClienteAuth, requireAdminCliente, async (req, res) => {
+  try {
+    const { razon_social } = req.body || {};
+    if (!razon_social || !razon_social.trim()) return res.status(400).json({ error: 'razon_social es requerido' });
+
+    const result = await sbFetch(
+      `/empresas_cliente?id=eq.${encodeURIComponent(req.empresaId)}`,
+      'PATCH', { razon_social: razon_social.trim() }
+    );
+    if (result === null) return res.status(500).json({ error: 'Error actualizando empresa' });
+
+    const rows = await sbFetch(
+      `/empresas_cliente?id=eq.${encodeURIComponent(req.empresaId)}&limit=1`
+    ) || [];
+    const e = rows[0] || {};
+    res.json({
+      id:              e.id             || req.empresaId,
+      razon_social:    e.razon_social   || '',
+      nit:             e.nit            || '',
+      nombre_controlt: e.nombre_controlt|| '',
+      activa:          e.activa         !== false,
+    });
+  } catch(e) {
+    console.error('❌ PATCH /empresa/config:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── SERVICIOS ───────────────────────────────────────────
 app.get('/servicios', requireClienteAuth, async (req, res) => {
   try {
