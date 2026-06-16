@@ -778,18 +778,19 @@ async function buildSessionData(userId, email, perfil) {
     sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(empresaId)}&limit=1`).catch(() => []),
     (async () => {
       if (rol === 'admin_cliente') {
-        const rows = await sbFetch(`/agencias_cliente?empresa_cliente_id=eq.${encodeURIComponent(empresaId)}&order=nombre.asc`).catch(() => []);
+        // Admin ve todas las agencias activas de la empresa
+        const rows = await sbFetch(`/agencias_cliente?empresa_cliente_id=eq.${encodeURIComponent(empresaId)}&activa=eq.true&order=nombre.asc`).catch(() => []);
         return (rows || []).map(a => ({ id: a.id, nombre: a.nombre, ciudad: a.ciudad || '' }));
       }
+      // Usuario regular: solo sus agencias asignadas (activas)
       const asignadas = await sbFetch(`/usuario_agencias?usuario_id=eq.${encodeURIComponent(userId)}&select=agencia_id`).catch(() => []);
       if (asignadas && asignadas.length > 0) {
         const ids = asignadas.map(a => encodeURIComponent(a.agencia_id)).join(',');
-        const rows = await sbFetch(`/agencias_cliente?id=in.(${ids})&order=nombre.asc`).catch(() => []);
+        const rows = await sbFetch(`/agencias_cliente?id=in.(${ids})&activa=eq.true&order=nombre.asc`).catch(() => []);
         return (rows || []).map(a => ({ id: a.id, nombre: a.nombre, ciudad: a.ciudad || '' }));
       }
-      // Fallback: todas las agencias de la empresa
-      const rows = await sbFetch(`/agencias_cliente?empresa_cliente_id=eq.${encodeURIComponent(empresaId)}&order=nombre.asc`).catch(() => []);
-      return (rows || []).map(a => ({ id: a.id, nombre: a.nombre, ciudad: a.ciudad || '' }));
+      // Sin asignaciones → array vacío (el frontend muestra estado vacío)
+      return [];
     })(),
   ]);
 
