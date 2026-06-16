@@ -769,6 +769,62 @@ function _notifs(sol, nuevoEstado, viaje, estadoAnterior) {
 
 // ─── PORTAL CLIENTE — AUTH + SERVICIOS + NOTIFICACIONES ─
 
+// Construye el payload completo de sesión reutilizado por /auth/login y GET /auth/me.
+async function buildSessionData(userId, email, perfil) {
+  const empresaId = perfil.empresa_cliente_id;
+  const rol       = perfil.rol || 'encargado';
+
+  const [empresas, agencias] = await Promise.all([
+    sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(empresaId)}&limit=1`).catch(() => []),
+    (async () => {
+      if (rol === 'admin_cliente') {
+        const rows = await sbFetch(`/agencias_cliente?empresa_cliente_id=eq.${encodeURIComponent(empresaId)}&order=nombre.asc`).catch(() => []);
+        return (rows || []).map(a => ({ id: a.id, nombre: a.nombre, ciudad: a.ciudad || '' }));
+      }
+      const asignadas = await sbFetch(`/usuario_agencias?usuario_id=eq.${encodeURIComponent(userId)}&select=agencia_id`).catch(() => []);
+      if (asignadas && asignadas.length > 0) {
+        const ids = asignadas.map(a => encodeURIComponent(a.agencia_id)).join(',');
+        const rows = await sbFetch(`/agencias_cliente?id=in.(${ids})&order=nombre.asc`).catch(() => []);
+        return (rows || []).map(a => ({ id: a.id, nombre: a.nombre, ciudad: a.ciudad || '' }));
+      }
+      // Fallback: todas las agencias de la empresa
+      const rows = await sbFetch(`/agencias_cliente?empresa_cliente_id=eq.${encodeURIComponent(empresaId)}&order=nombre.asc`).catch(() => []);
+      return (rows || []).map(a => ({ id: a.id, nombre: a.nombre, ciudad: a.ciudad || '' }));
+    })(),
+  ]);
+
+  const emp = (empresas || [])[0] || {};
+
+  return {
+    usuario: {
+      id:           userId,
+      nombre:       perfil.nombre       || '',
+      email,
+      cargo:        perfil.cargo        || '',
+      rol,
+      tipo_usuario: perfil.tipo_usuario || 'cliente',
+      agencia_id:   perfil.agencia_id   || null,
+      activo:       perfil.activo       !== false,
+    },
+    empresa: {
+      id:        emp.id        || empresaId,
+      nombre:    emp.nombre    || '',
+      nit:       emp.nit       || '',
+      ciudad:    emp.ciudad    || '',
+      direccion: emp.direccion || '',
+      telefono:  emp.telefono  || '',
+      email:     emp.email     || '',
+    },
+    agencias,
+    permisos: {
+      rol,
+      puede_gestionar_usuarios: rol === 'admin_cliente',
+      puede_ver_todas_agencias: rol === 'admin_cliente',
+      agencia_ids: agencias.map(a => a.id),
+    },
+  };
+}
+
 async function requireClienteAuth(req, res, next) {
   const hdr = req.headers.authorization || '';
   if (!hdr.startsWith('Bearer ')) return res.status(401).json({ error: 'No autenticado' });
@@ -779,17 +835,26 @@ async function requireClienteAuth(req, res, next) {
     });
     if (!r.ok) return res.status(401).json({ error: 'Token inválido o expirado' });
     const sbUser = await r.json();
-    const perfiles = await sbFetch(`/usuarios_cliente?id=eq.${sbUser.id}&limit=1`) || [];
+    const perfiles = await sbFetch(`/usuarios_cliente?id=eq.${encodeURIComponent(sbUser.id)}&limit=1`) || [];
     if (!perfiles.length) return res.status(403).json({ error: 'Perfil no configurado' });
+    const perfil = perfiles[0];
+    if (!perfil.activo)                                           return res.status(403).json({ error: 'Usuario inactivo' });
+    if (perfil.tipo_usuario && perfil.tipo_usuario !== 'cliente') return res.status(403).json({ error: 'Acceso no permitido' });
     req.userId     = sbUser.id;
     req.userEmail  = sbUser.email;
-    req.empresaId  = perfiles[0].empresa_cliente_id;
-    req.userPerfil = perfiles[0];
+    req.empresaId  = perfil.empresa_cliente_id;
+    req.userPerfil = perfil;
     next();
   } catch(e) {
     console.error('❌ requireClienteAuth:', e.message);
     res.status(500).json({ error: 'Error de autenticación' });
   }
+}
+
+function requireAdminCliente(req, res, next) {
+  if (!req.userPerfil)                        return res.status(401).json({ error: 'No autenticado' });
+  if (req.userPerfil.rol !== 'admin_cliente') return res.status(403).json({ error: 'Se requiere rol admin_cliente' });
+  next();
 }
 
 function mapSolicitud(sol, cumplido = null) {
@@ -833,31 +898,30 @@ app.post('/auth/login', async (req, res) => {
     if (!r.ok || !data.access_token) {
       return res.status(401).json({ error: data.error_description || 'Credenciales inválidas' });
     }
-    const perfiles = await sbFetch(`/usuarios_cliente?id=eq.${data.user.id}&limit=1`) || [];
+    const perfiles = await sbFetch(`/usuarios_cliente?id=eq.${encodeURIComponent(data.user.id)}&limit=1`) || [];
     if (!perfiles.length) return res.status(403).json({ error: 'Usuario no configurado en el portal' });
-    const p = perfiles[0];
-    res.json({
-      token: data.access_token,
-      usuario: {
-        id: data.user.id,   empresa_id: p.empresa_cliente_id,
-        agencia_id: p.agencia_id || null, nombre: p.nombre,
-        email: data.user.email,  cargo: p.cargo || '', rol: p.rol || 'encargado',
-      }
-    });
+    const perfil = perfiles[0];
+    if (!perfil.activo) return res.status(403).json({ error: 'Usuario inactivo' });
+    const session = await buildSessionData(data.user.id, data.user.email, perfil);
+    res.json({ token: data.access_token, refresh_token: data.refresh_token || null, ...session });
   } catch(e) {
     console.error('❌ /auth/login:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
-// GET /auth/me
-app.get('/auth/me', requireClienteAuth, (req, res) => {
-  const p = req.userPerfil;
-  res.json({
-    id: req.userId,   empresa_id: p.empresa_cliente_id,
-    agencia_id: p.agencia_id || null, nombre: p.nombre,
-    email: req.userEmail, cargo: p.cargo || '', rol: p.rol || 'encargado',
-  });
+// GET /auth/me — sesión completa: usuario + empresa + agencias + permisos
+app.get('/auth/me', requireClienteAuth, async (req, res) => {
+  try {
+    const session = await buildSessionData(req.userId, req.userEmail, req.userPerfil);
+    res.json({
+      ...session.usuario,
+      empresa_id: req.empresaId,
+      empresa:    session.empresa,
+      agencias:   session.agencias,
+      permisos:   session.permisos,
+    });
+  } catch(e) { console.error('❌ GET /auth/me:', e.message); res.status(500).json({ error: e.message }); }
 });
 
 // POST /auth/logout
