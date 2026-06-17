@@ -559,19 +559,7 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.73rem;font
           <div class="kpi-h" style="--kpi-c:var(--teal)"><div class="kpi-h-label">% Atención</div><div class="kpi-h-val" id="ks-pct">—</div><div class="kpi-h-sub">colocadas / recibidas</div></div>
         </div>
 
-        <!-- Chips de período -->
-        <div style="display:flex;align-items:center;gap:.4rem;padding:.42rem .75rem;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap">
-          <button class="stab active" data-periodo="hoy"    onclick="solSetPeriodo('hoy',this)">Hoy</button>
-          <button class="stab"        data-periodo="ayer"   onclick="solSetPeriodo('ayer',this)">Ayer</button>
-          <button class="stab"        data-periodo="semana" onclick="solSetPeriodo('semana',this)">Esta semana</button>
-          <button class="stab"        data-periodo="mes"    onclick="solSetPeriodo('mes',this)">Este mes</button>
-          <span style="font-family:var(--mono);font-size:.6rem;color:var(--text2);margin-left:.4rem">DESDE</span>
-          <input type="date" id="sol-desde" onchange="solSetPeriodo('custom',null)" style="padding:.28rem .5rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.68rem;outline:none;font-family:var(--mono)"/>
-          <span style="font-family:var(--mono);font-size:.6rem;color:var(--text2)">HASTA</span>
-          <input type="date" id="sol-hasta" onchange="solSetPeriodo('custom',null)" style="padding:.28rem .5rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.68rem;outline:none;font-family:var(--mono)"/>
-        </div>
-
-        <!-- Barra de filtros secundarios -->
+        <!-- Barra de filtros -->
         <div class="unified-toolbar" style="background:var(--bg2);border-bottom:1px solid var(--border);gap:.4rem;padding:.4rem .75rem;flex-wrap:wrap">
           <div class="search-wrap" style="min-width:160px;max-width:220px">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -601,6 +589,18 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.73rem;font
             <option value="WhatsApp">WhatsApp</option>
             <option value="Excel">Excel</option>
           </select>
+          <!-- Selector de período único -->
+          <select id="sol-fil-periodo" onchange="solOnPeriodoChange()" style="padding:.32rem .6rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.7rem;font-family:var(--sans)">
+            <option value="hoy">📅 Hoy</option>
+            <option value="semana">📅 Semana actual</option>
+            <option value="personalizado">📅 Rango personalizado…</option>
+          </select>
+          <!-- Inputs de rango — visibles solo al seleccionar "personalizado" -->
+          <span id="sol-rango-wrap" style="display:none;align-items:center;gap:.3rem">
+            <input type="date" id="sol-desde" onchange="solOnRangoChange()" style="padding:.28rem .5rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.68rem;outline:none;font-family:var(--mono)"/>
+            <span style="color:var(--text2);font-family:var(--mono);font-size:.7rem">→</span>
+            <input type="date" id="sol-hasta" onchange="solOnRangoChange()" style="padding:.28rem .5rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.68rem;outline:none;font-family:var(--mono)"/>
+          </span>
           <button onclick="solClearFilters()" style="padding:.32rem .6rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text2);font-size:.7rem;cursor:pointer;display:inline-flex;align-items:center;gap:.3rem;font-family:var(--sans)">
             <svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:currentColor;stroke-width:2.5;fill:none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Limpiar
           </button>
@@ -3090,35 +3090,53 @@ function syncPlaneadosConResume() {
 // ═══════════════════════════════════════════════════════════════════
 let solData      = [];
 let solFiltrados = [];
-let solPeriodo   = 'hoy';
 
 function solHoy() { return new Date().toISOString().slice(0, 10); }
 
-function solGetRange(periodo) {
-  const hoy = solHoy();
-  const d   = new Date();
+function solGetRange() {
+  const hoy    = solHoy();
+  const d      = new Date();
+  const periodo = document.getElementById('sol-fil-periodo')?.value || 'hoy';
   if (periodo === 'hoy')    return { desde: hoy, hasta: hoy };
-  if (periodo === 'ayer') {
-    d.setDate(d.getDate() - 1);
-    const ayer = d.toISOString().slice(0, 10);
-    return { desde: ayer, hasta: ayer };
-  }
   if (periodo === 'semana') {
     const dow   = d.getDay() || 7;
     const lunes = new Date(d);
     lunes.setDate(d.getDate() - dow + 1);
     return { desde: lunes.toISOString().slice(0, 10), hasta: hoy };
   }
-  if (periodo === 'mes') {
-    return { desde: hoy.slice(0, 7) + '-01', hasta: hoy };
-  }
-  if (periodo === 'custom') {
+  if (periodo === 'personalizado') {
     return {
       desde: document.getElementById('sol-desde')?.value || hoy,
       hasta: document.getElementById('sol-hasta')?.value || hoy,
     };
   }
   return { desde: hoy, hasta: hoy };
+}
+
+function solOnPeriodoChange() {
+  const val  = document.getElementById('sol-fil-periodo')?.value || 'hoy';
+  const wrap = document.getElementById('sol-rango-wrap');
+  if (wrap) wrap.style.display = val === 'personalizado' ? 'inline-flex' : 'none';
+  if (val !== 'personalizado') loadSolicitudes();
+}
+
+function solOnRangoChange() {
+  const desde = document.getElementById('sol-desde');
+  const hasta = document.getElementById('sol-hasta');
+  if (!desde || !hasta || !desde.value || !hasta.value) return;
+  // Enforce max 30-day range
+  const d1 = new Date(desde.value);
+  const d2 = new Date(hasta.value);
+  if (d2 < d1) { hasta.value = desde.value; }
+  else {
+    const diff = (d2 - d1) / 86400000;
+    if (diff > 30) {
+      const max = new Date(d1);
+      max.setDate(max.getDate() + 30);
+      hasta.value = max.toISOString().slice(0, 10);
+    }
+  }
+  loadSolicitudes();
 }
 
 async function loadSolicitudes() {
@@ -3129,7 +3147,7 @@ async function loadSolicitudes() {
   if (wrap)    { wrap.style.display    = 'none'; }
   if (empty)   { empty.style.display   = 'none'; }
 
-  const { desde, hasta } = solGetRange(solPeriodo);
+  const { desde, hasta } = solGetRange();
   try {
     const r    = await fetch(`${API}/api/solicitudes?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
     const data = await r.json();
@@ -3250,9 +3268,13 @@ function solRenderTabla() {
 
   const fmtFReq = iso => {
     if (!iso) return '—';
-    const [y, m, d] = iso.split('T')[0].split('-');
-    const date = new Date(+y, +m - 1, +d);
-    return date.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+    const dt  = new Date(iso);
+    const dia = String(dt.getDate()).padStart(2, '0');
+    const mes = dt.toLocaleString('es-CO', { month: 'short' }).replace('.', '');
+    const yr  = dt.getFullYear();
+    const hh  = String(dt.getHours()).padStart(2, '0');
+    const mm  = String(dt.getMinutes()).padStart(2, '0');
+    return `${dia}-${mes.charAt(0).toUpperCase() + mes.slice(1)}-${yr} ${hh}:${mm}`;
   };
 
   const badgeEstado = estado => {
@@ -3300,18 +3322,14 @@ function solRenderTabla() {
   ).join('');
 }
 
-function solSetPeriodo(periodo, btn) {
-  solPeriodo = periodo;
-  document.querySelectorAll('[data-periodo]').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  loadSolicitudes();
-}
-
 function solClearFilters() {
-  ['sol-search','sol-fil-estado','sol-fil-cliente','sol-fil-agencia','sol-fil-solicitante','sol-fil-canal']
+  ['sol-search','sol-fil-estado','sol-fil-cliente','sol-fil-agencia','sol-fil-solicitante','sol-fil-canal','sol-desde','sol-hasta']
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  const hoyBtn = document.querySelector('[data-periodo="hoy"]');
-  solSetPeriodo('hoy', hoyBtn);
+  const periodoEl = document.getElementById('sol-fil-periodo');
+  if (periodoEl) periodoEl.value = 'hoy';
+  const rangoWrap = document.getElementById('sol-rango-wrap');
+  if (rangoWrap) rangoWrap.style.display = 'none';
+  loadSolicitudes();
 }
 
 
