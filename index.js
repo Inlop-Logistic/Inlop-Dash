@@ -501,6 +501,71 @@ app.get("/api/pendientes", async (req, res) => {
 });
 
 
+// ─── SOLICITUDES (Módulo de Demanda) ─────────────────────────────────────────
+app.get('/api/solicitudes', async (req, res) => {
+  try {
+    const { desde, hasta, estado } = req.query;
+    const hoy = new Date().toISOString().slice(0, 10);
+    const fechaDesde = desde || hoy;
+    const fechaHasta = hasta || hoy;
+
+    let qs = `/solicitudes?order=creado_en.desc&limit=500`;
+
+    // Solo pendiente, confirmado (=aprobado) y cancelado — en_ruta y completado pertenecen a Viajes
+    if (estado && estado !== 'todos' && estado !== '') {
+      const dbEstado = estado === 'aprobado' ? 'confirmado' : estado;
+      qs += `&estado=eq.${encodeURIComponent(dbEstado)}`;
+    } else {
+      qs += `&estado=in.(pendiente,confirmado,cancelado)`;
+    }
+
+    qs += `&creado_en=gte.${encodeURIComponent(fechaDesde + 'T00:00:00.000')}`;
+    qs += `&creado_en=lte.${encodeURIComponent(fechaHasta + 'T23:59:59.999')}`;
+
+    const solicitudes = await sbFetch(qs) || [];
+
+    // Colectar IDs únicos para los joins
+    const empresaIds = [...new Set(solicitudes.map(s => s.empresa_cliente_id).filter(Boolean))];
+    const agenciaIds = [...new Set(solicitudes.map(s => s.agencia_id).filter(Boolean))];
+    const usuarioIds = [...new Set(solicitudes.map(s => s.creado_por).filter(Boolean))];
+
+    const [empresas, agencias, usuarios] = await Promise.all([
+      empresaIds.length
+        ? sbFetch(`/empresas_cliente?id=in.(${empresaIds.map(encodeURIComponent).join(',')})&select=id,razon_social`)
+        : Promise.resolve([]),
+      agenciaIds.length
+        ? sbFetch(`/agencias_cliente?id=in.(${agenciaIds.map(encodeURIComponent).join(',')})&select=id,nombre`)
+        : Promise.resolve([]),
+      usuarioIds.length
+        ? sbFetch(`/usuarios_cliente?id=in.(${usuarioIds.map(encodeURIComponent).join(',')})&select=id,nombre`)
+        : Promise.resolve([]),
+    ]);
+
+    const empMap = {}; (empresas || []).forEach(e => { empMap[e.id] = e.razon_social; });
+    const agMap  = {}; (agencias || []).forEach(a => { agMap[a.id]  = a.nombre; });
+    const usrMap = {}; (usuarios || []).forEach(u => { usrMap[u.id] = u.nombre; });
+
+    const result = solicitudes.map(s => ({
+      id:               s.id,
+      codigo_solicitud: s.codigo_solicitud,
+      cliente:          empMap[s.empresa_cliente_id] || '—',
+      agencia:          agMap[s.agencia_id]          || s.agencia_nombre || '—',
+      solicitante:      usrMap[s.creado_por]         || '—',
+      tipo_operacion:   s.tipo_operacion             || '',
+      tipo_vehiculo:    s.tipo_vehiculo              || '',
+      fecha_requerida:  s.fecha_requerida            || null,
+      estado:           s.estado === 'confirmado' ? 'aprobado' : s.estado,
+      creado_en:        s.creado_en,
+      canal:            s.canal                     || 'APP',
+    }));
+
+    res.json(result);
+  } catch(e) {
+    console.error('❌ GET /api/solicitudes:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 
 // ─── SYNC CUMPLIDOS — corre en Railway cada 60s ─────────
 function extraerTelefono(driver_phone, full_driver) {

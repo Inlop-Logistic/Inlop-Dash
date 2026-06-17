@@ -468,6 +468,10 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.73rem;font
     <div><div class="logo-text">INLOP</div><div class="logo-sub">Torre de Control · Live</div></div>
   </div>
   <nav class="header-center">
+    <button class="tab-btn" onclick="switchTab('solicitudes',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+      Solicitudes<span class="notif" id="sol-pend-count" style="display:none">0</span>
+    </button>
     <button class="tab-btn active" onclick="switchTab('viajes',this)">
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>Viajes
     </button>
@@ -542,6 +546,86 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.73rem;font
       <div id="error-bar" class="error-bar" style="display:none;flex-shrink:0">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <span id="error-msg"></span>
+      </div>
+
+      <!-- ── CONTENIDO SOLICITUDES ── -->
+      <div id="content-solicitudes" class="content-section" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+
+        <!-- KPI Cards -->
+        <div class="kpi-strip-h" id="sol-kpis-strip">
+          <div class="kpi-h" style="--kpi-c:var(--accent)"><div class="kpi-h-label">Recibidas</div><div class="kpi-h-val" id="ks-recibidas">—</div><div class="kpi-h-sub">en el período</div></div>
+          <div class="kpi-h" style="--kpi-c:var(--green)"><div class="kpi-h-label">Colocadas</div><div class="kpi-h-val" id="ks-colocadas">—</div><div class="kpi-h-sub">aprobadas</div></div>
+          <div class="kpi-h" style="--kpi-c:var(--red)"><div class="kpi-h-label">Canceladas</div><div class="kpi-h-val" id="ks-canceladas">—</div><div class="kpi-h-sub">cerradas</div></div>
+          <div class="kpi-h" style="--kpi-c:var(--teal)"><div class="kpi-h-label">% Atención</div><div class="kpi-h-val" id="ks-pct">—</div><div class="kpi-h-sub">colocadas / recibidas</div></div>
+        </div>
+
+        <!-- Chips de período -->
+        <div style="display:flex;align-items:center;gap:.4rem;padding:.42rem .75rem;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap">
+          <button class="stab active" data-periodo="hoy"    onclick="solSetPeriodo('hoy',this)">Hoy</button>
+          <button class="stab"        data-periodo="ayer"   onclick="solSetPeriodo('ayer',this)">Ayer</button>
+          <button class="stab"        data-periodo="semana" onclick="solSetPeriodo('semana',this)">Esta semana</button>
+          <button class="stab"        data-periodo="mes"    onclick="solSetPeriodo('mes',this)">Este mes</button>
+          <span style="font-family:var(--mono);font-size:.6rem;color:var(--text2);margin-left:.4rem">DESDE</span>
+          <input type="date" id="sol-desde" onchange="solSetPeriodo('custom',null)" style="padding:.28rem .5rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.68rem;outline:none;font-family:var(--mono)"/>
+          <span style="font-family:var(--mono);font-size:.6rem;color:var(--text2)">HASTA</span>
+          <input type="date" id="sol-hasta" onchange="solSetPeriodo('custom',null)" style="padding:.28rem .5rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.68rem;outline:none;font-family:var(--mono)"/>
+        </div>
+
+        <!-- Barra de filtros secundarios -->
+        <div class="unified-toolbar" style="background:var(--bg2);border-bottom:1px solid var(--border);gap:.4rem;padding:.4rem .75rem;flex-wrap:wrap">
+          <div class="search-wrap" style="min-width:160px;max-width:220px">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="sol-search" placeholder="SOL, cliente, agencia…" oninput="solApplyFilters()"/>
+          </div>
+          <select id="sol-fil-estado" onchange="solApplyFilters()" style="padding:.32rem .6rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.7rem;font-family:var(--sans)">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="aprobado">Aprobado</option>
+            <option value="cancelado">Cancelado</option>
+          </select>
+          <select id="sol-fil-cliente" onchange="solApplyFilters()" style="padding:.32rem .6rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.7rem;font-family:var(--sans)">
+            <option value="">Todos los clientes</option>
+          </select>
+          <select id="sol-fil-agencia" onchange="solApplyFilters()" style="padding:.32rem .6rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.7rem;font-family:var(--sans)">
+            <option value="">Todas las agencias</option>
+          </select>
+          <select id="sol-fil-solicitante" onchange="solApplyFilters()" style="padding:.32rem .6rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.7rem;font-family:var(--sans)">
+            <option value="">Todos los solicitantes</option>
+          </select>
+          <select id="sol-fil-canal" onchange="solApplyFilters()" style="padding:.32rem .6rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.7rem;font-family:var(--sans)">
+            <option value="">Todos los canales</option>
+            <option value="APP">APP</option>
+            <option value="Comercial">Comercial</option>
+            <option value="Backoffice">Backoffice</option>
+            <option value="API">API</option>
+            <option value="WhatsApp">WhatsApp</option>
+            <option value="Excel">Excel</option>
+          </select>
+          <button onclick="solClearFilters()" style="padding:.32rem .6rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text2);font-size:.7rem;cursor:pointer;display:inline-flex;align-items:center;gap:.3rem;font-family:var(--sans)">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:currentColor;stroke-width:2.5;fill:none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Limpiar
+          </button>
+          <span class="count-badge" id="sol-count-badge" style="margin-left:auto"></span>
+        </div>
+
+        <!-- Estado de carga -->
+        <div id="sol-loading" class="loading-state"><div class="spinner"></div><span>Cargando solicitudes…</span></div>
+
+        <!-- Tabla -->
+        <div id="sol-wrap" class="tbl-wrap" style="display:none;flex:1;overflow-y:auto">
+          <table>
+            <thead><tr>
+              <th>SOL</th><th>Cliente</th><th>Agencia</th><th>Operación</th><th>Vehículo</th>
+              <th>F. Requerida</th><th>Solicitante</th><th>Estado</th><th>Creado</th><th>Antigüedad</th><th>Canal</th>
+            </tr></thead>
+            <tbody id="sol-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- Estado vacío -->
+        <div id="sol-empty" class="empty-state" style="display:none">
+          <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+          <span id="sol-empty-msg">Sin solicitudes para este período</span>
+        </div>
       </div>
 
       <!-- ── CONTENIDO VIAJES ── -->
@@ -949,7 +1033,7 @@ setInterval(tick,1000);tick();
 
 // ── NAVEGACIÓN NUEVO LAYOUT ────────────────────────────
 let tabActual = 'viajes';
-const SECCIONES = ['viajes','mapa','alarmas','vehiculos','planeados','cumplidos'];
+const SECCIONES = ['solicitudes','viajes','mapa','alarmas','vehiculos','planeados','cumplidos'];
 
 // KPIs por pestaña
 const SIDEBAR_DEFS = {
@@ -1051,7 +1135,7 @@ function switchTab(tab, btn){
       mapFullInstance.invalidateSize();
       renderMapFull();
     },120);
-  } else if(['alarmas','cumplidos','planeados'].includes(tab)){
+  } else if(['alarmas','cumplidos','planeados','solicitudes'].includes(tab)){
     if(mapZone) mapZone.style.display='none';
     if(sidebar) sidebar.style.display='none';
     const bottom=document.querySelector('.main-bottom');
@@ -1060,6 +1144,7 @@ function switchTab(tab, btn){
     if(tab==='alarmas') updateAlarmasKPIs();
     if(tab==='cumplidos') cumUpdateKPIs();
     if(tab==='planeados') loadPlaneados();
+    if(tab==='solicitudes') loadSolicitudes();
   } else {
     if(mapZone) mapZone.style.display='block';
     const bottom=document.querySelector('.main-bottom');
@@ -2997,6 +3082,236 @@ function syncPlaneadosConResume() {
     planeadosApplyFilters();
     planeadosUpdateKPIs();
   }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// MÓDULO SOLICITUDES — Demanda INLOP
+// ═══════════════════════════════════════════════════════════════════
+let solData      = [];
+let solFiltrados = [];
+let solPeriodo   = 'hoy';
+
+function solHoy() { return new Date().toISOString().slice(0, 10); }
+
+function solGetRange(periodo) {
+  const hoy = solHoy();
+  const d   = new Date();
+  if (periodo === 'hoy')    return { desde: hoy, hasta: hoy };
+  if (periodo === 'ayer') {
+    d.setDate(d.getDate() - 1);
+    const ayer = d.toISOString().slice(0, 10);
+    return { desde: ayer, hasta: ayer };
+  }
+  if (periodo === 'semana') {
+    const dow   = d.getDay() || 7;
+    const lunes = new Date(d);
+    lunes.setDate(d.getDate() - dow + 1);
+    return { desde: lunes.toISOString().slice(0, 10), hasta: hoy };
+  }
+  if (periodo === 'mes') {
+    return { desde: hoy.slice(0, 7) + '-01', hasta: hoy };
+  }
+  if (periodo === 'custom') {
+    return {
+      desde: document.getElementById('sol-desde')?.value || hoy,
+      hasta: document.getElementById('sol-hasta')?.value || hoy,
+    };
+  }
+  return { desde: hoy, hasta: hoy };
+}
+
+async function loadSolicitudes() {
+  const loading = document.getElementById('sol-loading');
+  const wrap    = document.getElementById('sol-wrap');
+  const empty   = document.getElementById('sol-empty');
+  if (loading) { loading.style.display = 'flex'; }
+  if (wrap)    { wrap.style.display    = 'none'; }
+  if (empty)   { empty.style.display   = 'none'; }
+
+  const { desde, hasta } = solGetRange(solPeriodo);
+  try {
+    const r    = await fetch(`${API}/api/solicitudes?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
+    const data = await r.json();
+    solData = Array.isArray(data) ? data : [];
+  } catch(e) {
+    console.error('❌ loadSolicitudes:', e.message);
+    solData = [];
+  }
+  solPopulateSelects();
+  solApplyFilters();
+}
+
+function solPopulateSelects() {
+  const populate = (id, label, vals) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const current = el.value;
+    el.innerHTML  = `<option value="">${label}</option>`;
+    [...new Set(vals.filter(v => v && v !== '—'))].sort().forEach(v => {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = v;
+      if (v === current) o.selected = true;
+      el.appendChild(o);
+    });
+  };
+  populate('sol-fil-cliente',     'Todos los clientes',     solData.map(s => s.cliente));
+  populate('sol-fil-agencia',     'Todas las agencias',     solData.map(s => s.agencia));
+  populate('sol-fil-solicitante', 'Todos los solicitantes', solData.map(s => s.solicitante));
+}
+
+function solApplyFilters() {
+  const q           = (document.getElementById('sol-search')?.value         || '').toLowerCase().trim();
+  const estado      =  document.getElementById('sol-fil-estado')?.value     || '';
+  const cliente     =  document.getElementById('sol-fil-cliente')?.value    || '';
+  const agencia     =  document.getElementById('sol-fil-agencia')?.value    || '';
+  const solicitante =  document.getElementById('sol-fil-solicitante')?.value || '';
+  const canal       =  document.getElementById('sol-fil-canal')?.value      || '';
+
+  solFiltrados = solData.filter(s => {
+    if (estado      && s.estado                !== estado)      return false;
+    if (cliente     && s.cliente               !== cliente)     return false;
+    if (agencia     && s.agencia               !== agencia)     return false;
+    if (solicitante && s.solicitante           !== solicitante) return false;
+    if (canal       && (s.canal || 'APP')      !== canal)       return false;
+    if (q) {
+      const txt = [s.codigo_solicitud, s.cliente, s.agencia, s.solicitante].join(' ').toLowerCase();
+      if (!txt.includes(q)) return false;
+    }
+    return true;
+  });
+
+  solUpdateKPIs();
+  solRenderTabla();
+}
+
+function solUpdateKPIs() {
+  const recibidas  = solFiltrados.length;
+  const colocadas  = solFiltrados.filter(s => s.estado === 'aprobado').length;
+  const canceladas = solFiltrados.filter(s => s.estado === 'cancelado').length;
+  const pct        = recibidas > 0 ? Math.round((colocadas / recibidas) * 100) : null;
+
+  const sv = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  sv('ks-recibidas',  recibidas);
+  sv('ks-colocadas',  colocadas);
+  sv('ks-canceladas', canceladas);
+  sv('ks-pct',        pct !== null ? pct + '%' : '—');
+
+  // Badge en pestaña — pendientes del período
+  const pend  = solData.filter(s => s.estado === 'pendiente').length;
+  const badge = document.getElementById('sol-pend-count');
+  if (badge) { if (pend > 0) { badge.style.display = 'inline'; badge.textContent = pend; } else badge.style.display = 'none'; }
+
+  const countEl = document.getElementById('sol-count-badge');
+  if (countEl) countEl.textContent = recibidas + (recibidas === 1 ? ' solicitud' : ' solicitudes');
+}
+
+function solRenderTabla() {
+  const loading = document.getElementById('sol-loading');
+  const wrap    = document.getElementById('sol-wrap');
+  const empty   = document.getElementById('sol-empty');
+  const msg     = document.getElementById('sol-empty-msg');
+  if (!loading) return;
+  loading.style.display = 'none';
+
+  if (!solFiltrados.length) {
+    wrap.style.display  = 'none';
+    empty.style.display = 'flex';
+    if (msg) msg.textContent = solData.length === 0
+      ? 'Sin solicitudes para este período'
+      : 'Sin resultados para los filtros aplicados';
+    return;
+  }
+  empty.style.display = 'none';
+  wrap.style.display  = 'block';
+
+  const ahora = Date.now();
+
+  const fmtCreado = iso => {
+    if (!iso) return '—';
+    const d   = new Date(iso);
+    const dia = String(d.getDate()).padStart(2, '0');
+    const mes = d.toLocaleString('es-CO', { month: 'short' }).replace('.', '');
+    const hh  = String(d.getHours()).padStart(2, '0');
+    const mm  = String(d.getMinutes()).padStart(2, '0');
+    return `${dia}-${mes.charAt(0).toUpperCase() + mes.slice(1)} ${hh}:${mm}`;
+  };
+
+  const fmtAnt = iso => {
+    if (!iso) return '—';
+    const diff = ahora - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60)  return mins + ' min';
+    const hrs = Math.floor(mins / 60);
+    if (hrs  < 24)  return hrs  + ' h';
+    const dias = Math.floor(hrs / 24);
+    return dias + (dias === 1 ? ' día' : ' días');
+  };
+
+  const fmtFReq = iso => {
+    if (!iso) return '—';
+    const [y, m, d] = iso.split('T')[0].split('-');
+    const date = new Date(+y, +m - 1, +d);
+    return date.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+  const badgeEstado = estado => {
+    const map = {
+      pendiente: { cls: 'b-yellow', sym: '●', label: 'PENDIENTE' },
+      aprobado:  { cls: 'b-blue',   sym: '✓', label: 'APROBADO'  },
+      cancelado: { cls: 'b-red',    sym: '✕', label: 'CANCELADO' },
+    };
+    const b = map[estado] || { cls: 'b-gray', sym: '○', label: (estado || '').toUpperCase() };
+    return `<span class="badge ${b.cls}">${b.sym} ${b.label}</span>`;
+  };
+
+  const badgeTipo = tipo => {
+    if (!tipo) return '—';
+    const t = tipo.toLowerCase();
+    if (t === 'urbana')   return `<span class="badge b-blue">URBANA</span>`;
+    if (t === 'nacional') return `<span class="badge b-yellow">NACIONAL</span>`;
+    return `<span class="badge b-gray">${tipo.toUpperCase()}</span>`;
+  };
+
+  const badgeVeh = veh => veh
+    ? `<span style="display:inline-flex;align-items:center;padding:.15rem .45rem;border:1px solid var(--border2);border-radius:3px;font-family:var(--mono);font-size:.62rem;color:var(--text1);letter-spacing:.04em">${veh}</span>`
+    : '—';
+
+  const badgeCanal = canal => {
+    const map = { APP:'b-teal', Comercial:'b-blue', Backoffice:'b-purple', API:'b-orange', WhatsApp:'b-green', Excel:'b-gray' };
+    const cls = map[canal] || 'b-gray';
+    return `<span class="badge ${cls}" style="font-size:.58rem">${canal}</span>`;
+  };
+
+  document.getElementById('sol-tbody').innerHTML = solFiltrados.map((s, i) =>
+    `<tr class="fade-row" style="animation-delay:${Math.min(i * .02, .4)}s">
+      <td style="font-family:var(--mono);font-size:.68rem;color:var(--accent);letter-spacing:.04em">${s.codigo_solicitud || '—'}</td>
+      <td style="font-size:.72rem;color:var(--text0);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.cliente || ''}">${s.cliente || '—'}</td>
+      <td style="font-size:.72rem;color:var(--text1)">${s.agencia || '—'}</td>
+      <td>${badgeTipo(s.tipo_operacion)}</td>
+      <td>${badgeVeh(s.tipo_vehiculo)}</td>
+      <td style="font-family:var(--mono);font-size:.68rem;color:var(--text1)">${fmtFReq(s.fecha_requerida)}</td>
+      <td style="font-size:.7rem;color:var(--text2)">${s.solicitante || '—'}</td>
+      <td>${badgeEstado(s.estado)}</td>
+      <td style="font-family:var(--mono);font-size:.66rem;color:var(--text2);white-space:nowrap">${fmtCreado(s.creado_en)}</td>
+      <td style="font-family:var(--mono);font-size:.66rem;color:var(--text2)">${fmtAnt(s.creado_en)}</td>
+      <td>${badgeCanal(s.canal || 'APP')}</td>
+    </tr>`
+  ).join('');
+}
+
+function solSetPeriodo(periodo, btn) {
+  solPeriodo = periodo;
+  document.querySelectorAll('[data-periodo]').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  loadSolicitudes();
+}
+
+function solClearFilters() {
+  ['sol-search','sol-fil-estado','sol-fil-cliente','sol-fil-agencia','sol-fil-solicitante','sol-fil-canal']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const hoyBtn = document.querySelector('[data-periodo="hoy"]');
+  solSetPeriodo('hoy', hoyBtn);
 }
 
 
