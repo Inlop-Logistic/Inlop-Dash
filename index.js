@@ -505,7 +505,8 @@ app.get("/api/pendientes", async (req, res) => {
 app.get('/api/solicitudes', async (req, res) => {
   try {
     const { desde, hasta, estado } = req.query;
-    const hoy = new Date().toISOString().slice(0, 10);
+    // Usar fecha local Colombia para el default de "hoy"
+    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
     const fechaDesde = desde || hoy;
     const fechaHasta = hasta || hoy;
 
@@ -519,8 +520,9 @@ app.get('/api/solicitudes', async (req, res) => {
       qs += `&estado=in.(pendiente,confirmado,cancelado)`;
     }
 
-    qs += `&creado_en=gte.${encodeURIComponent(fechaDesde + 'T00:00:00.000')}`;
-    qs += `&creado_en=lte.${encodeURIComponent(fechaHasta + 'T23:59:59.999')}`;
+    // Anclar al huso de Colombia (UTC-5) para que "hoy" coincida con el día local del operador
+    qs += `&creado_en=gte.${encodeURIComponent(fechaDesde + 'T00:00:00.000-05:00')}`;
+    qs += `&creado_en=lte.${encodeURIComponent(fechaHasta + 'T23:59:59.999-05:00')}`;
 
     const solicitudes = await sbFetch(qs) || [];
 
