@@ -5105,12 +5105,19 @@ document.addEventListener('DOMContentLoaded', function(){
 ══════════════════════════════════════ */
 const SB_URL  = (typeof SUPABASE_URL!=='undefined')?SUPABASE_URL:'https://gtyydandwcgoaratmnqh.supabase.co';
 const SB_KEY  = (typeof SUPABASE_KEY!=='undefined')?SUPABASE_KEY:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0eXlkYW5kd2Nnb2FyYXRtbnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDAyMTcsImV4cCI6MjA5MjYxNjIxN30.utGZtr0L5t9hIpRABTtfhsKEsrSCBJLHcP_gQ5Hq0EI';
-const HEADERS = {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY};
+function getHeaders(){
+  let token=SB_KEY;
+  try{
+    const raw=localStorage.getItem('sb-gtyydandwcgoaratmnqh-auth-token');
+    if(raw){const s=JSON.parse(raw);if(s&&s.access_token)token=s.access_token;}
+  }catch(e){}
+  return{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+token};
+}
 
 async function sbGet(table, params){
   const qs=params?'?'+params:'';
   try{
-    const r=await fetch(SB_URL+'/rest/v1/'+table+qs,{headers:{...HEADERS,'Accept':'application/json'}});
+    const r=await fetch(SB_URL+'/rest/v1/'+table+qs,{headers:{...getHeaders(),'Accept':'application/json'}});
     if(!r.ok){
       console.warn('[Project sbGet] Error',r.status,'on',table,qs);
       return [];
@@ -5126,13 +5133,15 @@ async function sbGet(table, params){
 async function sbUpsert(table, body){
   const r=await fetch(SB_URL+'/rest/v1/'+table,{
     method:'POST',
-    headers:{...HEADERS,'Prefer':'resolution=merge-duplicates'},
+    headers:{...getHeaders(),'Prefer':'resolution=merge-duplicates'},
     body:JSON.stringify(body)
   });
-  return r.ok;
+  if(!r.ok){const e=await r.text().catch(()=>'');throw new Error('[Project] sbUpsert '+table+': HTTP '+r.status+' '+e);}
+  return true;
 }
 async function sbDelete(table, params){
-  await fetch(SB_URL+'/rest/v1/'+table+'?'+params,{method:'DELETE',headers:HEADERS});
+  const r=await fetch(SB_URL+'/rest/v1/'+table+'?'+params,{method:'DELETE',headers:getHeaders()});
+  if(!r.ok){const e=await r.text().catch(()=>'');throw new Error('[Project] sbDelete '+table+': HTTP '+r.status+' '+e);}
 }
 
 /* ══════════════════════════════════════
@@ -5685,13 +5694,19 @@ window.projSave=async function(){
     task.obs=obsEl?obsEl.value:task.obs||'';
     saves.push(saveTaskRow(wk,{task_id:task.task_id,tema:task.tema,meta:task.meta,real:task.real,obs:task.obs,semana:wk,orden:data.tasks.findIndex(t=>t.task_id===task_id)+1}));
   });
-  await Promise.all(saves);
-  if(typeof toast==='function') toast('✓ Project guardado · '+wk,'ok');
-  // Pasar a modo vista tras guardar
-  _projEditMode=false;
-  setProjEditMode(false, canEditProject());
-  renderProjKPIs(data.tasks);
-  renderProjTable(wk, data.tasks, false);
+  try{
+    await Promise.all(saves);
+    delete _cache[wk]; // invalidar cache: próximo render leerá desde Supabase
+    if(typeof toast==='function') toast('✓ Project guardado · '+wk,'ok');
+    _projEditMode=false;
+    setProjEditMode(false, canEditProject());
+    const fresh=await loadWeekData(wk);
+    renderProjKPIs(fresh.tasks);
+    renderProjTable(wk, fresh.tasks, false);
+  }catch(err){
+    console.error('[Project] Error al guardar en Supabase:',err);
+    if(typeof toast==='function') toast('Error al guardar. Verifica tu sesión o conexión.','err');
+  }
 };
 
 /* ══════════════════════════════════════
