@@ -1900,10 +1900,6 @@ window.updatePortalStats=updatePortalStats;
       <div class="hmt-sub" id="hdrSub">Planificación, seguimiento y control Operativo</div>
     </div>
 
-    <div class="hdr-alert-pill" id="hdrAlertPill" style="display:none">
-      <span class="hdr-alert-dot"></span>
-      <span class="hdr-alert-txt" id="hdrAlertTxt"></span>
-    </div>
 
     <button class="btn-portada-header" onclick="volverPortal()">
       <i class="ti ti-arrow-left" aria-hidden="true"></i>Portada
@@ -5130,8 +5126,9 @@ async function sbGet(table, params){
     return [];
   }
 }
-async function sbUpsert(table, body){
-  const r=await fetch(SB_URL+'/rest/v1/'+table,{
+async function sbUpsert(table, body, conflictCols){
+  const qs=conflictCols?'?on_conflict='+conflictCols:'';
+  const r=await fetch(SB_URL+'/rest/v1/'+table+qs,{
     method:'POST',
     headers:{...getHeaders(),'Prefer':'resolution=merge-duplicates'},
     body:JSON.stringify(body)
@@ -5252,7 +5249,7 @@ async function loadWeekData(wk){
 }
 
 async function saveTaskRow(wk, task){
-  await sbUpsert('project_tareas',{...task, semana:wk});
+  await sbUpsert('project_tareas',{...task, semana:wk},'semana,task_id');
 }
 
 async function saveHseq(wk, nombre){
@@ -5662,7 +5659,7 @@ window.projCancelNewRow=function(){
 
 window.projDeleteRow=async function(wk, task_id, isDefault){
   if(isDefault){
-    await sbUpsert('project_tareas',{task_id,semana:wk,deleted:true,real:null,obs:'',tema:'',meta:0,orden:999});
+    await sbUpsert('project_tareas',{task_id,semana:wk,deleted:true,real:null,obs:'',tema:'',meta:0,orden:999},'semana,task_id');
     if(_cache[wk]){
       _cache[wk].tasks=_cache[wk].tasks.filter(t=>t.task_id!==task_id);
     }
