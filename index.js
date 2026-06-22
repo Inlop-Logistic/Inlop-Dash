@@ -42,6 +42,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Servir TorreControl.html directamente desde la raíz
+import path from "path";
+import { fileURLToPath } from "url";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "TorreControl.html")));
+app.get("/TorreControl.html", (req, res) => res.sendFile(path.join(__dirname, "TorreControl.html")));
+
 const LOGIN_URL = "https://integrations.controlt.io/Auth/login";
 const BASE_URL  = "https://app.controlt.com.co/apipublic/api";
 const TOKEN_TTL = 60 * 60 * 1000; // 1 hora — renovación proactiva cada hora
