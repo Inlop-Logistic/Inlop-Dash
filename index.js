@@ -695,10 +695,10 @@ async function syncSolicitudes() {
       console.log('🔍 [SOL-DIAG] ¿number_order viajes?:', kv.includes('number_order'));
       console.log('🔍 [SOL-DIAG] Campos pendientes:',   kp.join(', '));
       console.log('🔍 [SOL-DIAG] ¿remission pendientes?:', kp.includes('remission'));
-      const mv = cache.viajes.data.filter(v=>(v.remission||'').startsWith('SOL-')).slice(0,3).map(v=>`${v.trip_number}→${v.remission}`);
-      const mp = cache.pendientes.data.filter(v=>(v.remission||'').startsWith('SOL-')).slice(0,3).map(v=>`${v.trip_number}→${v.remission}`);
-      console.log('🔍 [SOL-DIAG] Muestra SOL viajes:',    mv.join(' | ') || 'ninguna');
-      console.log('🔍 [SOL-DIAG] Muestra SOL pendientes:', mp.join(' | ') || 'ninguna');
+      const mv = cache.viajes.data.slice(0,5).map(v=>`${v.trip_number}→"${v.remission||''}"`);
+      const mp = cache.pendientes.data.slice(0,5).map(v=>`${v.trip_number}→"${v.remission||''}"`);
+      console.log('🔍 [SOL-DIAG] Muestra remisiones viajes:',    mv.join(' | ') || 'ninguna');
+      console.log('🔍 [SOL-DIAG] Muestra remisiones pendientes:', mp.join(' | ') || 'ninguna');
       _diagSolDone = true;
     }
 
@@ -707,17 +707,17 @@ async function syncSolicitudes() {
     const pendientesByRemission = new Map();
     for (const v of cache.viajes.data) {
       const rem = (v.remission || '').trim();
-      if (rem.startsWith('SOL-')) resumeByRemission.set(rem, v);
-      if (v.trip_number)          resumeByTripNumber.set(String(v.trip_number), v);
+      if (rem) resumeByRemission.set(rem, v);           // acepta SOL-XXXXX y remisiones reales de producción
+      if (v.trip_number) resumeByTripNumber.set(String(v.trip_number), v);
     }
     for (const v of cache.pendientes.data) {
       const rem = (v.remission || '').trim();
-      if (rem.startsWith('SOL-')) pendientesByRemission.set(rem, v);
+      if (rem) pendientesByRemission.set(rem, v);
     }
 
     const solicitudes = await sbFetch(
       '/solicitudes?estado=in.(pendiente,confirmado,en_ruta)' +
-      '&select=id,codigo_solicitud,estado,controlt_trip_number,' +
+      '&select=id,codigo_solicitud,external_ref,estado,controlt_trip_number,' +
               'creado_por,empresa_cliente_id,fecha_requerida,' +
               'observacion_coordinadora,manifiesto'
     );
@@ -734,17 +734,20 @@ async function syncSolicitudes() {
     const pendVerif    = [];
 
     for (const sol of solicitudes) {
-      const { id, codigo_solicitud, estado, controlt_trip_number,
+      const { id, codigo_solicitud, external_ref, estado, controlt_trip_number,
               creado_por, fecha_requerida, observacion_coordinadora } = sol;
+
+      // Clave de match: external_ref si está puesto (pruebas con remisión real), sino codigo_solicitud
+      const matchKey = (external_ref || '').trim() || codigo_solicitud;
 
       if (estado === 'pendiente') {
         if (fecha_requerida < orphanCutoff &&
-            !resumeByRemission.has(codigo_solicitud) &&
-            !pendientesByRemission.has(codigo_solicitud)) {
-          console.warn(`⚠️ [HUÉRFANA] ${codigo_solicitud} | requerida: ${fecha_requerida}`);
+            !resumeByRemission.has(matchKey) &&
+            !pendientesByRemission.has(matchKey)) {
+          console.warn(`⚠️ [HUÉRFANA] ${codigo_solicitud} | matchKey: ${matchKey} | requerida: ${fecha_requerida}`);
           continue;
         }
-        const vR = resumeByRemission.get(codigo_solicitud);
+        const vR = resumeByRemission.get(matchKey);
         if (vR) {
           const g  = _grupo(vR.state_travel);
           const ne = g || 'confirmado';
@@ -752,7 +755,7 @@ async function syncSolicitudes() {
           insertsNotif.push(..._notifs(sol, ne, vR, 'pendiente'));
           continue;
         }
-        const vP = pendientesByRemission.get(codigo_solicitud);
+        const vP = pendientesByRemission.get(matchKey);
         if (vP) {
           const g  = _grupo(vP.state_travel);
           const ne = (g === 'en_ruta' || g === 'completado' || g === 'cancelado') ? g : 'confirmado';
@@ -763,7 +766,7 @@ async function syncSolicitudes() {
       } else if (estado === 'confirmado') {
         const vR = controlt_trip_number
           ? resumeByTripNumber.get(controlt_trip_number)
-          : resumeByRemission.get(codigo_solicitud);
+          : resumeByRemission.get(matchKey);
         if (vR) {
           const g = _grupo(vR.state_travel);
           if (g === 'en_ruta' || g === 'completado' || g === 'cancelado') {
