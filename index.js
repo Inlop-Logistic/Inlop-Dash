@@ -519,12 +519,11 @@ app.get('/api/solicitudes', async (req, res) => {
 
     let qs = `/solicitudes?order=creado_en.desc&limit=500`;
 
-    // Solo pendiente, confirmado (=aprobado) y cancelado — en_ruta y completado pertenecen a Viajes
     if (estado && estado !== 'todos' && estado !== '') {
       const dbEstado = estado === 'aprobado' ? 'confirmado' : estado;
       qs += `&estado=eq.${encodeURIComponent(dbEstado)}`;
     } else {
-      qs += `&estado=in.(pendiente,confirmado,cancelado)`;
+      qs += `&estado=in.(pendiente,confirmado,en_ruta,cancelado)`;
     }
 
     // Anclar al huso de Colombia (UTC-5) para que "hoy" coincida con el día local del operador
@@ -580,13 +579,14 @@ app.patch('/api/solicitudes/:id/estado', async (req, res) => {
   try {
     const { id } = req.params;
     const { estado, conductor_nombre, placa_asignada, conductor_tel } = req.body;
-    const permitidos = ['pendiente', 'confirmado', 'cancelado'];
+    const permitidos = ['pendiente', 'confirmado', 'en_ruta', 'completado', 'cancelado'];
     if (!estado || !permitidos.includes(estado)) {
       return res.status(400).json({ error: `estado inválido: ${estado}` });
     }
     const ahora = new Date().toISOString();
     const patch = { estado };
     if (estado === 'confirmado') patch.fecha_confirmacion = ahora;
+    if (estado === 'en_ruta')    patch.fecha_inicio_real  = ahora;
     if (estado === 'cancelado')  patch.fecha_cancelacion  = ahora;
     if (conductor_nombre) patch.conductor_nombre = conductor_nombre;
     if (placa_asignada)   patch.placa_asignada   = placa_asignada;
@@ -976,7 +976,7 @@ function mapSolicitud(sol, viaje = null, cumplido = null) {
     fecha_solicitud:   sol.creado_en || sol.created_at || null,
     fecha_requerida:   sol.fecha_requerida,
     fecha_aprobacion:  sol.fecha_confirmacion || null,
-    fecha_inicio_real: cumplido?.fecha_viaje        || null,
+    fecha_inicio_real: cumplido?.fecha_viaje        || sol.fecha_inicio_real || null,
     fecha_fin_real:    cumplido?.fecha_finalizacion || null,
     fecha_cancelacion: sol.fecha_cancelacion || null,
     estado:            sol.estado === 'confirmado' ? 'aprobado' : sol.estado,

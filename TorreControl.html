@@ -3370,10 +3370,14 @@ function solRenderTabla() {
   const btnBase = 'padding:.22rem .55rem;border-radius:4px;border:1px solid;cursor:pointer;font-size:.62rem;font-family:var(--sans);font-weight:600;letter-spacing:.04em;transition:opacity .15s';
   const accionBtns = s => {
     if (s.estado === 'pendiente') {
-      return `<button onclick="solSimularMatch('${s.id}')" style="${btnBase};background:rgba(22,163,74,.12);color:#16a34a;border-color:#16a34a" title="Simular aprobación automática (temporal)">⚡ Simular</button>
+      return `<button onclick="solSimularMatch('${s.id}')" style="${btnBase};background:rgba(22,163,74,.12);color:#16a34a;border-color:#16a34a">⚡ Simular</button>
               <button onclick="solCancelarSol('${s.id}')" style="${btnBase};background:rgba(220,38,38,.08);color:#dc2626;border-color:#dc2626;margin-left:.3rem">✕ Cancelar</button>`;
     }
     if (s.estado === 'aprobado') {
+      return `<button onclick="solSimularEnRuta('${s.id}')" style="${btnBase};background:rgba(234,88,12,.12);color:#ea580c;border-color:#ea580c">🚛 En ruta</button>
+              <button onclick="solAbrirPanel('${s.id}')" style="${btnBase};background:rgba(1,42,107,.1);color:var(--accent);border-color:var(--accent);margin-left:.3rem">👁 Ver</button>`;
+    }
+    if (s.estado === 'en_ruta') {
       return `<button onclick="solAbrirPanel('${s.id}')" style="${btnBase};background:rgba(1,42,107,.1);color:var(--accent);border-color:var(--accent)">👁 Ver detalles</button>`;
     }
     return '—';
@@ -3478,6 +3482,17 @@ async function solConfirmarSimular(id) {
       if (conductor) s.conductor = conductor;
       if (placa)     s.placa     = placa;
     }
+    solApplyFilters();
+  }
+}
+
+async function solSimularEnRuta(id) {
+  const s = solData.find(x => x.id === id);
+  if (!s) return;
+  if (!confirm(`¿Simular inicio de viaje para ${s.codigo_solicitud}?\n\nCambiará el estado a EN RUTA y registrará la fecha de inicio.`)) return;
+  const ok = await solCambiarEstado(id, 'en_ruta');
+  if (ok) {
+    if (s) s.estado = 'en_ruta';
     solApplyFilters();
   }
 }
