@@ -940,7 +940,9 @@ function requireAdminCliente(req, res, next) {
   next();
 }
 
-function mapSolicitud(sol, cumplido = null) {
+// viaje: objeto de cache.viajes (activo en ControlT) — fuente de verdad para datos en tiempo real
+// cumplido: fila de tabla cumplidos — solo disponible cuando el viaje ya finalizó
+function mapSolicitud(sol, viaje = null, cumplido = null) {
   return {
     id:                sol.id,
     codigo_solicitud:  sol.codigo_solicitud,
@@ -961,11 +963,12 @@ function mapSolicitud(sol, cumplido = null) {
     fecha_cancelacion: sol.fecha_cancelacion || null,
     estado:            sol.estado === 'confirmado' ? 'aprobado' : sol.estado,
     controlt_trip_number: sol.controlt_trip_number || null,
-    placa_asignada:    cumplido?.placa          || sol.placa_asignada   || null,
-    conductor_nombre:  cumplido?.conductor      || sol.conductor_nombre || null,
-    conductor_tel:     cumplido?.conductor_tel  || null,
-    pct:               cumplido?.pct            ?? null,
-    observaciones:     sol.observacion_coordinadora || null,
+    // Datos del vehículo: viaje activo tiene prioridad, cumplido como fallback histórico
+    placa_asignada:   viaje?.license_plate  || cumplido?.placa      || sol.placa_asignada   || null,
+    conductor_nombre: viaje?.driver_name    || cumplido?.conductor  || sol.conductor_nombre || null,
+    conductor_tel:    viaje ? extraerTelefono(viaje.driver_phone, viaje.full_driver) : (cumplido?.conductor_tel || null),
+    pct:              viaje ? (parseFloat(viaje.percentage_travel) || 0) : null,
+    observaciones:    sol.observacion_coordinadora || null,
   };
 }
 
@@ -1465,13 +1468,27 @@ app.get('/servicios', requireClienteAuth, async (req, res) => {
     }
 
     const tripIds = [...new Set(solicitudes.filter(s => s.controlt_trip_number).map(s => s.controlt_trip_number))];
+
+    // cache.viajes = viajes activos en ControlT (fuente de verdad para datos en tiempo real)
+    const viajeMap = {};
+    for (const v of cache.viajes.data) {
+      if (v.trip_number) viajeMap[String(v.trip_number)] = v;
+    }
+
+    // cumplidos = fallback para viajes ya finalizados (no están en cache.viajes)
     const cumplMap = {};
-    if (tripIds.length) {
-      const cs = await sbFetch(`/cumplidos?id=in.(${tripIds.map(encodeURIComponent).join(',')})&select=id,placa,conductor,conductor_tel,pct,fecha_viaje,fecha_finalizacion`) || [];
+    const tripIdsFinalizados = tripIds.filter(id => !viajeMap[String(id)]);
+    if (tripIdsFinalizados.length) {
+      const cs = await sbFetch(`/cumplidos?id=in.(${tripIdsFinalizados.map(encodeURIComponent).join(',')})&select=id,placa,conductor,conductor_tel,fecha_viaje,fecha_finalizacion`) || [];
       cs.forEach(c => { cumplMap[c.id] = c; });
     }
 
-    res.json(solicitudes.map(s => mapSolicitud(s, cumplMap[s.controlt_trip_number])));
+    res.json(solicitudes.map(s => {
+      const tripNum = s.controlt_trip_number ? String(s.controlt_trip_number) : null;
+      const viaje   = tripNum ? viajeMap[tripNum]  || null : null;
+      const cumplido = tripNum ? cumplMap[tripNum] || null : null;
+      return mapSolicitud(s, viaje, cumplido);
+    }));
   } catch(e) {
     console.error('❌ GET /servicios:', e.message);
     res.status(500).json({ error: e.message });
@@ -1485,12 +1502,19 @@ app.get('/servicios/:id', requireClienteAuth, async (req, res) => {
     if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
     const sol = sols[0];
     if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
+    let viaje   = null;
     let cumplido = null;
     if (sol.controlt_trip_number) {
-      const cs = await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(sol.controlt_trip_number)}&select=id,placa,conductor,conductor_tel,pct,fecha_viaje,fecha_finalizacion&limit=1`) || [];
-      cumplido = cs[0] || null;
+      const tripNum = String(sol.controlt_trip_number);
+      // Buscar primero en viajes activos
+      viaje = cache.viajes.data.find(v => String(v.trip_number) === tripNum) || null;
+      // Si no está activo, buscar en histórico cumplidos
+      if (!viaje) {
+        const cs = await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(tripNum)}&select=id,placa,conductor,conductor_tel,fecha_viaje,fecha_finalizacion&limit=1`) || [];
+        cumplido = cs[0] || null;
+      }
     }
-    res.json(mapSolicitud(sol, cumplido));
+    res.json(mapSolicitud(sol, viaje, cumplido));
   } catch(e) {
     console.error('❌ GET /servicios/:id:', e.message);
     res.status(500).json({ error: e.message });
