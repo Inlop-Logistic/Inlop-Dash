@@ -737,7 +737,8 @@ async function syncSolicitudes() {
               creado_por, fecha_requerida, observacion_coordinadora } = sol;
 
       // Clave de match: external_ref si está puesto (pruebas con remisión real), sino codigo_solicitud
-      const matchKey = (external_ref || '').trim() || codigo_solicitud;
+      // Normalizar espacios dobles igual que _splitRem para que "NHR-IB-2185" == "NHR-  IB-2185"
+      const matchKey = ((external_ref || '').trim().replace(/\s+/g, ' ')) || codigo_solicitud;
 
       if (estado === 'pendiente') {
         // Solo descartar como huérfana si la fecha ya venció Y no tiene external_ref (match explícito)
@@ -844,8 +845,10 @@ async function syncSolicitudes() {
 }
 
 function _splitRem(remission) {
-  // ControlT devuelve remission como ",val1,val2" — partir y limpiar cada parte
-  return (remission || '').split(',').map(p => p.trim()).filter(Boolean);
+  // ControlT devuelve remission como ",val1,val2" y puede tener espacios dobles internos
+  return (remission || '').split(',')
+    .map(p => p.trim().replace(/\s+/g, ' '))  // colapsar espacios dobles
+    .filter(Boolean);
 }
 
 function _grupo(stateTravel) {
