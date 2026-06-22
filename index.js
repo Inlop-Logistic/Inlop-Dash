@@ -1694,8 +1694,16 @@ app.patch('/servicios/:id', requireClienteAuth, async (req, res) => {
     if (tipo_operacion)  patch.tipo_operacion            = tipo_operacion;
     if (external_ref !== undefined) patch.external_ref  = external_ref || null;
 
-    await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}`, 'PATCH', patch);
-    res.json(mapSolicitud({ ...sol, ...patch }));
+    if (Object.keys(patch).length === 0) {
+      return res.json(mapSolicitud(sol));
+    }
+    const result = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}`, 'PATCH', patch);
+    if (result === null) {
+      console.error(`❌ PATCH /servicios/${req.params.id}: Supabase rechazó el update`);
+      return res.status(500).json({ error: 'No se pudo guardar en la base de datos' });
+    }
+    const actualizado = Array.isArray(result) ? result[0] : result;
+    res.json(mapSolicitud(actualizado || { ...sol, ...patch }));
   } catch(e) {
     console.error('❌ PATCH /servicios/:id:', e.message);
     res.status(500).json({ error: e.message });
