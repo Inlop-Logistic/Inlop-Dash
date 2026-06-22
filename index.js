@@ -741,11 +741,17 @@ async function syncSolicitudes() {
       const matchKey = (external_ref || '').trim() || codigo_solicitud;
 
       if (estado === 'pendiente') {
-        if (fecha_requerida < orphanCutoff &&
+        // Solo descartar como huérfana si la fecha ya venció Y no tiene external_ref (match explícito)
+        if (!external_ref && fecha_requerida < orphanCutoff &&
             !resumeByRemission.has(matchKey) &&
             !pendientesByRemission.has(matchKey)) {
           console.warn(`⚠️ [HUÉRFANA] ${codigo_solicitud} | matchKey: ${matchKey} | requerida: ${fecha_requerida}`);
           continue;
+        }
+        // Log de diagnóstico cuando hay external_ref para facilitar depuración
+        if (external_ref && !resumeByRemission.has(matchKey)) {
+          const muestras = [...resumeByRemission.keys()].slice(0, 8).join(' | ');
+          console.warn(`🔍 [MATCH-MISS] ${codigo_solicitud} buscando "${matchKey}" — remisiones activas: ${muestras || 'ninguna'}`);
         }
         const vR = resumeByRemission.get(matchKey);
         if (vR) {
