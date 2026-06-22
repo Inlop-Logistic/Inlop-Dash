@@ -572,12 +572,19 @@ app.get('/api/solicitudes', async (req, res) => {
 app.patch('/api/solicitudes/:id/estado', async (req, res) => {
   try {
     const { id } = req.params;
-    const { estado } = req.body;
+    const { estado, conductor_nombre, placa_asignada, conductor_tel } = req.body;
     const permitidos = ['pendiente', 'confirmado', 'cancelado'];
     if (!estado || !permitidos.includes(estado)) {
       return res.status(400).json({ error: `estado inválido: ${estado}` });
     }
-    await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(id)}`, 'PATCH', { estado });
+    const ahora = new Date().toISOString();
+    const patch = { estado };
+    if (estado === 'confirmado') patch.fecha_confirmacion = ahora;
+    if (estado === 'cancelado')  patch.fecha_cancelacion  = ahora;
+    if (conductor_nombre) patch.conductor_nombre = conductor_nombre;
+    if (placa_asignada)   patch.placa_asignada   = placa_asignada;
+    if (conductor_tel)    patch.conductor_tel     = conductor_tel;
+    await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(id)}`, 'PATCH', patch);
     res.json({ ok: true, id, estado });
   } catch(e) {
     console.error('❌ PATCH /api/solicitudes/:id/estado:', e.message);
@@ -955,7 +962,7 @@ function mapSolicitud(sol, viaje = null, cumplido = null) {
     tipo_operacion:    sol.tipo_operacion  || '',
     origen:            sol.origen          || '',
     destino:           sol.destino         || '',
-    fecha_solicitud:   sol.creado_en       || sol.fecha_requerida,
+    fecha_solicitud:   sol.creado_en || sol.created_at || null,
     fecha_requerida:   sol.fecha_requerida,
     fecha_aprobacion:  sol.fecha_confirmacion || null,
     fecha_inicio_real: cumplido?.fecha_viaje        || null,
@@ -963,10 +970,12 @@ function mapSolicitud(sol, viaje = null, cumplido = null) {
     fecha_cancelacion: sol.fecha_cancelacion || null,
     estado:            sol.estado === 'confirmado' ? 'aprobado' : sol.estado,
     controlt_trip_number: sol.controlt_trip_number || null,
-    // Datos del vehículo: viaje activo tiene prioridad, cumplido como fallback histórico
-    placa_asignada:   viaje?.license_plate  || cumplido?.placa      || sol.placa_asignada   || null,
-    conductor_nombre: viaje?.driver_name    || cumplido?.conductor  || sol.conductor_nombre || null,
-    conductor_tel:    viaje ? extraerTelefono(viaje.driver_phone, viaje.full_driver) : (cumplido?.conductor_tel || null),
+    // Datos del vehículo: viaje activo (cache) > manual en solicitud > cumplido histórico
+    placa_asignada:   viaje?.license_plate  || sol.placa_asignada   || cumplido?.placa      || null,
+    conductor_nombre: viaje?.driver_name    || sol.conductor_nombre || cumplido?.conductor  || null,
+    conductor_tel:    viaje
+      ? extraerTelefono(viaje.driver_phone, viaje.full_driver)
+      : (sol.conductor_tel || cumplido?.conductor_tel || null),
     pct:              viaje ? (parseFloat(viaje.percentage_travel) || 0) : null,
     observaciones:    sol.observacion_coordinadora || null,
   };
