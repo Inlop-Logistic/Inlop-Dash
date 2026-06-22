@@ -706,13 +706,12 @@ async function syncSolicitudes() {
     const resumeByTripNumber    = new Map();
     const pendientesByRemission = new Map();
     for (const v of cache.viajes.data) {
-      const rem = (v.remission || '').trim();
-      if (rem) resumeByRemission.set(rem, v);           // acepta SOL-XXXXX y remisiones reales de producción
+      // remission llega como ",val1,val2" — indexar cada parte no vacía
+      for (const p of _splitRem(v.remission)) resumeByRemission.set(p, v);
       if (v.trip_number) resumeByTripNumber.set(String(v.trip_number), v);
     }
     for (const v of cache.pendientes.data) {
-      const rem = (v.remission || '').trim();
-      if (rem) pendientesByRemission.set(rem, v);
+      for (const p of _splitRem(v.remission)) pendientesByRemission.set(p, v);
     }
 
     const solicitudes = await sbFetch(
@@ -833,6 +832,11 @@ async function syncSolicitudes() {
   } catch(e) {
     console.error('❌ Error syncSolicitudes:', e.message);
   }
+}
+
+function _splitRem(remission) {
+  // ControlT devuelve remission como ",val1,val2" — partir y limpiar cada parte
+  return (remission || '').split(',').map(p => p.trim()).filter(Boolean);
 }
 
 function _grupo(stateTravel) {
