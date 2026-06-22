@@ -749,8 +749,17 @@ async function syncSolicitudes() {
         }
         // Log de diagnóstico cuando hay external_ref para facilitar depuración
         if (external_ref && !resumeByRemission.has(matchKey)) {
-          const muestras = [...resumeByRemission.keys()].slice(0, 8).join(' | ');
-          console.warn(`🔍 [MATCH-MISS] ${codigo_solicitud} buscando "${matchKey}" — remisiones activas: ${muestras || 'ninguna'}`);
+          const todasRem = [...resumeByRemission.keys()].join(' | ');
+          console.warn(`🔍 [MATCH-MISS] ${codigo_solicitud} buscando "${matchKey}" — todas las remisiones: ${todasRem || 'ninguna'}`);
+          // Buscar el valor en cualquier campo del viaje para saber dónde está
+          const encontrado = cache.viajes.data.find(v =>
+            Object.values(v).some(val => val && String(val).includes(matchKey))
+          );
+          if (encontrado) {
+            console.warn(`🔍 [MATCH-HINT] "${matchKey}" encontrado en trip ${encontrado.trip_number} — remission="${encontrado.remission}" number_order="${encontrado.number_order}" placa="${encontrado.license_plate}"`);
+          } else {
+            console.warn(`🔍 [MATCH-HINT] "${matchKey}" NO encontrado en ningún campo de los ${cache.viajes.data.length} viajes activos`);
+          }
         }
         const vR = resumeByRemission.get(matchKey);
         if (vR) {
