@@ -961,8 +961,10 @@ function mapSolicitud(sol, cumplido = null) {
     fecha_cancelacion: sol.fecha_cancelacion || null,
     estado:            sol.estado === 'confirmado' ? 'aprobado' : sol.estado,
     controlt_trip_number: sol.controlt_trip_number || null,
-    placa_asignada:    cumplido?.placa     || sol.placa_asignada   || null,
-    conductor_nombre:  cumplido?.conductor || sol.conductor_nombre || null,
+    placa_asignada:    cumplido?.placa          || sol.placa_asignada   || null,
+    conductor_nombre:  cumplido?.conductor      || sol.conductor_nombre || null,
+    conductor_tel:     cumplido?.conductor_tel  || null,
+    pct:               cumplido?.pct            ?? null,
     observaciones:     sol.observacion_coordinadora || null,
   };
 }
@@ -1465,7 +1467,7 @@ app.get('/servicios', requireClienteAuth, async (req, res) => {
     const tripIds = [...new Set(solicitudes.filter(s => s.controlt_trip_number).map(s => s.controlt_trip_number))];
     const cumplMap = {};
     if (tripIds.length) {
-      const cs = await sbFetch(`/cumplidos?id=in.(${tripIds.map(encodeURIComponent).join(',')})&select=id,placa,conductor,fecha_viaje,fecha_finalizacion`) || [];
+      const cs = await sbFetch(`/cumplidos?id=in.(${tripIds.map(encodeURIComponent).join(',')})&select=id,placa,conductor,conductor_tel,pct,fecha_viaje,fecha_finalizacion`) || [];
       cs.forEach(c => { cumplMap[c.id] = c; });
     }
 
@@ -1485,7 +1487,7 @@ app.get('/servicios/:id', requireClienteAuth, async (req, res) => {
     if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
     let cumplido = null;
     if (sol.controlt_trip_number) {
-      const cs = await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(sol.controlt_trip_number)}&select=id,placa,conductor,fecha_viaje,fecha_finalizacion&limit=1`) || [];
+      const cs = await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(sol.controlt_trip_number)}&select=id,placa,conductor,conductor_tel,pct,fecha_viaje,fecha_finalizacion&limit=1`) || [];
       cumplido = cs[0] || null;
     }
     res.json(mapSolicitud(sol, cumplido));
@@ -1496,7 +1498,49 @@ app.get('/servicios/:id', requireClienteAuth, async (req, res) => {
 });
 
 // GET /servicios/:id/paradas
-app.get('/servicios/:id/paradas', requireClienteAuth, (req, res) => res.json([]));
+app.get('/servicios/:id/paradas', requireClienteAuth, async (req, res) => {
+  try {
+    const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&select=id,empresa_cliente_id,origen,destino,estado&limit=1`) || [];
+    if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
+    const sol = sols[0];
+    if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
+
+    const estadoOrigen = sol.estado === 'completado' ? 'entregado'
+      : sol.estado === 'en_ruta' ? 'en_camino' : 'pendiente';
+
+    const estadoDestino = sol.estado === 'completado' ? 'entregado' : 'pendiente';
+
+    res.json([
+      {
+        id: `${sol.id}-origen`,
+        solicitud_id: sol.id,
+        orden: 1,
+        nombre: 'ORIGEN',
+        direccion: sol.origen || '',
+        tipo: 'origen',
+        estado: estadoOrigen,
+        hora_entrega: null,
+        tiene_evidencia: false,
+        lat: null, lng: null,
+      },
+      {
+        id: `${sol.id}-destino`,
+        solicitud_id: sol.id,
+        orden: 99,
+        nombre: 'DESTINO',
+        direccion: sol.destino || '',
+        tipo: 'destino',
+        estado: estadoDestino,
+        hora_entrega: null,
+        tiene_evidencia: false,
+        lat: null, lng: null,
+      },
+    ]);
+  } catch(e) {
+    console.error('❌ GET /servicios/:id/paradas:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // GET /servicios/:id/vehiculo
 app.get('/servicios/:id/vehiculo', requireClienteAuth, async (req, res) => {
