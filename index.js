@@ -846,8 +846,14 @@ function _fields(viaje, nuevoEstado, ahora, esPrimerEnlace) {
   };
   if (viaje?.trip_number)  f.controlt_trip_number = String(viaje.trip_number);
   if (viaje?.number_order) f.manifiesto            = String(viaje.number_order);
+  // Primer enlace: la solicitud se creó tarde, el viaje ya estaba activo
   if (esPrimerEnlace)      f.fecha_confirmacion    = ahora;
-  if (nuevoEstado === 'cancelado') f.fecha_cancelacion = ahora;
+  // Si llega en_ruta (o salta de pendiente directo a en_ruta) registrar fecha_inicio_real
+  if (nuevoEstado === 'en_ruta' || (esPrimerEnlace && nuevoEstado !== 'pendiente' && nuevoEstado !== 'confirmado')) {
+    f.fecha_inicio_real = ahora;
+  }
+  if (nuevoEstado === 'completado') f.fecha_fin_real    = ahora;
+  if (nuevoEstado === 'cancelado')  f.fecha_cancelacion = ahora;
   return f;
 }
 
