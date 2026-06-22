@@ -579,7 +579,8 @@ app.get('/api/solicitudes', async (req, res) => {
 app.patch('/api/solicitudes/:id/estado', async (req, res) => {
   try {
     const { id } = req.params;
-    const { estado, conductor_nombre, placa_asignada, conductor_tel } = req.body;
+    const { estado, conductor_nombre, placa_asignada } = req.body;
+    // conductor_tel NO existe en tabla solicitudes — se omite para no romper el PATCH
     const permitidos = ['pendiente', 'confirmado', 'cancelado'];
     if (!estado || !permitidos.includes(estado)) {
       return res.status(400).json({ error: `estado inválido: ${estado}` });
@@ -590,8 +591,11 @@ app.patch('/api/solicitudes/:id/estado', async (req, res) => {
     if (estado === 'cancelado')  patch.fecha_cancelacion  = ahora;
     if (conductor_nombre) patch.conductor_nombre = conductor_nombre;
     if (placa_asignada)   patch.placa_asignada   = placa_asignada;
-    if (conductor_tel)    patch.conductor_tel     = conductor_tel;
-    await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(id)}`, 'PATCH', patch);
+
+    const result = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(id)}`, 'PATCH', patch);
+    if (result === null) {
+      return res.status(500).json({ error: 'Supabase rechazó la actualización — revisar logs del servidor' });
+    }
     res.json({ ok: true, id, estado });
   } catch(e) {
     console.error('❌ PATCH /api/solicitudes/:id/estado:', e.message);
@@ -982,7 +986,7 @@ function mapSolicitud(sol, viaje = null, cumplido = null) {
     conductor_nombre: viaje?.driver_name    || sol.conductor_nombre || cumplido?.conductor  || null,
     conductor_tel:    viaje
       ? extraerTelefono(viaje.driver_phone, viaje.full_driver)
-      : (sol.conductor_tel || cumplido?.conductor_tel || null),
+      : (cumplido?.conductor_tel || null),
     pct:              viaje ? (parseFloat(viaje.percentage_travel) || 0) : null,
     observaciones:    sol.observacion_coordinadora || null,
   };
