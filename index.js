@@ -1684,7 +1684,7 @@ app.patch('/servicios/:id', requireClienteAuth, async (req, res) => {
     if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
     if (sol.estado !== 'pendiente') return res.status(400).json({ error: `No editable en estado: ${sol.estado}` });
 
-    const { fecha_requerida, observaciones, origen, destino, tipo_vehiculo, tipo_operacion } = req.body || {};
+    const { fecha_requerida, observaciones, origen, destino, tipo_vehiculo, tipo_operacion, external_ref } = req.body || {};
     const patch = {};
     if (fecha_requerida) patch.fecha_requerida          = fecha_requerida;
     if (observaciones)   patch.observacion_coordinadora = observaciones;
@@ -1692,6 +1692,7 @@ app.patch('/servicios/:id', requireClienteAuth, async (req, res) => {
     if (destino)         patch.destino                  = destino;
     if (tipo_vehiculo)   patch.tipo_vehiculo             = tipo_vehiculo;
     if (tipo_operacion)  patch.tipo_operacion            = tipo_operacion;
+    if (external_ref !== undefined) patch.external_ref  = external_ref || null;
 
     await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}`, 'PATCH', patch);
     res.json(mapSolicitud({ ...sol, ...patch }));
