@@ -619,7 +619,7 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.73rem;font
           <table>
             <thead><tr>
               <th>SOL</th><th>Creado</th><th>Solicitante</th><th>Cliente</th><th>Agencia</th>
-              <th>Operación</th><th>Vehículo</th><th>F. Requerida</th><th>Estado</th><th>Canal</th>
+              <th>Operación</th><th>Vehículo</th><th>F. Requerida</th><th>Estado</th><th>Canal</th><th style="text-align:center">Acción</th>
             </tr></thead>
             <tbody id="sol-tbody"></tbody>
           </table>
@@ -631,6 +631,28 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.73rem;font
           <span id="sol-empty-msg">Sin solicitudes para este período</span>
         </div>
       </div>
+
+      <!-- ── PANEL DETALLE SOLICITUD (slide-in desde la derecha) ── -->
+      <div id="sol-panel" style="position:fixed;top:0;right:-420px;width:420px;height:100vh;background:var(--bg1);border-left:1px solid var(--border);z-index:9000;display:flex;flex-direction:column;transition:right .25s ease;box-shadow:-4px 0 20px rgba(0,0,0,.18)">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0">
+          <div>
+            <div style="font-size:.6rem;font-family:var(--mono);letter-spacing:.15em;color:var(--text2);text-transform:uppercase;margin-bottom:.15rem">Solicitud</div>
+            <div id="sol-panel-cod" style="font-family:var(--mono);font-size:.9rem;color:var(--accent);letter-spacing:.06em;font-weight:700"></div>
+          </div>
+          <button onclick="solCerrarPanel()" style="background:none;border:none;cursor:pointer;color:var(--text2);padding:.3rem">
+            <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <!-- Body scroll -->
+        <div style="flex:1;overflow-y:auto;padding:1rem">
+          <div id="sol-panel-body"></div>
+        </div>
+        <!-- Footer acciones -->
+        <div id="sol-panel-footer" style="padding:.75rem 1rem;border-top:1px solid var(--border);display:flex;gap:.5rem;flex-shrink:0"></div>
+      </div>
+      <!-- Overlay -->
+      <div id="sol-panel-overlay" onclick="solCerrarPanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:8999"></div>
 
       <!-- ── CONTENIDO VIAJES ── -->
       <div id="content-viajes" class="content-section" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
@@ -3345,6 +3367,18 @@ function solRenderTabla() {
     return `<span class="badge ${cls}" style="font-size:.58rem">${canal}</span>`;
   };
 
+  const btnBase = 'padding:.22rem .55rem;border-radius:4px;border:1px solid;cursor:pointer;font-size:.62rem;font-family:var(--sans);font-weight:600;letter-spacing:.04em;transition:opacity .15s';
+  const accionBtns = s => {
+    if (s.estado === 'pendiente') {
+      return `<button onclick="solSimularMatch('${s.id}')" style="${btnBase};background:rgba(22,163,74,.12);color:#16a34a;border-color:#16a34a" title="Simular aprobación automática (temporal)">⚡ Simular</button>
+              <button onclick="solCancelarSol('${s.id}')" style="${btnBase};background:rgba(220,38,38,.08);color:#dc2626;border-color:#dc2626;margin-left:.3rem">✕ Cancelar</button>`;
+    }
+    if (s.estado === 'aprobado') {
+      return `<button onclick="solAbrirPanel('${s.id}')" style="${btnBase};background:rgba(1,42,107,.1);color:var(--accent);border-color:var(--accent)">👁 Ver detalles</button>`;
+    }
+    return '—';
+  };
+
   document.getElementById('sol-tbody').innerHTML = solFiltrados.map((s, i) =>
     `<tr class="fade-row" style="animation-delay:${Math.min(i * .02, .4)}s">
       <td style="font-family:var(--mono);font-size:.68rem;color:var(--accent);letter-spacing:.04em">${s.codigo_solicitud || '—'}</td>
@@ -3357,6 +3391,7 @@ function solRenderTabla() {
       <td style="font-family:var(--mono);font-size:.68rem;color:var(--text1)">${fmtFReq(s.fecha_requerida)}</td>
       <td>${badgeEstado(s.estado)}</td>
       <td>${badgeCanal(s.canal || 'APP')}</td>
+      <td style="text-align:center;white-space:nowrap">${accionBtns(s)}</td>
     </tr>`
   ).join('');
 }
@@ -3364,10 +3399,126 @@ function solRenderTabla() {
 function solClearFilters() {
   ['sol-search','sol-fil-estado','sol-fil-cliente','sol-fil-agencia','sol-fil-solicitante','sol-fil-canal','sol-desde','sol-hasta']
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  // Resetear input día a hoy
   const diaEl = document.getElementById('sol-fecha-dia');
   if (diaEl) diaEl.value = solHoy();
   solSetModo('dia');
+}
+
+// ── ACCIONES SOBRE SOLICITUDES ──────────────────────────────────────────────
+
+async function solCambiarEstado(id, estado) {
+  try {
+    const r = await fetch(`${API}/api/solicitudes/${encodeURIComponent(id)}/estado`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estado }),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || r.status);
+    return true;
+  } catch(e) {
+    alert('Error al actualizar: ' + e.message);
+    return false;
+  }
+}
+
+async function solSimularMatch(id) {
+  if (!confirm('¿Simular aprobación automática para esta solicitud?')) return;
+  const ok = await solCambiarEstado(id, 'confirmado');
+  if (ok) {
+    // Actualizar en memoria sin recargar toda la tabla
+    const s = solData.find(x => x.id === id);
+    if (s) s.estado = 'aprobado';
+    solApplyFilters();
+  }
+}
+
+async function solCancelarSol(id) {
+  if (!confirm('¿Cancelar esta solicitud?')) return;
+  const ok = await solCambiarEstado(id, 'cancelado');
+  if (ok) {
+    const s = solData.find(x => x.id === id);
+    if (s) s.estado = 'cancelado';
+    solApplyFilters();
+  }
+}
+
+// ── PANEL DETALLE ────────────────────────────────────────────────────────────
+
+function solAbrirPanel(id) {
+  const s = solData.find(x => x.id === id);
+  if (!s) return;
+
+  document.getElementById('sol-panel-cod').textContent = s.codigo_solicitud || id;
+
+  const fmtDt = iso => {
+    if (!iso) return '—';
+    const dt = new Date(iso);
+    const dia = String(dt.getDate()).padStart(2,'0');
+    const mes = dt.toLocaleString('es-CO',{month:'short'}).replace('.','');
+    return `${dia}-${mes.charAt(0).toUpperCase()+mes.slice(1)}-${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+  };
+
+  const row = (lbl, val) => `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:.5rem 0;border-bottom:1px solid var(--border2)">
+      <span style="font-size:.68rem;color:var(--text2);font-family:var(--sans);flex-shrink:0;margin-right:.5rem">${lbl}</span>
+      <span style="font-size:.72rem;color:var(--text0);font-family:var(--mono);text-align:right">${val || '—'}</span>
+    </div>`;
+
+  const estadoBadge = {
+    pendiente: '<span class="badge b-yellow">● PENDIENTE</span>',
+    aprobado:  '<span class="badge b-blue">✓ APROBADO</span>',
+    cancelado: '<span class="badge b-red">✕ CANCELADO</span>',
+  }[s.estado] || s.estado;
+
+  document.getElementById('sol-panel-body').innerHTML = `
+    <div style="margin-bottom:.75rem">
+      <div style="font-size:.6rem;font-family:var(--mono);letter-spacing:.12em;color:var(--text2);text-transform:uppercase;margin-bottom:.5rem">Estado actual</div>
+      ${estadoBadge}
+    </div>
+    <div style="font-size:.6rem;font-family:var(--mono);letter-spacing:.12em;color:var(--text2);text-transform:uppercase;margin:.75rem 0 .25rem">Datos del servicio</div>
+    ${row('Cliente',        s.cliente)}
+    ${row('Agencia',        s.agencia)}
+    ${row('Solicitante',    s.solicitante)}
+    ${row('Tipo operación', s.tipo_operacion)}
+    ${row('Tipo vehículo',  s.tipo_vehiculo)}
+    ${row('F. Requerida',   fmtDt(s.fecha_requerida))}
+    ${row('Canal',          s.canal)}
+    ${row('Creado en',      fmtDt(s.creado_en))}
+    <div style="font-size:.6rem;font-family:var(--mono);letter-spacing:.12em;color:var(--text2);text-transform:uppercase;margin:.75rem 0 .25rem">Servicio asociado</div>
+    <div style="padding:.6rem;background:var(--bg2);border-radius:5px;border:1px dashed var(--border2);font-size:.7rem;color:var(--text2)">
+      Pendiente de match automático con ControlT.<br>
+      <span style="font-size:.65rem;opacity:.7">Cuando el campo <strong>remisión</strong> del viaje coincida con el código de solicitud, aquí aparecerán conductor, placa y datos del despacho.</span>
+    </div>`;
+
+  // Footer con acciones según estado
+  const footer = document.getElementById('sol-panel-footer');
+  if (s.estado === 'aprobado') {
+    footer.innerHTML = `<button onclick="solCancelarDesdePanel('${s.id}')"
+      style="padding:.4rem .8rem;background:rgba(220,38,38,.1);color:#dc2626;border:1px solid #dc2626;border-radius:5px;cursor:pointer;font-size:.7rem;font-family:var(--sans);font-weight:600">
+      ✕ Cancelar solicitud
+    </button>`;
+  } else {
+    footer.innerHTML = '';
+  }
+
+  document.getElementById('sol-panel').style.right = '0';
+  document.getElementById('sol-panel-overlay').style.display = 'block';
+}
+
+async function solCancelarDesdePanel(id) {
+  if (!confirm('¿Cancelar esta solicitud?')) return;
+  const ok = await solCambiarEstado(id, 'cancelado');
+  if (ok) {
+    const s = solData.find(x => x.id === id);
+    if (s) s.estado = 'cancelado';
+    solCerrarPanel();
+    solApplyFilters();
+  }
+}
+
+function solCerrarPanel() {
+  document.getElementById('sol-panel').style.right = '-420px';
+  document.getElementById('sol-panel-overlay').style.display = 'none';
 }
 
 

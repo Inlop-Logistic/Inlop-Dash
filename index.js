@@ -568,6 +568,23 @@ app.get('/api/solicitudes', async (req, res) => {
   }
 });
 
+// PATCH /api/solicitudes/:id/estado — cambia estado manualmente (interno, sin auth)
+app.patch('/api/solicitudes/:id/estado', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { estado } = req.body;
+    const permitidos = ['pendiente', 'confirmado', 'cancelado'];
+    if (!estado || !permitidos.includes(estado)) {
+      return res.status(400).json({ error: `estado inválido: ${estado}` });
+    }
+    await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(id)}`, 'PATCH', { estado });
+    res.json({ ok: true, id, estado });
+  } catch(e) {
+    console.error('❌ PATCH /api/solicitudes/:id/estado:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 
 // ─── SYNC CUMPLIDOS — corre en Railway cada 60s ─────────
 function extraerTelefono(driver_phone, full_driver) {
