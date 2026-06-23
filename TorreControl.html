@@ -621,8 +621,8 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.73rem;font
         <div id="sol-wrap" class="tbl-wrap" style="display:none;flex:1;overflow-y:auto">
           <table>
             <thead><tr>
-              <th>SOL</th><th>REF</th><th>Creado</th><th>Solicitante</th><th>Cliente</th><th>Agencia</th>
-              <th>Operación</th><th>Vehículo</th><th>F. Requerida</th><th>Estado</th><th>Canal</th><th style="text-align:center">Acción</th>
+              <th>SOL</th><th>REF</th><th>Canal</th><th>Creado</th><th>Solicitante</th><th>Cliente</th><th>Agencia</th>
+              <th>Vehículo</th><th>Operación</th><th>Ruta</th><th>F. Requerida</th><th>Estado</th><th style="text-align:center">Acción</th>
             </tr></thead>
             <tbody id="sol-tbody"></tbody>
           </table>
@@ -3403,15 +3403,18 @@ function solRenderTabla() {
              </svg>
            </button>`
         : '<span style="color:var(--text2);font-size:.65rem">—</span>'}</td>
+      <td>${badgeCanal(s.canal || 'APP')}</td>
       <td style="font-family:var(--mono);font-size:.66rem;color:var(--text2);white-space:nowrap">${fmtCreado(s.creado_en)}</td>
       <td style="font-size:.7rem;color:var(--text2)">${s.solicitante || '—'}</td>
       <td style="font-size:.72rem;color:var(--text0);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.cliente || ''}">${s.cliente || '—'}</td>
       <td style="font-size:.72rem;color:var(--text1)">${s.agencia || '—'}</td>
-      <td>${badgeTipo(s.tipo_operacion)}</td>
       <td>${badgeVeh(s.tipo_vehiculo)}</td>
+      <td>${badgeTipo(s.tipo_operacion)}</td>
+      <td style="font-size:.7rem;color:var(--text1);white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis" title="${(s.origen||'')} → ${(s.destino||'')}">
+        ${s.origen && s.destino ? `<span style="color:var(--text2)">${s.origen}</span> <span style="color:var(--red)">→</span> <span style="color:var(--text2)">${s.destino}</span>` : '—'}
+      </td>
       <td style="font-family:var(--mono);font-size:.68rem;color:var(--text1)">${fmtFReq(s.fecha_requerida)}</td>
       <td>${badgeEstado(s.estado)}</td>
-      <td>${badgeCanal(s.canal || 'APP')}</td>
       <td style="text-align:center;white-space:nowrap">${accionBtns(s)}</td>
     </tr>`
   ).join('');
