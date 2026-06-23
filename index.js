@@ -1624,9 +1624,11 @@ app.get('/servicios/:id/vehiculo', requireClienteAuth, async (req, res) => {
     const tripNum = sols[0]?.controlt_trip_number;
     if (!tripNum) return res.status(404).json({ error: 'Sin vehículo asignado' });
     const viaje = cache.viajes.data.find(v => String(v.trip_number) === String(tripNum));
-    if (!viaje?.lat || !viaje?.lng) return res.status(404).json({ error: 'Sin posición GPS' });
+    const lat = parseFloat(viaje?.latitude || viaje?.lat || '');
+    const lng = parseFloat(viaje?.longitude || viaje?.lng || '');
+    if (!viaje || !lat || !lng) return res.status(404).json({ error: 'Sin posición GPS' });
     res.json({
-      lat: parseFloat(viaje.lat), lng: parseFloat(viaje.lng),
+      lat, lng,
       placa: viaje.license_plate || '',
       ultima_actualizacion: viaje.latest_gps_report || new Date().toISOString(),
     });
