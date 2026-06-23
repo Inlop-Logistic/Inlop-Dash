@@ -839,7 +839,17 @@ async function syncSolicitudes() {
             updates.push({ id, fields: _fields(vR, g, ahora, false) });
             insertsNotif.push(..._notifs(sol, g, vR, 'en_ruta'));
           } else {
-            updates.push({ id, fields: { estado_controlt: (vR.state_travel||'').toLowerCase().trim(), ultima_actualizacion_controlt: ahora } });
+            // Viaje sigue activo: actualizar estado_controlt y datos del conductor/vehículo
+            const keepFresh = {
+              estado_controlt:               (vR.state_travel||'').toLowerCase().trim(),
+              ultima_actualizacion_controlt: ahora,
+              pct:                           vR.percentage_travel != null ? parseFloat(vR.percentage_travel) : undefined,
+            };
+            if (vR.license_plate) keepFresh.placa_asignada   = vR.license_plate;
+            if (vR.driver_name)   keepFresh.conductor_nombre = vR.driver_name;
+            if (vR.driver_phone)  keepFresh.conductor_tel    = extraerTelefono(vR.driver_phone, vR.full_driver);
+            if (keepFresh.pct === undefined) delete keepFresh.pct;
+            updates.push({ id, fields: keepFresh });
           }
         } else if (controlt_trip_number) {
           pendVerif.push({ trip_number: controlt_trip_number, solicitud_id: id, estado_actual: estado, sol });
@@ -901,10 +911,13 @@ function _fields(viaje, nuevoEstado, ahora, esPrimerEnlace) {
     estado_controlt:               (viaje?.state_travel || '').toLowerCase().trim() || null,
     ultima_actualizacion_controlt: ahora,
   };
-  if (viaje?.trip_number)  f.controlt_trip_number = String(viaje.trip_number);
-  if (viaje?.number_order) f.manifiesto            = String(viaje.number_order);
+  if (viaje?.trip_number)    f.controlt_trip_number = String(viaje.trip_number);
+  if (viaje?.number_order)   f.manifiesto            = String(viaje.number_order);
+  if (viaje?.license_plate)  f.placa_asignada        = viaje.license_plate;
+  if (viaje?.driver_name)    f.conductor_nombre      = viaje.driver_name;
+  if (viaje?.driver_phone)   f.conductor_tel         = extraerTelefono(viaje.driver_phone, viaje.full_driver);
   // Primer enlace: la solicitud se creó tarde, el viaje ya estaba activo
-  if (esPrimerEnlace)      f.fecha_confirmacion    = ahora;
+  if (esPrimerEnlace)        f.fecha_confirmacion    = ahora;
   // Si llega en_ruta (o salta de pendiente directo a en_ruta) registrar fecha_inicio_real
   if (nuevoEstado === 'en_ruta' || (esPrimerEnlace && nuevoEstado !== 'pendiente' && nuevoEstado !== 'confirmado')) {
     f.fecha_inicio_real = ahora;
