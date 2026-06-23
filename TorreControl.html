@@ -3377,14 +3377,8 @@ function solRenderTabla() {
   const btnBase = 'padding:.22rem .55rem;border-radius:4px;border:1px solid;cursor:pointer;font-size:.62rem;font-family:var(--sans);font-weight:600;letter-spacing:.04em;transition:opacity .15s';
   const btnVer  = id => `<button onclick="solAbrirPanel('${id}')" style="${btnBase};background:rgba(1,42,107,.1);color:var(--accent);border-color:var(--accent)">👁 Ver detalles</button>`;
   const accionBtns = s => {
-    if (s.estado === 'pendiente') {
-      return `<button onclick="solSimularMatch('${s.id}')" style="${btnBase};background:rgba(22,163,74,.12);color:#16a34a;border-color:#16a34a">⚡ Simular</button>
-              <button onclick="solCancelarSol('${s.id}')" style="${btnBase};background:rgba(220,38,38,.08);color:#dc2626;border-color:#dc2626;margin-left:.3rem">✕ Cancelar</button>`;
-    }
-    if (s.estado === 'aprobado') {
-      return `<button onclick="solSimularEnRuta('${s.id}')" style="${btnBase};background:rgba(234,88,12,.12);color:#ea580c;border-color:#ea580c">🚛 En ruta</button>
-              <button onclick="solAbrirPanel('${s.id}')" style="${btnBase};background:rgba(1,42,107,.1);color:var(--accent);border-color:var(--accent);margin-left:.3rem">👁 Ver</button>`;
-    }
+    if (s.estado === 'pendiente')  return `<button onclick="solCancelarSol('${s.id}')" style="${btnBase};background:rgba(220,38,38,.08);color:#dc2626;border-color:#dc2626">✕ Cancelar</button>`;
+    if (s.estado === 'aprobado')   return btnVer(s.id);
     if (s.estado === 'en_ruta')    return btnVer(s.id);
     if (s.estado === 'completado') return btnVer(s.id);
     if (s.estado === 'cancelado')  return btnVer(s.id);
@@ -3442,78 +3436,6 @@ async function solCambiarEstado(id, estado, extra = {}) {
   } catch(e) {
     alert('Error al actualizar: ' + e.message);
     return false;
-  }
-}
-
-function solSimularMatch(id) {
-  const s = solData.find(x => x.id === id);
-  if (!s) return;
-
-  // Crear modal inline de simulación
-  const overlay = document.createElement('div');
-  overlay.id = 'sol-sim-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9500;display:flex;align-items:center;justify-content:center;padding:1rem';
-
-  const inp = (id, label, ph) => `
-    <div style="margin-bottom:.65rem">
-      <label style="display:block;font-size:.62rem;font-family:var(--sans);letter-spacing:.08em;color:var(--text2);text-transform:uppercase;margin-bottom:.25rem">${label}</label>
-      <input id="${id}" placeholder="${ph}" style="width:100%;padding:.4rem .55rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text0);font-size:.75rem;font-family:var(--mono);outline:none;box-sizing:border-box"/>
-    </div>`;
-
-  overlay.innerHTML = `
-    <div style="background:var(--bg1);border:1px solid var(--border);border-radius:8px;padding:1.25rem;width:100%;max-width:380px;box-shadow:0 8px 32px rgba(0,0,0,.3)">
-      <div style="font-size:.65rem;font-family:var(--mono);color:var(--accent);letter-spacing:.1em;margin-bottom:.2rem">${s.codigo_solicitud}</div>
-      <div style="font-size:.85rem;font-family:var(--sans);font-weight:700;color:var(--text0);margin-bottom:1rem">Simular aprobación</div>
-      ${inp('sim-conductor','Conductor','Nombre completo del conductor')}
-      ${inp('sim-placa','Placa','Ej: ABC-123')}
-      ${inp('sim-tel','Teléfono','Ej: 3001234567')}
-      <div style="display:flex;gap:.5rem;margin-top:1rem">
-        <button onclick="document.getElementById('sol-sim-overlay').remove()"
-          style="flex:1;padding:.45rem;background:var(--bg2);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.72rem;cursor:pointer;font-family:var(--sans)">
-          Cancelar
-        </button>
-        <button onclick="solConfirmarSimular('${id}')"
-          style="flex:1;padding:.45rem;background:#16a34a;border:none;border-radius:5px;color:#fff;font-size:.72rem;font-weight:700;cursor:pointer;font-family:var(--sans)">
-          ⚡ Confirmar
-        </button>
-      </div>
-    </div>`;
-
-  document.body.appendChild(overlay);
-  setTimeout(() => document.getElementById('sim-conductor')?.focus(), 50);
-}
-
-async function solConfirmarSimular(id) {
-  const conductor = document.getElementById('sim-conductor')?.value.trim();
-  const placa     = document.getElementById('sim-placa')?.value.trim();
-  const tel       = document.getElementById('sim-tel')?.value.trim();
-  document.getElementById('sol-sim-overlay')?.remove();
-
-  const extra = {};
-  if (conductor) extra.conductor_nombre = conductor;
-  if (placa)     extra.placa_asignada   = placa;
-  if (tel)       extra.conductor_tel    = tel;
-
-  const ok = await solCambiarEstado(id, 'confirmado', extra);
-  if (ok) {
-    const s = solData.find(x => x.id === id);
-    if (s) {
-      s.estado = 'aprobado';
-      if (conductor) s.conductor = conductor;
-      if (placa)     s.placa     = placa;
-    }
-    solApplyFilters();
-  }
-}
-
-async function solSimularEnRuta(id) {
-  const s = solData.find(x => x.id === id);
-  if (!s) return;
-  if (!confirm(`¿Simular inicio de viaje para ${s.codigo_solicitud}?\n\nCambiará el estado a EN RUTA y registrará la fecha de inicio.`)) return;
-  const ok = await solCambiarEstado(id, 'en_ruta');
-  if (ok) {
-    if (s) s.estado = 'en_ruta';
-    solApplyFilters();
   }
 }
 
