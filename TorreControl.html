@@ -3375,6 +3375,7 @@ function solRenderTabla() {
   };
 
   const btnBase = 'padding:.22rem .55rem;border-radius:4px;border:1px solid;cursor:pointer;font-size:.62rem;font-family:var(--sans);font-weight:600;letter-spacing:.04em;transition:opacity .15s';
+  const btnVer  = id => `<button onclick="solAbrirPanel('${id}')" style="${btnBase};background:rgba(1,42,107,.1);color:var(--accent);border-color:var(--accent)">👁 Ver detalles</button>`;
   const accionBtns = s => {
     if (s.estado === 'pendiente') {
       return `<button onclick="solSimularMatch('${s.id}')" style="${btnBase};background:rgba(22,163,74,.12);color:#16a34a;border-color:#16a34a">⚡ Simular</button>
@@ -3384,9 +3385,9 @@ function solRenderTabla() {
       return `<button onclick="solSimularEnRuta('${s.id}')" style="${btnBase};background:rgba(234,88,12,.12);color:#ea580c;border-color:#ea580c">🚛 En ruta</button>
               <button onclick="solAbrirPanel('${s.id}')" style="${btnBase};background:rgba(1,42,107,.1);color:var(--accent);border-color:var(--accent);margin-left:.3rem">👁 Ver</button>`;
     }
-    if (s.estado === 'en_ruta') {
-      return `<button onclick="solAbrirPanel('${s.id}')" style="${btnBase};background:rgba(1,42,107,.1);color:var(--accent);border-color:var(--accent)">👁 Ver detalles</button>`;
-    }
+    if (s.estado === 'en_ruta')    return btnVer(s.id);
+    if (s.estado === 'completado') return btnVer(s.id);
+    if (s.estado === 'cancelado')  return btnVer(s.id);
     return '—';
   };
 
