@@ -3269,10 +3269,10 @@ function solApplyFilters() {
 }
 
 function solUpdateKPIs() {
-  const recibidas   = solData.length;
-  const colocadas   = solData.filter(s => s.estado === 'aprobado').length;
-  const finalizadas = solData.filter(s => s.estado === 'completado').length;
-  const canceladas  = solData.filter(s => s.estado === 'cancelado').length;
+  const recibidas   = solFiltrados.length;
+  const colocadas   = solFiltrados.filter(s => s.estado === 'aprobado').length;
+  const finalizadas = solFiltrados.filter(s => s.estado === 'completado').length;
+  const canceladas  = solFiltrados.filter(s => s.estado === 'cancelado').length;
   const pct         = recibidas > 0 ? Math.round(((colocadas + finalizadas) / recibidas) * 100) : null;
 
   const sv = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
