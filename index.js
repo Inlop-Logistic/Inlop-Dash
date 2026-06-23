@@ -536,7 +536,7 @@ app.get('/api/solicitudes', async (req, res) => {
     const fechaDesde = desde || hoy;
     const fechaHasta = hasta || hoy;
 
-    let qs = `/solicitudes?order=creado_en.desc&limit=500&select=id,codigo_solicitud,external_ref,estado,creado_en,creado_por,empresa_cliente_id,agencia_id,agencia_nombre,tipo_operacion,tipo_vehiculo,origen,destino,fecha_requerida,canal,placa_asignada,conductor_nombre,conductor_tel,controlt_trip_number`;
+    let qs = `/solicitudes?order=creado_en.desc&limit=500`;
 
     if (estado && estado !== 'todos' && estado !== '') {
       const dbEstado = estado === 'aprobado' ? 'confirmado' : estado;
