@@ -536,7 +536,16 @@ app.get('/api/solicitudes', async (req, res) => {
     const fechaDesde = desde || hoy;
     const fechaHasta = hasta || hoy;
 
-    let qs = `/solicitudes?order=creado_en.desc&limit=500`;
+    // Columnas explícitas — actualizar aquí si se agrega alguna al schema
+    const SOL_SELECT = [
+      'id','codigo_solicitud','external_ref','estado','creado_en','creado_por',
+      'empresa_cliente_id','agencia_id','agencia_nombre',
+      'tipo_operacion','tipo_vehiculo','origen','destino',
+      'fecha_requerida','observacion_coordinadora',
+      'placa_asignada','conductor_nombre','conductor_tel',
+      'controlt_trip_number','canal',
+    ].join(',');
+    let qs = `/solicitudes?order=creado_en.desc&limit=500&select=${SOL_SELECT}`;
 
     if (estado && estado !== 'todos' && estado !== '') {
       const dbEstado = estado === 'aprobado' ? 'confirmado' : estado;
