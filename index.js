@@ -1678,9 +1678,11 @@ app.post('/servicios', requireClienteAuth, async (req, res) => {
 // PATCH /servicios/:id
 app.patch('/servicios/:id', requireClienteAuth, async (req, res) => {
   try {
+    console.log(`🔧 PATCH /servicios/${req.params.id} — body keys: ${Object.keys(req.body || {}).join(', ')}`);
     const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&limit=1`) || [];
     if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
     const sol = sols[0];
+    console.log(`🔧 sol encontrado: estado=${sol.estado} empresa=${sol.empresa_cliente_id} req.empresa=${req.empresaId}`);
     if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
     if (sol.estado !== 'pendiente') return res.status(400).json({ error: `No editable en estado: ${sol.estado}` });
 
@@ -1694,10 +1696,12 @@ app.patch('/servicios/:id', requireClienteAuth, async (req, res) => {
     if (tipo_operacion)  patch.tipo_operacion            = tipo_operacion;
     if (external_ref !== undefined) patch.external_ref  = external_ref || null;
 
+    console.log(`🔧 patch a aplicar: ${JSON.stringify(patch)}`);
     if (Object.keys(patch).length === 0) {
       return res.json(mapSolicitud(sol));
     }
     const result = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}`, 'PATCH', patch);
+    console.log(`🔧 resultado Supabase: ${JSON.stringify(result)}`);
     if (result === null) {
       console.error(`❌ PATCH /servicios/${req.params.id}: Supabase rechazó el update`);
       return res.status(500).json({ error: 'No se pudo guardar en la base de datos' });
