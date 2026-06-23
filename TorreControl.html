@@ -468,6 +468,10 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.73rem;font
     <div><div class="logo-text">INLOP</div><div class="logo-sub">Torre de Control · Live</div></div>
   </div>
   <nav class="header-center">
+    <button class="tab-btn" onclick="switchTab('solicitudes',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+      Solicitudes<span class="notif" id="sol-pend-count" style="display:none">0</span>
+    </button>
     <button class="tab-btn active" onclick="switchTab('viajes',this)">
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>Viajes
     </button>
@@ -543,6 +547,115 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.73rem;font
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <span id="error-msg"></span>
       </div>
+
+      <!-- ── CONTENIDO SOLICITUDES ── -->
+      <div id="content-solicitudes" class="content-section" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+
+        <!-- KPI Cards -->
+        <div class="kpi-strip-h" id="sol-kpis-strip">
+          <div class="kpi-h" style="--kpi-c:var(--accent)"><div class="kpi-h-label">Recibidas</div><div class="kpi-h-val" id="ks-recibidas">—</div><div class="kpi-h-sub">en el período</div></div>
+          <div class="kpi-h" style="--kpi-c:var(--green)"><div class="kpi-h-label">Colocadas</div><div class="kpi-h-val" id="ks-colocadas">—</div><div class="kpi-h-sub">aprobadas</div></div>
+          <div class="kpi-h" style="--kpi-c:#8b5cf6"><div class="kpi-h-label">Finalizadas</div><div class="kpi-h-val" id="ks-finalizadas">—</div><div class="kpi-h-sub">completadas</div></div>
+          <div class="kpi-h" style="--kpi-c:var(--red)"><div class="kpi-h-label">Canceladas</div><div class="kpi-h-val" id="ks-canceladas">—</div><div class="kpi-h-sub">cerradas</div></div>
+          <div class="kpi-h" style="--kpi-c:var(--teal)"><div class="kpi-h-label">% Atención</div><div class="kpi-h-val" id="ks-pct">—</div><div class="kpi-h-sub">colocadas / recibidas</div></div>
+        </div>
+
+        <!-- Barra de filtros -->
+        <div class="unified-toolbar" style="background:var(--bg2);border-bottom:1px solid var(--border);gap:.4rem;padding:.4rem .75rem;flex-wrap:wrap">
+          <div class="search-wrap" style="min-width:160px;max-width:220px">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="sol-search" placeholder="SOL, cliente, agencia…" oninput="solApplyFilters()"/>
+          </div>
+          <select id="sol-fil-estado" onchange="solApplyFilters()" style="padding:.32rem .6rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.7rem;font-family:var(--sans)">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="aprobado">Aprobado</option>
+            <option value="en_ruta">En ruta</option>
+            <option value="completado">Completado</option>
+            <option value="cancelado">Cancelado</option>
+          </select>
+          <select id="sol-fil-cliente" onchange="solApplyFilters()" style="padding:.32rem .6rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.7rem;font-family:var(--sans)">
+            <option value="">Todos los clientes</option>
+          </select>
+          <select id="sol-fil-agencia" onchange="solApplyFilters()" style="padding:.32rem .6rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.7rem;font-family:var(--sans)">
+            <option value="">Todas las agencias</option>
+          </select>
+          <select id="sol-fil-solicitante" onchange="solApplyFilters()" style="padding:.32rem .6rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.7rem;font-family:var(--sans)">
+            <option value="">Todos los solicitantes</option>
+          </select>
+          <select id="sol-fil-canal" onchange="solApplyFilters()" style="padding:.32rem .6rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.7rem;font-family:var(--sans)">
+            <option value="">Todos los canales</option>
+            <option value="APP">APP</option>
+            <option value="Comercial">Comercial</option>
+            <option value="Backoffice">Backoffice</option>
+            <option value="API">API</option>
+            <option value="WhatsApp">WhatsApp</option>
+            <option value="Excel">Excel</option>
+          </select>
+          <!-- Selector de período: Día / Semana / Rango -->
+          <span style="display:inline-flex;align-items:center;border:1px solid var(--border2);border-radius:5px;overflow:hidden;flex-shrink:0">
+            <button id="sol-modo-dia"    onclick="solSetModo('dia')"    class="sol-modo-btn sol-modo-act" style="padding:.3rem .55rem;font-size:.68rem;font-family:var(--sans);background:var(--accent);color:#fff;border:none;cursor:pointer;white-space:nowrap">Día</button>
+            <button id="sol-modo-semana" onclick="solSetModo('semana')" class="sol-modo-btn"              style="padding:.3rem .55rem;font-size:.68rem;font-family:var(--sans);background:var(--bg1);color:var(--text1);border:none;border-left:1px solid var(--border2);cursor:pointer;white-space:nowrap">Semana</button>
+            <button id="sol-modo-rango"  onclick="solSetModo('rango')"  class="sol-modo-btn"              style="padding:.3rem .55rem;font-size:.68rem;font-family:var(--sans);background:var(--bg1);color:var(--text1);border:none;border-left:1px solid var(--border2);cursor:pointer;white-space:nowrap">Rango</button>
+          </span>
+          <!-- Input día -->
+          <input type="date" id="sol-fecha-dia" onchange="loadSolicitudes()" style="padding:.28rem .5rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.68rem;outline:none;font-family:var(--mono)"/>
+          <!-- Input semana -->
+          <input type="week" id="sol-fecha-semana" onchange="loadSolicitudes()" style="display:none;padding:.28rem .5rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.68rem;outline:none;font-family:var(--mono)"/>
+          <!-- Inputs rango -->
+          <span id="sol-rango-wrap" style="display:none;align-items:center;gap:.3rem">
+            <input type="date" id="sol-desde" onchange="solOnRangoChange()" style="padding:.28rem .5rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.68rem;outline:none;font-family:var(--mono)"/>
+            <span style="color:var(--text2);font-family:var(--mono);font-size:.7rem">→</span>
+            <input type="date" id="sol-hasta" onchange="solOnRangoChange()" style="padding:.28rem .5rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.68rem;outline:none;font-family:var(--mono)"/>
+          </span>
+          <button onclick="solClearFilters()" style="padding:.32rem .6rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text2);font-size:.7rem;cursor:pointer;display:inline-flex;align-items:center;gap:.3rem;font-family:var(--sans)">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:currentColor;stroke-width:2.5;fill:none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Limpiar
+          </button>
+          <span class="count-badge" id="sol-count-badge" style="margin-left:auto"></span>
+        </div>
+
+        <!-- Estado de carga -->
+        <div id="sol-loading" class="loading-state"><div class="spinner"></div><span>Cargando solicitudes…</span></div>
+
+        <!-- Tabla -->
+        <div id="sol-wrap" class="tbl-wrap" style="display:none;flex:1;overflow-y:auto">
+          <table>
+            <thead><tr>
+              <th>SOL</th><th>Remisión</th><th>Canal</th><th>Fecha Solicitud</th><th>Solicitante</th><th>Cliente</th><th>Agencia</th>
+              <th>Vehículo</th><th>Operación</th><th>Ruta</th><th>Fecha Requerida</th><th>Estado</th><th style="text-align:center">Gestión</th>
+            </tr></thead>
+            <tbody id="sol-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- Estado vacío -->
+        <div id="sol-empty" class="empty-state" style="display:none">
+          <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+          <span id="sol-empty-msg">Sin solicitudes para este período</span>
+        </div>
+      </div>
+
+      <!-- ── PANEL DETALLE SOLICITUD (slide-in desde la derecha) ── -->
+      <div id="sol-panel" style="position:fixed;top:0;right:-420px;width:420px;height:100vh;background:var(--bg1);border-left:1px solid var(--border);z-index:9000;display:flex;flex-direction:column;transition:right .25s ease;box-shadow:-4px 0 20px rgba(0,0,0,.18)">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0">
+          <div>
+            <div style="font-size:.6rem;font-family:var(--mono);letter-spacing:.15em;color:var(--text2);text-transform:uppercase;margin-bottom:.15rem">Solicitud</div>
+            <div id="sol-panel-cod" style="font-family:var(--mono);font-size:.9rem;color:var(--accent);letter-spacing:.06em;font-weight:700"></div>
+          </div>
+          <button onclick="solCerrarPanel()" style="background:none;border:none;cursor:pointer;color:var(--text2);padding:.3rem">
+            <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <!-- Body scroll -->
+        <div style="flex:1;overflow-y:auto;padding:1rem">
+          <div id="sol-panel-body"></div>
+        </div>
+        <!-- Footer acciones -->
+        <div id="sol-panel-footer" style="padding:.75rem 1rem;border-top:1px solid var(--border);display:flex;gap:.5rem;flex-shrink:0"></div>
+      </div>
+      <!-- Overlay -->
+      <div id="sol-panel-overlay" onclick="solCerrarPanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:8999"></div>
 
       <!-- ── CONTENIDO VIAJES ── -->
       <div id="content-viajes" class="content-section" style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0">
@@ -949,7 +1062,7 @@ setInterval(tick,1000);tick();
 
 // ── NAVEGACIÓN NUEVO LAYOUT ────────────────────────────
 let tabActual = 'viajes';
-const SECCIONES = ['viajes','mapa','alarmas','vehiculos','planeados','cumplidos'];
+const SECCIONES = ['solicitudes','viajes','mapa','alarmas','vehiculos','planeados','cumplidos'];
 
 // KPIs por pestaña
 const SIDEBAR_DEFS = {
@@ -1051,7 +1164,7 @@ function switchTab(tab, btn){
       mapFullInstance.invalidateSize();
       renderMapFull();
     },120);
-  } else if(['alarmas','cumplidos','planeados'].includes(tab)){
+  } else if(['alarmas','cumplidos','planeados','solicitudes'].includes(tab)){
     if(mapZone) mapZone.style.display='none';
     if(sidebar) sidebar.style.display='none';
     const bottom=document.querySelector('.main-bottom');
@@ -1060,6 +1173,7 @@ function switchTab(tab, btn){
     if(tab==='alarmas') updateAlarmasKPIs();
     if(tab==='cumplidos') cumUpdateKPIs();
     if(tab==='planeados') loadPlaneados();
+    if(tab==='solicitudes') loadSolicitudes();
   } else {
     if(mapZone) mapZone.style.display='block';
     const bottom=document.querySelector('.main-bottom');
@@ -2997,6 +3111,512 @@ function syncPlaneadosConResume() {
     planeadosApplyFilters();
     planeadosUpdateKPIs();
   }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// MÓDULO SOLICITUDES — Demanda INLOP
+// ═══════════════════════════════════════════════════════════════════
+let solData      = [];
+let solFiltrados = [];
+
+// Devuelve la fecha local Colombia (YYYY-MM-DD) para evitar desfase UTC
+function solHoy() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+}
+
+let solModo = 'dia'; // 'dia' | 'semana' | 'rango'
+
+function solSetModo(modo) {
+  solModo = modo;
+  // Actualizar estilos de botones
+  ['dia','semana','rango'].forEach(m => {
+    const btn = document.getElementById('sol-modo-' + m);
+    if (!btn) return;
+    const active = m === modo;
+    btn.style.background = active ? 'var(--accent)' : 'var(--bg1)';
+    btn.style.color      = active ? '#fff' : 'var(--text1)';
+  });
+  // Mostrar/ocultar inputs
+  const diaEl    = document.getElementById('sol-fecha-dia');
+  const semanaEl = document.getElementById('sol-fecha-semana');
+  const rangoEl  = document.getElementById('sol-rango-wrap');
+  if (diaEl)    diaEl.style.display    = modo === 'dia'    ? '' : 'none';
+  if (semanaEl) semanaEl.style.display = modo === 'semana' ? '' : 'none';
+  if (rangoEl)  rangoEl.style.display  = modo === 'rango'  ? 'inline-flex' : 'none';
+  if (modo !== 'rango') loadSolicitudes();
+}
+
+function solGetRange() {
+  const hoy = solHoy();
+  if (solModo === 'dia') {
+    const v = document.getElementById('sol-fecha-dia')?.value || hoy;
+    return { desde: v, hasta: v };
+  }
+  if (solModo === 'semana') {
+    const v = document.getElementById('sol-fecha-semana')?.value; // 'YYYY-Www'
+    if (v) {
+      const [yr, wk] = v.split('-W').map(Number);
+      // ISO week: lunes de la semana
+      const jan4    = new Date(yr, 0, 4);
+      const lunes   = new Date(jan4);
+      lunes.setDate(jan4.getDate() - ((jan4.getDay() || 7) - 1) + (wk - 1) * 7);
+      const domingo = new Date(lunes);
+      domingo.setDate(lunes.getDate() + 6);
+      const fmt = d => d.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      return { desde: fmt(lunes), hasta: fmt(domingo) };
+    }
+    // Fallback: semana actual
+    const d   = new Date();
+    const dow = d.getDay() || 7;
+    const lunes = new Date(d);
+    lunes.setDate(d.getDate() - dow + 1);
+    return { desde: lunes.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }), hasta: hoy };
+  }
+  if (solModo === 'rango') {
+    return {
+      desde: document.getElementById('sol-desde')?.value || hoy,
+      hasta: document.getElementById('sol-hasta')?.value || hoy,
+    };
+  }
+  return { desde: hoy, hasta: hoy };
+}
+
+function solOnRangoChange() {
+  const desde = document.getElementById('sol-desde');
+  const hasta = document.getElementById('sol-hasta');
+  if (!desde || !hasta || !desde.value || !hasta.value) return;
+  const d1 = new Date(desde.value);
+  const d2 = new Date(hasta.value);
+  if (d2 < d1) { hasta.value = desde.value; }
+  else {
+    const diff = (d2 - d1) / 86400000;
+    if (diff > 30) {
+      const max = new Date(d1);
+      max.setDate(max.getDate() + 30);
+      hasta.value = max.toISOString().slice(0, 10);
+    }
+  }
+  loadSolicitudes();
+}
+
+async function loadSolicitudes() {
+  // Inicializar input día a hoy si está vacío (primera carga)
+  const diaEl = document.getElementById('sol-fecha-dia');
+  if (diaEl && !diaEl.value) diaEl.value = solHoy();
+
+  const loading = document.getElementById('sol-loading');
+  const wrap    = document.getElementById('sol-wrap');
+  const empty   = document.getElementById('sol-empty');
+  if (loading) { loading.style.display = 'flex'; }
+  if (wrap)    { wrap.style.display    = 'none'; }
+  if (empty)   { empty.style.display   = 'none'; }
+
+  const { desde, hasta } = solGetRange();
+  try {
+    const r    = await fetch(`${API}/api/solicitudes?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
+    const data = await r.json();
+    solData = Array.isArray(data) ? data : [];
+  } catch(e) {
+    console.error('❌ loadSolicitudes:', e.message);
+    solData = [];
+  }
+  solPopulateSelects();
+  solApplyFilters();
+}
+
+function solPopulateSelects() {
+  const populate = (id, label, vals) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const current = el.value;
+    el.innerHTML  = `<option value="">${label}</option>`;
+    [...new Set(vals.filter(v => v && v !== '—'))].sort().forEach(v => {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = v;
+      if (v === current) o.selected = true;
+      el.appendChild(o);
+    });
+  };
+  populate('sol-fil-cliente',     'Todos los clientes',     solData.map(s => s.cliente));
+  populate('sol-fil-agencia',     'Todas las agencias',     solData.map(s => s.agencia));
+  populate('sol-fil-solicitante', 'Todos los solicitantes', solData.map(s => s.solicitante));
+}
+
+function solApplyFilters() {
+  const q           = (document.getElementById('sol-search')?.value         || '').toLowerCase().trim();
+  const estado      =  document.getElementById('sol-fil-estado')?.value     || '';
+  const cliente     =  document.getElementById('sol-fil-cliente')?.value    || '';
+  const agencia     =  document.getElementById('sol-fil-agencia')?.value    || '';
+  const solicitante =  document.getElementById('sol-fil-solicitante')?.value || '';
+  const canal       =  document.getElementById('sol-fil-canal')?.value      || '';
+
+  solFiltrados = solData.filter(s => {
+    if (estado      && s.estado                !== estado)      return false;
+    if (cliente     && s.cliente               !== cliente)     return false;
+    if (agencia     && s.agencia               !== agencia)     return false;
+    if (solicitante && s.solicitante           !== solicitante) return false;
+    if (canal       && (s.canal || 'APP')      !== canal)       return false;
+    if (q) {
+      const txt = [s.codigo_solicitud, s.cliente, s.agencia, s.solicitante].join(' ').toLowerCase();
+      if (!txt.includes(q)) return false;
+    }
+    return true;
+  });
+
+  solUpdateKPIs();
+  solRenderTabla();
+}
+
+function solUpdateKPIs() {
+  const recibidas   = solFiltrados.length;
+  const colocadas   = solFiltrados.filter(s => s.estado === 'aprobado').length;
+  const finalizadas = solFiltrados.filter(s => s.estado === 'completado').length;
+  const canceladas  = solFiltrados.filter(s => s.estado === 'cancelado').length;
+  const pct         = recibidas > 0 ? Math.round(((colocadas + finalizadas) / recibidas) * 100) : null;
+
+  const sv = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  sv('ks-recibidas',   recibidas);
+  sv('ks-colocadas',   colocadas);
+  sv('ks-finalizadas', finalizadas);
+  sv('ks-canceladas',  canceladas);
+  sv('ks-pct',         pct !== null ? pct + '%' : '—');
+
+  // Badge en pestaña — pendientes del período
+  const pend  = solData.filter(s => s.estado === 'pendiente').length;
+  const badge = document.getElementById('sol-pend-count');
+  if (badge) { if (pend > 0) { badge.style.display = 'inline'; badge.textContent = pend; } else badge.style.display = 'none'; }
+
+  const countEl = document.getElementById('sol-count-badge');
+  if (countEl) countEl.textContent = recibidas + (recibidas === 1 ? ' solicitud' : ' solicitudes');
+}
+
+function solRenderTabla() {
+  const loading = document.getElementById('sol-loading');
+  const wrap    = document.getElementById('sol-wrap');
+  const empty   = document.getElementById('sol-empty');
+  const msg     = document.getElementById('sol-empty-msg');
+  if (!loading) return;
+  loading.style.display = 'none';
+
+  if (!solFiltrados.length) {
+    wrap.style.display  = 'none';
+    empty.style.display = 'flex';
+    if (msg) msg.textContent = solData.length === 0
+      ? 'Sin solicitudes para este período'
+      : 'Sin resultados para los filtros aplicados';
+    return;
+  }
+  empty.style.display = 'none';
+  wrap.style.display  = 'block';
+
+  const ahora = Date.now();
+
+  const fmtCreado = iso => {
+    if (!iso) return '—';
+    const d   = new Date(iso);
+    const dia = String(d.getDate()).padStart(2, '0');
+    const mes = d.toLocaleString('es-CO', { month: 'short' }).replace('.', '');
+    const hh  = String(d.getHours()).padStart(2, '0');
+    const mm  = String(d.getMinutes()).padStart(2, '0');
+    return `${dia}-${mes.charAt(0).toUpperCase() + mes.slice(1)} ${hh}:${mm}`;
+  };
+
+  const fmtAnt = iso => {
+    if (!iso) return '—';
+    const diff = ahora - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60)  return mins + ' min';
+    const hrs = Math.floor(mins / 60);
+    if (hrs  < 24)  return hrs  + ' h';
+    const dias = Math.floor(hrs / 24);
+    return dias + (dias === 1 ? ' día' : ' días');
+  };
+
+  const fmtFReq = iso => {
+    if (!iso) return '—';
+    const dt  = new Date(iso);
+    const dia = String(dt.getDate()).padStart(2, '0');
+    const mes = dt.toLocaleString('es-CO', { month: 'short' }).replace('.', '');
+    const yr  = dt.getFullYear();
+    const hh  = String(dt.getHours()).padStart(2, '0');
+    const mm  = String(dt.getMinutes()).padStart(2, '0');
+    return `${dia}-${mes.charAt(0).toUpperCase() + mes.slice(1)}-${yr} ${hh}:${mm}`;
+  };
+
+  const badgeEstado = estado => {
+    const map = {
+      pendiente:  { cls: 'b-yellow',  sym: '●', label: 'PENDIENTE'  },
+      aprobado:   { cls: 'b-blue',    sym: '✓', label: 'APROBADO'   },
+      en_ruta:    { cls: 'b-orange',  sym: '▶', label: 'EN RUTA'    },
+      completado: { cls: 'b-green',   sym: '✔', label: 'COMPLETADO' },
+      cancelado:  { cls: 'b-red',     sym: '✕', label: 'CANCELADO'  },
+    };
+    const b = map[estado] || { cls: 'b-gray', sym: '○', label: (estado || '').toUpperCase() };
+    return `<span class="badge ${b.cls}">${b.sym} ${b.label}</span>`;
+  };
+
+  const badgeTipo = tipo => {
+    if (!tipo) return '—';
+    const t = tipo.toLowerCase();
+    if (t === 'urbana')   return `<span class="badge b-blue">URBANA</span>`;
+    if (t === 'nacional') return `<span class="badge b-yellow">NACIONAL</span>`;
+    return `<span class="badge b-gray">${tipo.toUpperCase()}</span>`;
+  };
+
+  const badgeVeh = veh => veh
+    ? `<span style="display:inline-flex;align-items:center;padding:.15rem .45rem;border:1px solid var(--border2);border-radius:3px;font-family:var(--mono);font-size:.62rem;color:var(--text1);letter-spacing:.04em">${veh}</span>`
+    : '—';
+
+  const badgeCanal = canal => {
+    const map = { APP:'b-teal', Comercial:'b-blue', Backoffice:'b-purple', API:'b-orange', WhatsApp:'b-green', Excel:'b-gray' };
+    const cls = map[canal] || 'b-gray';
+    return `<span class="badge ${cls}" style="font-size:.58rem">${canal}</span>`;
+  };
+
+  const btnBase = 'padding:.22rem .55rem;border-radius:4px;border:1px solid;cursor:pointer;font-size:.62rem;font-family:var(--sans);font-weight:600;letter-spacing:.04em;transition:opacity .15s';
+  const btnVer  = id => `<button onclick="solAbrirPanel('${id}')" style="${btnBase};background:rgba(1,42,107,.1);color:var(--accent);border-color:var(--accent)">👁 Ver detalles</button>`;
+  const accionBtns = s => {
+    if (s.estado === 'pendiente') {
+      return `<button onclick="solSimularMatch('${s.id}')" style="${btnBase};background:rgba(22,163,74,.12);color:#16a34a;border-color:#16a34a">⚡ Simular</button>
+              <button onclick="solCancelarSol('${s.id}')" style="${btnBase};background:rgba(220,38,38,.08);color:#dc2626;border-color:#dc2626;margin-left:.3rem">✕ Cancelar</button>`;
+    }
+    if (s.estado === 'aprobado') {
+      return `<button onclick="solSimularEnRuta('${s.id}')" style="${btnBase};background:rgba(234,88,12,.12);color:#ea580c;border-color:#ea580c">🚛 En ruta</button>
+              <button onclick="solAbrirPanel('${s.id}')" style="${btnBase};background:rgba(1,42,107,.1);color:var(--accent);border-color:var(--accent);margin-left:.3rem">👁 Ver</button>`;
+    }
+    if (s.estado === 'en_ruta')    return btnVer(s.id);
+    if (s.estado === 'completado') return btnVer(s.id);
+    if (s.estado === 'cancelado')  return btnVer(s.id);
+    return '—';
+  };
+
+  document.getElementById('sol-tbody').innerHTML = solFiltrados.map((s, i) =>
+    `<tr class="fade-row" style="animation-delay:${Math.min(i * .02, .4)}s">
+      <td style="font-family:var(--mono);font-size:.68rem;color:var(--accent);letter-spacing:.04em">${s.codigo_solicitud || '—'}</td>
+      <td style="white-space:nowrap">${s.external_ref
+        ? `<span style="font-family:var(--mono);font-size:.65rem;color:var(--text1);letter-spacing:.04em">${s.external_ref}</span>
+           <button onclick="event.stopPropagation();navigator.clipboard.writeText('${s.external_ref.replace(/'/g,"\\'")}').then(()=>{this.title='¡Copiado!';setTimeout(()=>this.title='Copiar',1500)})"
+             title="Copiar" style="border:none;background:none;cursor:pointer;padding:1px 3px;color:var(--text2);vertical-align:middle">
+             <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
+               <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke-linecap="square"/>
+             </svg>
+           </button>`
+        : '<span style="color:var(--text2);font-size:.65rem">—</span>'}</td>
+      <td>${badgeCanal(s.canal || 'APP')}</td>
+      <td style="font-family:var(--mono);font-size:.66rem;color:var(--text2);white-space:nowrap">${fmtCreado(s.creado_en)}</td>
+      <td style="font-size:.7rem;color:var(--text2)">${s.solicitante || '—'}</td>
+      <td style="font-size:.72rem;color:var(--text0);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.cliente || ''}">${s.cliente || '—'}</td>
+      <td style="font-size:.72rem;color:var(--text1)">${s.agencia || '—'}</td>
+      <td>${badgeVeh(s.tipo_vehiculo)}</td>
+      <td>${badgeTipo(s.tipo_operacion)}</td>
+      <td style="font-size:.7rem;color:var(--text1);white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis" title="${(s.origen||'')} → ${(s.destino||'')}">
+        ${s.origen && s.destino ? `<span style="color:var(--text2)">${s.origen}</span> <span style="color:var(--red)">→</span> <span style="color:var(--text2)">${s.destino}</span>` : '—'}
+      </td>
+      <td style="font-family:var(--mono);font-size:.68rem;color:var(--text1)">${fmtFReq(s.fecha_requerida)}</td>
+      <td>${badgeEstado(s.estado)}</td>
+      <td style="text-align:center;white-space:nowrap">${accionBtns(s)}</td>
+    </tr>`
+  ).join('');
+}
+
+function solClearFilters() {
+  ['sol-search','sol-fil-estado','sol-fil-cliente','sol-fil-agencia','sol-fil-solicitante','sol-fil-canal','sol-desde','sol-hasta']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const diaEl = document.getElementById('sol-fecha-dia');
+  if (diaEl) diaEl.value = solHoy();
+  solSetModo('dia');
+}
+
+// ── ACCIONES SOBRE SOLICITUDES ──────────────────────────────────────────────
+
+async function solCambiarEstado(id, estado, extra = {}) {
+  try {
+    const r = await fetch(`${API}/api/solicitudes/${encodeURIComponent(id)}/estado`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estado, ...extra }),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || r.status);
+    return true;
+  } catch(e) {
+    alert('Error al actualizar: ' + e.message);
+    return false;
+  }
+}
+
+function solSimularMatch(id) {
+  const s = solData.find(x => x.id === id);
+  if (!s) return;
+
+  // Crear modal inline de simulación
+  const overlay = document.createElement('div');
+  overlay.id = 'sol-sim-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9500;display:flex;align-items:center;justify-content:center;padding:1rem';
+
+  const inp = (id, label, ph) => `
+    <div style="margin-bottom:.65rem">
+      <label style="display:block;font-size:.62rem;font-family:var(--sans);letter-spacing:.08em;color:var(--text2);text-transform:uppercase;margin-bottom:.25rem">${label}</label>
+      <input id="${id}" placeholder="${ph}" style="width:100%;padding:.4rem .55rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text0);font-size:.75rem;font-family:var(--mono);outline:none;box-sizing:border-box"/>
+    </div>`;
+
+  overlay.innerHTML = `
+    <div style="background:var(--bg1);border:1px solid var(--border);border-radius:8px;padding:1.25rem;width:100%;max-width:380px;box-shadow:0 8px 32px rgba(0,0,0,.3)">
+      <div style="font-size:.65rem;font-family:var(--mono);color:var(--accent);letter-spacing:.1em;margin-bottom:.2rem">${s.codigo_solicitud}</div>
+      <div style="font-size:.85rem;font-family:var(--sans);font-weight:700;color:var(--text0);margin-bottom:1rem">Simular aprobación</div>
+      ${inp('sim-conductor','Conductor','Nombre completo del conductor')}
+      ${inp('sim-placa','Placa','Ej: ABC-123')}
+      ${inp('sim-tel','Teléfono','Ej: 3001234567')}
+      <div style="display:flex;gap:.5rem;margin-top:1rem">
+        <button onclick="document.getElementById('sol-sim-overlay').remove()"
+          style="flex:1;padding:.45rem;background:var(--bg2);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.72rem;cursor:pointer;font-family:var(--sans)">
+          Cancelar
+        </button>
+        <button onclick="solConfirmarSimular('${id}')"
+          style="flex:1;padding:.45rem;background:#16a34a;border:none;border-radius:5px;color:#fff;font-size:.72rem;font-weight:700;cursor:pointer;font-family:var(--sans)">
+          ⚡ Confirmar
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('sim-conductor')?.focus(), 50);
+}
+
+async function solConfirmarSimular(id) {
+  const conductor = document.getElementById('sim-conductor')?.value.trim();
+  const placa     = document.getElementById('sim-placa')?.value.trim();
+  const tel       = document.getElementById('sim-tel')?.value.trim();
+  document.getElementById('sol-sim-overlay')?.remove();
+
+  const extra = {};
+  if (conductor) extra.conductor_nombre = conductor;
+  if (placa)     extra.placa_asignada   = placa;
+  if (tel)       extra.conductor_tel    = tel;
+
+  const ok = await solCambiarEstado(id, 'confirmado', extra);
+  if (ok) {
+    const s = solData.find(x => x.id === id);
+    if (s) {
+      s.estado = 'aprobado';
+      if (conductor) s.conductor = conductor;
+      if (placa)     s.placa     = placa;
+    }
+    solApplyFilters();
+  }
+}
+
+async function solSimularEnRuta(id) {
+  const s = solData.find(x => x.id === id);
+  if (!s) return;
+  if (!confirm(`¿Simular inicio de viaje para ${s.codigo_solicitud}?\n\nCambiará el estado a EN RUTA y registrará la fecha de inicio.`)) return;
+  const ok = await solCambiarEstado(id, 'en_ruta');
+  if (ok) {
+    if (s) s.estado = 'en_ruta';
+    solApplyFilters();
+  }
+}
+
+async function solCancelarSol(id) {
+  if (!confirm('¿Cancelar esta solicitud?')) return;
+  const ok = await solCambiarEstado(id, 'cancelado');
+  if (ok) {
+    const s = solData.find(x => x.id === id);
+    if (s) s.estado = 'cancelado';
+    solApplyFilters();
+  }
+}
+
+// ── PANEL DETALLE ────────────────────────────────────────────────────────────
+
+function solAbrirPanel(id) {
+  const s = solData.find(x => x.id === id);
+  if (!s) return;
+
+  document.getElementById('sol-panel-cod').textContent = s.codigo_solicitud || id;
+
+  const fmtDt = iso => {
+    if (!iso) return '—';
+    const dt = new Date(iso);
+    const dia = String(dt.getDate()).padStart(2,'0');
+    const mes = dt.toLocaleString('es-CO',{month:'short'}).replace('.','');
+    return `${dia}-${mes.charAt(0).toUpperCase()+mes.slice(1)}-${dt.getFullYear()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+  };
+
+  const row = (lbl, val) => `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:.5rem 0;border-bottom:1px solid var(--border2)">
+      <span style="font-size:.68rem;color:var(--text2);font-family:var(--sans);flex-shrink:0;margin-right:.5rem">${lbl}</span>
+      <span style="font-size:.72rem;color:var(--text0);font-family:var(--mono);text-align:right">${val || '—'}</span>
+    </div>`;
+
+  const estadoBadge = {
+    pendiente:  '<span class="badge b-yellow">● PENDIENTE</span>',
+    aprobado:   '<span class="badge b-blue">✓ APROBADO</span>',
+    en_ruta:    '<span class="badge b-orange">▶ EN RUTA</span>',
+    completado: '<span class="badge b-green">✔ COMPLETADO</span>',
+    cancelado:  '<span class="badge b-red">✕ CANCELADO</span>',
+  }[s.estado] || s.estado;
+
+  document.getElementById('sol-panel-body').innerHTML = `
+    <div style="margin-bottom:.75rem">
+      <div style="font-size:.6rem;font-family:var(--mono);letter-spacing:.12em;color:var(--text2);text-transform:uppercase;margin-bottom:.5rem">Estado actual</div>
+      ${estadoBadge}
+    </div>
+    <div style="font-size:.6rem;font-family:var(--mono);letter-spacing:.12em;color:var(--text2);text-transform:uppercase;margin:.75rem 0 .25rem">Datos del servicio</div>
+    ${row('Cliente',        s.cliente)}
+    ${row('Agencia',        s.agencia)}
+    ${row('Solicitante',    s.solicitante)}
+    ${row('Tipo operación', s.tipo_operacion)}
+    ${row('Tipo vehículo',  s.tipo_vehiculo)}
+    ${row('F. Requerida',   fmtDt(s.fecha_requerida))}
+    ${row('Canal',          s.canal)}
+    ${row('Creado en',      fmtDt(s.creado_en))}
+    <div style="font-size:.6rem;font-family:var(--mono);letter-spacing:.12em;color:var(--text2);text-transform:uppercase;margin:.75rem 0 .25rem">Servicio asociado</div>
+    ${(s.placa_asignada || s.conductor_nombre) ? `
+      ${row('Placa',     s.placa_asignada)}
+      ${row('Conductor', s.conductor_nombre)}
+      ${s.conductor_tel ? `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:.5rem 0;border-bottom:1px solid var(--border2)">
+        <span style="font-size:.68rem;color:var(--text2);font-family:var(--sans);flex-shrink:0;margin-right:.5rem">Teléfono</span>
+        <a href="tel:${s.conductor_tel}" style="font-size:.72rem;color:#16a34a;font-family:var(--mono);text-align:right;text-decoration:none">${s.conductor_tel}</a>
+      </div>` : ''}
+      ${s.controlt_trip_number ? row('Trip #', s.controlt_trip_number) : ''}
+      ${(s.origen || s.destino) ? row('Ruta', `${s.origen || '—'} → ${s.destino || '—'}`) : ''}
+    ` : `
+      <div style="padding:.6rem;background:var(--bg2);border-radius:5px;border:1px dashed var(--border2);font-size:.7rem;color:var(--text2)">
+        Pendiente de asignación ControlT.
+        <br><span style="font-size:.65rem;opacity:.7">Cuando la remisión del viaje coincida con el código de solicitud, aquí aparecerán conductor, placa y ruta.</span>
+      </div>
+    `}`;
+
+  // Footer con acciones según estado
+  const footer = document.getElementById('sol-panel-footer');
+  if (s.estado === 'aprobado') {
+    footer.innerHTML = `<button onclick="solCancelarDesdePanel('${s.id}')"
+      style="padding:.4rem .8rem;background:rgba(220,38,38,.1);color:#dc2626;border:1px solid #dc2626;border-radius:5px;cursor:pointer;font-size:.7rem;font-family:var(--sans);font-weight:600">
+      ✕ Cancelar solicitud
+    </button>`;
+  } else {
+    footer.innerHTML = '';
+  }
+
+  document.getElementById('sol-panel').style.right = '0';
+  document.getElementById('sol-panel-overlay').style.display = 'block';
+}
+
+async function solCancelarDesdePanel(id) {
+  if (!confirm('¿Cancelar esta solicitud?')) return;
+  const ok = await solCambiarEstado(id, 'cancelado');
+  if (ok) {
+    const s = solData.find(x => x.id === id);
+    if (s) s.estado = 'cancelado';
+    solCerrarPanel();
+    solApplyFilters();
+  }
+}
+
+function solCerrarPanel() {
+  document.getElementById('sol-panel').style.right = '-420px';
+  document.getElementById('sol-panel-overlay').style.display = 'none';
 }
 
 
