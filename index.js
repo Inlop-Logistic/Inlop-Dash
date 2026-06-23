@@ -536,7 +536,7 @@ app.get('/api/solicitudes', async (req, res) => {
     const fechaDesde = desde || hoy;
     const fechaHasta = hasta || hoy;
 
-    let qs = `/solicitudes?order=creado_en.desc&limit=500`;
+    let qs = `/solicitudes?order=creado_en.desc&limit=500&select=id,codigo_solicitud,external_ref,estado,creado_en,creado_por,empresa_cliente_id,agencia_id,agencia_nombre,tipo_operacion,tipo_vehiculo,origen,destino,fecha_requerida,canal,placa_asignada,conductor_nombre,conductor_tel,controlt_trip_number`;
 
     if (estado && estado !== 'todos' && estado !== '') {
       const dbEstado = estado === 'aprobado' ? 'confirmado' : estado;
@@ -575,15 +575,22 @@ app.get('/api/solicitudes', async (req, res) => {
     const result = solicitudes.map(s => ({
       id:               s.id,
       codigo_solicitud: s.codigo_solicitud,
+      external_ref:     s.external_ref              || null,
       cliente:          empMap[s.empresa_cliente_id] || '—',
       agencia:          agMap[s.agencia_id]          || s.agencia_nombre || '—',
       solicitante:      usrMap[s.creado_por]         || '—',
       tipo_operacion:   s.tipo_operacion             || '',
       tipo_vehiculo:    s.tipo_vehiculo              || '',
+      origen:           s.origen                    || '',
+      destino:          s.destino                   || '',
       fecha_requerida:  s.fecha_requerida            || null,
       estado:           s.estado === 'confirmado' ? 'aprobado' : s.estado,
       creado_en:        s.creado_en,
       canal:            s.canal                     || 'APP',
+      placa_asignada:   s.placa_asignada            || null,
+      conductor_nombre: s.conductor_nombre          || null,
+      conductor_tel:    s.conductor_tel             || null,
+      controlt_trip_number: s.controlt_trip_number  || null,
     }));
 
     res.json(result);

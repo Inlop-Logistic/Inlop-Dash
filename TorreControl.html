@@ -618,7 +618,7 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.73rem;font
         <div id="sol-wrap" class="tbl-wrap" style="display:none;flex:1;overflow-y:auto">
           <table>
             <thead><tr>
-              <th>SOL</th><th>Creado</th><th>Solicitante</th><th>Cliente</th><th>Agencia</th>
+              <th>SOL</th><th>REF</th><th>Creado</th><th>Solicitante</th><th>Cliente</th><th>Agencia</th>
               <th>Operación</th><th>Vehículo</th><th>F. Requerida</th><th>Estado</th><th>Canal</th><th style="text-align:center">Acción</th>
             </tr></thead>
             <tbody id="sol-tbody"></tbody>
@@ -3386,6 +3386,15 @@ function solRenderTabla() {
   document.getElementById('sol-tbody').innerHTML = solFiltrados.map((s, i) =>
     `<tr class="fade-row" style="animation-delay:${Math.min(i * .02, .4)}s">
       <td style="font-family:var(--mono);font-size:.68rem;color:var(--accent);letter-spacing:.04em">${s.codigo_solicitud || '—'}</td>
+      <td style="white-space:nowrap">${s.external_ref
+        ? `<span style="font-family:var(--mono);font-size:.65rem;color:var(--text1);letter-spacing:.04em">${s.external_ref}</span>
+           <button onclick="event.stopPropagation();navigator.clipboard.writeText('${s.external_ref.replace(/'/g,"\\'")}').then(()=>{this.title='¡Copiado!';setTimeout(()=>this.title='Copiar',1500)})"
+             title="Copiar" style="border:none;background:none;cursor:pointer;padding:1px 3px;color:var(--text2);vertical-align:middle">
+             <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
+               <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke-linecap="square"/>
+             </svg>
+           </button>`
+        : '<span style="color:var(--text2);font-size:.65rem">—</span>'}</td>
       <td style="font-family:var(--mono);font-size:.66rem;color:var(--text2);white-space:nowrap">${fmtCreado(s.creado_en)}</td>
       <td style="font-size:.7rem;color:var(--text2)">${s.solicitante || '—'}</td>
       <td style="font-size:.72rem;color:var(--text0);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.cliente || ''}">${s.cliente || '—'}</td>
@@ -3550,10 +3559,21 @@ function solAbrirPanel(id) {
     ${row('Canal',          s.canal)}
     ${row('Creado en',      fmtDt(s.creado_en))}
     <div style="font-size:.6rem;font-family:var(--mono);letter-spacing:.12em;color:var(--text2);text-transform:uppercase;margin:.75rem 0 .25rem">Servicio asociado</div>
-    <div style="padding:.6rem;background:var(--bg2);border-radius:5px;border:1px dashed var(--border2);font-size:.7rem;color:var(--text2)">
-      Pendiente de match automático con ControlT.<br>
-      <span style="font-size:.65rem;opacity:.7">Cuando el campo <strong>remisión</strong> del viaje coincida con el código de solicitud, aquí aparecerán conductor, placa y datos del despacho.</span>
-    </div>`;
+    ${(s.placa_asignada || s.conductor_nombre) ? `
+      ${row('Placa',     s.placa_asignada)}
+      ${row('Conductor', s.conductor_nombre)}
+      ${s.conductor_tel ? `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:.5rem 0;border-bottom:1px solid var(--border2)">
+        <span style="font-size:.68rem;color:var(--text2);font-family:var(--sans);flex-shrink:0;margin-right:.5rem">Teléfono</span>
+        <a href="tel:${s.conductor_tel}" style="font-size:.72rem;color:#16a34a;font-family:var(--mono);text-align:right;text-decoration:none">${s.conductor_tel}</a>
+      </div>` : ''}
+      ${s.controlt_trip_number ? row('Trip #', s.controlt_trip_number) : ''}
+      ${(s.origen || s.destino) ? row('Ruta', `${s.origen || '—'} → ${s.destino || '—'}`) : ''}
+    ` : `
+      <div style="padding:.6rem;background:var(--bg2);border-radius:5px;border:1px dashed var(--border2);font-size:.7rem;color:var(--text2)">
+        Pendiente de asignación ControlT.
+        <br><span style="font-size:.65rem;opacity:.7">Cuando la remisión del viaje coincida con el código de solicitud, aquí aparecerán conductor, placa y ruta.</span>
+      </div>
+    `}`;
 
   // Footer con acciones según estado
   const footer = document.getElementById('sol-panel-footer');
