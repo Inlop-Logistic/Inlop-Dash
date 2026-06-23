@@ -1056,7 +1056,7 @@ function mapSolicitud(sol, viaje = null, cumplido = null) {
     fecha_requerida:   sol.fecha_requerida,
     fecha_aprobacion:  sol.fecha_confirmacion || null,
     fecha_inicio_real: cumplido?.fecha_viaje        || sol.fecha_inicio_real || null,
-    fecha_fin_real:    cumplido?.fecha_finalizacion || null,
+    fecha_fin_real:    cumplido?.fecha_finalizacion || sol.fecha_fin_real || null,
     fecha_cancelacion: sol.fecha_cancelacion || null,
     estado:            sol.estado === 'confirmado' ? 'aprobado' : sol.estado,
     controlt_trip_number: sol.controlt_trip_number || null,
