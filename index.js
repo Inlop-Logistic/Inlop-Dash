@@ -145,6 +145,25 @@ app.get('/api/ct/travel/:id', async (req, res) => {
   }
 });
 
+// GET /api/ct/travel/list — lista viajes activos via Travel API pública
+app.get('/api/ct/travel/list', async (req, res) => {
+  try {
+    const token = await getCtPublicToken();
+    const r = await fetch(`${CT_PUBLIC_URL}/Travel/List`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+    });
+    const txt = await r.text();
+    if (!r.ok) {
+      console.error(`❌ CT Travel/List → ${r.status}: ${txt.slice(0,300)}`);
+      return res.status(r.status).json({ error: 'ControlT error', status: r.status, body: txt.slice(0,300) });
+    }
+    res.json(JSON.parse(txt));
+  } catch(e) {
+    console.error('❌ /api/ct/travel/list error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/ct/binnacle
 app.post('/api/ct/binnacle', async (req, res) => {
   try {
