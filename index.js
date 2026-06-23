@@ -230,13 +230,6 @@ async function safeFetch(path, fallback = []) {
 
   const text = await response.text();
 
-  console.log("================================");
-  console.log("URL:", `${BASE_URL}${path}`);
-  console.log("STATUS:", response.status);
-  console.log("CONTENT-TYPE:", response.headers.get("content-type"));
-  console.log("BODY:", text.substring(0, 2000));
-  console.log("================================");
-
   try {
     const data = JSON.parse(text);
     if (data && data.Message && data.Message.toLowerCase().includes("denied")) {
@@ -245,8 +238,7 @@ async function safeFetch(path, fallback = []) {
     }
     return data;
   } catch (e) {
-    console.warn(`⚠️ ${path} respuesta no-JSON`);
-    console.error("ERROR PARSE:", e.message);
+    console.warn(`⚠️ ${path} respuesta no-JSON: ${e.message}`);
     return fallback;
   }
 }
@@ -264,8 +256,7 @@ const GRUPO_CONFIRMADO  = new Set(['sin asignar', 'sin activar']);
 const GRUPO_EN_RUTA     = new Set(['iniciado', 'cargando', 'en tránsito', 'en transito', 'en transíto', 'en tránsíto', 'pernoctando', 'descargando']);
 const GRUPO_COMPLETADO  = new Set(['completado', 'finalizado']);
 const GRUPO_CANCELADO   = new Set(['cancelado']);
-const ORPHAN_HOURS      = parseInt(process.env.ORPHAN_HOURS || '4', 10);
-let   _diagSolDone      = false;
+const ORPHAN_HOURS = parseInt(process.env.ORPHAN_HOURS || '4', 10);
 
 function getPrioridad(state_travel) {
   const s = (state_travel || '').toLowerCase().trim();
@@ -303,24 +294,15 @@ async function syncPendientes() {
     const hasta  = fmt(en7dias);
 
     const path = `/Travel/search?dateStart=${encodeURIComponent(desde)}&dateEnd=${encodeURIComponent(hasta)}&size=200&page=1`;
-    console.log(`⏳ Consultando: ${path}`);
-
     const data = await safeFetch(path, []);
     const arr = Array.isArray(data) ? data : data.data || data.result || [];
     cache.pendientes.data = arr;
     cache.pendientes.ts   = Date.now();
-    console.log(`⏳ Travel/search devolvió: ${arr.length} viajes`);
-    if(arr.length > 0){
-      console.log(`⏳ CAMPOS: ${Object.keys(arr[0]).join(', ')}`);
-      console.log(`⏳ Muestra: ${arr.slice(0,3).map(v=>`${v.trip_number}=${v.schedulate_origin||v.license_plate}`).join(' | ')}`);
-    } else {
-      console.log(`⏳ Sin resultados con fechas — intentando sin filtro de fecha...`);
+    if (!arr.length) {
       const data2 = await safeFetch(`/Travel/search?size=200&page=1`, []);
       const arr2 = Array.isArray(data2) ? data2 : data2.data || data2.result || [];
       cache.pendientes.data = arr2;
       cache.pendientes.ts   = Date.now();
-      console.log(`⏳ Fallback: ${arr2.length} viajes`);
-      if(arr2.length > 0) console.log(`⏳ CAMPOS fallback: ${Object.keys(arr2[0]).join(', ')}`);
     }
   } catch(e) {
     console.error("❌ Error sync pendientes:", e.message);
@@ -516,9 +498,6 @@ app.get("/api/pendientes", async (req, res) => {
       return dA - dB;
     });
 
-    console.log(`⏳ Cache pendientes: ${arr.length} total, activeIds: ${activeIds.size}`);
-    if(arr.length > 0) console.log(`⏳ Muestra schedulate_origin:`, arr.slice(0,3).map(v=>`${v.trip_number}=${v.schedulate_origin}`).join(' | '));
-    console.log(`⏳ Resultado filtrado: ${filtrados.length} futuros pendientes`);
     res.json(filtrados);
   } catch(err) {
     console.warn("⚠️  /api/pendientes error:", err.message);
@@ -722,21 +701,6 @@ async function syncSolicitudes() {
       return;
     }
 
-    if (!_diagSolDone) {
-      const kv = cache.viajes.data.length    ? Object.keys(cache.viajes.data[0])    : [];
-      const kp = cache.pendientes.data.length ? Object.keys(cache.pendientes.data[0]) : [];
-      console.log('🔍 [SOL-DIAG] Campos viajes:',       kv.join(', '));
-      console.log('🔍 [SOL-DIAG] ¿remission viajes?:',   kv.includes('remission'));
-      console.log('🔍 [SOL-DIAG] ¿number_order viajes?:', kv.includes('number_order'));
-      console.log('🔍 [SOL-DIAG] Campos pendientes:',   kp.join(', '));
-      console.log('🔍 [SOL-DIAG] ¿remission pendientes?:', kp.includes('remission'));
-      const mv = cache.viajes.data.slice(0,5).map(v=>`${v.trip_number}→"${v.remission||''}"`);
-      const mp = cache.pendientes.data.slice(0,5).map(v=>`${v.trip_number}→"${v.remission||''}"`);
-      console.log('🔍 [SOL-DIAG] Muestra remisiones viajes:',    mv.join(' | ') || 'ninguna');
-      console.log('🔍 [SOL-DIAG] Muestra remisiones pendientes:', mp.join(' | ') || 'ninguna');
-      _diagSolDone = true;
-    }
-
     const resumeByRemission     = new Map();
     const resumeByTripNumber    = new Map();
     const pendientesByRemission = new Map();
@@ -801,6 +765,7 @@ async function syncSolicitudes() {
         if (vR) {
           const g  = _grupo(vR.state_travel);
           const ne = g || 'confirmado';
+          console.log(`✅ [MATCH] ${codigo_solicitud} → trip ${vR.trip_number} (${vR.license_plate || '—'}) | pendiente → ${ne}`);
           updates.push({ id, fields: _fields(vR, ne, ahora, true) });
           insertsNotif.push(..._notifs(sol, ne, vR, 'pendiente'));
           continue;
@@ -809,6 +774,7 @@ async function syncSolicitudes() {
         if (vP) {
           const g  = _grupo(vP.state_travel);
           const ne = (g === 'en_ruta' || g === 'completado' || g === 'cancelado') ? g : 'confirmado';
+          console.log(`✅ [MATCH] ${codigo_solicitud} → trip ${vP.trip_number} (pendientes) | pendiente → ${ne}`);
           updates.push({ id, fields: _fields(vP, ne, ahora, true) });
           insertsNotif.push(..._notifs(sol, ne, vP, 'pendiente'));
         }
@@ -820,6 +786,7 @@ async function syncSolicitudes() {
         if (vR) {
           const g = _grupo(vR.state_travel);
           if (g === 'en_ruta' || g === 'completado' || g === 'cancelado') {
+            console.log(`🔄 [ESTADO] ${codigo_solicitud}: confirmado → ${g}`);
             updates.push({ id, fields: _fields(vR, g, ahora, false) });
             insertsNotif.push(..._notifs(sol, g, vR, 'confirmado'));
           } else {
@@ -836,6 +803,7 @@ async function syncSolicitudes() {
         if (vR) {
           const g = _grupo(vR.state_travel);
           if (g === 'completado' || g === 'cancelado') {
+            console.log(`🔄 [ESTADO] ${codigo_solicitud}: en_ruta → ${g}`);
             updates.push({ id, fields: _fields(vR, g, ahora, false) });
             insertsNotif.push(..._notifs(sol, g, vR, 'en_ruta'));
           } else {
@@ -878,6 +846,7 @@ async function syncSolicitudes() {
     for (const { id, fields } of updates) {
       const r = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(id)}`, 'PATCH', fields);
       if (r !== null) updOk++;
+      else console.error(`❌ [syncSolicitudes] Supabase rechazó PATCH para solicitud ${id} — campos: ${Object.keys(fields).join(', ')}`);
     }
     for (let i = 0; i < insertsNotif.length; i += 50) {
       await sbFetch('/notificaciones_cliente', 'POST', insertsNotif.slice(i, i + 50));
@@ -1728,11 +1697,9 @@ app.post('/servicios', requireClienteAuth, async (req, res) => {
 // PATCH /servicios/:id
 app.patch('/servicios/:id', requireClienteAuth, async (req, res) => {
   try {
-    console.log(`🔧 PATCH /servicios/${req.params.id} — body keys: ${Object.keys(req.body || {}).join(', ')}`);
     const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&limit=1`) || [];
     if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
     const sol = sols[0];
-    console.log(`🔧 sol encontrado: estado=${sol.estado} empresa=${sol.empresa_cliente_id} req.empresa=${req.empresaId}`);
     if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
     if (sol.estado !== 'pendiente') return res.status(400).json({ error: `No editable en estado: ${sol.estado}` });
 
@@ -1746,14 +1713,12 @@ app.patch('/servicios/:id', requireClienteAuth, async (req, res) => {
     if (tipo_operacion)  patch.tipo_operacion            = tipo_operacion;
     if (external_ref !== undefined) patch.external_ref  = external_ref || null;
 
-    console.log(`🔧 patch a aplicar: ${JSON.stringify(patch)}`);
     if (Object.keys(patch).length === 0) {
       return res.json(mapSolicitud(sol));
     }
     const result = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}`, 'PATCH', patch);
-    console.log(`🔧 resultado Supabase: ${JSON.stringify(result)}`);
     if (result === null) {
-      console.error(`❌ PATCH /servicios/${req.params.id}: Supabase rechazó el update`);
+      console.error(`❌ PATCH /servicios/${req.params.id}: Supabase rechazó el update — campos: ${Object.keys(patch).join(', ')}`);
       return res.status(500).json({ error: 'No se pudo guardar en la base de datos' });
     }
     const actualizado = Array.isArray(result) ? result[0] : result;
@@ -1895,9 +1860,10 @@ app.get("/health", (req, res) => {
 });
 
 // ─── INICIO ─────────────────────────────────────────────
-app.listen(process.env.PORT || 3000, async () => {
-  console.log("🚀 INLOP Torre de Control — Servidor iniciado");
-  console.log("📊 Modo caché: ControlT se consulta 1 vez/minuto en background");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, async () => {
+  console.log(`🚀 INLOP Torre de Control — Servidor iniciado en puerto ${PORT}`);
+  console.log(`📊 Sync: viajes cada 60s | solicitudes cada 65s | planeados cada 5min`);
 
   try {
     await refreshToken();
