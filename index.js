@@ -1800,7 +1800,7 @@ app.get('/catalogos/agencias', requireClienteAuth, async (req, res) => {
 
 // GET /catalogos/vehiculos
 app.get('/catalogos/vehiculos', (req, res) => {
-  res.json(['NHR', 'TURBO', 'NPR', 'NQR', 'MINIMULA', 'TURBO PLATÓN']);
+  res.json(['NHR', 'NKR', 'TURBO', 'SENCILLO', 'DOBLE TROQUE', 'MINIMULA', 'TRACTOMULA']);
 });
 
 // Planeados — desde Supabase
