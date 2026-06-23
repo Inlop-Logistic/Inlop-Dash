@@ -242,7 +242,7 @@ const ESTADO_PRIORIDAD = {
 
 // ─── GRUPOS DE ESTADO — PORTAL CLIENTE ──────────────────
 const GRUPO_CONFIRMADO  = new Set(['sin asignar', 'sin activar']);
-const GRUPO_EN_RUTA     = new Set(['iniciado', 'cargando', 'en tránsito', 'en transito', 'pernoctando', 'descargando']);
+const GRUPO_EN_RUTA     = new Set(['iniciado', 'cargando', 'en tránsito', 'en transito', 'en transíto', 'en tránsíto', 'pernoctando', 'descargando']);
 const GRUPO_COMPLETADO  = new Set(['completado', 'finalizado']);
 const GRUPO_CANCELADO   = new Set(['cancelado']);
 const ORPHAN_HOURS      = parseInt(process.env.ORPHAN_HOURS || '4', 10);
