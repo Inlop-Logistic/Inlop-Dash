@@ -555,6 +555,7 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.73rem;font
         <div class="kpi-strip-h" id="sol-kpis-strip">
           <div class="kpi-h" style="--kpi-c:var(--accent)"><div class="kpi-h-label">Recibidas</div><div class="kpi-h-val" id="ks-recibidas">—</div><div class="kpi-h-sub">en el período</div></div>
           <div class="kpi-h" style="--kpi-c:var(--green)"><div class="kpi-h-label">Colocadas</div><div class="kpi-h-val" id="ks-colocadas">—</div><div class="kpi-h-sub">aprobadas</div></div>
+          <div class="kpi-h" style="--kpi-c:#8b5cf6"><div class="kpi-h-label">Finalizadas</div><div class="kpi-h-val" id="ks-finalizadas">—</div><div class="kpi-h-sub">completadas</div></div>
           <div class="kpi-h" style="--kpi-c:var(--red)"><div class="kpi-h-label">Canceladas</div><div class="kpi-h-val" id="ks-canceladas">—</div><div class="kpi-h-sub">cerradas</div></div>
           <div class="kpi-h" style="--kpi-c:var(--teal)"><div class="kpi-h-label">% Atención</div><div class="kpi-h-val" id="ks-pct">—</div><div class="kpi-h-sub">colocadas / recibidas</div></div>
         </div>
@@ -569,6 +570,8 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.73rem;font
             <option value="">Todos los estados</option>
             <option value="pendiente">Pendiente</option>
             <option value="aprobado">Aprobado</option>
+            <option value="en_ruta">En ruta</option>
+            <option value="completado">Completado</option>
             <option value="cancelado">Cancelado</option>
           </select>
           <select id="sol-fil-cliente" onchange="solApplyFilters()" style="padding:.32rem .6rem;background:var(--bg1);border:1px solid var(--border2);border-radius:5px;color:var(--text1);font-size:.7rem;font-family:var(--sans)">
@@ -3266,16 +3269,18 @@ function solApplyFilters() {
 }
 
 function solUpdateKPIs() {
-  const recibidas  = solFiltrados.length;
-  const colocadas  = solFiltrados.filter(s => s.estado === 'aprobado').length;
-  const canceladas = solFiltrados.filter(s => s.estado === 'cancelado').length;
-  const pct        = recibidas > 0 ? Math.round((colocadas / recibidas) * 100) : null;
+  const recibidas   = solData.length;
+  const colocadas   = solData.filter(s => s.estado === 'aprobado').length;
+  const finalizadas = solData.filter(s => s.estado === 'completado').length;
+  const canceladas  = solData.filter(s => s.estado === 'cancelado').length;
+  const pct         = recibidas > 0 ? Math.round(((colocadas + finalizadas) / recibidas) * 100) : null;
 
   const sv = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  sv('ks-recibidas',  recibidas);
-  sv('ks-colocadas',  colocadas);
-  sv('ks-canceladas', canceladas);
-  sv('ks-pct',        pct !== null ? pct + '%' : '—');
+  sv('ks-recibidas',   recibidas);
+  sv('ks-colocadas',   colocadas);
+  sv('ks-finalizadas', finalizadas);
+  sv('ks-canceladas',  canceladas);
+  sv('ks-pct',         pct !== null ? pct + '%' : '—');
 
   // Badge en pestaña — pendientes del período
   const pend  = solData.filter(s => s.estado === 'pendiente').length;
@@ -3341,9 +3346,11 @@ function solRenderTabla() {
 
   const badgeEstado = estado => {
     const map = {
-      pendiente: { cls: 'b-yellow', sym: '●', label: 'PENDIENTE' },
-      aprobado:  { cls: 'b-blue',   sym: '✓', label: 'APROBADO'  },
-      cancelado: { cls: 'b-red',    sym: '✕', label: 'CANCELADO' },
+      pendiente:  { cls: 'b-yellow',  sym: '●', label: 'PENDIENTE'  },
+      aprobado:   { cls: 'b-blue',    sym: '✓', label: 'APROBADO'   },
+      en_ruta:    { cls: 'b-orange',  sym: '▶', label: 'EN RUTA'    },
+      completado: { cls: 'b-green',   sym: '✔', label: 'COMPLETADO' },
+      cancelado:  { cls: 'b-red',     sym: '✕', label: 'CANCELADO'  },
     };
     const b = map[estado] || { cls: 'b-gray', sym: '○', label: (estado || '').toUpperCase() };
     return `<span class="badge ${b.cls}">${b.sym} ${b.label}</span>`;
@@ -3539,9 +3546,11 @@ function solAbrirPanel(id) {
     </div>`;
 
   const estadoBadge = {
-    pendiente: '<span class="badge b-yellow">● PENDIENTE</span>',
-    aprobado:  '<span class="badge b-blue">✓ APROBADO</span>',
-    cancelado: '<span class="badge b-red">✕ CANCELADO</span>',
+    pendiente:  '<span class="badge b-yellow">● PENDIENTE</span>',
+    aprobado:   '<span class="badge b-blue">✓ APROBADO</span>',
+    en_ruta:    '<span class="badge b-orange">▶ EN RUTA</span>',
+    completado: '<span class="badge b-green">✔ COMPLETADO</span>',
+    cancelado:  '<span class="badge b-red">✕ CANCELADO</span>',
   }[s.estado] || s.estado;
 
   document.getElementById('sol-panel-body').innerHTML = `

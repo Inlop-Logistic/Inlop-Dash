@@ -551,7 +551,7 @@ app.get('/api/solicitudes', async (req, res) => {
       const dbEstado = estado === 'aprobado' ? 'confirmado' : estado;
       qs += `&estado=eq.${encodeURIComponent(dbEstado)}`;
     } else {
-      qs += `&estado=in.(pendiente,confirmado,en_ruta,cancelado)`;
+      qs += `&estado=in.(pendiente,confirmado,en_ruta,completado,cancelado)`;
     }
 
     // Anclar al huso de Colombia (UTC-5) para que "hoy" coincida con el día local del operador
