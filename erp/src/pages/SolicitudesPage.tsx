@@ -1,16 +1,25 @@
 import { useEffect, useState, useMemo } from "react";
-import { getSolicitudes, cambiarEstadoSolicitud } from "@/lib/api";
-import type { Solicitud } from "@/lib/api";
 import {
-  RefreshCw, Search, X, ChevronRight,
+  getSolicitudes, getSolicitudDetalle, cambiarEstadoSolicitud,
+} from "@/lib/api";
+import type { Solicitud, SolicitudDetalle, HistorialEstado } from "@/lib/api";
+import {
+  RefreshCw, Search, ChevronRight,
   Clock, CheckCircle, Truck, XCircle, ClipboardList,
+  User, Car, MapPin, Calendar, FileText, AlertCircle,
 } from "lucide-react";
+import {
+  EstadoBadge, CanalBadge, ESTADO_CFG,
+  KpiCard, PageHeader, Card,
+  SidePanel, PanelSection, InfoRow,
+  Button,
+} from "@/components/ui";
+import { DataTable } from "@/components/ui";
+import type { Column } from "@/components/ui";
 
-// ─── Utilidades ──────────────────────────────────────────────────────────────
+// ── Utilidades ─────────────────────────────────────────────────────────────────
 
-function hoy() {
-  return new Date().toISOString().slice(0, 10);
-}
+function hoy() { return new Date().toISOString().slice(0, 10); }
 
 function hace7dias() {
   const d = new Date();
@@ -18,170 +27,354 @@ function hace7dias() {
   return d.toISOString().slice(0, 10);
 }
 
-function fmtFecha(iso: string) {
+function fmtFecha(iso: string | null | undefined) {
+  if (!iso) return "—";
   return new Date(iso).toLocaleDateString("es-CO", {
     day: "2-digit", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
 }
 
-// ─── Badge de estado ─────────────────────────────────────────────────────────
-
-const ESTADO_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  pendiente:  { label: "Pendiente",  color: "var(--amber)",   bg: "var(--amber-bg)"  },
-  aprobado:   { label: "Aprobado",   color: "var(--info)",    bg: "var(--info-bg)"   },
-  en_ruta:    { label: "En ruta",    color: "#7C3AED",        bg: "#F5F3FF"          },
-  completado: { label: "Completado", color: "var(--success)", bg: "var(--success-bg)"},
-  cancelado:  { label: "Cancelado",  color: "var(--inlop-red)", bg: "#FFF1F2"        },
-};
-
-function EstadoBadge({ estado }: { estado: string }) {
-  const cfg = ESTADO_CONFIG[estado] ?? { label: estado, color: "var(--gray-500)", bg: "var(--gray-100)" };
-  return (
-    <span
-      className="inline-flex items-center font-semibold text-[11px] px-2.5 py-1 rounded-full"
-      style={{ background: cfg.bg, color: cfg.color }}
-    >
-      {cfg.label}
-    </span>
-  );
+function fmtFechaCort(iso: string | null | undefined) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("es-CO", {
+    day: "2-digit", month: "short", year: "numeric",
+  });
 }
 
-function CanalBadge({ canal }: { canal: string }) {
-  const isApp = canal === "APP";
-  return (
-    <span
-      className="inline-flex items-center font-semibold text-[10px] px-2 py-0.5 rounded-full"
-      style={{
-        background: isApp ? "var(--navy)" : "var(--gray-100)",
-        color:      isApp ? "#fff"        : "var(--gray-500)",
-      }}
-    >
-      {canal}
-    </span>
-  );
-}
+// ── Timeline de estados ────────────────────────────────────────────────────────
 
-// ─── KPI card ────────────────────────────────────────────────────────────────
+const ESTADO_FLOW = ["pendiente", "aprobado", "en_ruta", "completado"] as const;
 
-function KpiCard({ label, value, color, bg, icon }: {
-  label: string; value: number; color: string; bg: string; icon: React.ReactNode;
+function Timeline({ historial, estadoActual }: {
+  historial: HistorialEstado[];
+  estadoActual: string;
 }) {
+  const isCancelado = estadoActual === "cancelado";
+
+  if (isCancelado) {
+    const entrada = historial.find((h) => h.estado === "cancelado");
+    return (
+      <div className="flex items-start gap-3">
+        <div
+          className="h-7 w-7 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+          style={{ background: "#FFE4E6" }}
+        >
+          <XCircle className="w-3.5 h-3.5" style={{ color: "#E30613" }} />
+        </div>
+        <div>
+          <div className="text-[13px] font-semibold" style={{ color: "#9F1239" }}>Cancelado</div>
+          {entrada && (
+            <div className="text-[11px] mt-0.5" style={{ color: "var(--gray-400)" }}>
+              {fmtFecha(entrada.cambiado_en)}
+              {entrada.cambiado_por ? ` · ${entrada.cambiado_por}` : ""}
+            </div>
+          )}
+          {entrada?.notas && (
+            <div className="text-[12px] mt-1 px-2.5 py-1.5 rounded-lg" style={{ background: "#FFF1F2", color: "#9F1239" }}>
+              {entrada.notas}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const currentIdx = ESTADO_FLOW.indexOf(estadoActual as typeof ESTADO_FLOW[number]);
+
   return (
-    <div
-      className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3"
-      style={{ border: "1px solid var(--gray-100)", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}
-    >
-      <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: bg, color }}>
-        {icon}
-      </div>
-      <div>
-        <div className="font-bold text-[22px] leading-none" style={{ color: "var(--gray-800)" }}>{value}</div>
-        <div className="text-[11px] mt-0.5" style={{ color: "var(--gray-500)" }}>{label}</div>
-      </div>
+    <div className="flex flex-col gap-0">
+      {ESTADO_FLOW.map((estado, idx) => {
+        const done    = idx <= currentIdx;
+        const active  = idx === currentIdx;
+        const isLast  = idx === ESTADO_FLOW.length - 1;
+        const entrada = historial.find((h) => h.estado === estado);
+        const cfg     = ESTADO_CFG[estado];
+
+        return (
+          <div key={estado} className="flex items-start gap-3">
+            {/* Línea + dot */}
+            <div className="flex flex-col items-center shrink-0" style={{ width: 28 }}>
+              <div
+                className="h-7 w-7 rounded-full flex items-center justify-center z-10"
+                style={{
+                  background: done ? (active ? cfg.bg : "#D1FAE5") : "var(--gray-100)",
+                  border: active ? `2px solid ${cfg.dot}` : "2px solid transparent",
+                  transition: "all 0.2s",
+                }}
+              >
+                {done && !active && (
+                  <CheckCircle className="w-3.5 h-3.5" style={{ color: "#059669" }} />
+                )}
+                {active && (
+                  <div className="w-2 h-2 rounded-full" style={{ background: cfg.dot }} />
+                )}
+                {!done && (
+                  <div className="w-2 h-2 rounded-full" style={{ background: "var(--gray-300)" }} />
+                )}
+              </div>
+              {!isLast && (
+                <div
+                  className="w-0.5 flex-1 min-h-[20px]"
+                  style={{ background: done && !active ? "#D1FAE5" : "var(--gray-100)", marginTop: 2 }}
+                />
+              )}
+            </div>
+
+            {/* Texto */}
+            <div className="pb-4 min-w-0 flex-1">
+              <div
+                className="text-[13px] font-semibold"
+                style={{ color: active ? cfg.color : done ? "var(--gray-700)" : "var(--gray-300)" }}
+              >
+                {cfg?.label ?? estado}
+              </div>
+              {entrada ? (
+                <div className="text-[11px] mt-0.5" style={{ color: "var(--gray-400)" }}>
+                  {fmtFecha(entrada.cambiado_en)}
+                  {entrada.cambiado_por ? ` · ${entrada.cambiado_por}` : ""}
+                </div>
+              ) : (
+                <div className="text-[11px] mt-0.5" style={{ color: "var(--gray-300)" }}>
+                  {done ? "Completado" : "Pendiente"}
+                </div>
+              )}
+              {entrada?.notas && (
+                <div className="text-[11px] mt-1 italic" style={{ color: "var(--gray-400)" }}>
+                  {entrada.notas}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-// ─── Panel detalle ───────────────────────────────────────────────────────────
+// ── Panel de detalle completo ──────────────────────────────────────────────────
 
-function PanelDetalle({
-  sol, onClose, onEstado,
+function DetalleSolicitud({
+  solicitud,
+  onClose,
+  onEstado,
 }: {
-  sol: Solicitud;
+  solicitud: Solicitud;
   onClose: () => void;
-  onEstado: (id: string, estado: string) => void;
+  onEstado: (id: string, estado: string) => Promise<void>;
 }) {
-  const [loading, setLoading] = useState(false);
+  const [detalle, setDetalle] = useState<SolicitudDetalle | null>(null);
+  const [loadingDetalle, setLoadingDetalle] = useState(true);
+  const [accionLoading, setAccionLoading] = useState(false);
+  const [errorDetalle, setErrorDetalle] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoadingDetalle(true);
+    setErrorDetalle(null);
+    getSolicitudDetalle(solicitud.id)
+      .then(setDetalle)
+      .catch((e) => {
+        setErrorDetalle(e instanceof Error ? e.message : "Error al cargar detalle");
+        setDetalle(null);
+      })
+      .finally(() => setLoadingDetalle(false));
+  }, [solicitud.id]);
 
   const accion = async (estado: string) => {
-    setLoading(true);
-    await onEstado(sol.id, estado);
-    setLoading(false);
+    setAccionLoading(true);
+    try {
+      await onEstado(solicitud.id, estado);
+    } finally {
+      setAccionLoading(false);
+    }
   };
 
-  return (
-    <div
-      className="fixed inset-0 z-40 flex justify-end"
-      style={{ background: "rgba(0,0,0,0.3)" }}
-      onClick={onClose}
-    >
-      <div
-        className="h-full w-full max-w-[420px] bg-white flex flex-col overflow-y-auto"
-        style={{ boxShadow: "-4px 0 24px rgba(0,0,0,0.12)" }}
-        onClick={(e) => e.stopPropagation()}
+  const d = detalle;
+  const tieneCondutor = d?.conductor_nombre;
+  const tieneVehiculo = d?.vehiculo_placa;
+  const historial     = d?.historial ?? [];
+
+  const footer = (solicitud.estado === "pendiente" || solicitud.estado === "aprobado") ? (
+    <div className="px-6 py-4 flex flex-col gap-2.5">
+      {solicitud.estado === "pendiente" && (
+        <Button
+          variant="primary"
+          size="lg"
+          className="w-full justify-center"
+          loading={accionLoading}
+          onClick={() => accion("aprobado")}
+        >
+          ✓ Aprobar solicitud
+        </Button>
+      )}
+      <Button
+        variant="danger"
+        size="lg"
+        className="w-full justify-center"
+        loading={accionLoading}
+        onClick={() => accion("cancelado")}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: "1px solid var(--gray-100)" }}>
-          <div>
-            <div className="font-bold text-[16px]" style={{ color: "var(--navy)" }}>
-              {sol.codigo_solicitud}
-            </div>
-            {sol.external_ref && (
-              <div className="text-[12px] mt-0.5" style={{ color: "var(--gray-400)" }}>
-                Ref: {sol.external_ref}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <EstadoBadge estado={sol.estado} />
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-              <X className="w-4 h-4" style={{ color: "var(--gray-500)" }} />
-            </button>
-          </div>
-        </div>
+        ✕ Cancelar solicitud
+      </Button>
+    </div>
+  ) : null;
 
-        {/* Campos */}
-        <div className="flex-1 px-6 py-5 flex flex-col gap-4">
-          <Row label="Cliente"         value={sol.cliente} />
-          <Row label="Agencia"         value={sol.agencia} />
-          <Row label="Canal"           value={<CanalBadge canal={sol.canal} />} />
-          <Row label="Solicitante"     value={sol.solicitante ?? "—"} />
-          <Row label="Vehículo"        value={sol.tipo_vehiculo} />
-          <Row label="Operación"       value={sol.tipo_operacion === "urbana" ? "Urbana" : "Nacional"} />
-          <Row label="Ruta"            value={`${sol.origen} → ${sol.destino}`} />
-          <Row label="Fecha requerida" value={fmtFecha(sol.fecha_requerida)} />
-          <Row label="Fecha solicitud" value={fmtFecha(sol.creado_en)} />
-        </div>
-
-        {/* Acciones */}
-        {(sol.estado === "pendiente" || sol.estado === "aprobado") && (
-          <div className="px-6 py-5 flex flex-col gap-2.5" style={{ borderTop: "1px solid var(--gray-100)" }}>
-            {sol.estado === "pendiente" && (
-              <button
-                disabled={loading}
-                onClick={() => accion("aprobado")}
-                className="w-full font-semibold text-[13px] py-3 rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-50"
-                style={{ background: "var(--navy)" }}
-              >
-                ✓ Aprobar solicitud
-              </button>
-            )}
-            <button
-              disabled={loading}
-              onClick={() => accion("cancelado")}
-              className="w-full font-semibold text-[13px] py-3 rounded-xl transition-all hover:bg-red-50 disabled:opacity-50"
-              style={{ border: "1.5px solid #FECDD3", color: "var(--inlop-red)" }}
-            >
-              ✕ Cancelar solicitud
-            </button>
+  return (
+    <SidePanel
+      open
+      onClose={onClose}
+      title={solicitud.codigo_solicitud}
+      subtitle={solicitud.external_ref ? `Ref. ${solicitud.external_ref}` : undefined}
+      headerRight={<EstadoBadge estado={solicitud.estado} />}
+      footer={footer}
+      width="480px"
+    >
+      {/* Info del cliente */}
+      <PanelSection title="Cliente y solicitud" icon={<FileText className="w-3.5 h-3.5" />} first>
+        <InfoRow label="Cliente"     value={solicitud.cliente} />
+        <InfoRow label="Agencia"     value={solicitud.agencia} />
+        <InfoRow label="Canal"       value={<CanalBadge canal={solicitud.canal} />} />
+        <InfoRow label="Solicitante" value={solicitud.solicitante} />
+        <InfoRow label="Operación"   value={solicitud.tipo_operacion === "urbana" ? "Urbana" : "Nacional"} />
+        {d?.notas && (
+          <div
+            className="mt-3 text-[12px] px-3 py-2.5 rounded-xl"
+            style={{ background: "var(--gray-50)", color: "var(--gray-600)", border: "1px solid var(--gray-100)" }}
+          >
+            {d.notas}
           </div>
         )}
-      </div>
-    </div>
+      </PanelSection>
+
+      {/* Ruta y fechas */}
+      <PanelSection title="Ruta y fechas" icon={<MapPin className="w-3.5 h-3.5" />}>
+        {/* Visual origen → destino */}
+        <div
+          className="flex items-center gap-2 mb-4 px-3 py-3 rounded-xl"
+          style={{ background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}
+        >
+          <div className="flex flex-col items-center gap-1 shrink-0">
+            <div className="w-2.5 h-2.5 rounded-full border-2" style={{ borderColor: "var(--navy)" }} />
+            <div className="w-0.5 h-5" style={{ background: "var(--gray-200)" }} />
+            <div className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--inlop-red)" }} />
+          </div>
+          <div className="flex flex-col gap-3 flex-1 min-w-0">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>Origen</div>
+              <div className="text-[13px] font-bold truncate" style={{ color: "var(--gray-800)" }}>{solicitud.origen}</div>
+            </div>
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>Destino</div>
+              <div className="text-[13px] font-bold truncate" style={{ color: "var(--gray-800)" }}>{solicitud.destino}</div>
+            </div>
+          </div>
+          {d?.distancia_km && (
+            <div className="shrink-0 text-right">
+              <div className="text-[18px] font-bold" style={{ color: "var(--navy)" }}>{d.distancia_km}</div>
+              <div className="text-[10px]" style={{ color: "var(--gray-400)" }}>km</div>
+            </div>
+          )}
+        </div>
+
+        <InfoRow label="Tipo vehículo"  value={solicitud.tipo_vehiculo} />
+        <InfoRow label="Fecha requerida" value={fmtFecha(solicitud.fecha_requerida)} />
+        {d?.fecha_inicio_ruta && <InfoRow label="Inicio ruta"    value={fmtFecha(d.fecha_inicio_ruta)} />}
+        {d?.fecha_fin_ruta    && <InfoRow label="Fin de ruta"    value={fmtFecha(d.fecha_fin_ruta)}    />}
+        <InfoRow label="Creada"          value={fmtFecha(solicitud.creado_en)} />
+        {d?.actualizado_en    && <InfoRow label="Actualizada"    value={fmtFecha(d.actualizado_en)}    />}
+      </PanelSection>
+
+      {/* Conductor */}
+      <PanelSection title="Conductor asignado" icon={<User className="w-3.5 h-3.5" />}>
+        {loadingDetalle ? (
+          <div className="text-[12px] py-2" style={{ color: "var(--gray-300)" }}>Cargando…</div>
+        ) : errorDetalle ? (
+          <div className="flex items-center gap-2 text-[12px]" style={{ color: "var(--gray-400)" }}>
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            No se pudo obtener información adicional
+          </div>
+        ) : tieneCondutor ? (
+          <div
+            className="flex items-center gap-3 p-3 rounded-xl"
+            style={{ background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}
+          >
+            <div
+              className="h-10 w-10 rounded-full flex items-center justify-center font-bold text-[14px] shrink-0"
+              style={{ background: "var(--navy)", color: "#fff" }}
+            >
+              {d!.conductor_nombre!.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="text-[13px] font-bold" style={{ color: "var(--gray-800)" }}>{d!.conductor_nombre}</div>
+              {d?.conductor_cedula   && <div className="text-[11px]" style={{ color: "var(--gray-400)" }}>CC {d.conductor_cedula}</div>}
+              {d?.conductor_telefono && <div className="text-[11px]" style={{ color: "var(--gray-400)" }}>📞 {d.conductor_telefono}</div>}
+              {d?.conductor_licencia && <div className="text-[11px]" style={{ color: "var(--gray-400)" }}>Lic. {d.conductor_licencia}</div>}
+            </div>
+          </div>
+        ) : (
+          <div
+            className="flex items-center gap-2 text-[12px] py-2 px-3 rounded-xl"
+            style={{ background: "var(--gray-50)", color: "var(--gray-400)" }}
+          >
+            <User className="w-3.5 h-3.5 shrink-0" />
+            Sin conductor asignado aún
+          </div>
+        )}
+      </PanelSection>
+
+      {/* Vehículo */}
+      <PanelSection title="Vehículo asignado" icon={<Car className="w-3.5 h-3.5" />}>
+        {loadingDetalle ? (
+          <div className="text-[12px] py-2" style={{ color: "var(--gray-300)" }}>Cargando…</div>
+        ) : tieneVehiculo ? (
+          <div
+            className="p-3 rounded-xl"
+            style={{ background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <div
+                  className="text-[18px] font-bold tracking-widest"
+                  style={{ color: "var(--navy)", fontFamily: "monospace" }}
+                >
+                  {d!.vehiculo_placa}
+                </div>
+                {d?.vehiculo_tipo && (
+                  <div className="text-[12px] mt-0.5" style={{ color: "var(--gray-500)" }}>{d.vehiculo_tipo}</div>
+                )}
+              </div>
+              {d?.vehiculo_capacidad && (
+                <div className="text-right">
+                  <div className="text-[16px] font-bold" style={{ color: "var(--gray-700)" }}>{d.vehiculo_capacidad}</div>
+                  <div className="text-[10px]" style={{ color: "var(--gray-400)" }}>capacidad</div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div
+            className="flex items-center gap-2 text-[12px] py-2 px-3 rounded-xl"
+            style={{ background: "var(--gray-50)", color: "var(--gray-400)" }}
+          >
+            <Car className="w-3.5 h-3.5 shrink-0" />
+            Sin vehículo asignado aún
+          </div>
+        )}
+      </PanelSection>
+
+      {/* Timeline */}
+      <PanelSection title="Historial de estados" icon={<Calendar className="w-3.5 h-3.5" />}>
+        {loadingDetalle ? (
+          <div className="text-[12px] py-2" style={{ color: "var(--gray-300)" }}>Cargando historial…</div>
+        ) : (
+          <Timeline historial={historial} estadoActual={solicitud.estado} />
+        )}
+      </PanelSection>
+    </SidePanel>
   );
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <span className="text-[12px] shrink-0" style={{ color: "var(--gray-400)" }}>{label}</span>
-      <span className="text-[13px] font-semibold text-right" style={{ color: "var(--gray-700)" }}>{value}</span>
-    </div>
-  );
-}
-
-// ─── Tabs de estado ───────────────────────────────────────────────────────────
+// ── Tabs ───────────────────────────────────────────────────────────────────────
 
 const TABS = [
   { id: "todos",      label: "Todos"      },
@@ -192,24 +385,104 @@ const TABS = [
   { id: "cancelado",  label: "Cancelados" },
 ];
 
-// ─── Página principal ─────────────────────────────────────────────────────────
+// ── Columnas de tabla ──────────────────────────────────────────────────────────
+
+const COLUMNS: Column<Solicitud>[] = [
+  {
+    key: "codigo",
+    header: "SOL",
+    width: "110px",
+    render: (s) => (
+      <div className="font-bold text-[13px]" style={{ color: "var(--navy)" }}>
+        {s.codigo_solicitud}
+      </div>
+    ),
+  },
+  {
+    key: "remision",
+    header: "Remisión",
+    width: "100px",
+    render: (s) => (
+      <span className="text-[12px]" style={{ color: "var(--gray-500)" }}>
+        {s.external_ref ?? "—"}
+      </span>
+    ),
+  },
+  {
+    key: "canal",
+    header: "Canal",
+    width: "70px",
+    render: (s) => <CanalBadge canal={s.canal} />,
+  },
+  {
+    key: "cliente",
+    header: "Cliente",
+    render: (s) => (
+      <div>
+        <div className="text-[13px] font-medium" style={{ color: "var(--gray-700)" }}>{s.cliente}</div>
+        <div className="text-[11px]" style={{ color: "var(--gray-400)" }}>{s.agencia}</div>
+      </div>
+    ),
+  },
+  {
+    key: "vehiculo",
+    header: "Vehículo",
+    width: "110px",
+    render: (s) => (
+      <span className="text-[12px]" style={{ color: "var(--gray-600)" }}>{s.tipo_vehiculo}</span>
+    ),
+  },
+  {
+    key: "ruta",
+    header: "Ruta",
+    render: (s) => (
+      <div className="text-[12px]" style={{ color: "var(--gray-600)" }}>
+        <div className="font-medium">{s.origen}</div>
+        <div style={{ color: "var(--gray-400)" }}>→ {s.destino}</div>
+      </div>
+    ),
+  },
+  {
+    key: "fecha",
+    header: "F. requerida",
+    width: "120px",
+    render: (s) => (
+      <span className="text-[12px]" style={{ color: "var(--gray-500)" }}>
+        {fmtFechaCort(s.fecha_requerida)}
+      </span>
+    ),
+  },
+  {
+    key: "estado",
+    header: "Estado",
+    width: "120px",
+    render: (s) => <EstadoBadge estado={s.estado} />,
+  },
+  {
+    key: "arrow",
+    header: "",
+    width: "32px",
+    render: () => <ChevronRight className="w-4 h-4" style={{ color: "var(--gray-300)" }} />,
+  },
+];
+
+// ── Página principal ───────────────────────────────────────────────────────────
 
 export function SolicitudesPage() {
-  const [data, setData]       = useState<Solicitud[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
-  const [desde, setDesde]     = useState(hace7dias());
-  const [hasta, setHasta]     = useState(hoy());
-  const [busqueda, setBusqueda] = useState("");
+  const [data, setData]           = useState<Solicitud[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
+  const [desde, setDesde]         = useState(hace7dias());
+  const [hasta, setHasta]         = useState(hoy());
+  const [busqueda, setBusqueda]   = useState("");
   const [tabEstado, setTabEstado] = useState("todos");
-  const [panelId, setPanelId] = useState<string | null>(null);
+  const [panelId, setPanelId]     = useState<string | null>(null);
 
   const cargar = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await getSolicitudes(desde, hasta);
-      setData(res);
+      setData(await getSolicitudes(desde, hasta));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al cargar solicitudes");
     } finally {
@@ -220,13 +493,11 @@ export function SolicitudesPage() {
   useEffect(() => { cargar(); }, [desde, hasta]);
 
   const handleEstado = async (id: string, estado: string) => {
-    try {
-      await cambiarEstadoSolicitud(id, estado);
-      setData((prev) => prev.map((s) => s.id === id ? { ...s, estado: estado as Solicitud["estado"] } : s));
-      if (estado === "cancelado" || estado === "aprobado") setPanelId(null);
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Error");
-    }
+    await cambiarEstadoSolicitud(id, estado);
+    setData((prev) =>
+      prev.map((s) => s.id === id ? { ...s, estado: estado as Solicitud["estado"] } : s)
+    );
+    setPanelId(null);
   };
 
   const filtradas = useMemo(() => {
@@ -248,8 +519,8 @@ export function SolicitudesPage() {
   const kpis = useMemo(() => ({
     recibidas:  data.length,
     pendientes: data.filter((s) => s.estado === "pendiente").length,
-    aprobadas:  data.filter((s) => s.estado === "aprobado" || s.estado === "en_ruta").length,
-    completadas:data.filter((s) => s.estado === "completado").length,
+    enGestion:  data.filter((s) => s.estado === "aprobado" || s.estado === "en_ruta").length,
+    completadas: data.filter((s) => s.estado === "completado").length,
     canceladas: data.filter((s) => s.estado === "cancelado").length,
   }), [data]);
 
@@ -259,54 +530,86 @@ export function SolicitudesPage() {
     <div className="p-6 flex flex-col gap-5">
 
       {/* Header */}
-      <div>
-        <h1 className="font-bold text-[22px]" style={{ color: "var(--navy)" }}>Solicitudes</h1>
-        <p className="text-[13px] mt-0.5" style={{ color: "var(--gray-400)" }}>
-          Solicitudes entrantes del Portal Cliente
-        </p>
-      </div>
+      <PageHeader
+        title="Solicitudes"
+        subtitle="Solicitudes entrantes del Portal Cliente"
+        icon={<ClipboardList className="w-5 h-5" />}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />}
+              loading={loading}
+              onClick={cargar}
+            >
+              Actualizar
+            </Button>
+          </div>
+        }
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <KpiCard label="Recibidas"   value={kpis.recibidas}   color="var(--info)"       bg="var(--info-bg)"    icon={<ClipboardList className="w-4 h-4" />} />
-        <KpiCard label="Pendientes"  value={kpis.pendientes}  color="var(--amber)"      bg="var(--amber-bg)"   icon={<Clock         className="w-4 h-4" />} />
-        <KpiCard label="En gestión"  value={kpis.aprobadas}   color="var(--navy)"       bg="var(--info-bg)"    icon={<Truck         className="w-4 h-4" />} />
-        <KpiCard label="Completadas" value={kpis.completadas} color="var(--success)"    bg="var(--success-bg)" icon={<CheckCircle   className="w-4 h-4" />} />
-        <KpiCard label="Canceladas"  value={kpis.canceladas}  color="var(--inlop-red)"  bg="#FFF1F2"           icon={<XCircle       className="w-4 h-4" />} />
+        <KpiCard
+          label="Recibidas"
+          value={kpis.recibidas}
+          icon={<ClipboardList className="w-4.5 h-4.5" />}
+          color="#1D4ED8" bg="#DBEAFE"
+          onClick={() => setTabEstado("todos")}
+        />
+        <KpiCard
+          label="Pendientes"
+          value={kpis.pendientes}
+          icon={<Clock className="w-4.5 h-4.5" />}
+          color="#B45309" bg="#FEF3C7"
+          onClick={() => setTabEstado("pendiente")}
+        />
+        <KpiCard
+          label="En gestión"
+          value={kpis.enGestion}
+          icon={<Truck className="w-4.5 h-4.5" />}
+          color="var(--navy)" bg="#DBEAFE"
+          onClick={() => setTabEstado("aprobado")}
+        />
+        <KpiCard
+          label="Completadas"
+          value={kpis.completadas}
+          icon={<CheckCircle className="w-4.5 h-4.5" />}
+          color="#065F46" bg="#D1FAE5"
+          onClick={() => setTabEstado("completado")}
+        />
+        <KpiCard
+          label="Canceladas"
+          value={kpis.canceladas}
+          icon={<XCircle className="w-4.5 h-4.5" />}
+          color="#9F1239" bg="#FFE4E6"
+          onClick={() => setTabEstado("cancelado")}
+        />
       </div>
 
-      {/* Filtros fecha + búsqueda */}
+      {/* Filtros */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <label className="text-[12px] font-medium" style={{ color: "var(--gray-500)" }}>Desde</label>
+          <label className="text-[12px] font-medium whitespace-nowrap" style={{ color: "var(--gray-500)" }}>Desde</label>
           <input
             type="date" value={desde}
             onChange={(e) => setDesde(e.target.value)}
             className="text-[13px] outline-none"
-            style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "8px 12px", color: "var(--gray-700)", background: "#fff" }}
+            style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "7px 12px", color: "var(--gray-700)", background: "#fff" }}
           />
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-[12px] font-medium" style={{ color: "var(--gray-500)" }}>Hasta</label>
+          <label className="text-[12px] font-medium whitespace-nowrap" style={{ color: "var(--gray-500)" }}>Hasta</label>
           <input
             type="date" value={hasta}
             onChange={(e) => setHasta(e.target.value)}
             className="text-[13px] outline-none"
-            style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "8px 12px", color: "var(--gray-700)", background: "#fff" }}
+            style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "7px 12px", color: "var(--gray-700)", background: "#fff" }}
           />
         </div>
-        <button
-          onClick={cargar}
-          disabled={loading}
-          className="flex items-center gap-1.5 text-[13px] font-semibold px-4 py-2 rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-50"
-          style={{ background: "var(--navy)" }}
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-          Actualizar
-        </button>
 
-        {/* Búsqueda */}
-        <div className="flex-1 min-w-[200px] relative">
+        <div className="flex-1 min-w-[220px] relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "var(--gray-400)" }} />
           <input
             type="text" value={busqueda}
@@ -318,15 +621,18 @@ export function SolicitudesPage() {
         </div>
       </div>
 
-      {/* Tabs estado */}
+      {/* Tabs */}
       <div className="flex items-center gap-1.5 flex-wrap">
         {TABS.map((t) => {
           const active = tabEstado === t.id;
+          const count  = t.id === "todos"
+            ? data.length
+            : data.filter((s) => s.estado === t.id).length;
           return (
             <button
               key={t.id}
               onClick={() => setTabEstado(t.id)}
-              className="font-semibold text-[12px] px-3.5 py-1.5 rounded-lg transition-all"
+              className="flex items-center gap-1.5 font-semibold text-[12px] px-3.5 py-1.5 rounded-lg transition-all"
               style={{
                 background: active ? "var(--navy)" : "#fff",
                 color:      active ? "#fff" : "var(--gray-600)",
@@ -334,84 +640,53 @@ export function SolicitudesPage() {
               }}
             >
               {t.label}
+              {count > 0 && (
+                <span
+                  className="text-[10px] font-bold min-w-[16px] text-center px-1 rounded-full"
+                  style={{
+                    background: active ? "rgba(255,255,255,0.2)" : "var(--gray-100)",
+                    color:      active ? "#fff" : "var(--gray-500)",
+                  }}
+                >
+                  {count}
+                </span>
+              )}
             </button>
           );
         })}
-        {filtradas.length !== data.length && (
-          <span className="text-[12px]" style={{ color: "var(--gray-400)" }}>· {filtradas.length} resultado{filtradas.length !== 1 ? "s" : ""}</span>
+        {busqueda && (
+          <span className="text-[12px]" style={{ color: "var(--gray-400)" }}>
+            · {filtradas.length} resultado{filtradas.length !== 1 ? "s" : ""}
+          </span>
         )}
       </div>
 
       {/* Tabla */}
-      <div
-        className="bg-white rounded-2xl overflow-hidden"
-        style={{ border: "1px solid var(--gray-100)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
-      >
+      <Card>
         {error ? (
           <div className="py-16 text-center">
+            <AlertCircle className="w-8 h-8 mx-auto mb-3" style={{ color: "var(--inlop-red)", opacity: 0.5 }} />
             <p className="text-[13px]" style={{ color: "var(--inlop-red)" }}>{error}</p>
-            <button onClick={cargar} className="mt-3 text-[12px] underline" style={{ color: "var(--navy)" }}>Reintentar</button>
-          </div>
-        ) : loading ? (
-          <div className="py-16 text-center text-[13px]" style={{ color: "var(--gray-400)" }}>
-            Cargando solicitudes…
-          </div>
-        ) : filtradas.length === 0 ? (
-          <div className="py-16 text-center text-[13px]" style={{ color: "var(--gray-400)" }}>
-            No hay solicitudes en el rango seleccionado.
+            <button onClick={cargar} className="mt-3 text-[12px] underline" style={{ color: "var(--navy)" }}>
+              Reintentar
+            </button>
           </div>
         ) : (
-          <table className="w-full text-left">
-            <thead>
-              <tr style={{ borderBottom: "1px solid var(--gray-100)" }}>
-                {["SOL", "Remisión", "Canal", "Cliente", "Agencia", "Vehículo", "Ruta", "Fecha requerida", "Estado", ""].map((h) => (
-                  <th key={h} className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtradas.map((s) => (
-                <tr
-                  key={s.id}
-                  className="transition-colors hover:bg-gray-50 cursor-pointer"
-                  style={{ borderBottom: "1px solid var(--gray-100)" }}
-                  onClick={() => setPanelId(s.id)}
-                >
-                  <td className="px-4 py-3">
-                    <div className="font-bold text-[13px]" style={{ color: "var(--navy)" }}>{s.codigo_solicitud}</div>
-                  </td>
-                  <td className="px-4 py-3 text-[12px]" style={{ color: "var(--gray-500)" }}>
-                    {s.external_ref ?? "—"}
-                  </td>
-                  <td className="px-4 py-3"><CanalBadge canal={s.canal} /></td>
-                  <td className="px-4 py-3 text-[13px] font-medium" style={{ color: "var(--gray-700)" }}>
-                    {s.cliente}
-                  </td>
-                  <td className="px-4 py-3 text-[12px]" style={{ color: "var(--gray-500)" }}>{s.agencia}</td>
-                  <td className="px-4 py-3 text-[12px]" style={{ color: "var(--gray-600)" }}>{s.tipo_vehiculo}</td>
-                  <td className="px-4 py-3 text-[12px]" style={{ color: "var(--gray-600)" }}>
-                    {s.origen} → {s.destino}
-                  </td>
-                  <td className="px-4 py-3 text-[12px]" style={{ color: "var(--gray-500)" }}>
-                    {fmtFecha(s.fecha_requerida)}
-                  </td>
-                  <td className="px-4 py-3"><EstadoBadge estado={s.estado} /></td>
-                  <td className="px-4 py-3">
-                    <ChevronRight className="w-4 h-4" style={{ color: "var(--gray-300)" }} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable
+            columns={COLUMNS}
+            rows={filtradas}
+            rowKey={(s) => s.id}
+            onRowClick={(s) => setPanelId(s.id)}
+            loading={loading}
+            emptyMessage="No hay solicitudes en el rango seleccionado."
+          />
         )}
-      </div>
+      </Card>
 
       {/* Panel detalle */}
       {panelSol && (
-        <PanelDetalle
-          sol={panelSol}
+        <DetalleSolicitud
+          solicitud={panelSol}
           onClose={() => setPanelId(null)}
           onEstado={handleEstado}
         />
