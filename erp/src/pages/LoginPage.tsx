@@ -24,35 +24,68 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "var(--gray-50)" }}>
-      <div className="w-full max-w-[400px]">
-
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
+    <div
+      className="flex-1 flex"
+      style={{ background: "var(--navy-dark)" }}
+    >
+      {/* Left panel — branding */}
+      <div
+        className="hidden lg:flex flex-col justify-between p-12 w-[420px] shrink-0"
+        style={{ background: "var(--navy)", borderRight: "1px solid rgba(255,255,255,0.06)" }}
+      >
+        <div className="flex items-center gap-3">
           <div
-            className="h-14 w-14 rounded-2xl flex items-center justify-center mb-4"
-            style={{ background: "var(--navy)" }}
+            className="h-10 w-10 rounded-xl flex items-center justify-center"
+            style={{ background: "var(--inlop-red)" }}
           >
-            <span className="text-white font-bold text-xl tracking-tight">IN</span>
+            <span className="text-white font-bold text-sm tracking-tight">IN</span>
           </div>
-          <h1 className="font-bold text-[20px]" style={{ color: "var(--navy)" }}>
-            INLOP ERP
-          </h1>
-          <p className="text-[13px] mt-0.5" style={{ color: "var(--gray-400)" }}>
-            Sistema interno de operaciones
+          <span className="text-white font-bold text-[15px] tracking-wide">INLOP ERP</span>
+        </div>
+
+        <div>
+          <p className="text-[28px] font-light leading-snug" style={{ color: "rgba(255,255,255,0.9)" }}>
+            Torre de Control<br />
+            <span className="font-bold">Operaciones</span>
+          </p>
+          <p className="mt-4 text-[13px] leading-relaxed" style={{ color: "rgba(255,255,255,0.45)" }}>
+            Gestión integral de solicitudes, viajes,<br />
+            cumplidos y flota en tiempo real.
           </p>
         </div>
 
-        {/* Card */}
-        <div
-          className="bg-white rounded-2xl p-7"
-          style={{ border: "1px solid var(--gray-100)", boxShadow: "0 4px 24px rgba(0,0,0,0.06)" }}
-        >
+        <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.25)" }}>
+          INLOP Logística SAS · Sistema interno
+        </p>
+      </div>
+
+      {/* Right panel — form */}
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="w-full max-w-[380px]">
+
+          {/* Mobile logo */}
+          <div className="flex items-center gap-3 mb-8 lg:hidden">
+            <div
+              className="h-9 w-9 rounded-xl flex items-center justify-center"
+              style={{ background: "var(--inlop-red)" }}
+            >
+              <span className="text-white font-bold text-sm">IN</span>
+            </div>
+            <span className="text-white font-bold text-[15px]">INLOP ERP</span>
+          </div>
+
+          <h2 className="font-bold text-[22px] mb-1" style={{ color: "#fff" }}>
+            Iniciar sesión
+          </h2>
+          <p className="text-[13px] mb-7" style={{ color: "rgba(255,255,255,0.45)" }}>
+            Accede con tu cuenta de operaciones
+          </p>
+
           <form onSubmit={submit} className="flex flex-col gap-4">
 
             {/* Email */}
             <div>
-              <label className="block text-[13px] font-semibold mb-1.5" style={{ color: "var(--gray-700)" }}>
+              <label className="block text-[12px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>
                 Correo electrónico
               </label>
               <input
@@ -63,20 +96,20 @@ export function LoginPage() {
                 required
                 className="w-full text-[14px] outline-none transition-colors"
                 style={{
-                  background: "#fff",
-                  border: "1.5px solid var(--gray-200)",
+                  background: "rgba(255,255,255,0.07)",
+                  border: "1.5px solid rgba(255,255,255,0.12)",
                   borderRadius: 10,
                   padding: "11px 14px",
-                  color: "var(--gray-800)",
+                  color: "#fff",
                 }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--navy)")}
-                onBlur={(e)  => (e.currentTarget.style.borderColor = "var(--gray-200)")}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.35)")}
+                onBlur={(e)  => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)")}
               />
             </div>
 
             {/* Password */}
             <div>
-              <label className="block text-[13px] font-semibold mb-1.5" style={{ color: "var(--gray-700)" }}>
+              <label className="block text-[12px] font-semibold mb-1.5 uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>
                 Contraseña
               </label>
               <div className="relative">
@@ -88,20 +121,20 @@ export function LoginPage() {
                   required
                   className="w-full text-[14px] outline-none transition-colors"
                   style={{
-                    background: "#fff",
-                    border: "1.5px solid var(--gray-200)",
+                    background: "rgba(255,255,255,0.07)",
+                    border: "1.5px solid rgba(255,255,255,0.12)",
                     borderRadius: 10,
                     padding: "11px 42px 11px 14px",
-                    color: "var(--gray-800)",
+                    color: "#fff",
                   }}
-                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--navy)")}
-                  onBlur={(e)  => (e.currentTarget.style.borderColor = "var(--gray-200)")}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.35)")}
+                  onBlur={(e)  => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)")}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPw((v) => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 p-1"
-                  style={{ color: "var(--gray-400)" }}
+                  style={{ color: "rgba(255,255,255,0.4)" }}
                 >
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -110,7 +143,7 @@ export function LoginPage() {
 
             {/* Error */}
             {error && (
-              <p className="text-[12px] px-3 py-2 rounded-lg" style={{ background: "#FFF1F2", color: "var(--inlop-red)" }}>
+              <p className="text-[12px] px-3 py-2 rounded-lg" style={{ background: "rgba(227,6,19,0.15)", color: "#FF6B75", border: "1px solid rgba(227,6,19,0.3)" }}>
                 {error}
               </p>
             )}
@@ -119,8 +152,8 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full font-semibold text-[14px] py-3 rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-1"
-              style={{ background: "var(--navy)" }}
+              className="w-full font-semibold text-[14px] py-3 rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
+              style={{ background: "var(--inlop-red)", boxShadow: "0 4px 16px rgba(227,6,19,0.3)" }}
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               {loading ? "Ingresando…" : "Ingresar"}
@@ -128,10 +161,6 @@ export function LoginPage() {
 
           </form>
         </div>
-
-        <p className="text-center text-[11px] mt-5" style={{ color: "var(--gray-400)" }}>
-          INLOP Logística SAS · Sistema interno
-        </p>
       </div>
     </div>
   );
