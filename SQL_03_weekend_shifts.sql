@@ -1,20 +1,21 @@
 -- ════════════════════════════════════════════════════════════════
 -- SCRIPT 03: weekend_shift_templates + weekend_shifts + weekend_shift_assignments
 -- Gestión de Turnos de Fin de Semana
--- Ejecutar DESPUÉS del Script 01
+-- FK a profiles.id (tabla oficial de usuarios del ERP)
+-- Ejecutar DESPUÉS del Script 02
 -- ════════════════════════════════════════════════════════════════
 
--- ── Catálogo de áreas (plantilla fija) ────────────────────────
+-- ── Catálogo de áreas/turnos (plantilla fija por empresa) ────
 CREATE TABLE IF NOT EXISTS weekend_shift_templates (
-  id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  departamento    TEXT NOT NULL,
-  area_nombre     TEXT NOT NULL,
-  area_code       TEXT UNIQUE NOT NULL,
-  color_hex       TEXT DEFAULT '#3b82f6',
-  covers_both_days BOOLEAN DEFAULT true,  -- true = 1 persona cubre sáb+dom; false = persona diferente c/día
-  is_critical     BOOLEAN DEFAULT true,   -- slot obligatorio antes de publicar
-  display_order   INT DEFAULT 0,
-  activo          BOOLEAN DEFAULT true
+  id               UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  departamento     TEXT NOT NULL,
+  area_nombre      TEXT NOT NULL,
+  area_code        TEXT UNIQUE NOT NULL,
+  color_hex        TEXT DEFAULT '#3b82f6',
+  covers_both_days BOOLEAN DEFAULT true,  -- true: 1 persona sáb+dom; false: persona diferente por día
+  is_critical      BOOLEAN DEFAULT true,  -- slot obligatorio antes de publicar
+  display_order    INT DEFAULT 0,
+  activo           BOOLEAN DEFAULT true
 );
 
 ALTER TABLE weekend_shift_templates ENABLE ROW LEVEL SECURITY;
@@ -50,14 +51,14 @@ CREATE TABLE IF NOT EXISTS weekend_shifts (
   status          TEXT DEFAULT 'draft'
     CHECK (status IN ('draft','published','closed')),
   notes           TEXT,
-  created_by      TEXT,
-  published_by    TEXT,
+  created_by      TEXT,       -- nombre del creador (display)
+  published_by    TEXT,       -- nombre de quien publicó (display)
   published_at    TIMESTAMPTZ,
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_ws_weekend_start ON weekend_shifts(weekend_start);
+CREATE INDEX IF NOT EXISTS idx_ws_weekend_start ON weekend_shifts(weekend_start DESC);
 CREATE INDEX IF NOT EXISTS idx_ws_status        ON weekend_shifts(status);
 
 ALTER TABLE weekend_shifts ENABLE ROW LEVEL SECURITY;
@@ -75,22 +76,32 @@ CREATE POLICY "ws_insert" ON weekend_shifts
 CREATE POLICY "ws_update" ON weekend_shifts
   FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
 
--- ── Asignaciones individuales por área/día ────────────────────
+-- ── Asignaciones individuales por área y día ─────────────────
 CREATE TABLE IF NOT EXISTS weekend_shift_assignments (
   id               UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  shift_id         UUID NOT NULL REFERENCES weekend_shifts(id) ON DELETE CASCADE,
+  shift_id         UUID NOT NULL
+    REFERENCES weekend_shifts(id) ON DELETE CASCADE,
   template_code    TEXT NOT NULL,
-  shift_day        TEXT NOT NULL CHECK (shift_day IN ('saturday','sunday','both')),
-  assigned_nombre  TEXT NOT NULL,
+
+  -- Día cubierto
+  shift_day        TEXT NOT NULL
+    CHECK (shift_day IN ('saturday','sunday','both')),
+
+  -- Persona asignada: FK a profiles + nombre desnormalizado para display
+  assigned_user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  assigned_nombre  TEXT NOT NULL DEFAULT '',   -- nombre en el momento de la asignación
+
   confirmed        BOOLEAN DEFAULT false,
   confirmed_at     TIMESTAMPTZ,
   notes            TEXT,
   created_at       TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(shift_id, template_code, shift_day)  -- 1 persona por slot
+
+  -- Un solo responsable por slot (shift + área + día)
+  UNIQUE(shift_id, template_code, shift_day)
 );
 
 CREATE INDEX IF NOT EXISTS idx_wsa_shift_id ON weekend_shift_assignments(shift_id);
-CREATE INDEX IF NOT EXISTS idx_wsa_code     ON weekend_shift_assignments(template_code);
+CREATE INDEX IF NOT EXISTS idx_wsa_user     ON weekend_shift_assignments(assigned_user_id);
 
 ALTER TABLE weekend_shift_assignments ENABLE ROW LEVEL SECURITY;
 

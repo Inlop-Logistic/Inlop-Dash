@@ -6330,7 +6330,7 @@ function fmtDate(d){
 var _profiles=[];
 
 async function loadProfiles(){
-  _profiles=await dbGet('inlop_profiles','activo=eq.true&order=nombre.asc');
+  _profiles=await dbGet('profiles','select=id,nombre,email,rol,departamento&order=nombre.asc');
   return _profiles;
 }
 
@@ -6340,9 +6340,9 @@ function fillSelect(selId,selected){
   sel.innerHTML='<option value="">— Sin asignar —</option>';
   _profiles.forEach(function(p){
     var opt=document.createElement('option');
-    opt.value=p.nombre;
+    opt.value=p.id;
     opt.textContent=p.nombre+(p.departamento?' · '+p.departamento:'');
-    if(p.nombre===selected)opt.selected=true;
+    if(p.id===selected)opt.selected=true;
     sel.appendChild(opt);
   });
 }
@@ -6502,7 +6502,7 @@ var CM=(function(){
         document.getElementById('cm-due-date').value=c.due_date||'';
         document.getElementById('cm-priority').value=c.priority||'medium';
         document.getElementById('cm-status').value=c.status||'open';
-        fillSelect('cm-responsible',c.responsible_nombre);
+        fillSelect('cm-responsible',c.responsible_id||'');
       }else{
         if(title)title.textContent='Nuevo Compromiso';
         document.getElementById('cm-id').value='';
@@ -6524,15 +6524,16 @@ var CM=(function(){
 
     save:async function(){
       var title=(document.getElementById('cm-title').value||'').trim();
-      var responsible=document.getElementById('cm-responsible').value;
+      var responsibleId=document.getElementById('cm-responsible').value;
+      var responsibleProfile=_profiles.find(function(p){return p.id===responsibleId;});
       var dueDate=document.getElementById('cm-due-date').value;
       if(!title){alert('El título es obligatorio.');return;}
-      if(!responsible){alert('Selecciona un responsable.');return;}
+      if(!responsibleId){alert('Selecciona un responsable.');return;}
       if(!dueDate){alert('La fecha límite es obligatoria.');return;}
       var btn=document.getElementById('cm-save-btn');
       if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Guardando...';}
       try{
-        var body={title:title,description:(document.getElementById('cm-description').value||'').trim()||null,observations:(document.getElementById('cm-observations').value||'').trim()||null,committee_date:document.getElementById('cm-committee-date').value||null,due_date:dueDate,priority:document.getElementById('cm-priority').value,status:document.getElementById('cm-status').value,responsible_nombre:responsible,updated_at:new Date().toISOString()};
+        var body={title:title,description:(document.getElementById('cm-description').value||'').trim()||null,observations:(document.getElementById('cm-observations').value||'').trim()||null,committee_date:document.getElementById('cm-committee-date').value||null,due_date:dueDate,priority:document.getElementById('cm-priority').value,status:document.getElementById('cm-status').value,responsible_id:responsibleId,responsible_nombre:responsibleProfile?responsibleProfile.nombre:'',updated_at:new Date().toISOString()};
         if(_editId){
           await dbUpdate('committee_commitments','id=eq.'+_editId,body);
         }else{
@@ -6790,7 +6791,7 @@ var SH=(function(){
       if(lbl)lbl.textContent=label||'Área';
       document.getElementById('sm-notes').value='';
       var curr=getA(code,day);
-      fillSelect('sm-person',curr?curr.assigned_nombre:'');
+      fillSelect('sm-person',curr?curr.assigned_user_id||'':'');
       document.getElementById('shift-modal').style.display='flex';
       document.getElementById('shift-modal-overlay').style.display='block';
     },
@@ -6802,7 +6803,9 @@ var SH=(function(){
     saveAssignment:async function(){
       var code=document.getElementById('sm-template-code').value;
       var day=document.getElementById('sm-day').value;
-      var nombre=document.getElementById('sm-person').value;
+      var assignedId=document.getElementById('sm-person').value;
+      var assignedProfile=_profiles.find(function(p){return p.id===assignedId;});
+      var nombre=assignedProfile?assignedProfile.nombre:'';
       var notes=(document.getElementById('sm-notes').value||'').trim();
       if(!_shift||!_shift.id)return;
       var btn=document.getElementById('sm-save-btn');
@@ -6812,7 +6815,7 @@ var SH=(function(){
           // Remove assignment
           try{await dbDelete('weekend_shift_assignments','shift_id=eq.'+_shift.id+'&template_code=eq.'+encodeURIComponent(code)+'&shift_day=eq.'+day);}catch(e){}
         }else{
-          await dbUpsert('weekend_shift_assignments',{shift_id:_shift.id,template_code:code,shift_day:day,assigned_nombre:nombre,notes:notes||null,confirmed:false,created_at:new Date().toISOString()},'shift_id,template_code,shift_day');
+          await dbUpsert('weekend_shift_assignments',{shift_id:_shift.id,template_code:code,shift_day:day,assigned_user_id:assignedId||null,assigned_nombre:nombre,notes:notes||null,confirmed:false,created_at:new Date().toISOString()},'shift_id,template_code,shift_day');
         }
         SH.closeModal();
         _assignments=await dbGet('weekend_shift_assignments','shift_id=eq.'+_shift.id);
