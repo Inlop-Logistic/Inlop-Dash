@@ -264,25 +264,8 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
 
         <div style={{ height: 1, background: "rgba(255,255,255,0.07)", margin: "0 var(--space-4)" }} />
 
-        {/* Footer usuario */}
-        <div className="py-4 px-3">
-          <div className={`flex items-center mb-3 overflow-hidden ${collapsed ? "justify-center gap-0" : "gap-2.5"}`}>
-            {/* Avatar decorativo — el nombre se muestra en texto adyacente */}
-            <div
-              aria-hidden="true"
-              className="shrink-0 h-8 w-8 rounded-[var(--radius-full)] flex items-center justify-center font-bold text-[var(--text-sm)]"
-              style={{ background: "var(--inlop-red)", color: "#fff" }}
-            >
-              {profile?.nombre?.charAt(0).toUpperCase() ?? "U"}
-            </div>
-            <div className="min-w-0" style={textStyle}>
-              <div className="text-[var(--text-base)] font-semibold text-white truncate">{profile?.nombre ?? "—"}</div>
-              <div className="text-[var(--text-xs)] truncate" style={{ color: "rgba(255,255,255,0.45)" }}>
-                {profile?.cargo ?? profile?.rol ?? "—"}
-              </div>
-            </div>
-          </div>
-
+        {/* Footer — únicamente acción de cierre de sesión; perfil en el Header */}
+        <div className="py-3 px-3">
           <div className="relative group/signout">
             <button
               onClick={signOut}
