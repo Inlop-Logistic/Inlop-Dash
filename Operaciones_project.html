@@ -6330,14 +6330,26 @@ function fmtDate(d){
 var _profiles=[];
 
 async function loadProfiles(){
-  _profiles=await dbGet('personal','select=id,nombre,cargo,area&activo=eq.true&order=nombre.asc');
+  try{
+    var rows=await dbGet('personal','select=id,nombre,cargo,area&activo=eq.true&order=nombre.asc');
+    _profiles=Array.isArray(rows)?rows:[];
+    if(!_profiles.length)console.error('[INLOP] personal table returned 0 rows. Run SQL_04_personal.sql in Supabase.');
+  }catch(e){
+    _profiles=[];
+    console.error('[INLOP] loadProfiles error:',e);
+  }
   return _profiles;
 }
 
-function fillSelect(selId,selected){if(!_profiles||!_profiles.length){var s2=document.getElementById(selId);if(s2){s2.innerHTML='<option value="">— Sin usuarios disponibles —</option>';}return;}
+function fillSelect(selId,selected){
   var sel=document.getElementById(selId);
   if(!sel)return;
+  // Always reset first to avoid stale DOM values surviving a failed reload
   sel.innerHTML='<option value="">— Sin asignar —</option>';
+  if(!_profiles||!_profiles.length){
+    sel.innerHTML='<option value="">— Sin personal disponible (ver consola) —</option>';
+    return;
+  }
   _profiles.forEach(function(p){
     var opt=document.createElement('option');
     opt.value=p.id;
@@ -6528,7 +6540,7 @@ var CM=(function(){
       var responsibleProfile=_profiles.find(function(p){return p.id===responsibleId;});
       var dueDate=document.getElementById('cm-due-date').value;
       if(!title){alert('El título es obligatorio.');return;}
-      if(!responsibleId){alert('Selecciona un responsable.');return;}
+      if(!responsibleId||!_profiles.find(function(p){return p.id===responsibleId;})){alert('Selecciona un responsable válido de la lista.');return;}
       if(!dueDate){alert('La fecha límite es obligatoria.');return;}
       var btn=document.getElementById('cm-save-btn');
       if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Guardando...';}
@@ -6815,6 +6827,12 @@ var SH=(function(){
       if(!_shift||!_shift.id)return;
       var btn=document.getElementById('sm-save-btn');
       if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Guardando...';}
+      // Validate: if assignedId is set, it MUST exist in _profiles (personal table)
+      if(assignedId&&!_profiles.find(function(p){return p.id===assignedId;})){
+        if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Asignar';}
+        alert('La persona seleccionada no es válida. Recarga la página e intenta de nuevo.');
+        return;
+      }
       try{
         if(!assignedId){
           // Remove assignment
