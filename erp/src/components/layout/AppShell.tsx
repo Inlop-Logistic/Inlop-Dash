@@ -332,8 +332,9 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
             <div style={{ width: 1, height: 20, background: "var(--gray-200)", margin: "0 4px" }} aria-hidden="true" />
             <TopbarUserMenu
               profile={{
-                nombre: profile?.nombre ?? "Sin nombre",
+                nombre: profile?.nombre ?? "Usuario",
                 cargo:  profile?.cargo,
+                rol:    profile?.rol,
                 email:  profile?.email,
               }}
               onSignOut={signOut}

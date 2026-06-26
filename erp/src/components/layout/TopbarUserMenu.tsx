@@ -2,11 +2,23 @@ import { useState, useEffect, useRef } from "react";
 import { ChevronDown, User, Settings, HelpCircle, LogOut, Briefcase } from "lucide-react";
 
 // ── Interfaz pública del perfil de usuario ────────────────────────────────────
+// Subconjunto de Profile (AuthContext) — mismos campos, todos opcionales
+// excepto nombre que AuthContext garantiza no vacío.
 
 export interface UserMenuProfile {
-  nombre:  string;
-  cargo?:  string;
-  email?:  string;
+  nombre: string;
+  cargo?: string;
+  rol?:   string;   // fallback de cargo
+  email?: string;
+}
+
+// ── Iniciales del avatar (dos letras: primera + última palabra) ───────────────
+
+function getInitials(nombre: string): string {
+  const words = nombre.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].charAt(0).toUpperCase();
+  return (words[0].charAt(0) + words[words.length - 1].charAt(0)).toUpperCase();
 }
 
 // ── Definición de opciones del menú ───────────────────────────────────────────
@@ -117,8 +129,10 @@ export function TopbarUserMenu({ profile, onSignOut }: Props) {
     },
   ];
 
-  // Initial del avatar: primera letra del nombre real — nunca hardcodeada
-  const initial = profile.nombre.charAt(0).toUpperCase();
+  // Iniciales del avatar: primera + última palabra del nombre real
+  const initials  = getInitials(profile.nombre);
+  // Cargo visible: profiles.cargo tiene prioridad, profiles.rol como fallback
+  const cargoLine = profile.cargo?.trim() || profile.rol?.trim() || null;
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -145,7 +159,7 @@ export function TopbarUserMenu({ profile, onSignOut }: Props) {
           className="shrink-0 h-7 w-7 rounded-[var(--radius-full)] flex items-center justify-center font-bold text-[var(--text-sm)]"
           style={{ background: "var(--inlop-red)", color: "#fff" }}
         >
-          {initial}
+          {initials}
         </div>
 
         <span
@@ -194,7 +208,7 @@ export function TopbarUserMenu({ profile, onSignOut }: Props) {
               className="shrink-0 h-10 w-10 rounded-[var(--radius-full)] flex items-center justify-center font-bold text-[var(--text-lg)]"
               style={{ background: "var(--inlop-red)", color: "#fff" }}
             >
-              {initial}
+              {initials}
             </div>
 
             <div className="flex-1 min-w-0">
@@ -205,13 +219,13 @@ export function TopbarUserMenu({ profile, onSignOut }: Props) {
                 {profile.nombre}
               </div>
 
-              {profile.cargo && (
+              {cargoLine && (
                 <div
                   className="flex items-center gap-1 mt-0.5 text-[var(--text-xs)]"
                   style={{ color: "var(--gray-500)" }}
                 >
                   <Briefcase aria-hidden="true" className="w-3 h-3 shrink-0" />
-                  <span className="truncate">{profile.cargo}</span>
+                  <span className="truncate">{cargoLine}</span>
                 </div>
               )}
 
