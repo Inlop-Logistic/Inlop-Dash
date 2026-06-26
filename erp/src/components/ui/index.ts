@@ -1,4 +1,4 @@
-export { Badge, EstadoBadge, CanalBadge, ESTADO_CFG } from "./Badge";
+export { Badge } from "./Badge";
 export { Button } from "./Button";
 export { Card, CardSection } from "./Card";
 export { KpiCard } from "./KpiCard";
