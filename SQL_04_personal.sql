@@ -67,10 +67,22 @@ ON CONFLICT DO NOTHING;
 -- ════════════════════════════════════════════════════════════════
 -- MIGRACIÓN: ajustar FKs de committee_commitments y weekend_shift_assignments
 -- para apuntar a personal(id) en lugar de profiles(id)
--- (ejecutar solo si las tablas ya existen de scripts anteriores)
 -- ════════════════════════════════════════════════════════════════
 
--- committee_commitments: responsible_id → personal
+-- Paso 1: Limpiar FKs huérfanas (UUIDs de profiles que no existen en personal).
+-- Los nombres ya están desnormalizados en responsible_nombre / assigned_nombre,
+-- así que no se pierde información de display al poner el UUID en NULL.
+UPDATE committee_commitments
+  SET responsible_id = NULL
+  WHERE responsible_id IS NOT NULL
+    AND responsible_id NOT IN (SELECT id FROM personal);
+
+UPDATE weekend_shift_assignments
+  SET assigned_user_id = NULL
+  WHERE assigned_user_id IS NOT NULL
+    AND assigned_user_id NOT IN (SELECT id FROM personal);
+
+-- Paso 2: committee_commitments → personal
 ALTER TABLE committee_commitments
   DROP CONSTRAINT IF EXISTS committee_commitments_responsible_id_fkey;
 
@@ -78,7 +90,7 @@ ALTER TABLE committee_commitments
   ADD CONSTRAINT committee_commitments_responsible_id_fkey
   FOREIGN KEY (responsible_id) REFERENCES personal(id) ON DELETE SET NULL;
 
--- weekend_shift_assignments: assigned_user_id → personal
+-- Paso 3: weekend_shift_assignments → personal
 ALTER TABLE weekend_shift_assignments
   DROP CONSTRAINT IF EXISTS weekend_shift_assignments_assigned_user_id_fkey;
 
