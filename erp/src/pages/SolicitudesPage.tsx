@@ -16,31 +16,7 @@ import {
 } from "@/components/ui";
 import { DataTable } from "@/components/ui";
 import type { Column } from "@/components/ui";
-
-// ── Utilidades ─────────────────────────────────────────────────────────────────
-
-function hoy() { return new Date().toISOString().slice(0, 10); }
-
-function hace7dias() {
-  const d = new Date();
-  d.setDate(d.getDate() - 7);
-  return d.toISOString().slice(0, 10);
-}
-
-function fmtFecha(iso: string | null | undefined) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("es-CO", {
-    day: "2-digit", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
-}
-
-function fmtFechaCort(iso: string | null | undefined) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("es-CO", {
-    day: "2-digit", month: "short", year: "numeric",
-  });
-}
+import { hoy, haceNDias, fmtFecha, fmtFechaCort } from "@/utils/dates";
 
 // ── Timeline de estados ────────────────────────────────────────────────────────
 
@@ -472,7 +448,7 @@ export function SolicitudesPage() {
   const [data, setData]           = useState<Solicitud[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
-  const [desde, setDesde]         = useState(hace7dias());
+  const [desde, setDesde]         = useState(haceNDias(7));
   const [hasta, setHasta]         = useState(hoy());
   const [busqueda, setBusqueda]   = useState("");
   const [tabEstado, setTabEstado] = useState("todos");
