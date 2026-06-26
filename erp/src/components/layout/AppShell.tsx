@@ -57,7 +57,7 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
           </div>
           <div>
             <div className="font-bold text-[13px] text-white leading-tight">INLOP ERP</div>
-            <div className="text-[10px] leading-tight" style={{ color: "rgba(255,255,255,0.45)" }}>
+            <div className="leading-tight whitespace-nowrap" style={{ color: "rgba(255,255,255,0.45)", fontSize: 9 }}>
               Plataforma Empresarial Integrada
             </div>
           </div>
