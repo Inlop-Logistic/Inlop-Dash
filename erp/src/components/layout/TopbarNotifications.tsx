@@ -257,7 +257,7 @@ export function TopbarNotifications({ notifications = [] }: Props) {
             style={{ borderTop: "1px solid var(--gray-100)", background: "var(--gray-50)" }}
           >
             <span className="text-[var(--text-xs)]" style={{ color: "var(--gray-400)" }}>
-              Próximamente: alertas en tiempo real desde ControlT y Avansat.
+              Las notificaciones aparecerán aquí en tiempo real.
             </span>
           </div>
         </div>

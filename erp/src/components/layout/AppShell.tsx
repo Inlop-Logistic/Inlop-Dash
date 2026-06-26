@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { TopbarSearch } from "@/components/layout/TopbarSearch";
 import { TopbarNotifications } from "@/components/layout/TopbarNotifications";
+import { TopbarUserMenu } from "@/components/layout/TopbarUserMenu";
 
 export type Vista =
   | "dashboard"
@@ -325,21 +326,18 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
           {/* Centro — Buscador global */}
           <TopbarSearch onNavigate={(id) => setVista(id as Vista)} />
 
-          {/* Derecha — notificaciones + perfil de usuario */}
+          {/* Derecha — notificaciones + menú de usuario */}
           <div className="flex items-center justify-end gap-1">
             <TopbarNotifications />
             <div style={{ width: 1, height: 20, background: "var(--gray-200)", margin: "0 4px" }} aria-hidden="true" />
-            <span className="text-[var(--text-base)]" style={{ color: "var(--gray-500)" }}>
-              {profile?.nombre}
-            </span>
-            {/* Avatar decorativo — el nombre se muestra en el span adyacente */}
-            <div
-              aria-hidden="true"
-              className="h-8 w-8 rounded-[var(--radius-full)] flex items-center justify-center font-bold text-[var(--text-sm)]"
-              style={{ background: "var(--inlop-red)", color: "#fff" }}
-            >
-              {profile?.nombre?.charAt(0).toUpperCase() ?? "U"}
-            </div>
+            <TopbarUserMenu
+              profile={{
+                nombre: profile?.nombre ?? "Usuario",
+                cargo:  profile?.cargo,
+                email:  profile?.email,
+              }}
+              onSignOut={signOut}
+            />
           </div>
         </header>
 
