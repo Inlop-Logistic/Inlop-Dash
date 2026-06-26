@@ -6480,14 +6480,6 @@ var CM=(function(){
     }).join('');
   }
 
-  async function genCode(){
-    var yr=new Date().getFullYear();
-    var rows=await dbGet('committee_commitments','code=like.COM-'+yr+'-%&order=code.desc&limit=1');
-    if(!rows||!rows.length)return'COM-'+yr+'-001';
-    var n=parseInt((rows[0].code||'').split('-')[2]||'0',10)+1;
-    return'COM-'+yr+'-'+String(n).padStart(3,'0');
-  }
-
   return{
     load:load,
 
@@ -6551,13 +6543,8 @@ var CM=(function(){
         }else{
           body.created_by_nombre=getUser().nombre;
           body.created_at=new Date().toISOString();
-          var inserted=false;
-          for(var _attempt=0;_attempt<5&&!inserted;_attempt++){
-            body.code=await genCode();
-            try{await dbInsert('committee_commitments',body);inserted=true;}
-            catch(dupErr){if(String(dupErr.code||dupErr.message||'').indexOf('23505')===-1)throw dupErr;}
-          }
-          if(!inserted)throw new Error('No se pudo generar un código único. Intenta de nuevo.');
+          // code es generado por el trigger trg_commitment_code en PostgreSQL
+          await dbInsert('committee_commitments',body);
         }
         CM.closeModal();
         await load();
