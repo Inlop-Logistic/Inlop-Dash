@@ -6537,10 +6537,15 @@ var CM=(function(){
         if(_editId){
           await dbUpdate('committee_commitments','id=eq.'+_editId,body);
         }else{
-          body.code=await genCode();
           body.created_by_nombre=getUser().nombre;
           body.created_at=new Date().toISOString();
-          await dbInsert('committee_commitments',body);
+          var inserted=false;
+          for(var _attempt=0;_attempt<5&&!inserted;_attempt++){
+            body.code=await genCode();
+            try{await dbInsert('committee_commitments',body);inserted=true;}
+            catch(dupErr){if(String(dupErr.code||dupErr.message||'').indexOf('23505')===-1)throw dupErr;}
+          }
+          if(!inserted)throw new Error('No se pudo generar un código único. Intenta de nuevo.');
         }
         CM.closeModal();
         await load();
