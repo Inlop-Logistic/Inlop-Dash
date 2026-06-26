@@ -6330,11 +6330,11 @@ function fmtDate(d){
 var _profiles=[];
 
 async function loadProfiles(){
-  _profiles=await dbGet('profiles','select=id,nombre,email,rol,departamento&order=nombre.asc');
+  _profiles=await dbGet('profiles','select=id,nombre,email,rol&order=nombre.asc');
   return _profiles;
 }
 
-function fillSelect(selId,selected){
+function fillSelect(selId,selected){if(!_profiles||!_profiles.length){var s2=document.getElementById(selId);if(s2){s2.innerHTML='<option value="">— Sin usuarios disponibles —</option>';}return;}
   var sel=document.getElementById(selId);
   if(!sel)return;
   sel.innerHTML='<option value="">— Sin asignar —</option>';
@@ -6811,7 +6811,7 @@ var SH=(function(){
       var btn=document.getElementById('sm-save-btn');
       if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Guardando...';}
       try{
-        if(!nombre){
+        if(!assignedId){
           // Remove assignment
           try{await dbDelete('weekend_shift_assignments','shift_id=eq.'+_shift.id+'&template_code=eq.'+encodeURIComponent(code)+'&shift_day=eq.'+day);}catch(e){}
         }else{
@@ -6860,9 +6860,10 @@ async function initModules(){
 var _projInited=false;
 
 function tryInit(){
-  var tab=document.getElementById('tc-proj');
-  if(!tab)return;
-  if(tab.classList.contains('on')){
+  var projDiv=document.getElementById('tc-proj');
+  var projBtn=document.getElementById('tab-proj');
+  var isActive=(projDiv&&projDiv.classList.contains('show'))||(projBtn&&projBtn.classList.contains('on'));
+  if(isActive){
     if(!_projInited){_projInited=true;initModules();}
   }else{
     _projInited=false;
@@ -6871,19 +6872,17 @@ function tryInit(){
 
 var _observer=new MutationObserver(function(){tryInit();});
 document.addEventListener('DOMContentLoaded',function(){
-  var tab=document.getElementById('tc-proj');
-  if(tab){
-    _observer.observe(tab,{attributes:true,attributeFilter:['class']});
-    if(tab.classList.contains('on'))initModules();
-  }
-  // Hook tab button for fresh load on each visit
-  var tabBtn=document.getElementById('tab-proj');
-  if(tabBtn){
-    tabBtn.addEventListener('click',function(){
+  var projDiv=document.getElementById('tc-proj');
+  var projBtn=document.getElementById('tab-proj');
+  if(projDiv)_observer.observe(projDiv,{attributes:true,attributeFilter:['class']});
+  if(projBtn)_observer.observe(projBtn,{attributes:true,attributeFilter:['class']});
+  if(projBtn){
+    projBtn.addEventListener('click',function(){
       _projInited=false;
-      setTimeout(initModules,150);
+      setTimeout(tryInit,200);
     });
   }
+  tryInit();
 });
 
 // Expose globals
