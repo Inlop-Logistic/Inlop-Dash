@@ -2,16 +2,11 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import type { Profile } from "@/types/auth";
 
-// ── Tipos exportados — fuente única de verdad para la identidad del usuario ──
-
-export interface Profile {
-  id:     string;
-  nombre: string;   // garantizado: nunca vacío (ver resolveNombre)
-  cargo:  string;
-  rol:    string;
-  email:  string;
-}
+// Re-export para compatibilidad: los módulos pueden importar Profile
+// desde aquí o directamente desde @/types/auth.
+export type { Profile } from "@/types/auth";
 
 interface AuthState {
   user:    User | null;

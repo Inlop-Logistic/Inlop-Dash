@@ -8,19 +8,10 @@ import {
 import { TopbarSearch } from "@/components/layout/TopbarSearch";
 import { TopbarNotifications } from "@/components/layout/TopbarNotifications";
 import { TopbarUserMenu } from "@/components/layout/TopbarUserMenu";
+import type { Vista, NavSection } from "@/types/navigation";
 
-export type Vista =
-  | "dashboard"
-  | "solicitudes"
-  | "viajes"
-  | "mapa"
-  | "alarmas"
-  | "vehiculos"
-  | "planeados"
-  | "cumplidos";
-
-interface NavItem    { id: Vista; label: string; icon: ReactNode; badge?: number }
-interface NavSection { id: string; label: string; items: NavItem[] }
+// Re-export para compatibilidad con importadores existentes (ej. App.tsx).
+export type { Vista } from "@/types/navigation";
 
 const NAV_SECTIONS: NavSection[] = [
   {

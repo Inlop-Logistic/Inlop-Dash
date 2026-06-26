@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AuthProvider, useAuth } from "@/state/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
-import type { Vista } from "@/components/layout/AppShell";
+import type { Vista } from "@/types/navigation";
 import { LoginPage } from "@/pages/LoginPage";
 import { SolicitudesPage } from "@/pages/SolicitudesPage";
 
