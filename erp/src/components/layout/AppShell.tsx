@@ -332,7 +332,7 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
             <div style={{ width: 1, height: 20, background: "var(--gray-200)", margin: "0 4px" }} aria-hidden="true" />
             <TopbarUserMenu
               profile={{
-                nombre: profile?.nombre ?? "Usuario",
+                nombre: profile?.nombre ?? "Sin nombre",
                 cargo:  profile?.cargo,
                 email:  profile?.email,
               }}

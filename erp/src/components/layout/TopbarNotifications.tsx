@@ -130,7 +130,7 @@ export function TopbarNotifications({ notifications = [] }: Props) {
 
           {/* Header del panel */}
           <div
-            className="flex items-center justify-between px-4 py-3"
+            className="flex items-center justify-between px-5 py-4"
             style={{ borderBottom: "1px solid var(--gray-100)" }}
           >
             <div className="flex items-center gap-2">
@@ -253,7 +253,7 @@ export function TopbarNotifications({ notifications = [] }: Props) {
 
           {/* Footer del panel */}
           <div
-            className="px-4 py-2.5 flex items-center justify-center"
+            className="px-5 py-3 flex items-center justify-center"
             style={{ borderTop: "1px solid var(--gray-100)", background: "var(--gray-50)" }}
           >
             <span className="text-[var(--text-xs)]" style={{ color: "var(--gray-400)" }}>

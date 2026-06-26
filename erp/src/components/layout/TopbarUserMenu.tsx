@@ -2,8 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { ChevronDown, User, Settings, HelpCircle, LogOut, Briefcase } from "lucide-react";
 
 // ── Interfaz pública del perfil de usuario ────────────────────────────────────
-// Subconjunto del perfil Supabase que el componente necesita renderizar.
-// AppShell extrae estos campos de AuthContext y los pasa como prop.
 
 export interface UserMenuProfile {
   nombre:  string;
@@ -24,7 +22,7 @@ interface MenuItem {
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
-  profile:  UserMenuProfile;
+  profile:   UserMenuProfile;
   onSignOut: () => void;
 }
 
@@ -70,7 +68,8 @@ export function TopbarUserMenu({ profile, onSignOut }: Props) {
   // ── Navegación por teclado dentro del menú ─────────────────────────────────
 
   const handleMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    const items = panelRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([disabled])');
+    // Incluye items aria-disabled — el foco puede llegar a ellos pero no los activa
+    const items = panelRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');
     if (!items || items.length === 0) return;
     const arr  = Array.from(items);
     const curr = document.activeElement as HTMLButtonElement;
@@ -93,31 +92,32 @@ export function TopbarUserMenu({ profile, onSignOut }: Props) {
     {
       id:     "perfil",
       label:  "Mi perfil",
-      icon:   <User aria-hidden="true" className="w-3.5 h-3.5" />,
-      action: undefined, // futuro
+      icon:   <User       aria-hidden="true" className="w-3.5 h-3.5" />,
+      action: undefined,
     },
     {
       id:     "preferencias",
       label:  "Preferencias",
-      icon:   <Settings aria-hidden="true" className="w-3.5 h-3.5" />,
-      action: undefined, // futuro
+      icon:   <Settings   aria-hidden="true" className="w-3.5 h-3.5" />,
+      action: undefined,
     },
     {
       id:     "ayuda",
       label:  "Ayuda",
       icon:   <HelpCircle aria-hidden="true" className="w-3.5 h-3.5" />,
-      action: undefined, // futuro
+      action: undefined,
     },
     "separator",
     {
       id:     "signout",
       label:  "Cerrar sesión",
-      icon:   <LogOut aria-hidden="true" className="w-3.5 h-3.5" />,
+      icon:   <LogOut     aria-hidden="true" className="w-3.5 h-3.5" />,
       danger: true,
       action: () => { closeMenu(); onSignOut(); },
     },
   ];
 
+  // Initial del avatar: primera letra del nombre real — nunca hardcodeada
   const initial = profile.nombre.charAt(0).toUpperCase();
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -140,7 +140,6 @@ export function TopbarUserMenu({ profile, onSignOut }: Props) {
           open ? "bg-[var(--gray-100)]" : "",
         ].join(" ")}
       >
-        {/* Avatar */}
         <div
           aria-hidden="true"
           className="shrink-0 h-7 w-7 rounded-[var(--radius-full)] flex items-center justify-center font-bold text-[var(--text-sm)]"
@@ -149,7 +148,6 @@ export function TopbarUserMenu({ profile, onSignOut }: Props) {
           {initial}
         </div>
 
-        {/* Nombre — oculto en tablet estrecho */}
         <span
           className="hidden md:block text-[var(--text-base)] font-medium max-w-[120px] truncate"
           style={{ color: "var(--gray-700)" }}
@@ -157,7 +155,6 @@ export function TopbarUserMenu({ profile, onSignOut }: Props) {
           {profile.nombre}
         </span>
 
-        {/* Chevron */}
         <ChevronDown
           aria-hidden="true"
           className="hidden md:block w-3 h-3 shrink-0 transition-transform duration-150"
@@ -177,7 +174,7 @@ export function TopbarUserMenu({ profile, onSignOut }: Props) {
           onKeyDown={handleMenuKeyDown}
           className="absolute right-0 mt-2 overflow-hidden"
           style={{
-            width:        "240px",
+            width:        "256px",
             background:   "#fff",
             borderRadius: "var(--radius-lg)",
             border:       "1px solid var(--gray-100)",
@@ -187,12 +184,11 @@ export function TopbarUserMenu({ profile, onSignOut }: Props) {
           }}
         >
 
-          {/* Encabezado — perfil del usuario */}
+          {/* Encabezado */}
           <div
-            className="px-4 py-3 flex items-center gap-3"
+            className="px-5 py-4 flex items-center gap-3"
             style={{ borderBottom: "1px solid var(--gray-100)" }}
           >
-            {/* Avatar grande */}
             <div
               aria-hidden="true"
               className="shrink-0 h-10 w-10 rounded-[var(--radius-full)] flex items-center justify-center font-bold text-[var(--text-lg)]"
@@ -211,7 +207,7 @@ export function TopbarUserMenu({ profile, onSignOut }: Props) {
 
               {profile.cargo && (
                 <div
-                  className="flex items-center gap-1 mt-0.5 truncate text-[var(--text-xs)]"
+                  className="flex items-center gap-1 mt-0.5 text-[var(--text-xs)]"
                   style={{ color: "var(--gray-500)" }}
                 >
                   <Briefcase aria-hidden="true" className="w-3 h-3 shrink-0" />
@@ -231,7 +227,7 @@ export function TopbarUserMenu({ profile, onSignOut }: Props) {
           </div>
 
           {/* Opciones */}
-          <div className="py-1">
+          <div className="py-1.5">
             {MENU_ITEMS.map((item, idx) => {
               if (item === "separator") {
                 return (
@@ -239,48 +235,53 @@ export function TopbarUserMenu({ profile, onSignOut }: Props) {
                     key={`sep-${idx}`}
                     role="separator"
                     aria-hidden="true"
-                    style={{ height: 1, background: "var(--gray-100)", margin: "4px 0" }}
+                    style={{ height: 1, background: "var(--gray-100)", margin: "6px 0" }}
                   />
                 );
               }
 
-              const disabled = !item.action;
+              // Opciones sin action: aria-disabled sin disabled HTML para que
+              // reciban hover y muestren el tooltip nativo del title.
+              const upcoming = !item.action && !item.danger;
 
               return (
                 <button
                   key={item.id}
                   role="menuitem"
-                  disabled={disabled}
-                  onClick={item.action}
-                  aria-disabled={disabled}
+                  aria-disabled={upcoming || undefined}
+                  title={upcoming ? "Disponible próximamente" : undefined}
+                  onClick={item.action ?? undefined}
                   className={[
-                    "w-full flex items-center gap-2.5 px-4 py-2 text-left text-[var(--text-md)]",
-                    "transition-colors duration-100",
-                    "focus-visible:outline-none focus-visible:bg-[var(--gray-50)]",
-                    disabled
-                      ? "cursor-default opacity-40"
+                    "w-full flex items-center gap-3 px-5 py-2.5 text-left text-[var(--text-md)]",
+                    "transition-colors duration-150",
+                    "focus-visible:outline-none",
+                    upcoming
+                      ? "cursor-default"
                       : item.danger
-                        ? "hover:bg-[var(--danger-bg)] cursor-pointer"
-                        : "hover:bg-[var(--gray-50)] cursor-pointer",
+                        ? "hover:bg-[var(--danger-bg)] cursor-pointer focus-visible:bg-[var(--danger-bg)]"
+                        : "hover:bg-[var(--gray-50)] cursor-pointer focus-visible:bg-[var(--gray-50)]",
                   ].join(" ")}
                   style={{
-                    color: item.danger ? "var(--danger)" : "var(--gray-700)",
+                    color: upcoming
+                      ? "var(--gray-300)"
+                      : item.danger
+                        ? "var(--danger)"
+                        : "var(--gray-700)",
                   }}
                 >
-                  <span className="shrink-0" style={{ color: item.danger ? "var(--danger)" : "var(--gray-400)" }}>
+                  <span
+                    className="shrink-0"
+                    style={{
+                      color: upcoming
+                        ? "var(--gray-300)"
+                        : item.danger
+                          ? "var(--danger)"
+                          : "var(--gray-400)",
+                    }}
+                  >
                     {item.icon}
                   </span>
                   <span>{item.label}</span>
-
-                  {/* Etiqueta "próximamente" para opciones sin acción */}
-                  {disabled && !item.danger && (
-                    <span
-                      className="ml-auto text-[var(--text-xs)] px-1.5 py-0.5 rounded-[var(--radius-sm)] font-medium"
-                      style={{ background: "var(--gray-100)", color: "var(--gray-400)" }}
-                    >
-                      Pronto
-                    </span>
-                  )}
                 </button>
               );
             })}
