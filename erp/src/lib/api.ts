@@ -1,16 +1,4 @@
-const API = "https://inlop-dash-production.up.railway.app";
-
-async function req<T>(path: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    ...opts,
-    headers: { "Content-Type": "application/json", ...opts?.headers },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? `HTTP ${res.status}`);
-  }
-  return res.json();
-}
+import { req } from "@/services/http";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 

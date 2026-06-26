@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/services/supabase";
 import type { Profile } from "@/types/auth";
 
 // Re-export para compatibilidad: los módulos pueden importar Profile
