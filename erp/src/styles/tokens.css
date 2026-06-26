@@ -189,4 +189,14 @@
   --z-toast:        60;    /* Notificaciones Toast                         */
   --z-tooltip:      70;    /* Tooltips — siempre encima de todo            */
 
+  /* ── Layout Estructural ─────────────────────────────────────────────── */
+  /*
+   * Dimensiones base del layout del ERP.
+   * Cambiar estos valores ajusta el layout globalmente.
+   */
+
+  --sidebar-width:           220px;   /* Ancho del sidebar expandido          */
+  --sidebar-width-collapsed: 60px;    /* Ancho del sidebar colapsado          */
+  --topbar-height:           56px;    /* Altura del topbar                    */
+
 }
