@@ -16,7 +16,7 @@ import {
 } from "@/components/ui";
 import { DataTable } from "@/components/ui";
 import type { Column } from "@/components/ui";
-import { hoy, haceNDias, fmtFecha, fmtFechaCort } from "@/utils/dates";
+import { hoy, hace7dias, fmtFecha, fmtFechaCort } from "@/utils/date";
 
 // ── Timeline de estados ────────────────────────────────────────────────────────
 
@@ -448,7 +448,7 @@ export function SolicitudesPage() {
   const [data, setData]           = useState<Solicitud[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
-  const [desde, setDesde]         = useState(haceNDias(7));
+  const [desde, setDesde]         = useState(hace7dias());
   const [hasta, setHasta]         = useState(hoy());
   const [busqueda, setBusqueda]   = useState("");
   const [tabEstado, setTabEstado] = useState("todos");

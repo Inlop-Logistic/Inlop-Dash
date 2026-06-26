@@ -6,10 +6,10 @@ export function hoy(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** Fecha de hace N días como string ISO-8601 (YYYY-MM-DD). */
-export function haceNDias(n: number): string {
+/** Fecha de hace 7 días como string ISO-8601 (YYYY-MM-DD). */
+export function hace7dias(): string {
   const d = new Date();
-  d.setDate(d.getDate() - n);
+  d.setDate(d.getDate() - 7);
   return d.toISOString().slice(0, 10);
 }
 
