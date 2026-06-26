@@ -1,0 +1,192 @@
+/*
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * INLOP Design System — Design Tokens
+ *
+ * Fuente única de verdad para todos los valores visuales del ecosistema.
+ * Cualquier valor de color, radio, sombra, espaciado, z-index o animación
+ * debe estar definido aquí y referenciado desde los componentes.
+ *
+ * REGLA: Nunca usar valores hardcodeados en componentes.
+ *        Siempre referenciar una variable de este archivo.
+ *
+ * Referencia: docs/ARQUITECTURA.md § 3.3 Design System
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ */
+
+:root {
+
+  /* ── Brand Colors ────────────────────────────────────────────────────── */
+
+  --navy:           #012A6B;   /* Color principal INLOP                    */
+  --navy-dark:      #001840;   /* Sidebar, fondos oscuros                  */
+  --navy-mid:       #0A3580;   /* Hover sobre navy                         */
+  --inlop-navy:     #012A6B;   /* Alias semántico de --navy                */
+  --inlop-red:      #E30613;   /* Acento INLOP — CTAs, alertas críticas    */
+
+
+  /* ── Gray Scale ──────────────────────────────────────────────────────── */
+  /*
+   * Alineada con el Portal Cliente para coherencia visual del ecosistema.
+   * Cambiar estos valores afecta simultáneamente ERP y futuras superficies
+   * que compartan este archivo de tokens.
+   */
+
+  --gray-50:        #F8F9FC;   /* Fondos de página, áreas de contenido     */
+  --gray-100:       #ECEEF3;   /* Bordes suaves, separadores               */
+  --gray-200:       #DDE1EA;   /* Bordes visibles, inputs en reposo        */
+  --gray-300:       #BCC4D0;   /* Placeholders, líneas de timeline         */
+  --gray-400:       #8A93A8;   /* Texto de ayuda, labels secundarios       */
+  --gray-500:       #6B7589;   /* Texto secundario                         */
+  --gray-600:       #566072;   /* Texto de cuerpo medio                    */
+  --gray-700:       #3A4257;   /* Texto de cuerpo principal                */
+  --gray-800:       #1E2535;   /* Texto enfatizado, títulos                */
+  --gray-900:       #0F1623;   /* Máximo contraste                         */
+
+
+  /* ── Semantic Colors ─────────────────────────────────────────────────── */
+
+  /* Success */
+  --success:        #059669;
+  --success-light:  #D1FAE5;
+  --success-bg:     #ECFDF5;
+
+  /* Warning */
+  --warning:        #D97706;
+  --warning-light:  #FDE68A;
+  --warning-bg:     #FFFBEB;
+
+  /* Danger */
+  --danger:         #E30613;
+  --danger-light:   #FECDD3;
+  --danger-bg:      #FFE4E6;
+
+  /* Info */
+  --info:           #2563EB;
+  --info-light:     #BFDBFE;
+  --info-bg:        #EFF6FF;
+
+  /* Aliases de compatibilidad con código existente */
+  --amber:          #D97706;
+  --amber-bg:       #FFFBEB;
+
+
+  /* ── Border Radius ───────────────────────────────────────────────────── */
+  /*
+   * El sistema INLOP usa radios contenidos (4-8px) para una estética
+   * empresarial y consistente con el Portal Cliente (2-8px).
+   * --radius-2xl existe por compatibilidad; se eliminará progresivamente.
+   */
+
+  --radius-sm:      4px;      /* Inputs compactos, badges, chips          */
+  --radius-md:      6px;      /* Botones, inputs estándar                 */
+  --radius-lg:      8px;      /* Cards, panels, contenedores principales  */
+  --radius-xl:      12px;     /* Elementos de mayor peso visual           */
+  --radius-2xl:     16px;     /* Legado — se migrará a --radius-lg        */
+  --radius-full:    9999px;   /* Píldoras, avatares, indicadores          */
+
+
+  /* ── Shadows ─────────────────────────────────────────────────────────── */
+
+  --shadow-xs:      0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.08),
+                    0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md:      0 4px 12px rgba(0, 0, 0, 0.10);
+  --shadow-lg:      0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* Aliases semánticos */
+  --shadow-card:    var(--shadow-sm);
+  --shadow-panel:   -8px 0 32px rgba(0, 0, 0, 0.12);
+  --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.12);
+
+
+  /* ── Spacing Scale (base 4px) ────────────────────────────────────────── */
+  /*
+   * Compatible con la escala de Tailwind: --space-4 = 16px = p-4 en Tailwind.
+   * Usar estos tokens en CSS custom; usar clases Tailwind en className de JSX.
+   */
+
+  --space-px:       1px;
+  --space-0:        0px;
+  --space-1:        4px;
+  --space-2:        8px;
+  --space-3:        12px;
+  --space-4:        16px;
+  --space-5:        20px;
+  --space-6:        24px;
+  --space-8:        32px;
+  --space-10:       40px;
+  --space-12:       48px;
+  --space-16:       64px;
+  --space-20:       80px;
+  --space-24:       96px;
+
+
+  /* ── Font Scale ──────────────────────────────────────────────────────── */
+  /*
+   * Escala tipográfica del ERP en píxeles.
+   * Compatible con Tailwind text-[Xpx] — estos tokens permiten usar las
+   * mismas medidas en CSS custom sin repetir valores literales.
+   */
+
+  --text-xs:        10px;     /* Labels, metadatos, overlines             */
+  --text-sm:        11px;     /* Subtítulos de sección, hints             */
+  --text-base:      12px;     /* Texto secundario, descripciones          */
+  --text-md:        13px;     /* Texto de cuerpo principal del ERP        */
+  --text-lg:        14px;     /* Texto destacado, botones                 */
+  --text-xl:        16px;     /* Títulos de panel, headers pequeños       */
+  --text-2xl:       20px;     /* Títulos de página medianos               */
+  --text-3xl:       24px;     /* Valores KPI                              */
+  --text-4xl:       32px;     /* Display — reservado para Barlow Condensed */
+
+
+  /* ── Font Weights ────────────────────────────────────────────────────── */
+
+  --weight-light:      300;
+  --weight-regular:    400;
+  --weight-medium:     500;
+  --weight-semibold:   600;
+  --weight-bold:       700;
+  --weight-extrabold:  800;
+
+
+  /* ── Line Heights ────────────────────────────────────────────────────── */
+
+  --leading-none:      1;
+  --leading-tight:     1.25;
+  --leading-snug:      1.375;
+  --leading-normal:    1.5;
+  --leading-relaxed:   1.625;
+
+
+  /* ── Motion & Transitions ────────────────────────────────────────────── */
+
+  --ease-standard:  cubic-bezier(0.4, 0, 0.2, 1);  /* Entrada y salida     */
+  --ease-enter:     cubic-bezier(0, 0, 0.2, 1);     /* Elementos entrando   */
+  --ease-exit:      cubic-bezier(0.4, 0, 1, 1);     /* Elementos saliendo   */
+
+  --duration-fast:  100ms;
+  --duration-base:  200ms;
+  --duration-slow:  300ms;
+
+  --transition-fast: var(--duration-fast) var(--ease-standard);
+  --transition-base: var(--duration-base) var(--ease-standard);
+  --transition-slow: var(--duration-slow) var(--ease-standard);
+
+
+  /* ── Z-Index ─────────────────────────────────────────────────────────── */
+  /*
+   * Escala global para evitar conflictos entre capas superpuestas.
+   * Cualquier nuevo elemento con position fixed/absolute debe usar
+   * uno de estos valores, nunca un número arbitrario.
+   */
+
+  --z-base:         1;
+  --z-raised:       10;
+  --z-dropdown:     30;
+  --z-panel:        40;    /* SidePanel de detalle                         */
+  --z-overlay:      45;    /* Overlays sobre paneles                       */
+  --z-modal:        50;    /* Diálogos de confirmación                     */
+  --z-toast:        60;    /* Notificaciones Toast                         */
+  --z-tooltip:      70;    /* Tooltips — siempre encima de todo            */
+
+}

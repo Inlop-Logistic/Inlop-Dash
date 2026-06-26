@@ -1,0 +1,22 @@
+/*
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * INLOP Design System — Typography Tokens
+ *
+ * Define las variables de familia tipográfica del ecosistema INLOP.
+ * Las fuentes se cargan en index.html via <link> para máximo rendimiento
+ * (preconnect + descarga paralela, sin bloqueo de render).
+ *
+ * Fuentes del sistema INLOP:
+ *   Barlow Condensed  →  display, títulos, wordmark, KPIs   (--font-display)
+ *   DM Sans           →  cuerpo de texto, UI general        (--font-sans)
+ *   DM Mono           →  placas, códigos, IDs, datos        (--font-mono)
+ *
+ * Referencia: docs/ARQUITECTURA.md § 3.3 Design System
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ */
+
+:root {
+  --font-display: "Barlow Condensed", sans-serif;
+  --font-sans:    "DM Sans", system-ui, -apple-system, sans-serif;
+  --font-mono:    "DM Mono", "Courier New", monospace;
+}

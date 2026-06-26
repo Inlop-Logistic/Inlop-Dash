@@ -1,34 +1,21 @@
+/*
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * INLOP ERP — Entry Point CSS
+ *
+ * Punto de entrada único para todos los estilos del ERP.
+ * Los estilos se organizan en capas separadas por responsabilidad:
+ *
+ *   tailwindcss     → utilidades + preflight reset
+ *   typography.css  → variables de familia tipográfica
+ *   tokens.css      → design tokens (colores, radios, sombras, espaciado…)
+ *   globals.css     → estilos base del documento (body, #root)
+ *
+ * REGLA: No agregar CSS directamente en este archivo.
+ *        Todo nuevo estilo va en el archivo de capa correspondiente.
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ */
+
 @import "tailwindcss";
-
-:root {
-  --navy:       #012A6B;
-  --navy-dark:  #001840;
-  --navy-mid:   #0A3580;
-  --inlop-red:  #E30613;
-  --success:    #059669;
-  --success-bg: #ECFDF5;
-  --amber:      #D97706;
-  --amber-bg:   #FFFBEB;
-  --info:       #2563EB;
-  --info-bg:    #EFF6FF;
-  --gray-50:    #F8F9FB;
-  --gray-100:   #F0F2F5;
-  --gray-200:   #E2E6ED;
-  --gray-300:   #C8CFD8;
-  --gray-400:   #9AA3B0;
-  --gray-500:   #6B7584;
-  --gray-600:   #4B5563;
-  --gray-700:   #374151;
-  --gray-800:   #1F2937;
-}
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  font-family: "Inter", system-ui, sans-serif;
-  background: var(--gray-50);
-  color: var(--gray-800);
-  -webkit-font-smoothing: antialiased;
-}
-
-#root { display: flex; flex-direction: column; min-height: 100svh; }
+@import "./styles/typography.css";
+@import "./styles/tokens.css";
+@import "./styles/globals.css";

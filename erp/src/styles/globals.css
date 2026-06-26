@@ -1,0 +1,53 @@
+/*
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * INLOP Design System — Global Base Styles
+ *
+ * Reset mínimo y estilos base del documento. Tailwind preflight cubre la
+ * mayor parte del reset; aquí sólo se establecen las decisiones de diseño
+ * propias del ERP que no pertenecen a un componente específico.
+ *
+ * REGLA: No agregar utilidades aquí. Sólo estilos base de document/body.
+ *
+ * Referencia: docs/ARQUITECTURA.md § 3.3 Design System
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ */
+
+/* ── Box Model ───────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+
+/* ── Document ────────────────────────────────────────────────────────────── */
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust:         100%;
+}
+
+
+/* ── Body ────────────────────────────────────────────────────────────────── */
+
+body {
+  font-family:              var(--font-sans);
+  font-size:                var(--text-md);         /* 13px — texto de cuerpo ERP */
+  line-height:              var(--leading-normal);
+  color:                    var(--gray-700);
+  background-color:         var(--gray-50);
+
+  -webkit-font-smoothing:   antialiased;
+  -moz-osx-font-smoothing:  grayscale;
+  text-rendering:           optimizeLegibility;
+}
+
+
+/* ── Root Mount ──────────────────────────────────────────────────────────── */
+
+#root {
+  display:        flex;
+  flex-direction: column;
+  min-height:     100svh;
+}
