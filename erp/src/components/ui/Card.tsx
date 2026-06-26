@@ -15,8 +15,8 @@ const PAD: Record<NonNullable<CardProps["padding"]>, string> = {
 export function Card({ children, padding = "none", className = "", style, ...rest }: CardProps) {
   return (
     <div
-      className={`bg-white rounded-2xl overflow-hidden ${PAD[padding]} ${className}`}
-      style={{ border: "1px solid var(--gray-100)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", ...style }}
+      className={`bg-white rounded-[var(--radius-2xl)] overflow-hidden ${PAD[padding]} ${className}`}
+      style={{ border: "1px solid var(--gray-100)", boxShadow: "var(--shadow-card)", ...style }}
       {...rest}
     >
       {children}
