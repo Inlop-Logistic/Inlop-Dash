@@ -45,18 +45,18 @@ export function LoginPage() {
 
         <div>
           <p className="text-[28px] font-light leading-snug" style={{ color: "rgba(255,255,255,0.9)" }}>
-            Torre de Control<br />
-            <span className="font-bold">Operaciones</span>
+            Plataforma<br />
+            <span className="font-bold">Empresarial Integrada</span>
           </p>
           <p className="mt-4 text-[13px] leading-relaxed" style={{ color: "rgba(255,255,255,0.45)" }}>
-            Gestión integral de solicitudes, viajes,<br />
-            cumplidos y flota en tiempo real.
+            Centraliza, integra y optimiza los procesos estratégicos de INLOP desde una única plataforma.
           </p>
         </div>
 
-        <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.25)" }}>
-          INLOP Logística SAS · Sistema interno
-        </p>
+        <div>
+          <p className="text-[11px] font-semibold" style={{ color: "rgba(255,255,255,0.4)" }}>INLOP ERP</p>
+          <p className="text-[10px] mt-0.5" style={{ color: "rgba(255,255,255,0.25)" }}>Plataforma Empresarial Integrada</p>
+        </div>
       </div>
 
       {/* Right panel — form */}
@@ -78,7 +78,7 @@ export function LoginPage() {
             Iniciar sesión
           </h2>
           <p className="text-[13px] mb-7" style={{ color: "rgba(255,255,255,0.45)" }}>
-            Accede con tu cuenta de operaciones
+            Accede con tu cuenta institucional
           </p>
 
           <form onSubmit={submit} className="flex flex-col gap-4">

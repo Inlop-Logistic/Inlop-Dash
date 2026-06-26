@@ -19,7 +19,7 @@ export type Vista =
 interface NavItem { id: Vista; label: string; icon: ReactNode; badge?: number }
 
 const NAV: NavItem[] = [
-  { id: "dashboard",   label: "Dashboard",   icon: <LayoutDashboard className="w-4 h-4" /> },
+  { id: "dashboard",   label: "Inicio",      icon: <LayoutDashboard className="w-4 h-4" /> },
   { id: "solicitudes", label: "Solicitudes",  icon: <ClipboardList   className="w-4 h-4" /> },
   { id: "viajes",      label: "Viajes",       icon: <Truck           className="w-4 h-4" /> },
   { id: "mapa",        label: "Mapa GPS",     icon: <Map             className="w-4 h-4" /> },
@@ -58,7 +58,7 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
           <div>
             <div className="font-bold text-[13px] text-white leading-tight">INLOP ERP</div>
             <div className="text-[10px] leading-tight" style={{ color: "rgba(255,255,255,0.45)" }}>
-              Torre de Control
+              Plataforma Empresarial Integrada
             </div>
           </div>
         </div>
