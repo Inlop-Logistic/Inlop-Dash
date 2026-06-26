@@ -5,6 +5,7 @@ import {
   AlertTriangle, Car, CalendarDays, CheckSquare,
   LogOut, ChevronRight, ChevronLeft,
 } from "lucide-react";
+import { TopbarSearch } from "@/components/layout/TopbarSearch";
 
 export type Vista =
   | "dashboard"
@@ -301,8 +302,13 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
 
         {/* Topbar */}
         <header
-          className="flex items-center justify-between px-6 shrink-0"
-          style={{ height: "var(--topbar-height)", background: "#fff", borderBottom: "1px solid var(--gray-100)" }}
+          className="grid items-center gap-4 px-5 shrink-0"
+          style={{
+            gridTemplateColumns: "1fr auto 1fr",
+            height: "var(--topbar-height)",
+            background: "#fff",
+            borderBottom: "1px solid var(--gray-100)",
+          }}
         >
           {/* Breadcrumb semántico — WAI-ARIA breadcrumb pattern */}
           <nav aria-label="Ruta de navegación">
@@ -315,7 +321,11 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
             </ol>
           </nav>
 
-          <div className="flex items-center gap-2">
+          {/* Centro — Buscador global */}
+          <TopbarSearch onNavigate={(id) => setVista(id as Vista)} />
+
+          {/* Derecha — perfil de usuario */}
+          <div className="flex items-center justify-end gap-2">
             <span className="text-[var(--text-base)]" style={{ color: "var(--gray-500)" }}>
               {profile?.nombre}
             </span>
