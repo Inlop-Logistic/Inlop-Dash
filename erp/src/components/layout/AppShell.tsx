@@ -16,18 +16,40 @@ export type Vista =
   | "planeados"
   | "cumplidos";
 
-interface NavItem { id: Vista; label: string; icon: ReactNode; badge?: number }
+interface NavItem    { id: Vista; label: string; icon: ReactNode; badge?: number }
+interface NavSection { id: string; label: string; items: NavItem[] }
 
-const NAV: NavItem[] = [
-  { id: "dashboard",   label: "Inicio",      icon: <LayoutDashboard className="w-4 h-4" /> },
-  { id: "solicitudes", label: "Solicitudes",  icon: <ClipboardList   className="w-4 h-4" /> },
-  { id: "viajes",      label: "Viajes",       icon: <Truck           className="w-4 h-4" /> },
-  { id: "mapa",        label: "Mapa GPS",     icon: <Map             className="w-4 h-4" /> },
-  { id: "alarmas",     label: "Alarmas",      icon: <AlertTriangle   className="w-4 h-4" /> },
-  { id: "vehiculos",   label: "Vehículos",    icon: <Car             className="w-4 h-4" /> },
-  { id: "planeados",   label: "Planeados",    icon: <CalendarDays    className="w-4 h-4" /> },
-  { id: "cumplidos",   label: "Cumplidos",    icon: <CheckSquare     className="w-4 h-4" /> },
+// ── Estructura de navegación ──────────────────────────────────────────────────
+//
+// Agregar un nuevo módulo: push a items[] de la sección correspondiente
+//        y extender el tipo Vista con el nuevo id.
+// Agregar una nueva sección: descomentar la entrada correspondiente e incluir
+//        sus NavItem[] cuando el módulo esté listo.
+//
+const NAV_SECTIONS: NavSection[] = [
+  {
+    id: "operaciones",
+    label: "OPERACIONES",
+    items: [
+      { id: "dashboard",   label: "Inicio",      icon: <LayoutDashboard className="w-4 h-4" /> },
+      { id: "solicitudes", label: "Solicitudes",  icon: <ClipboardList   className="w-4 h-4" /> },
+      { id: "viajes",      label: "Viajes",       icon: <Truck           className="w-4 h-4" /> },
+      { id: "mapa",        label: "Mapa GPS",     icon: <Map             className="w-4 h-4" /> },
+      { id: "alarmas",     label: "Alarmas",      icon: <AlertTriangle   className="w-4 h-4" /> },
+      { id: "vehiculos",   label: "Vehículos",    icon: <Car             className="w-4 h-4" /> },
+      { id: "planeados",   label: "Planeados",    icon: <CalendarDays    className="w-4 h-4" /> },
+      { id: "cumplidos",   label: "Cumplidos",    icon: <CheckSquare     className="w-4 h-4" /> },
+    ],
+  },
+  // { id: "comercial",      label: "COMERCIAL",      items: [] },
+  // { id: "finanzas",       label: "FINANZAS",        items: [] },
+  // { id: "talento_humano", label: "TALENTO HUMANO",  items: [] },
+  // { id: "hseq",           label: "HSEQ",            items: [] },
+  // { id: "configuracion",  label: "CONFIGURACIÓN",   items: [] },
 ];
+
+// Vista plana de todos los ítems — usada para búsquedas (breadcrumb, etc.)
+const NAV_ALL = NAV_SECTIONS.flatMap((s) => s.items);
 
 interface Props {
   vista: Vista;
@@ -68,40 +90,57 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
 
         <div style={{ height: 1, background: "rgba(255,255,255,0.07)", margin: "0 var(--space-4)" }} />
 
-        {/* Nav */}
-        <nav aria-label="Navegación principal" className="flex-1 px-3 py-3 flex flex-col gap-0.5 overflow-y-auto">
-          {NAV.map((item) => {
-            const active = vista === item.id;
-            const badge  = badges[item.id];
-            return (
-              <button
-                key={item.id}
-                onClick={() => setVista(item.id)}
-                aria-current={active ? "page" : undefined}
-                className={[
-                  "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-all text-[var(--text-md)] font-medium relative",
-                  "rounded-[var(--radius-xl)]",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--navy-dark)]",
-                  active
-                    ? "bg-[var(--navy-mid)] text-white"
-                    : "text-[rgba(255,255,255,0.55)] hover:bg-[rgba(255,255,255,0.07)] hover:text-[rgba(255,255,255,0.85)]",
-                ].join(" ")}
-                style={{ borderLeft: active ? "2px solid var(--inlop-red)" : "2px solid transparent" }}
+        {/* Nav — secciones con agrupación lógica */}
+        <nav aria-label="Navegación principal" className="flex-1 px-3 py-3 flex flex-col overflow-y-auto">
+          {NAV_SECTIONS.filter((s) => s.items.length > 0).map((section, sectionIdx) => (
+            <div key={section.id} className={sectionIdx > 0 ? "mt-4" : ""}>
+
+              {/* Etiqueta de sección */}
+              <div
+                className="px-3 pt-1 pb-1.5 text-[var(--text-xs)] font-semibold tracking-widest select-none"
+                style={{ color: "rgba(255,255,255,0.30)", letterSpacing: "0.08em" }}
+                aria-hidden="true"
               >
-                {item.icon}
-                <span className="flex-1">{item.label}</span>
-                {badge !== undefined && badge > 0 && (
-                  <span
-                    aria-label={`${badge} notificaciones`}
-                    className="text-[var(--text-xs)] font-bold px-1.5 py-0.5 rounded-[var(--radius-full)] min-w-[18px] text-center"
-                    style={{ background: "var(--inlop-red)", color: "#fff" }}
-                  >
-                    {badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+                {section.label}
+              </div>
+
+              {/* Ítems de la sección */}
+              <div className="flex flex-col gap-0.5">
+                {section.items.map((item) => {
+                  const active = vista === item.id;
+                  const badge  = badges[item.id];
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setVista(item.id)}
+                      aria-current={active ? "page" : undefined}
+                      className={[
+                        "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-all text-[var(--text-md)] font-medium relative",
+                        "rounded-[var(--radius-xl)]",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--navy-dark)]",
+                        active
+                          ? "bg-[var(--navy-mid)] text-white"
+                          : "text-[rgba(255,255,255,0.55)] hover:bg-[rgba(255,255,255,0.07)] hover:text-[rgba(255,255,255,0.85)]",
+                      ].join(" ")}
+                      style={{ borderLeft: active ? "2px solid var(--inlop-red)" : "2px solid transparent" }}
+                    >
+                      {item.icon}
+                      <span className="flex-1">{item.label}</span>
+                      {badge !== undefined && badge > 0 && (
+                        <span
+                          aria-label={`${badge} notificaciones`}
+                          className="text-[var(--text-xs)] font-bold px-1.5 py-0.5 rounded-[var(--radius-full)] min-w-[18px] text-center"
+                          style={{ background: "var(--inlop-red)", color: "#fff" }}
+                        >
+                          {badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         <div style={{ height: 1, background: "rgba(255,255,255,0.07)", margin: "0 var(--space-4)" }} />
@@ -153,7 +192,7 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
                 <ChevronRight className="w-3.5 h-3.5" />
               </li>
               <li aria-current="page" style={{ color: "var(--gray-700)", fontWeight: "var(--weight-semibold)" }}>
-                {NAV.find((n) => n.id === vista)?.label ?? "—"}
+                {NAV_ALL.find((n) => n.id === vista)?.label ?? "—"}
               </li>
             </ol>
           </nav>
