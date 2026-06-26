@@ -6330,7 +6330,7 @@ function fmtDate(d){
 var _profiles=[];
 
 async function loadProfiles(){
-  _profiles=await dbGet('profiles','select=id,nombre,email,rol&order=nombre.asc');
+  _profiles=await dbGet('personal','select=id,nombre,cargo,area&activo=eq.true&order=nombre.asc');
   return _profiles;
 }
 
@@ -6341,7 +6341,7 @@ function fillSelect(selId,selected){if(!_profiles||!_profiles.length){var s2=doc
   _profiles.forEach(function(p){
     var opt=document.createElement('option');
     opt.value=p.id;
-    opt.textContent=p.nombre+(p.departamento?' · '+p.departamento:'');
+    opt.textContent=p.nombre+(p.area?' · '+p.area:'');
     if(p.id===selected)opt.selected=true;
     sel.appendChild(opt);
   });
