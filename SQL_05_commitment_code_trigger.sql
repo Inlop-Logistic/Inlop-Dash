@@ -1,28 +1,35 @@
 -- ════════════════════════════════════════════════════════════════
 -- SCRIPT 05: generación automática de code en committee_commitments
--- El consecutivo COM-YYYY-NNN lo produce PostgreSQL, no el frontend.
--- Ejecutar una sola vez en Supabase.
+-- Secuencia + trigger en PostgreSQL. Sin lógica en el frontend.
+-- Idempotente: se puede ejecutar aunque ya existan registros.
 -- ════════════════════════════════════════════════════════════════
 
--- ── Secuencia anual ──────────────────────────────────────────────
--- Una secuencia global que reinicia manualmente cada año.
--- Si se necesita reinicio automático por año se puede reemplazar
--- por la función con lógica de año (ver comentario al final).
+-- 1. Crear la secuencia si no existe (arranca en 1, se ajusta abajo)
 CREATE SEQUENCE IF NOT EXISTS committee_commitments_code_seq
-  START 1
-  INCREMENT 1
-  NO CYCLE;
+  START 1 INCREMENT 1 NO CYCLE;
 
--- ── Función generadora ───────────────────────────────────────────
+-- 2. Sincronizar la secuencia con el mayor consecutivo existente.
+--    Si la tabla está vacía MAX() = NULL → COALESCE → setval a 0,
+--    con lo cual el próximo nextval() devuelve 1.
+--    Si ya existe COM-2026-003 → MAX = 3 → próximo nextval() = 4.
+SELECT setval(
+  'committee_commitments_code_seq',
+  COALESCE(
+    MAX(CAST(split_part(code, '-', 3) AS INTEGER)),
+    0
+  ),
+  true   -- 'true' significa "este valor ya fue usado"; nextval dará MAX+1
+)
+FROM committee_commitments
+WHERE code ~ '^COM-\d{4}-\d+$';   -- ignora registros con código mal formado
+
+-- 3. Función generadora
 CREATE OR REPLACE FUNCTION generate_commitment_code()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
-  yr   TEXT := to_char(NOW(), 'YYYY');
-  seq  BIGINT;
+  yr  TEXT   := to_char(NOW(), 'YYYY');
+  seq BIGINT;
 BEGIN
-  -- Solo genera el código si no viene ya establecido
   IF NEW.code IS NULL OR NEW.code = '' THEN
     seq := nextval('committee_commitments_code_seq');
     NEW.code := 'COM-' || yr || '-' || lpad(seq::TEXT, 3, '0');
@@ -31,31 +38,9 @@ BEGIN
 END;
 $$;
 
--- ── Trigger BEFORE INSERT ────────────────────────────────────────
+-- 4. Trigger BEFORE INSERT (DROP primero para que sea idempotente)
 DROP TRIGGER IF EXISTS trg_commitment_code ON committee_commitments;
 
 CREATE TRIGGER trg_commitment_code
   BEFORE INSERT ON committee_commitments
-  FOR EACH ROW
-  EXECUTE FUNCTION generate_commitment_code();
-
--- ════════════════════════════════════════════════════════════════
--- NOTA SOBRE EL REINICIO ANUAL
--- La secuencia es continua (COM-2026-001, COM-2026-002, ...,
--- COM-2027-003, COM-2027-004 ...). El año en el prefijo cambia solo,
--- pero el número NO reinicia a 001 al cambiar el año.
--- Si se requiere reinicio anual, ejecutar en enero:
---   ALTER SEQUENCE committee_commitments_code_seq RESTART WITH 1;
--- O reemplazar la función para usar un contador por año:
---
--- CREATE OR REPLACE FUNCTION generate_commitment_code() ...
---   SELECT COALESCE(MAX(
---     CAST(split_part(code, '-', 3) AS INT)
---   ), 0) + 1
---   INTO seq
---   FROM committee_commitments
---   WHERE code LIKE 'COM-' || yr || '-%';
---   NEW.code := 'COM-' || yr || '-' || lpad(seq::TEXT, 3, '0');
--- (Este enfoque es equivalente al JS anterior y tiene el mismo race
---  condition; usar la secuencia es siempre preferible.)
--- ════════════════════════════════════════════════════════════════
+  FOR EACH ROW EXECUTE FUNCTION generate_commitment_code();
