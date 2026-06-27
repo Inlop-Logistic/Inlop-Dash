@@ -29,6 +29,13 @@ export interface HistorialEstado {
   notas: string | null;
 }
 
+export interface ActorAccion {
+  id: string | null;
+  nombre: string | null;
+  fecha: string;
+  origen: "erp" | "app_cliente" | "sistema";
+}
+
 export interface SolicitudDetalle extends Solicitud {
   conductor_nombre: string | null;
   conductor_cedula: string | null;

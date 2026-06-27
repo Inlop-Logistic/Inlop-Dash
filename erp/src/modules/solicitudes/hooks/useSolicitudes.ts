@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { hoy, hace7dias } from "@/utils/date";
-import type { Solicitud } from "../types";
+import type { Solicitud, ActorAccion } from "../types";
 import { getSolicitudes, cambiarEstadoSolicitud } from "../services/api";
 
 export function useSolicitudes() {
@@ -28,7 +28,9 @@ export function useSolicitudes() {
   useEffect(() => { cargar(); }, [desde, hasta]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEstado = async (id: string, estado: string) => {
-    await cambiarEstadoSolicitud(id, estado);
+    // actor: incorporar desde AuthContext cuando esté disponible
+    const actor: ActorAccion | null = null;
+    await cambiarEstadoSolicitud(id, estado, actor ? { actor } : {});
     setData((prev) =>
       prev.map((s) => s.id === id ? { ...s, estado: estado as Solicitud["estado"] } : s)
     );

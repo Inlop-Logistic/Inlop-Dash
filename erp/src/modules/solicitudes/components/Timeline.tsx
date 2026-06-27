@@ -1,11 +1,17 @@
 import { CheckCircle, XCircle } from "lucide-react";
 import { fmtFecha } from "@/utils/date";
 import { ESTADO_CFG, ESTADO_FLOW } from "../constants";
-import type { HistorialEstado } from "../types";
+
+interface TimelineEntrada {
+  estado: string;
+  cambiado_en: string;
+  cambiado_por: string | null;
+  notas: string | null;
+}
 
 interface TimelineProps {
-  historial:     HistorialEstado[];
-  estadoActual:  string;
+  historial:    TimelineEntrada[];
+  estadoActual: string;
 }
 
 export function Timeline({ historial, estadoActual }: TimelineProps) {
