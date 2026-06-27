@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  User, Truck, Link as LinkIcon, MapPin, Calendar, FileText, AlertCircle,
+  User, Truck, MapPin, Calendar, FileText, AlertCircle,
 } from "lucide-react";
 import { fmtFecha } from "@/utils/date";
 import { SidePanel, PanelSection, InfoRow, Button } from "@/components/ui";
@@ -56,10 +56,10 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
     }
   };
 
-  const d             = detalle;
-  const tieneCondutor = d?.conductor_nombre;
-  const tieneVehiculo = d?.vehiculo_placa;
-  const historial     = d?.historial ?? [];
+  const d              = detalle;
+  const tieneConductor = d?.conductor_nombre;
+  const tieneVehiculo  = d?.vehiculo_placa;
+  const historial      = d?.historial ?? [];
 
   const footer = (solicitud.estado === "pendiente" || solicitud.estado === "aprobado") ? (
     <div className="px-6 py-4 flex flex-col gap-2.5">
@@ -106,15 +106,41 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
       width="480px"
     >
 
-      {/* ── 1. Cliente ─────────────────────────────────────────── */}
-      <PanelSection title="Cliente" icon={<User className="w-3.5 h-3.5" />} first>
+      {/* Identificación */}
+      <PanelSection title="Identificación" icon={<FileText className="w-3.5 h-3.5" />} first>
+        <InfoRow label="Estado"    value={<EstadoBadge estado={solicitud.estado} />} />
+        <InfoRow label="Código"    value={solicitud.codigo_solicitud} mono />
+        {solicitud.external_ref && (
+          <InfoRow label="Referencia" value={solicitud.external_ref} mono />
+        )}
+        <div
+          className="mt-3 px-3 py-2.5 rounded-xl"
+          style={{ background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}
+        >
+          <div
+            className="text-[10px] font-semibold uppercase tracking-wide mb-1"
+            style={{ color: "var(--gray-400)" }}
+          >
+            Llave de correlación operativa
+          </div>
+          <div className="text-[14px] font-bold font-mono" style={{ color: "var(--navy)" }}>
+            {solicitud.external_ref ?? solicitud.codigo_solicitud}
+          </div>
+          <div className="text-[11px] mt-1 leading-snug" style={{ color: "var(--gray-400)" }}>
+            Este identificador permitirá relacionar esta solicitud con la operación logística durante su ciclo de ejecución.
+          </div>
+        </div>
+      </PanelSection>
+
+      {/* Cliente */}
+      <PanelSection title="Cliente" icon={<User className="w-3.5 h-3.5" />}>
         <InfoRow label="Cliente"     value={solicitud.cliente} />
         <InfoRow label="Agencia"     value={solicitud.agencia} />
         <InfoRow label="Canal"       value={<CanalBadge canal={solicitud.canal} />} />
         <InfoRow label="Solicitante" value={solicitud.solicitante ?? "No registrado"} />
       </PanelSection>
 
-      {/* ── 2. Operación ───────────────────────────────────────── */}
+      {/* Operación */}
       <PanelSection title="Operación" icon={<MapPin className="w-3.5 h-3.5" />}>
         <InfoRow label="Tipo"            value={solicitud.tipo_operacion === "urbana" ? "Urbana" : "Nacional"} />
         <InfoRow label="Tipo vehículo"   value={solicitud.tipo_vehiculo} />
@@ -153,7 +179,7 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
         {d?.actualizado_en    && <InfoRow label="Actualizada" value={fmtFecha(d.actualizado_en)}    />}
       </PanelSection>
 
-      {/* ── 3. Asignación (conductor + vehículo) ───────────────── */}
+      {/* Asignación */}
       <PanelSection title="Asignación" icon={<Truck className="w-3.5 h-3.5" />}>
         {loadingDetalle ? (
           <div className="text-[12px] py-2" style={{ color: "var(--gray-300)" }}>Cargando…</div>
@@ -173,7 +199,7 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
               >
                 Conductor
               </div>
-              {tieneCondutor ? (
+              {tieneConductor ? (
                 <div
                   className="flex items-center gap-3 p-3 rounded-xl"
                   style={{ background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}
@@ -250,25 +276,7 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
         )}
       </PanelSection>
 
-      {/* ── 4. Correlación ─────────────────────────────────────── */}
-      <PanelSection title="Correlación" icon={<LinkIcon className="w-3.5 h-3.5" />}>
-        <div
-          className="px-3 py-2.5 rounded-xl"
-          style={{ background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}
-        >
-          <div className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--gray-400)" }}>
-            Llave de correlación operativa
-          </div>
-          <div className="text-[14px] font-bold font-mono" style={{ color: "var(--navy)" }}>
-            {solicitud.external_ref ?? solicitud.codigo_solicitud}
-          </div>
-          <div className="text-[11px] mt-1 leading-snug" style={{ color: "var(--gray-400)" }}>
-            Este identificador permitirá relacionar esta solicitud con la operación logística durante su ciclo de ejecución.
-          </div>
-        </div>
-      </PanelSection>
-
-      {/* ── 5. Observaciones (condicional) ─────────────────────── */}
+      {/* Observaciones (condicional) */}
       {d?.notas && (
         <PanelSection title="Observaciones" icon={<FileText className="w-3.5 h-3.5" />}>
           <div
@@ -280,7 +288,7 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
         </PanelSection>
       )}
 
-      {/* ── 6. Historial ───────────────────────────────────────── */}
+      {/* Historial */}
       <PanelSection title="Historial" icon={<Calendar className="w-3.5 h-3.5" />}>
         {loadingDetalle ? (
           <div className="text-[12px] py-2" style={{ color: "var(--gray-300)" }}>Cargando historial…</div>

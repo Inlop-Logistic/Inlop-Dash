@@ -55,8 +55,9 @@ export function SolicitudesPage() {
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <label className="text-[12px] font-medium whitespace-nowrap" style={{ color: "var(--gray-500)" }}>Desde</label>
+          <label htmlFor="filtro-desde" className="text-[12px] font-medium whitespace-nowrap" style={{ color: "var(--gray-500)" }}>Desde</label>
           <input
+            id="filtro-desde"
             type="date" value={desde}
             onChange={(e) => setDesde(e.target.value)}
             className="text-[13px] outline-none"
@@ -64,8 +65,9 @@ export function SolicitudesPage() {
           />
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-[12px] font-medium whitespace-nowrap" style={{ color: "var(--gray-500)" }}>Hasta</label>
+          <label htmlFor="filtro-hasta" className="text-[12px] font-medium whitespace-nowrap" style={{ color: "var(--gray-500)" }}>Hasta</label>
           <input
+            id="filtro-hasta"
             type="date" value={hasta}
             onChange={(e) => setHasta(e.target.value)}
             className="text-[13px] outline-none"
@@ -76,6 +78,7 @@ export function SolicitudesPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "var(--gray-400)" }} />
           <input
             type="text" value={busqueda}
+            aria-label="Buscar solicitudes"
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="SOL, cliente, agencia, ruta…"
             className="w-full text-[13px] outline-none"
@@ -85,7 +88,7 @@ export function SolicitudesPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex items-center gap-1.5 flex-wrap" role="tablist">
         {TABS.map((t) => {
           const active = tabEstado === t.id;
           const count  = t.id === "todos"
@@ -94,6 +97,8 @@ export function SolicitudesPage() {
           return (
             <button
               key={t.id}
+              role="tab"
+              aria-selected={active}
               onClick={() => setTabEstado(t.id)}
               className="flex items-center gap-1.5 font-semibold text-[12px] px-3.5 py-1.5 rounded-lg transition-all"
               style={{
@@ -130,7 +135,7 @@ export function SolicitudesPage() {
           <div className="py-16 text-center">
             <AlertCircle className="w-8 h-8 mx-auto mb-3" style={{ color: "var(--inlop-red)", opacity: 0.5 }} />
             <p className="text-[13px]" style={{ color: "var(--inlop-red)" }}>{error}</p>
-            <button onClick={cargar} className="mt-3 text-[12px] underline" style={{ color: "var(--navy)" }}>
+            <button type="button" onClick={cargar} className="mt-3 text-[12px] underline" style={{ color: "var(--navy)" }}>
               Reintentar
             </button>
           </div>
