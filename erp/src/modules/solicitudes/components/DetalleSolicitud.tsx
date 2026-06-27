@@ -21,6 +21,7 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
   const [loadingDetalle, setLoadingDetalle] = useState(true);
   const [accionLoading, setAccionLoading]  = useState(false);
   const [errorDetalle, setErrorDetalle]    = useState<string | null>(null);
+  const [accionError, setAccionError]      = useState<string | null>(null);
 
   useEffect(() => {
     setLoadingDetalle(true);
@@ -36,8 +37,20 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
 
   const accion = async (estado: string) => {
     setAccionLoading(true);
+    setAccionError(null);
     try {
       await onEstado(solicitud.id, estado);
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : "";
+      if (/403|401|permiso|autorizado/i.test(raw)) {
+        setAccionError("No tienes permiso para realizar esta acción. Contacta a tu administrador.");
+      } else if (/409|conflict|modificado/i.test(raw)) {
+        setAccionError("Esta solicitud fue modificada por otro operador. Cierra el panel y recarga la lista.");
+      } else if (/network|failed to fetch|timeout/i.test(raw)) {
+        setAccionError("No se pudo conectar con el servidor. Verifica tu conexión e intenta de nuevo.");
+      } else {
+        setAccionError("No fue posible completar la acción. Intenta de nuevo en unos momentos.");
+      }
     } finally {
       setAccionLoading(false);
     }
@@ -50,6 +63,15 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
 
   const footer = (solicitud.estado === "pendiente" || solicitud.estado === "aprobado") ? (
     <div className="px-6 py-4 flex flex-col gap-2.5">
+      {accionError && (
+        <div
+          className="flex items-start gap-2 text-[12px] px-3 py-2.5 rounded-xl"
+          style={{ background: "var(--danger-bg)", color: "#9F1239", border: "1px solid var(--danger)" }}
+        >
+          <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          {accionError}
+        </div>
+      )}
       {solicitud.estado === "pendiente" && (
         <Button
           variant="primary"
@@ -89,6 +111,22 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
         <InfoRow label="Canal"       value={<CanalBadge canal={solicitud.canal} />} />
         <InfoRow label="Solicitante" value={solicitud.solicitante} />
         <InfoRow label="Operación"   value={solicitud.tipo_operacion === "urbana" ? "Urbana" : "Nacional"} />
+
+        <div
+          className="mt-3 px-3 py-2.5 rounded-xl"
+          style={{ background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}
+        >
+          <div className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--gray-400)" }}>
+            Llave de correlación operativa
+          </div>
+          <div className="text-[14px] font-bold font-mono" style={{ color: "var(--navy)" }}>
+            {solicitud.external_ref ?? solicitud.codigo_solicitud}
+          </div>
+          <div className="text-[11px] mt-1 leading-snug" style={{ color: "var(--gray-400)" }}>
+            Este identificador se utilizará al crear la operación en el proveedor TMS.
+          </div>
+        </div>
+
         {d?.notas && (
           <div
             className="mt-3 text-[12px] px-3 py-2.5 rounded-xl"

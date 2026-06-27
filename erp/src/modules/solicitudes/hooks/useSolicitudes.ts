@@ -32,7 +32,6 @@ export function useSolicitudes() {
     setData((prev) =>
       prev.map((s) => s.id === id ? { ...s, estado: estado as Solicitud["estado"] } : s)
     );
-    setPanelId(null);
   };
 
   const filtradas = useMemo(() => {
