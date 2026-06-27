@@ -123,7 +123,7 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
             {solicitud.external_ref ?? solicitud.codigo_solicitud}
           </div>
           <div className="text-[11px] mt-1 leading-snug" style={{ color: "var(--gray-400)" }}>
-            Este identificador se utilizará al crear la operación en el proveedor TMS.
+            Este identificador permitirá relacionar esta solicitud con la operación logística durante su ciclo de ejecución.
           </div>
         </div>
 
