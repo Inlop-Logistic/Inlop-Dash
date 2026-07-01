@@ -9664,7 +9664,7 @@ function goStep(n){
 /* ── Inicializar sesión ───────────────────────────── */
 function initSession(){
   _step=1;
-  _cmpLoaded=false; /* forzar re-fetch de compromisos en nueva sesión */
+  /* CM.isLoaded() se consulta en tiempo de render — no requiere variable local */
   _cmpExisting=[];
   var semana=(typeof wkId!=='undefined')?wkId:'—';
   var cargoActivo=(typeof cargo!=='undefined')?cargo:'liq';
