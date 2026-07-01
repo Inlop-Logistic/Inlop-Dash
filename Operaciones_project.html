@@ -2068,6 +2068,11 @@ window.updatePortalStats=updatePortalStats;
       <button class="xl-btn" onclick="window.open('https://inlop1.sharepoint.com/:x:/s/INLOP/IQA7_s7M6rcXTaiTdLmkFVK7AS-_1oaThXbqJ8QCEYyUZSw?e=mq7vbt', '_blank')" style="background:#185FA5">SharePoint</button>
       <button class="xl-clr" id="xlClr" onclick="clearMem()">✕ Limpiar</button>
     </div>
+    <!-- DEMO — REMOVER ANTES DE PRODUCCIÓN -->
+    <button style="padding:5px 12px;border-radius:6px;background:#e67e00;border:none;color:#fff;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.08em" onclick="CO._demo()" title="Modo demo: carga datos ficticios">
+      ⚡ DEMO
+    </button>
+    <!-- FIN DEMO -->
     <button class="btn-comite-hdr" id="btnComiteHdr" onclick="CO.open()">
       <i class="ti ti-clipboard-text" aria-hidden="true"></i>Comité Operativo
     </button>
@@ -8169,7 +8174,23 @@ var CO={
     updateAsisCounters();
   },
 
-  _getSession:function(){return _session;}
+  _getSession:function(){return _session;},
+
+  /* ── MODO DEMO — REMOVER ANTES DE PRODUCCIÓN ────── */
+  _demo:function(){
+    _coPersonal=[
+      {id:'d1',nombre:'Carlos Martínez',cargo:'Jefe Operativo',area:'Operaciones'},
+      {id:'d2',nombre:'Laura Gómez',cargo:'Coordinadora Logística',area:'Logística'},
+      {id:'d3',nombre:'Andrés Pérez',cargo:'Supervisor Carga Líquida',area:'Operaciones'},
+      {id:'d4',nombre:'María Torres',cargo:'Supervisora Carga Seca',area:'Operaciones'},
+      {id:'d5',nombre:'Juan Rodríguez',cargo:'Analista HSE',area:'HSE'},
+      {id:'d6',nombre:'Paola Suárez',cargo:'Auxiliar Tráfico',area:'Tráfico'},
+      {id:'d7',nombre:'Felipe Castro',cargo:'Conductor Senior',area:'Transporte'}
+    ];
+    _coPersonalLoaded=true;
+    CO.open();
+  }
+  /* ── FIN MODO DEMO ──────────────────────────────── */
 };
 
 window.CO=CO;
