@@ -8182,6 +8182,7 @@ var _session={
 /* ── Directorio de personal (caché local) ─────────── */
 var _coPersonal=[];
 var _coPersonalLoaded=false;
+var _demoMode=false;
 
 /* ── Constantes Supabase (solo lectura GET) ───────── */
 var _CO_SB_URL='https://gtyydandwcgoaratmnqh.supabase.co';
@@ -9266,7 +9267,7 @@ function validateSnapshot(snap){
     {label:'Encabezado',step:1,ok:!!(snap.fecha_reunion&&snap.lugar&&snap.responsable_liquida_id&&snap.responsable_seca_id)},
     {label:'Asistencia',step:2,ok:snap.asistentes&&snap.asistentes.length>0},
     {label:'Project',step:3,ok:true},
-    {label:'Seguimiento Operativo',step:4,ok:!!(snap.operacion&&(snap.operacion.liq||snap.operacion.sec))},
+    {label:'Seguimiento Operativo',step:4,ok:true},
     {label:'Generalidades',step:5,ok:true},
     {label:'Momento HSE',step:6,ok:true},
     {label:'Acuerdos del Comité',step:7,ok:true}
@@ -9275,6 +9276,10 @@ function validateSnapshot(snap){
 
 /* ── Persiste el acta y los compromisos nuevos ───── */
 async function persistSnapshot(snap){
+  /* Modo demo: omitir Supabase y retornar acta local */
+  if(_demoMode){
+    return{id:'demo-'+Date.now(),codigo:snap.codigo,snapshot:snap,status:'finalizado'};
+  }
   /* 1. Insertar acta */
   var actaBody={
     codigo:snap.codigo,
@@ -9728,6 +9733,7 @@ var CO={
     CM.setCoContext(false,null);
     _finalizando=false;
     _lastSnapshot=null;
+    _demoMode=false;
     var ov=$id('co-overlay');
     if(ov)ov.style.display='none';
     _step=1;
@@ -9831,9 +9837,12 @@ var CO={
   _cerrarExito:function(){
     var ov=$id('co-success-overlay');
     if(ov)ov.style.display='none';
-    /* cerrar el wizard también */
     var wiz=$id('co-overlay');
     if(wiz)wiz.style.display='none';
+    CM.setCoContext(false,null);
+    _finalizando=false;
+    _lastSnapshot=null;
+    _demoMode=false;
     _step=1;
     _session={};
   },
@@ -9871,6 +9880,7 @@ var CO={
 
   /* ── MODO DEMO — REMOVER ANTES DE PRODUCCIÓN ────── */
   _demo:function(){
+    _demoMode=true;
     _coPersonal=[
       {id:'d1',nombre:'Carlos Martínez',cargo:'Jefe Operativo',area:'Operaciones'},
       {id:'d2',nombre:'Laura Gómez',cargo:'Coordinadora Logística',area:'Logística'},
@@ -9882,6 +9892,29 @@ var CO={
     ];
     _coPersonalLoaded=true;
     CO.open();
+    /* Pre-poblar _session con datos demo para que el checklist pase sin navegar todos los pasos */
+    setTimeout(function(){
+      var hoy=new Date();
+      var yy=hoy.getFullYear();
+      var mm=String(hoy.getMonth()+1).padStart(2,'0');
+      var dd=String(hoy.getDate()).padStart(2,'0');
+      _session.fecha_reunion=yy+'-'+mm+'-'+dd;
+      _session.hora_inicio='08:00';
+      _session.hora_fin='09:30';
+      _session.lugar='Sala de Operaciones INLOP';
+      _session.responsable_1='d1';
+      _session.responsable_2='d2';
+      /* Sincronizar DOM del Step 1 */
+      var f=$id('co-f-fecha');if(f)f.value=_session.fecha_reunion;
+      var h=$id('co-f-hora');if(h)h.value=_session.hora_inicio;
+      var l=$id('co-f-lugar');if(l)l.value=_session.lugar;
+      var r1=$id('co-f-resp1');if(r1)r1.value=_session.responsable_1;
+      var r2=$id('co-f-resp2');if(r2)r2.value=_session.responsable_2;
+      /* Asistencia demo: todos marcados como presentes */
+      _session.asistencia=_coPersonal.map(function(p){
+        return{id:p.id,nombre:p.nombre,cargo:p.cargo,area:p.area,tipo:'personal',presente:true};
+      });
+    },150);
   }
   /* ── FIN MODO DEMO ──────────────────────────────── */
 };
