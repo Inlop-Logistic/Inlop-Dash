@@ -7551,6 +7551,23 @@ if(document.readyState!=='loading'){tryInit();}
 .co-gen-novedad-dot.crit{background:#dc2626;}
 .co-gen-sin-nov{color:#94a3b8;font-style:italic;font-size:12px;padding:2px 0;}
 .co-gen-nd-note{color:#94a3b8;font-style:italic;font-size:12px;}
+.co-gen-badge-pi{background:rgba(148,163,184,.12);color:#64748b;}
+.co-gen-pi-note{display:flex;align-items:center;gap:6px;color:#94a3b8;font-size:12px;font-style:italic;}
+.co-gen-pi-note i{font-size:13px;}
+/* ── Momento HSE Step 6 ────────────────────────── */
+.co-hse-ruleta-card{background:var(--c1);border:1px solid var(--line2);border-radius:12px;overflow:hidden;}
+.co-hse-ruleta-hdr{display:flex;align-items:center;gap:12px;padding:14px 18px;background:linear-gradient(135deg,rgba(1,42,107,.05),rgba(1,42,107,.02));border-bottom:1px solid var(--line2);}
+.co-hse-ruleta-hdr i{font-size:22px;color:var(--navy);}
+.co-hse-ruleta-hdr-txt{flex:1;}
+.co-hse-ruleta-hdr-ttl{font-size:13px;font-weight:700;color:var(--navy);letter-spacing:.02em;}
+.co-hse-ruleta-hdr-sub{font-size:11px;color:#64748b;margin-top:1px;}
+.co-hse-ruleta-body{padding:18px;}
+.co-hse-info-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid #f1f5f9;}
+.co-hse-info-row:last-child{border-bottom:none;}
+.co-hse-info-lbl{font-size:11px;color:#94a3b8;font-weight:600;letter-spacing:.04em;text-transform:uppercase;min-width:110px;flex-shrink:0;}
+.co-hse-info-val{font-size:13px;color:var(--w1);font-weight:600;}
+.co-hse-no-asign{display:flex;align-items:center;gap:10px;padding:16px;color:#94a3b8;font-size:13px;font-style:italic;}
+.co-hse-no-asign i{font-size:18px;}
 @media(max-width:640px){
   .co-ops-kpi-row{grid-template-columns:repeat(2,1fr);}
   .co-gen-grid{grid-template-columns:1fr;}
@@ -7805,14 +7822,34 @@ if(document.readyState!=='loading'){tryInit();}
         <div class="co-step-num">6</div>
         <div class="co-step-hdr-txt">
           <div class="co-step-ttl">Momento HSE</div>
-          <div class="co-step-desc">Responsable del momento de seguridad. Proviene automáticamente del resultado de la Ruleta HSEQ.</div>
+          <div class="co-step-desc">Responsable del momento de seguridad asignado por la Ruleta HSEQ. Registre el tema presentado y las observaciones del comité.</div>
         </div>
       </div>
-      <div class="co-placeholder">
-        <i class="ti ti-shield-check"></i>
-        <strong>Próxima fase</strong><br>
-        Aquí se mostrará el responsable asignado por la Ruleta HSEQ y<br>
-        un campo para registrar el tema presentado y observaciones.
+
+      <!-- Tarjeta ejecutiva Ruleta -->
+      <div style="padding:14px 18px 0;">
+        <div class="co-hse-ruleta-card" id="co-hse-ruleta-card">
+          <!-- renderizado por initStep6() -->
+        </div>
+      </div>
+
+      <!-- Campos de captura manual -->
+      <div class="co-form-section" style="margin-top:14px;">
+        <div class="co-form-section-ttl"><i class="ti ti-microphone"></i>Tema presentado <span class="co-req-note">— opcional</span></div>
+        <div style="padding:14px 18px;">
+          <textarea class="co-proj-obs-area" id="co-hse-tema"
+            placeholder="Describa brevemente el tema presentado en el momento HSE…"
+            oninput="CO._syncHseTema(this.value)"></textarea>
+        </div>
+      </div>
+
+      <div class="co-form-section">
+        <div class="co-form-section-ttl"><i class="ti ti-pencil"></i>Observaciones <span class="co-req-note">— opcional</span></div>
+        <div style="padding:14px 18px;">
+          <textarea class="co-proj-obs-area" id="co-hse-obs"
+            placeholder="Observaciones del comité sobre el momento HSE, compromisos o acuerdos derivados…"
+            oninput="CO._syncHseObs(this.value)"></textarea>
+        </div>
       </div>
     </div>
 
@@ -7941,9 +7978,13 @@ var _session={
   project_snapshot:null,
   ops_snapshot:null,
   generalidades:{observaciones:'',snapshot:null},
-  hse_responsable:null,
-  hse_tema:'',
-  hse_observaciones:'',
+  hse:{
+    responsable:null,        /* leído de snap.hseq — solo lectura */
+    tema_presentado:'',      /* captura manual en el comité */
+    observaciones:'',        /* textarea opcional */
+    /* Preparado para compromisos — implementación en Fase 3.8 */
+    compromisos_generados:[] /* [{texto, responsable, fecha_limite}] */
+  },
   compromisos_revisados:[],
   compromisos_nuevos:[],
   acta_id:null,
@@ -8590,7 +8631,7 @@ function initStep5(){
       : '<div class="co-gen-sin-nov">Cumplimiento al 100% en todos los cargos</div>'
   );
 
-  /* ── Área: Sistemas / Project ──────────────────────── */
+  /* ── Área: Project / Sistemas ─────────────────────── */
   var snap=null;
   try{snap=projGetSnapshot(semana);}catch(e){}
   var tasksCrit=snap?(snap.tasks||[]).filter(function(t){
@@ -8598,7 +8639,7 @@ function initStep5(){
     var ind=projCalcIndicador(t.real,t.meta);
     return ind.estado==='crit'||ind.estado==='risk';
   }):[];
-  html+=_genCard('ti-device-laptop','Sistemas',tasksCrit.length>0?'warn':'ok',
+  html+=_genCard('ti-device-laptop','Project',tasksCrit.length>0?'warn':'ok',
     snap
       ? (tasksCrit.length>0
           ? tasksCrit.map(function(t){
@@ -8612,23 +8653,26 @@ function initStep5(){
       : '<div class="co-gen-sin-nov">Datos de Project no disponibles para esta semana</div>'
   );
 
-  /* ── Área: HSEQ — solo ruleta ──────────────────────── */
-  var hseqInfo=snap&&snap.hseq?snap.hseq:null;
-  html+=_genCard('ti-shield-check','HSEQ',hseqInfo?'ok':'nd',
-    hseqInfo
+  /* ── Área: HSEQ — responsable + tema de ruleta ──────── */
+  var hseqResp=snap&&snap.hseq?snap.hseq:null;
+  var hseqTema=_session.hse&&_session.hse.tema_presentado?_session.hse.tema_presentado:null;
+  html+=_genCard('ti-shield-check','HSEQ',hseqResp?'ok':'nd',
+    hseqResp
       ? '<div class="co-gen-novedad-item" style="border:none">'
         +'<div class="co-gen-novedad-dot" style="background:#3b82f6"></div>'
-        +'<div>Tema ruleta: <strong>'+_esc(hseqInfo)+'</strong></div></div>'
-      : '<div class="co-gen-sin-nov">Sin información de ruleta HSEQ para esta semana</div>'
+        +'<div><span style="color:#94a3b8">Responsable:</span> <strong>'+_esc(hseqResp)+'</strong>'
+        +(hseqTema?'<br><span style="color:#94a3b8">Tema:</span> '+_esc(hseqTema):'')
+        +'</div></div>'
+      : '<div class="co-gen-sin-nov">Sin asignación de Ruleta HSEQ para esta semana</div>'
   );
 
-  /* ── Áreas sin módulo en el sistema actual ──────────── */
-  ['Gestión Documental','Comercial','Financiero'].forEach(function(area){
-    var ico=area==='Gestión Documental'?'ti-file-text':area==='Comercial'?'ti-trending-up':'ti-report-money';
-    html+=_genCard(ico,area,'nd',
-      '<div class="co-gen-nd-note">Información no disponible en el sistema actual</div>'
-    );
-  });
+  /* ── Áreas pendientes de integración ───────────────── */
+  [{area:'Gestión Documental',ico:'ti-file-text'},{area:'Comercial',ico:'ti-trending-up'},{area:'Financiero',ico:'ti-report-money'}]
+    .forEach(function(e){
+      html+=_genCard(e.ico,e.area,'pi',
+        '<div class="co-gen-pi-note"><i class="ti ti-clock"></i> Pendiente de integración con el sistema</div>'
+      );
+    });
 
   html+='</div>';
   cont.innerHTML=html;
@@ -8642,6 +8686,7 @@ function _esc(s){
 function _genCard(icon,title,status,bodyHtml){
   var badge=status==='ok'?'<span class="co-gen-card-badge co-gen-badge-ok">Sin novedades</span>'
     :status==='warn'?'<span class="co-gen-card-badge co-gen-badge-warn">Con novedades</span>'
+    :status==='pi'?'<span class="co-gen-card-badge co-gen-badge-pi">Pendiente integración</span>'
     :'<span class="co-gen-card-badge co-gen-badge-nd">Sin datos</span>';
   return '<div class="co-gen-card">'
     +'<div class="co-gen-card-hdr"><i class="ti '+icon+'"></i>'
@@ -8654,6 +8699,63 @@ function syncStep5Obs(val){
   if(!_session.generalidades||typeof _session.generalidades!=='object')
     _session.generalidades={observaciones:'',snapshot:null};
   _session.generalidades.observaciones=val||'';
+}
+
+/* ── Step 6: Momento HSE ─────────────────────────── */
+function _hseObj(){
+  if(!_session.hse||typeof _session.hse!=='object')
+    _session.hse={responsable:null,tema_presentado:'',observaciones:'',compromisos_generados:[]};
+  return _session.hse;
+}
+
+function initStep6(){
+  var hse=_hseObj();
+  var semana=_session.semana;
+  var card=$id('co-hse-ruleta-card');
+  var temaEl=$id('co-hse-tema');
+  var obsEl=$id('co-hse-obs');
+
+  /* Leer responsable de la Ruleta (snap.hseq del módulo Project) */
+  var snap=null;
+  try{snap=projGetSnapshot(semana);}catch(e){}
+  var resp=snap&&snap.hseq?snap.hseq:null;
+  hse.responsable=resp||null;
+
+  /* Semana actual para mostrar en tarjeta */
+  var semLabel=semana&&semana!=='—'?semana:'—';
+
+  /* Renderizar tarjeta ejecutiva */
+  if(card){
+    if(resp){
+      card.innerHTML='<div class="co-hse-ruleta-hdr">'
+        +'<i class="ti ti-shield-check"></i>'
+        +'<div class="co-hse-ruleta-hdr-txt">'
+        +'<div class="co-hse-ruleta-hdr-ttl">Ruleta HSEQ — Asignación vigente</div>'
+        +'<div class="co-hse-ruleta-hdr-sub">Información proveniente del módulo Project</div>'
+        +'</div></div>'
+        +'<div class="co-hse-ruleta-body">'
+        +'<div class="co-hse-info-row"><span class="co-hse-info-lbl">Responsable</span><span class="co-hse-info-val">'+_esc(resp)+'</span></div>'
+        +'<div class="co-hse-info-row"><span class="co-hse-info-lbl">Semana</span><span class="co-hse-info-val">'+_esc(semLabel)+'</span></div>'
+        +'</div>';
+    } else {
+      card.innerHTML='<div class="co-hse-no-asign">'
+        +'<i class="ti ti-alert-circle"></i>'
+        +'Sin asignación de Ruleta HSEQ para la semana '+_esc(semLabel)
+        +'. Asigne el responsable desde el módulo <strong>Project</strong>.</div>';
+    }
+  }
+
+  /* Restaurar campos de captura manual desde _session */
+  if(temaEl) temaEl.value=hse.tema_presentado||'';
+  if(obsEl)  obsEl.value=hse.observaciones||'';
+}
+
+function syncHseTema(val){
+  _hseObj().tema_presentado=val||'';
+}
+
+function syncHseObs(val){
+  _hseObj().observaciones=val||'';
 }
 
 /* ── Dispatcher: guardar estado antes de salir ────── */
@@ -8669,13 +8771,14 @@ function initStepContent(n){
   if(n===3) initStep3();
   if(n===4) initStep4();
   if(n===5) initStep5();
+  if(n===6) initStep6();
 }
 
 /* ── Dispatcher: validar antes de avanzar ─────────── */
 function validateStep(n){
   if(n===1) return validateStep1();
   if(n===2) return validateStep2();
-  return true; /* Pasos 3 y 4 siempre permiten avanzar */
+  return true; /* Pasos 3–6 siempre permiten avanzar */
 }
 
 /* ── Render barra de progreso ─────────────────────── */
@@ -8754,9 +8857,12 @@ function initSession(){
     project_snapshot:null,
     ops_snapshot:null,
     generalidades:{observaciones:'',snapshot:null},
-    hse_responsable:null,
-    hse_tema:'',
-    hse_observaciones:'',
+    hse:{
+      responsable:null,
+      tema_presentado:'',
+      observaciones:'',
+      compromisos_generados:[]
+    },
     compromisos_revisados:[],
     compromisos_nuevos:[],
     project:{observaciones:'',snapshot:null},
@@ -8869,6 +8975,10 @@ var CO={
 
   /* ── Generalidades: sync textarea observaciones ──── */
   _syncGenObs:function(val){syncStep5Obs(val);},
+
+  /* ── Momento HSE: sync campos ────────────────────── */
+  _syncHseTema:function(val){syncHseTema(val);},
+  _syncHseObs:function(val){syncHseObs(val);},
 
   /* ── Operativo: toggle detalle colapsable ────────── */
   _toggleOpsDetalle:function(uid){
