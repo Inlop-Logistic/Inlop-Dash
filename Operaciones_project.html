@@ -7192,6 +7192,145 @@ if(document.readyState!=='loading'){tryInit();}
   .co-form-group{border-right:none;}
   .co-form-group.co-span-2{grid-column:1;}
 }
+
+/* ── Paso 2: Asistencia ─────────────────────────────── */
+.co-asis-summary{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:12px;
+}
+.co-asis-stat{
+  background:var(--c1);border:1px solid var(--line2);border-radius:10px;
+  padding:14px 16px;text-align:center;
+}
+.co-asis-stat.green{border-color:rgba(34,139,34,.25);background:rgba(34,139,34,.04);}
+.co-asis-stat.red  {border-color:rgba(200,30,30,.25); background:rgba(200,30,30,.04);}
+.co-asis-stat.blue {border-color:rgba(1,42,107,.2);   background:rgba(1,42,107,.04);}
+.co-asis-stat-val{
+  font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:700;
+  color:var(--navy);line-height:1;
+}
+.co-asis-stat.green .co-asis-stat-val{color:#228b22;}
+.co-asis-stat.red   .co-asis-stat-val{color:#c81e1e;}
+.co-asis-stat.blue  .co-asis-stat-val{color:var(--navy2);}
+.co-asis-stat-lbl{
+  font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:#888;margin-top:4px;
+}
+/* tarjeta de persona */
+.co-asis-card{
+  display:flex;align-items:center;gap:14px;
+  padding:12px 18px;
+  border-bottom:1px solid var(--line2);
+  cursor:pointer;
+  transition:background .12s;
+}
+.co-asis-card:last-child{border-bottom:none;}
+.co-asis-card:hover{background:rgba(1,42,107,.03);}
+.co-asis-card.ausente{opacity:.5;}
+.co-asis-avatar{
+  width:36px;height:36px;border-radius:50%;
+  background:var(--navy);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;
+  flex-shrink:0;
+}
+.co-asis-card.ausente .co-asis-avatar{background:#bbb;}
+.co-asis-info{flex:1;min-width:0;}
+.co-asis-nombre{
+  font-size:13px;font-weight:600;color:var(--w1);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.co-asis-cargo{font-size:11px;color:#888;margin-top:1px;}
+.co-asis-check{
+  width:20px;height:20px;border-radius:4px;
+  border:2px solid var(--line2);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;transition:all .12s;
+  background:var(--c1);
+}
+.co-asis-card:not(.ausente) .co-asis-check{
+  background:var(--navy);border-color:var(--navy);
+}
+.co-asis-card:not(.ausente) .co-asis-check::after{
+  content:'';display:block;
+  width:5px;height:9px;
+  border:2px solid #fff;border-top:none;border-left:none;
+  transform:rotate(45deg) translate(-1px,-1px);
+}
+/* tarjeta invitado */
+.co-inv-card{
+  display:flex;align-items:center;gap:14px;
+  padding:12px 18px;
+  border-bottom:1px solid var(--line2);
+}
+.co-inv-card:last-child{border-bottom:none;}
+.co-inv-avatar{
+  width:36px;height:36px;border-radius:50%;
+  background:var(--navy2);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;
+  flex-shrink:0;
+}
+.co-inv-info{flex:1;min-width:0;}
+.co-inv-nombre{font-size:13px;font-weight:600;color:var(--w1);}
+.co-inv-meta{font-size:11px;color:#888;margin-top:1px;}
+.co-inv-del{
+  width:28px;height:28px;border:none;background:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:50%;color:#999;font-size:15px;
+  transition:background .12s,color .12s;
+}
+.co-inv-del:hover{background:rgba(200,30,30,.1);color:#c81e1e;}
+/* botón agregar invitado */
+.co-btn-add-inv{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:7px 16px;border-radius:6px;
+  background:transparent;border:1px solid var(--navy);
+  color:var(--navy);font-size:12px;font-weight:700;
+  letter-spacing:.06em;cursor:pointer;
+  transition:all .15s;
+}
+.co-btn-add-inv:hover{background:var(--navy);color:#fff;}
+
+/* ── Modal invitado ─────────────────────────────────── */
+#co-inv-modal{
+  position:fixed;inset:0;z-index:9900;
+  background:rgba(0,0,0,.45);
+  display:none;align-items:center;justify-content:center;
+}
+#co-inv-modal.open{display:flex;}
+.co-inv-modal-box{
+  background:var(--c1);border-radius:12px;
+  width:100%;max-width:420px;
+  box-shadow:0 8px 40px rgba(0,0,0,.22);
+  overflow:hidden;
+}
+.co-inv-modal-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 20px;
+  border-bottom:1px solid var(--line2);
+  font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--navy);
+}
+.co-inv-modal-body{padding:20px;display:flex;flex-direction:column;gap:14px;}
+.co-inv-modal-ftr{
+  display:flex;gap:10px;justify-content:flex-end;
+  padding:14px 20px;border-top:1px solid var(--line2);
+}
+.co-inv-modal-btn{
+  padding:8px 20px;border-radius:6px;font-size:13px;font-weight:700;
+  cursor:pointer;transition:all .15s;border:1px solid transparent;
+}
+.co-inv-modal-btn.cancel{
+  background:transparent;border-color:var(--line2);color:#666;
+}
+.co-inv-modal-btn.cancel:hover{background:var(--c0);}
+.co-inv-modal-btn.save{
+  background:var(--navy);color:#fff;border-color:var(--navy);
+}
+.co-inv-modal-btn.save:hover{background:var(--navy2);}
+@media(max-width:640px){
+  .co-asis-summary{grid-template-columns:repeat(2,1fr);}
+}
 </style>
 
 <!-- ═══ COMITÉ OPERATIVO — Wizard HTML ═══ -->
@@ -7281,7 +7420,7 @@ if(document.readyState!=='loading'){tryInit();}
 
           <div class="co-form-group">
             <label class="co-form-label" for="co-f-resp1">
-              Responsable 1 <span class="co-req">*</span>
+              Resp. Carga Líquida <span class="co-req">*</span>
             </label>
             <select class="co-select" id="co-f-resp1">
               <option value="">— Seleccionar —</option>
@@ -7290,7 +7429,7 @@ if(document.readyState!=='loading'){tryInit();}
 
           <div class="co-form-group">
             <label class="co-form-label" for="co-f-resp2">
-              Responsable 2 <span class="co-req">*</span>
+              Resp. Carga Seca <span class="co-req">*</span>
             </label>
             <select class="co-select" id="co-f-resp2">
               <option value="">— Seleccionar —</option>
@@ -7307,14 +7446,51 @@ if(document.readyState!=='loading'){tryInit();}
         <div class="co-step-num">2</div>
         <div class="co-step-hdr-txt">
           <div class="co-step-ttl">Asistencia</div>
-          <div class="co-step-desc">Lista de participantes del comité. Los asistentes se cargan automáticamente desde el directorio de Personal.</div>
+          <div class="co-step-desc">Confirma quiénes asistieron al comité. Todos los colaboradores activos están marcados por defecto.</div>
         </div>
       </div>
-      <div class="co-placeholder">
-        <i class="ti ti-users"></i>
-        <strong>Próxima fase</strong><br>
-        Aquí se mostrará el listado de Personal activo con checkbox de asistencia.<br>
-        Se podrán demarcar ausentes y agregar invitados externos.
+
+      <!-- Tarjeta de resumen -->
+      <div class="co-asis-summary">
+        <div class="co-asis-stat">
+          <div class="co-asis-stat-val" id="co-asis-total">0</div>
+          <div class="co-asis-stat-lbl">Esperados</div>
+        </div>
+        <div class="co-asis-stat green">
+          <div class="co-asis-stat-val" id="co-asis-presentes">0</div>
+          <div class="co-asis-stat-lbl">Presentes</div>
+        </div>
+        <div class="co-asis-stat red">
+          <div class="co-asis-stat-val" id="co-asis-ausentes">0</div>
+          <div class="co-asis-stat-lbl">Ausentes</div>
+        </div>
+        <div class="co-asis-stat blue">
+          <div class="co-asis-stat-val" id="co-asis-invitados">0</div>
+          <div class="co-asis-stat-lbl">Invitados</div>
+        </div>
+      </div>
+
+      <!-- Lista de colaboradores -->
+      <div class="co-form-section">
+        <div class="co-form-section-ttl">
+          <i class="ti ti-users" aria-hidden="true"></i>Colaboradores
+        </div>
+        <div id="co-asis-lista"></div>
+      </div>
+
+      <!-- Sección invitados -->
+      <div class="co-form-section" id="co-inv-section" style="display:none">
+        <div class="co-form-section-ttl">
+          <i class="ti ti-user-plus" aria-hidden="true"></i>Invitados externos
+        </div>
+        <div id="co-inv-lista"></div>
+      </div>
+
+      <!-- Botón agregar invitado -->
+      <div style="display:flex;justify-content:flex-end;">
+        <button class="co-btn-add-inv" onclick="CO._openInvModal()">
+          <i class="ti ti-user-plus" aria-hidden="true"></i>Agregar invitado
+        </button>
       </div>
     </div>
 
@@ -7441,6 +7617,42 @@ if(document.readyState!=='loading'){tryInit();}
   </div>
 
 </div><!-- /co-overlay -->
+
+<!-- Modal: agregar invitado -->
+<div id="co-inv-modal" role="dialog" aria-modal="true" aria-label="Agregar invitado">
+  <div class="co-inv-modal-box">
+    <div class="co-inv-modal-hdr">
+      <span><i class="ti ti-user-plus" aria-hidden="true"></i>&nbsp;Agregar Invitado</span>
+      <button class="co-btn-close" style="position:static" onclick="CO._closeInvModal()" title="Cerrar">
+        <i class="ti ti-x" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="co-inv-modal-body">
+      <div class="co-form-group" style="padding:0;border:none">
+        <label class="co-form-label" for="co-inv-nombre">Nombre <span class="co-req">*</span></label>
+        <input type="text" class="co-input" id="co-inv-nombre" maxlength="100" placeholder="Nombre completo">
+      </div>
+      <div class="co-form-group" style="padding:0;border:none">
+        <label class="co-form-label" for="co-inv-cargo">Cargo <span class="co-req">*</span></label>
+        <input type="text" class="co-input" id="co-inv-cargo" maxlength="80" placeholder="Cargo o rol">
+      </div>
+      <div class="co-form-group" style="padding:0;border:none">
+        <label class="co-form-label" for="co-inv-empresa">Empresa <span class="co-req">*</span></label>
+        <input type="text" class="co-input" id="co-inv-empresa" maxlength="100" placeholder="Empresa u organización">
+      </div>
+      <div class="co-form-group" style="padding:0;border:none">
+        <label class="co-form-label" for="co-inv-obs">Observación <span style="font-weight:400;text-transform:none;letter-spacing:0">(opcional)</span></label>
+        <input type="text" class="co-input" id="co-inv-obs" maxlength="200" placeholder="Motivo de asistencia, etc.">
+      </div>
+    </div>
+    <div class="co-inv-modal-ftr">
+      <button class="co-inv-modal-btn cancel" onclick="CO._closeInvModal()">Cancelar</button>
+      <button class="co-inv-modal-btn save" onclick="CO._saveInvitado()">
+        <i class="ti ti-check" aria-hidden="true"></i>&nbsp;Guardar
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══ COMITÉ OPERATIVO — Módulo CO (IIFE) ═══ -->
 <script>
@@ -7622,11 +7834,11 @@ function validateStep1(){
     return false;
   }
   if(!_session.responsable_1){
-    if(typeof toast==='function') toast('Selecciona el Responsable 1.','warn');
+    if(typeof toast==='function') toast('Selecciona el Responsable de Carga Líquida.','warn');
     return false;
   }
   if(!_session.responsable_2){
-    if(typeof toast==='function') toast('Selecciona el Responsable 2.','warn');
+    if(typeof toast==='function') toast('Selecciona el Responsable de Carga Seca.','warn');
     return false;
   }
   if(_session.responsable_1===_session.responsable_2){
@@ -7636,19 +7848,143 @@ function validateStep1(){
   return true;
 }
 
+/* ══════════════════════════════════════════════════
+   PASO 2: ASISTENCIA
+   ══════════════════════════════════════════════════ */
+
+/* Inicializar estado de asistencia en _session si está vacío */
+function initAsistenciaSession(){
+  if(_session.asistencia&&_session.asistencia.length>0) return;
+  _session.asistencia=_coPersonal.map(function(p){
+    return {
+      id:p.id,
+      nombre:p.nombre,
+      cargo:p.cargo||'',
+      area:p.area||'',
+      presente:true,
+      tipo:'colaborador'
+    };
+  });
+}
+
+/* Helpers contadores */
+function _countPresentes(){
+  return (_session.asistencia||[]).filter(function(a){return a.presente&&a.tipo==='colaborador';}).length;
+}
+function _countAusentes(){
+  return (_session.asistencia||[]).filter(function(a){return !a.presente&&a.tipo==='colaborador';}).length;
+}
+function _countInvitados(){
+  return (_session.invitados||[]).length;
+}
+function _countTotal(){
+  return (_session.asistencia||[]).filter(function(a){return a.tipo==='colaborador';}).length;
+}
+
+/* Actualizar contadores en el DOM */
+function updateAsisCounters(){
+  var t=$id('co-asis-total');
+  var p=$id('co-asis-presentes');
+  var a=$id('co-asis-ausentes');
+  var i=$id('co-asis-invitados');
+  if(t) t.textContent=_countTotal();
+  if(p) p.textContent=_countPresentes();
+  if(a) a.textContent=_countAusentes();
+  if(i) i.textContent=_countInvitados();
+}
+
+/* Iniciales de nombre para el avatar */
+function _initials(nombre){
+  var partes=(nombre||'').trim().split(/\s+/);
+  if(partes.length>=2) return (partes[0][0]+(partes[1][0]||'')).toUpperCase();
+  return (partes[0]||'?').substring(0,2).toUpperCase();
+}
+
+/* Render lista de colaboradores */
+function renderAsisList(){
+  var lista=$id('co-asis-lista');
+  if(!lista)return;
+  if(!_session.asistencia||_session.asistencia.length===0){
+    lista.innerHTML='<div style="padding:20px;text-align:center;color:#888;font-size:13px;">No hay colaboradores cargados.</div>';
+    return;
+  }
+  var html='';
+  _session.asistencia.forEach(function(a,idx){
+    if(a.tipo!=='colaborador')return;
+    var ausClass=a.presente?'':'ausente';
+    html+='<div class="co-asis-card '+ausClass+'" onclick="CO._toggleAsistencia('+idx+')" title="'+(a.presente?'Marcar ausente':'Marcar presente')+'">'+
+      '<div class="co-asis-avatar">'+_initials(a.nombre)+'</div>'+
+      '<div class="co-asis-info">'+
+        '<div class="co-asis-nombre">'+a.nombre+'</div>'+
+        '<div class="co-asis-cargo">'+(a.cargo||'')+(a.area?' &middot; '+a.area:'')+'</div>'+
+      '</div>'+
+      '<div class="co-asis-check"></div>'+
+    '</div>';
+  });
+  lista.innerHTML=html;
+}
+
+/* Render lista de invitados */
+function renderInvList(){
+  var seccion=$id('co-inv-section');
+  var lista=$id('co-inv-lista');
+  if(!lista)return;
+  var invs=_session.invitados||[];
+  if(invs.length===0){
+    if(seccion) seccion.style.display='none';
+    lista.innerHTML='';
+    return;
+  }
+  if(seccion) seccion.style.display='';
+  var html='';
+  invs.forEach(function(inv,idx){
+    html+='<div class="co-inv-card">'+
+      '<div class="co-inv-avatar">'+_initials(inv.nombre)+'</div>'+
+      '<div class="co-inv-info">'+
+        '<div class="co-inv-nombre">'+inv.nombre+'</div>'+
+        '<div class="co-inv-meta">'+inv.cargo+' &middot; '+inv.empresa+(inv.obs?' &middot; '+inv.obs:'')+'</div>'+
+      '</div>'+
+      '<button class="co-inv-del" onclick="CO._removeInvitado('+idx+')" title="Eliminar invitado">'+
+        '<i class="ti ti-trash" aria-hidden="true"></i>'+
+      '</button>'+
+    '</div>';
+  });
+  lista.innerHTML=html;
+}
+
+/* Inicializar Paso 2 */
+function initStep2(){
+  initAsistenciaSession();
+  renderAsisList();
+  renderInvList();
+  updateAsisCounters();
+}
+
+/* Validar Paso 2 */
+function validateStep2(){
+  if(_countPresentes()===0){
+    if(typeof toast==='function') toast('Debe haber al menos un asistente presente.','warn');
+    return false;
+  }
+  return true;
+}
+
 /* ── Dispatcher: guardar estado antes de salir ────── */
 function syncStep(n){
   if(n===1) syncStep1();
+  /* Paso 2 es reactivo — no hay sync adicional */
 }
 
 /* ── Dispatcher: inicializar contenido al entrar ──── */
 function initStepContent(n){
   if(n===1) initStep1();
+  if(n===2) initStep2();
 }
 
 /* ── Dispatcher: validar antes de avanzar ─────────── */
 function validateStep(n){
   if(n===1) return validateStep1();
+  if(n===2) return validateStep2();
   return true;
 }
 
@@ -7723,7 +8059,7 @@ function initSession(){
     lugar:null,
     responsable_1:null,
     responsable_2:null,
-    asistentes:[],
+    asistencia:[],
     invitados:[],
     project_snapshot:null,
     ops_snapshot:null,
@@ -7770,7 +8106,6 @@ var CO={
   },
 
   goStep:function(n){
-    /* Navegación desde barra de progreso: libre hacia atrás, valida hacia adelante */
     if(n<_step){
       goStep(n);
     } else if(n>_step){
@@ -7788,6 +8123,50 @@ var CO={
 
   save:function(){
     alert('Guardar se implementará en la siguiente fase.');
+  },
+
+  /* ── Asistencia ─────────────────────────────────── */
+  _toggleAsistencia:function(idx){
+    if(!_session.asistencia||idx<0||idx>=_session.asistencia.length)return;
+    _session.asistencia[idx].presente=!_session.asistencia[idx].presente;
+    renderAsisList();
+    updateAsisCounters();
+  },
+
+  /* ── Invitados ──────────────────────────────────── */
+  _openInvModal:function(){
+    ['co-inv-nombre','co-inv-cargo','co-inv-empresa','co-inv-obs'].forEach(function(id){
+      var el=$id(id);if(el)el.value='';
+    });
+    var m=$id('co-inv-modal');
+    if(m){m.classList.add('open');var n=$id('co-inv-nombre');if(n)n.focus();}
+  },
+
+  _closeInvModal:function(){
+    var m=$id('co-inv-modal');
+    if(m)m.classList.remove('open');
+  },
+
+  _saveInvitado:function(){
+    var nombre=(($id('co-inv-nombre')||{}).value||'').trim();
+    var cargo=(($id('co-inv-cargo')||{}).value||'').trim();
+    var empresa=(($id('co-inv-empresa')||{}).value||'').trim();
+    var obs=(($id('co-inv-obs')||{}).value||'').trim();
+    if(!nombre){if(typeof toast==='function')toast('El nombre del invitado es obligatorio.','warn');return;}
+    if(!cargo){if(typeof toast==='function')toast('El cargo del invitado es obligatorio.','warn');return;}
+    if(!empresa){if(typeof toast==='function')toast('La empresa del invitado es obligatoria.','warn');return;}
+    if(!_session.invitados)_session.invitados=[];
+    _session.invitados.push({nombre:nombre,cargo:cargo,empresa:empresa,obs:obs});
+    CO._closeInvModal();
+    renderInvList();
+    updateAsisCounters();
+  },
+
+  _removeInvitado:function(idx){
+    if(!_session.invitados||idx<0||idx>=_session.invitados.length)return;
+    _session.invitados.splice(idx,1);
+    renderInvList();
+    updateAsisCounters();
   },
 
   _getSession:function(){return _session;}
