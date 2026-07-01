@@ -8213,7 +8213,7 @@ function _coFetch(path){
 /* ── Cargar directorio personal desde Supabase ────── */
 function loadPersonal(){
   if(_coPersonalLoaded)return Promise.resolve(_coPersonal);
-  return _coFetch('/rest/v1/personal?select=id,nombre,cargo&deleted_at=is.null&order=nombre.asc')
+  return _coFetch('/rest/v1/personal?select=id,nombre,cargo&order=nombre.asc')
     .then(function(rows){
       _coPersonal=rows||[];
       _coPersonalLoaded=true;
