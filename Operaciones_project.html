@@ -7511,8 +7511,49 @@ if(document.readyState!=='loading'){tryInit();}
   letter-spacing:.1em;text-transform:uppercase;color:var(--navy);
   border-bottom:1px solid var(--line2);background:rgba(1,42,107,.03);
 }
+/* Estado general indicator */
+.co-ops-estado{
+  display:flex;align-items:center;gap:12px;
+  padding:14px 20px;border-radius:10px;border:1px solid;
+  font-size:15px;font-weight:700;
+}
+.co-ops-estado.ok  {background:rgba(34,139,34,.07); border-color:rgba(34,139,34,.25); color:#1a6b1a;}
+.co-ops-estado.warn{background:rgba(217,119,6,.07);  border-color:rgba(217,119,6,.25);  color:#92400e;}
+.co-ops-estado.crit{background:rgba(200,30,30,.07);  border-color:rgba(200,30,30,.25);  color:#991b1b;}
+.co-ops-estado-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0;}
+.co-ops-estado.ok   .co-ops-estado-dot{background:#228b22;box-shadow:0 0 0 3px rgba(34,139,34,.2);}
+.co-ops-estado.warn .co-ops-estado-dot{background:#d97706;box-shadow:0 0 0 3px rgba(217,119,6,.2);}
+.co-ops-estado.crit .co-ops-estado-dot{background:#c81e1e;box-shadow:0 0 0 3px rgba(200,30,30,.2);}
+/* detalle colapsable */
+.co-ops-detalle-toggle{
+  display:flex;align-items:center;gap:6px;justify-content:flex-end;
+  font-size:11px;color:var(--navy2);cursor:pointer;
+  font-weight:700;letter-spacing:.06em;padding:4px 0;
+  user-select:none;
+}
+.co-ops-detalle-toggle:hover{color:var(--navy);}
+.co-ops-detalle{display:none;}
+.co-ops-detalle.open{display:block;}
+/* ── Generalidades Step 5 ──────────────────────── */
+.co-gen-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;padding:14px 18px 0;}
+.co-gen-card{background:var(--c1);border:1px solid var(--line2);border-radius:10px;overflow:hidden;}
+.co-gen-card-hdr{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line2);background:#f8fafc;}
+.co-gen-card-hdr i{font-size:16px;color:var(--navy);}
+.co-gen-card-ttl{font-size:13px;font-weight:700;color:var(--navy);flex:1;}
+.co-gen-card-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.04em;}
+.co-gen-badge-ok{background:rgba(34,139,34,.1);color:#1a6b1a;}
+.co-gen-badge-warn{background:rgba(217,119,6,.1);color:#92400e;}
+.co-gen-badge-nd{background:rgba(100,116,139,.1);color:#475569;}
+.co-gen-card-body{padding:12px 16px;font-size:12px;color:#475569;}
+.co-gen-novedad-item{display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid #f1f5f9;}
+.co-gen-novedad-item:last-child{border-bottom:none;}
+.co-gen-novedad-dot{width:7px;height:7px;border-radius:50%;background:#f59e0b;flex-shrink:0;margin-top:4px;}
+.co-gen-novedad-dot.crit{background:#dc2626;}
+.co-gen-sin-nov{color:#94a3b8;font-style:italic;font-size:12px;padding:2px 0;}
+.co-gen-nd-note{color:#94a3b8;font-style:italic;font-size:12px;}
 @media(max-width:640px){
   .co-ops-kpi-row{grid-template-columns:repeat(2,1fr);}
+  .co-gen-grid{grid-template-columns:1fr;}
 }
 </style>
 
@@ -7737,14 +7778,24 @@ if(document.readyState!=='loading'){tryInit();}
         <div class="co-step-num">5</div>
         <div class="co-step-hdr-txt">
           <div class="co-step-ttl">Generalidades</div>
-          <div class="co-step-desc">Puntos adicionales de agenda. Deben existir antes de iniciar el comité.</div>
+          <div class="co-step-desc">Revisión ejecutiva de novedades por área. Los datos provienen del sistema — no se registra información nueva aquí.</div>
         </div>
       </div>
-      <div class="co-placeholder">
-        <i class="ti ti-notes"></i>
-        <strong>Próxima fase</strong><br>
-        Aquí se mostrará el campo de generalidades y puntos adicionales de agenda<br>
-        que deben haberse preparado antes de la reunión.
+
+      <!-- Tarjetas por área — renderizadas por initStep5() -->
+      <div id="co-gen-content"></div>
+
+      <!-- Observaciones del comité -->
+      <div class="co-form-section">
+        <div class="co-form-section-ttl">
+          <i class="ti ti-pencil" aria-hidden="true"></i>Observaciones del Comité
+          <span class="co-req-note">&nbsp;— opcional</span>
+        </div>
+        <div style="padding:14px 18px;">
+          <textarea class="co-proj-obs-area" id="co-gen-obs"
+            placeholder="Puntos adicionales, acuerdos generales o temas tratados en el comité…"
+            oninput="CO._syncGenObs(this.value)"></textarea>
+        </div>
       </div>
     </div>
 
@@ -7889,7 +7940,7 @@ var _session={
   invitados:[],
   project_snapshot:null,
   ops_snapshot:null,
-  generalidades:'',
+  generalidades:{observaciones:'',snapshot:null},
   hse_responsable:null,
   hse_tema:'',
   hse_observaciones:'',
@@ -8320,29 +8371,25 @@ function _opsWs(w){
 
 function _opsRp(r){return r.sol>0?Math.round(r.carg/r.sol*100):0;}
 
+/* ID único para detalle colapsable */
+var _opsDetalleIdx=0;
+
 function _renderOpsSection(wk, label, color){
   if(!wk) return '';
   var s=_opsWs(wk);
   var META_VAL=(typeof META!=='undefined')?META:95;
   var alertClass=s.pct>=META_VAL?'ok':s.pct>=70?'warn':'crit';
-  var alertIcon=alertClass==='ok'?'ti-circle-check':alertClass==='warn'?'ti-alert-triangle':'ti-alert-circle';
-  var alertTxt=alertClass==='ok'?'Operación normal · Meta '+META_VAL+'% superada':
-    alertClass==='warn'?'Alerta · Por debajo de meta '+META_VAL+'%':
-    'Crítico · Cumplimiento muy bajo';
+
+  var uid='ops-det-'+(++_opsDetalleIdx);
 
   var html='<div class="co-form-section" style="margin-top:0">'+
     '<div class="co-ops-cargo-ttl" style="border-left:3px solid '+color+'">'+
       '<i class="ti ti-truck" aria-hidden="true"></i>'+label+
+      ' &nbsp;<span style="font-weight:400;font-size:10px;letter-spacing:0;text-transform:none;color:#888">'+s.sol+' nom · '+s.carg+' carg · déficit '+s.deficit+'</span>'+
     '</div>'+
-    '<div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;">';
+    '<div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px;">';
 
-  /* Alert banner */
-  html+='<div class="co-ops-alert '+alertClass+'">'+
-    '<i class="ti '+alertIcon+'" aria-hidden="true"></i>'+
-    alertTxt+
-  '</div>';
-
-  /* KPIs de la carga */
+  /* KPIs compactos */
   html+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">'+
     '<div class="co-ops-kpi"><div class="co-ops-kpi-val">'+s.sol+'</div><div class="co-ops-kpi-lbl">Nominados</div></div>'+
     '<div class="co-ops-kpi"><div class="co-ops-kpi-val" style="color:#228b22">'+s.carg+'</div><div class="co-ops-kpi-lbl">Cargados</div></div>'+
@@ -8350,10 +8397,13 @@ function _renderOpsSection(wk, label, color){
     '<div class="co-ops-kpi"><div class="co-ops-kpi-val" style="color:'+(s.pct>=META_VAL?'#228b22':s.pct>=70?'#d97706':'#c81e1e')+'">'+s.pct+'%</div><div class="co-ops-kpi-lbl">Cumplimiento</div><div class="co-ops-kpi-sub">Meta: '+META_VAL+'%</div></div>'+
   '</div>';
 
-  /* Tabla por cliente */
+  /* Toggle detalle (tabla colapsada por defecto) */
   var rows=(wk.rows||[]).filter(function(r){return r.sol>0;});
   if(rows.length>0){
-    /* Agrupar por cliente */
+    html+='<div class="co-ops-detalle-toggle" onclick="CO._toggleOpsDetalle(\''+uid+'\')">'+
+      '<i class="ti ti-table" aria-hidden="true"></i>Ver detalle por cliente <i class="ti ti-chevron-down" id="'+uid+'-ico" aria-hidden="true"></i>'+
+    '</div>';
+
     var byC={};
     rows.forEach(function(r){
       var k=r.c||(r.cliente||'Sin cliente');
@@ -8362,38 +8412,31 @@ function _renderOpsSection(wk, label, color){
       if(r.causa&&!byC[k].causa)byC[k].causa=r.causa;
     });
     var sorted=Object.entries(byC).sort(function(a,b){
+      var META_VAL2=(typeof META!=='undefined')?META:95;
       var pa=a[1].sol>0?Math.round(a[1].carg/a[1].sol*100):0;
       var pb=b[1].sol>0?Math.round(b[1].carg/b[1].sol*100):0;
-      var ca=pa>=META_VAL?0:pa>=70?1:2;
-      var cb=pb>=META_VAL?0:pb>=70?1:2;
+      var ca=pa>=META_VAL2?0:pa>=70?1:2;
+      var cb=pb>=META_VAL2?0:pb>=70?1:2;
       if(ca!==cb)return ca-cb;return pb-pa;
     });
 
-    html+='<div style="overflow-x:auto"><table class="co-ops-table">'+
-      '<thead><tr><th>Cliente</th><th class="c">Nominados</th><th class="c">Cargados</th><th class="c">Déficit</th><th class="c">%</th><th>Causa</th></tr></thead><tbody>';
-
+    html+='<div class="co-ops-detalle" id="'+uid+'"><div style="overflow-x:auto"><table class="co-ops-table">'+
+      '<thead><tr><th>Cliente</th><th class="c">Nom</th><th class="c">Carg</th><th class="c">Déf</th><th class="c">%</th><th>Causa</th></tr></thead><tbody>';
     sorted.forEach(function(e){
       var c=e[0],v=e[1];
       var p=v.sol>0?Math.round(v.carg/v.sol*100):0;
+      var META_VAL2=(typeof META!=='undefined')?META:95;
       var def=v.sol-v.carg;
-      var badgeClass=p>=META_VAL?'ok':p>=70?'warn':'crit';
+      var badgeClass=p>=META_VAL2?'ok':p>=70?'warn':'crit';
       var critCls=p<70?' class="crit-row"':'';
-      var barColor=p>=META_VAL?'#228b22':p>=70?'#d97706':'#c81e1e';
-      html+='<tr'+critCls+'>'+
-        '<td>'+c+'</td>'+
-        '<td class="c">'+v.sol+'</td>'+
-        '<td class="c">'+v.carg+'</td>'+
+      var barColor=p>=META_VAL2?'#228b22':p>=70?'#d97706':'#c81e1e';
+      html+='<tr'+critCls+'><td>'+c+'</td><td class="c">'+v.sol+'</td><td class="c">'+v.carg+'</td>'+
         '<td class="c" style="color:'+(def>0?'#c81e1e':'#228b22')+'">'+def+'</td>'+
-        '<td class="c">'+
-          '<span class="co-ops-badge '+badgeClass+'">'+p+'%</span>'+
-          '<span class="co-ops-bar-wrap"><span class="co-ops-bar-fill" style="width:'+p+'%;background:'+barColor+'"></span></span>'+
-        '</td>'+
-        '<td style="font-size:11px;color:#888">'+(v.causa||'—')+'</td>'+
-      '</tr>';
+        '<td class="c"><span class="co-ops-badge '+badgeClass+'">'+p+'%</span>'+
+        '<span class="co-ops-bar-wrap"><span class="co-ops-bar-fill" style="width:'+p+'%;background:'+barColor+'"></span></span></td>'+
+        '<td style="font-size:11px;color:#888">'+(v.causa||'—')+'</td></tr>';
     });
-    html+='</tbody></table></div>';
-  } else {
-    html+='<div style="padding:10px;text-align:center;color:#888;font-size:12px;">Sin rutas nominadas esta semana.</div>';
+    html+='</tbody></table></div></div>';
   }
 
   html+='</div></div>';
@@ -8449,14 +8492,18 @@ function initStep4(){
   var globalClass=totPct>=META_VAL?'ok':totPct>=70?'warn':'crit';
   var globalIcon=globalClass==='ok'?'ti-circle-check':globalClass==='warn'?'ti-alert-triangle':'ti-alert-circle';
 
+  /* Reset counter de IDs */
+  _opsDetalleIdx=0;
+
   var html='';
 
-  /* Banner global */
-  html+='<div class="co-ops-alert '+globalClass+'" style="margin-bottom:4px">'+
-    '<i class="ti '+globalIcon+'" style="font-size:20px" aria-hidden="true"></i>'+
+  /* ── Estado General de la Operación ── */
+  var estadoLabel=globalClass==='ok'?'Operación Normal':globalClass==='warn'?'Operación con Atención':'Operación Crítica';
+  html+='<div class="co-ops-estado '+globalClass+'">'+
+    '<div class="co-ops-estado-dot"></div>'+
     '<div>'+
-      '<div style="font-size:14px">Cumplimiento global semana '+semana+': <strong>'+totPct+'%</strong></div>'+
-      '<div style="font-size:11px;font-weight:400;margin-top:2px">Meta: '+META_VAL+'% &nbsp;·&nbsp; '+totCarg+' cargados de '+totSol+' nominados &nbsp;·&nbsp; Déficit: '+totDef+'</div>'+
+      '<div>'+estadoLabel+'</div>'+
+      '<div style="font-size:11px;font-weight:400;margin-top:2px;opacity:.8">Semana '+semana+' &nbsp;·&nbsp; Cumplimiento global: <strong>'+totPct+'%</strong> &nbsp;·&nbsp; Meta: '+META_VAL+'% &nbsp;·&nbsp; Déficit: '+totDef+'</div>'+
     '</div>'+
   '</div>';
 
@@ -8481,6 +8528,134 @@ function syncStep4Obs(val){
   _session.operacion.observaciones=val||'';
 }
 
+/* ── Step 5: Generalidades ───────────────────────── */
+function initStep5(){
+  var cont=$id('co-gen-content');
+  var obsEl=$id('co-gen-obs');
+  if(!cont)return;
+  if(!_session.generalidades||typeof _session.generalidades!=='object')
+    _session.generalidades={observaciones:'',snapshot:null};
+  if(obsEl) obsEl.value=_session.generalidades.observaciones||'';
+
+  var semana=_session.semana;
+  var html='<div class="co-gen-grid">';
+
+  /* ── Área: Tráfico — acciones urgentes/pendientes/en ejecución ── */
+  var accionesTraf=[];
+  ['liq','sec'].forEach(function(c){
+    var wkActions=(actions&&actions[c]&&semana)?actions[c][semana]||[]:[];
+    wkActions.forEach(function(a){
+      if(a.status==='urgente'||a.status==='pendiente'||a.status==='ejecucion')
+        accionesTraf.push({txt:a.txt,resp:a.resp,status:a.status,cargo:c==='liq'?'Carga Líquida':'Carga Seca'});
+    });
+  });
+  html+=_genCard('ti-truck-delivery','Tráfico',accionesTraf.length>0?'warn':'ok',
+    accionesTraf.length>0
+      ? accionesTraf.slice(0,5).map(function(a){
+          var dot=a.status==='urgente'?'crit':'';
+          return '<div class="co-gen-novedad-item"><div class="co-gen-novedad-dot '+dot+'"></div>'
+            +'<div><strong>['+a.cargo+']</strong> '+_esc(a.txt)
+            +(a.resp?'<br><span style="color:#94a3b8">Resp: '+_esc(a.resp)+'</span>':'')
+            +'</div></div>';
+        }).join('')+(accionesTraf.length>5?'<div class="co-gen-sin-nov" style="margin-top:4px">…y '+(accionesTraf.length-5)+' más</div>':'')
+      : '<div class="co-gen-sin-nov">Sin novedades en acciones activas</div>'
+  );
+
+  /* ── Área: Operaciones — rutas < 100% ─────────────── */
+  var rutasBajas=[];
+  var wkLiq=semana&&DATA_LIQ?DATA_LIQ.find(function(w){return w.id===semana;}):null;
+  var wkSec=semana&&DATA_SEC?DATA_SEC.find(function(w){return w.id===semana;}):null;
+  [wkLiq?{w:wkLiq,label:'Carga Líquida'}:null,wkSec?{w:wkSec,label:'Carga Seca'}:null]
+    .forEach(function(entry){
+      if(!entry)return;
+      (entry.w.rutas||[]).forEach(function(r){
+        var ws=_opsWs(entry.w);
+        var sol=ws.sol,carg=ws.carg;
+        var pct=sol>0?Math.round(carg/sol*100):null;
+        if(pct!==null&&pct<100) rutasBajas.push({label:entry.label,cliente:r.cliente||r.nombre||'—',pct:pct});
+      });
+    });
+  /* alternativa: check overall pct */
+  var opsItems=[];
+  if(wkLiq){var ws=_opsWs(wkLiq);if(ws.pct<100) opsItems.push({label:'Carga Líquida',pct:ws.pct,deficit:ws.deficit});}
+  if(wkSec){var ws2=_opsWs(wkSec);if(ws2.pct<100) opsItems.push({label:'Carga Seca',pct:ws2.pct,deficit:ws2.deficit});}
+  html+=_genCard('ti-settings','Operaciones',opsItems.length>0?'warn':'ok',
+    opsItems.length>0
+      ? opsItems.map(function(o){
+          return '<div class="co-gen-novedad-item"><div class="co-gen-novedad-dot'+(o.pct<85?' crit':'')+'"></div>'
+            +'<div><strong>'+_esc(o.label)+'</strong>: '+o.pct+'% cumplimiento'
+            +(o.deficit?'<br><span style="color:#94a3b8">Déficit: '+o.deficit+' unid.</span>':'')
+            +'</div></div>';
+        }).join('')
+      : '<div class="co-gen-sin-nov">Cumplimiento al 100% en todos los cargos</div>'
+  );
+
+  /* ── Área: Sistemas / Project ──────────────────────── */
+  var snap=null;
+  try{snap=projGetSnapshot(semana);}catch(e){}
+  var tasksCrit=snap?(snap.tasks||[]).filter(function(t){
+    if(t.real===null||t.real==='')return false;
+    var ind=projCalcIndicador(t.real,t.meta);
+    return ind.estado==='crit'||ind.estado==='risk';
+  }):[];
+  html+=_genCard('ti-device-laptop','Sistemas',tasksCrit.length>0?'warn':'ok',
+    snap
+      ? (tasksCrit.length>0
+          ? tasksCrit.map(function(t){
+              var ind=projCalcIndicador(t.real,t.meta);
+              return '<div class="co-gen-novedad-item">'
+                +'<div class="co-gen-novedad-dot'+(ind.estado==='crit'?' crit':'')+'"></div>'
+                +'<div><strong>'+_esc(t.sistema||t.nombre||'—')+'</strong>: '
+                +t.real+'% <span style="color:#94a3b8">(meta '+t.meta+'%)</span></div></div>';
+            }).join('')
+          : '<div class="co-gen-sin-nov">Todos los sistemas dentro de meta</div>')
+      : '<div class="co-gen-sin-nov">Datos de Project no disponibles para esta semana</div>'
+  );
+
+  /* ── Área: HSEQ — solo ruleta ──────────────────────── */
+  var hseqInfo=snap&&snap.hseq?snap.hseq:null;
+  html+=_genCard('ti-shield-check','HSEQ',hseqInfo?'ok':'nd',
+    hseqInfo
+      ? '<div class="co-gen-novedad-item" style="border:none">'
+        +'<div class="co-gen-novedad-dot" style="background:#3b82f6"></div>'
+        +'<div>Tema ruleta: <strong>'+_esc(hseqInfo)+'</strong></div></div>'
+      : '<div class="co-gen-sin-nov">Sin información de ruleta HSEQ para esta semana</div>'
+  );
+
+  /* ── Áreas sin módulo en el sistema actual ──────────── */
+  ['Gestión Documental','Comercial','Financiero'].forEach(function(area){
+    var ico=area==='Gestión Documental'?'ti-file-text':area==='Comercial'?'ti-trending-up':'ti-report-money';
+    html+=_genCard(ico,area,'nd',
+      '<div class="co-gen-nd-note">Información no disponible en el sistema actual</div>'
+    );
+  });
+
+  html+='</div>';
+  cont.innerHTML=html;
+}
+
+function _esc(s){
+  if(!s)return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function _genCard(icon,title,status,bodyHtml){
+  var badge=status==='ok'?'<span class="co-gen-card-badge co-gen-badge-ok">Sin novedades</span>'
+    :status==='warn'?'<span class="co-gen-card-badge co-gen-badge-warn">Con novedades</span>'
+    :'<span class="co-gen-card-badge co-gen-badge-nd">Sin datos</span>';
+  return '<div class="co-gen-card">'
+    +'<div class="co-gen-card-hdr"><i class="ti '+icon+'"></i>'
+    +'<span class="co-gen-card-ttl">'+title+'</span>'+badge+'</div>'
+    +'<div class="co-gen-card-body">'+bodyHtml+'</div>'
+    +'</div>';
+}
+
+function syncStep5Obs(val){
+  if(!_session.generalidades||typeof _session.generalidades!=='object')
+    _session.generalidades={observaciones:'',snapshot:null};
+  _session.generalidades.observaciones=val||'';
+}
+
 /* ── Dispatcher: guardar estado antes de salir ────── */
 function syncStep(n){
   if(n===1) syncStep1();
@@ -8493,6 +8668,7 @@ function initStepContent(n){
   if(n===2) initStep2();
   if(n===3) initStep3();
   if(n===4) initStep4();
+  if(n===5) initStep5();
 }
 
 /* ── Dispatcher: validar antes de avanzar ─────────── */
@@ -8577,7 +8753,7 @@ function initSession(){
     invitados:[],
     project_snapshot:null,
     ops_snapshot:null,
-    generalidades:'',
+    generalidades:{observaciones:'',snapshot:null},
     hse_responsable:null,
     hse_tema:'',
     hse_observaciones:'',
@@ -8690,6 +8866,18 @@ var CO={
 
   /* ── Operativo: sync textarea observaciones ──────── */
   _syncOpsObs:function(val){syncStep4Obs(val);},
+
+  /* ── Generalidades: sync textarea observaciones ──── */
+  _syncGenObs:function(val){syncStep5Obs(val);},
+
+  /* ── Operativo: toggle detalle colapsable ────────── */
+  _toggleOpsDetalle:function(uid){
+    var el=$id(uid);
+    var ico=$id(uid+'-ico');
+    if(!el)return;
+    var open=el.classList.toggle('open');
+    if(ico){ico.className=open?'ti ti-chevron-up':'ti ti-chevron-down';}
+  },
 
   _getSession:function(){return _session;},
 
