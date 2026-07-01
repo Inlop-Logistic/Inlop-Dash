@@ -7111,6 +7111,87 @@ if(document.readyState!=='loading'){tryInit();}
   #co-progress{display:none;}
   .co-hdr-sub{display:none;}
 }
+
+/* ── Paso 1: Formulario Encabezado ──────────────────── */
+.co-form-section{
+  background:var(--c1);
+  border:1px solid var(--line2);
+  border-radius:10px;
+  overflow:hidden;
+}
+.co-form-section-ttl{
+  display:flex;align-items:center;gap:8px;
+  padding:12px 18px;
+  background:rgba(1,42,107,.04);
+  border-bottom:1px solid var(--line2);
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--navy);
+}
+.co-form-section-ttl i{font-size:15px;color:var(--navy2);}
+.co-form-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:0;
+}
+.co-form-group{
+  display:flex;flex-direction:column;gap:5px;
+  padding:14px 18px;
+  border-bottom:1px solid var(--line2);
+  border-right:1px solid var(--line2);
+}
+.co-form-group:nth-child(even){border-right:none;}
+.co-form-group.co-span-2{
+  grid-column:1/-1;
+  border-right:none;
+}
+.co-form-group:last-child,.co-form-group:nth-last-child(2):not(.co-span-2){
+  border-bottom:none;
+}
+/* quitar borde inferior del último par */
+.co-form-grid > .co-form-group:nth-last-child(-n+2):not(.co-span-2){border-bottom:none;}
+.co-form-label{
+  font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--navy2);
+  display:flex;align-items:center;gap:4px;
+}
+.co-req{color:#e53e3e;font-size:11px;}
+.co-req-note{
+  font-size:10px;color:#888;font-style:italic;
+  margin-top:2px;font-weight:400;letter-spacing:0;text-transform:none;
+}
+.co-field-static{
+  font-size:13px;font-weight:600;color:var(--w1);
+  padding:5px 0;line-height:1.4;
+}
+.co-field-tema{
+  font-size:13px;font-weight:700;color:var(--navy);
+  padding:5px 0;letter-spacing:.02em;
+}
+.co-input,.co-select{
+  width:100%;padding:7px 10px;
+  border:1px solid var(--line2);border-radius:6px;
+  background:var(--c0);color:var(--w1);
+  font-size:13px;font-family:inherit;
+  transition:border-color .15s,box-shadow .15s;
+  -webkit-appearance:none;
+}
+.co-input:focus,.co-select:focus{
+  outline:none;
+  border-color:var(--navy);
+  box-shadow:0 0 0 3px rgba(1,42,107,.12);
+}
+.co-select{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 10px center;
+  padding-right:28px;
+}
+@media(max-width:640px){
+  .co-form-grid{grid-template-columns:1fr;}
+  .co-form-group{border-right:none;}
+  .co-form-group.co-span-2{grid-column:1;}
+}
 </style>
 
 <!-- ═══ COMITÉ OPERATIVO — Wizard HTML ═══ -->
@@ -7146,11 +7227,77 @@ if(document.readyState!=='loading'){tryInit();}
           <div class="co-step-desc">Datos generales del acta: fecha, hora, lugar y responsables.</div>
         </div>
       </div>
-      <div class="co-placeholder">
-        <i class="ti ti-file-description"></i>
-        <strong>Próxima fase</strong><br>
-        Aquí se capturarán la fecha de la reunión, hora de inicio, hora de fin,<br>
-        lugar y los dos responsables del acta.
+      <!-- Sección 1: Datos generales -->
+      <div class="co-form-section">
+        <div class="co-form-section-ttl">
+          <i class="ti ti-info-circle" aria-hidden="true"></i>Datos Generales
+        </div>
+        <div class="co-form-grid">
+
+          <div class="co-form-group">
+            <label class="co-form-label" for="co-f-semana">Semana</label>
+            <div class="co-field-static" id="co-f-semana-val">—</div>
+            <input type="hidden" id="co-f-semana">
+          </div>
+
+          <div class="co-form-group">
+            <label class="co-form-label" for="co-f-tema">Tema</label>
+            <div class="co-field-tema">Comité Operativo</div>
+            <input type="hidden" id="co-f-tema" value="Comité Operativo">
+          </div>
+
+          <div class="co-form-group">
+            <label class="co-form-label" for="co-f-fecha">
+              Fecha de la Reunión <span class="co-req">*</span>
+            </label>
+            <input type="date" class="co-input" id="co-f-fecha">
+          </div>
+
+          <div class="co-form-group">
+            <label class="co-form-label" for="co-f-hora">
+              Hora de Inicio <span class="co-req">*</span>
+            </label>
+            <input type="time" class="co-input" id="co-f-hora">
+          </div>
+
+          <div class="co-form-group co-span-2">
+            <label class="co-form-label" for="co-f-lugar">
+              Lugar <span class="co-req">*</span>
+            </label>
+            <input type="text" class="co-input" id="co-f-lugar"
+              maxlength="120" placeholder="Sala de Juntas">
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Sección 2: Responsables -->
+      <div class="co-form-section">
+        <div class="co-form-section-ttl">
+          <i class="ti ti-user-check" aria-hidden="true"></i>Responsables del Acta
+          <span class="co-req-note">&nbsp;— ambos son obligatorios y deben ser personas distintas</span>
+        </div>
+        <div class="co-form-grid">
+
+          <div class="co-form-group">
+            <label class="co-form-label" for="co-f-resp1">
+              Responsable 1 <span class="co-req">*</span>
+            </label>
+            <select class="co-select" id="co-f-resp1">
+              <option value="">— Seleccionar —</option>
+            </select>
+          </div>
+
+          <div class="co-form-group">
+            <label class="co-form-label" for="co-f-resp2">
+              Responsable 2 <span class="co-req">*</span>
+            </label>
+            <select class="co-select" id="co-f-resp2">
+              <option value="">— Seleccionar —</option>
+            </select>
+          </div>
+
+        </div>
       </div>
     </div>
 
@@ -7337,8 +7484,173 @@ var _session={
   status:'draft'
 };
 
+/* ── Directorio de personal (caché local) ─────────── */
+var _coPersonal=[];
+var _coPersonalLoaded=false;
+
+/* ── Constantes Supabase (solo lectura GET) ───────── */
+var _CO_SB_URL='https://gtyydandwcgoaratmnqh.supabase.co';
+var _CO_SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0eXlkYW5kd2Nnb2FyYXRtbnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDAyMTcsImV4cCI6MjA5MjYxNjIxN30.utGZtr0L5t9hIpRABTtfhsKEsrSCBJLHcP_gQ5Hq0EI';
+
 /* ── Helper DOM ───────────────────────────────────── */
 function $id(id){return document.getElementById(id);}
+
+/* ── Fetch helper (GET solo lectura) ──────────────── */
+function _coFetch(path){
+  return fetch(_CO_SB_URL+path,{
+    headers:{
+      'apikey':_CO_SB_KEY,
+      'Authorization':'Bearer '+_CO_SB_KEY
+    }
+  }).then(function(r){
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.json();
+  });
+}
+
+/* ── Cargar directorio personal desde Supabase ────── */
+function loadPersonal(){
+  if(_coPersonalLoaded)return Promise.resolve(_coPersonal);
+  return _coFetch('/rest/v1/personal?select=id,nombre,cargo&deleted_at=is.null&order=nombre.asc')
+    .then(function(rows){
+      _coPersonal=rows||[];
+      _coPersonalLoaded=true;
+      return _coPersonal;
+    })
+    .catch(function(err){
+      console.warn('[CO] loadPersonal error:',err);
+      _coPersonal=[];
+      return [];
+    });
+}
+
+/* ── Poblar selects de responsables ───────────────── */
+function fillPersonalSelects(){
+  ['co-f-resp1','co-f-resp2'].forEach(function(selId){
+    var sel=$id(selId);
+    if(!sel)return;
+    var curVal=sel.value;
+    sel.innerHTML='<option value="">— Seleccionar —</option>';
+    _coPersonal.forEach(function(p){
+      var opt=document.createElement('option');
+      opt.value=p.id;
+      opt.textContent=p.nombre+(p.cargo?' — '+p.cargo:'');
+      sel.appendChild(opt);
+    });
+    if(curVal)sel.value=curVal;
+  });
+}
+
+/* ── Inicializar campos del Paso 1 ────────────────── */
+function initStep1(){
+  var semana=_session.semana||'—';
+  var cargoActivo=_session.cargo||'liq';
+
+  /* Semana (read-only display) */
+  var semEl=$id('co-f-semana-val');
+  if(semEl) semEl.textContent='Semana '+semana+' · Carga '+(cargoActivo==='liq'?'Líquida':'Seca');
+  var semInp=$id('co-f-semana');
+  if(semInp) semInp.value=semana;
+
+  /* Fecha: default hoy si no hay valor previo */
+  var fecEl=$id('co-f-fecha');
+  if(fecEl&&!fecEl.value){
+    var hoy=new Date();
+    var yy=hoy.getFullYear();
+    var mm=String(hoy.getMonth()+1).padStart(2,'0');
+    var dd=String(hoy.getDate()).padStart(2,'0');
+    fecEl.value=yy+'-'+mm+'-'+dd;
+  }
+
+  /* Hora inicio: default ahora si no hay valor previo */
+  var horEl=$id('co-f-hora');
+  if(horEl&&!horEl.value){
+    var now=new Date();
+    var hh=String(now.getHours()).padStart(2,'0');
+    var mi=String(now.getMinutes()).padStart(2,'0');
+    horEl.value=hh+':'+mi;
+  }
+
+  /* Lugar: default "Sala de Juntas" si no hay valor previo */
+  var lugEl=$id('co-f-lugar');
+  if(lugEl&&!lugEl.value) lugEl.value='Sala de Juntas';
+
+  /* Restaurar valores de _session si existen */
+  if(_session.fecha_reunion&&fecEl) fecEl.value=_session.fecha_reunion;
+  if(_session.hora_inicio&&horEl) horEl.value=_session.hora_inicio;
+  if(_session.lugar&&lugEl) lugEl.value=_session.lugar;
+
+  fillPersonalSelects();
+
+  if(_session.responsable_1){
+    var r1=$id('co-f-resp1');
+    if(r1) r1.value=_session.responsable_1;
+  }
+  if(_session.responsable_2){
+    var r2=$id('co-f-resp2');
+    if(r2) r2.value=_session.responsable_2;
+  }
+}
+
+/* ── Guardar valores del Paso 1 en _session ───────── */
+function syncStep1(){
+  var fecEl=$id('co-f-fecha');
+  var horEl=$id('co-f-hora');
+  var lugEl=$id('co-f-lugar');
+  var r1El=$id('co-f-resp1');
+  var r2El=$id('co-f-resp2');
+  _session.fecha_reunion=fecEl?fecEl.value:'';
+  _session.hora_inicio=horEl?horEl.value:'';
+  _session.lugar=lugEl?lugEl.value.trim():'';
+  _session.responsable_1=r1El?r1El.value:'';
+  _session.responsable_2=r2El?r2El.value:'';
+}
+
+/* ── Validar Paso 1 ───────────────────────────────── */
+function validateStep1(){
+  syncStep1();
+  if(!_session.fecha_reunion){
+    if(typeof toast==='function') toast('Ingresa la fecha de la reunión.','warn');
+    return false;
+  }
+  if(!_session.hora_inicio){
+    if(typeof toast==='function') toast('Ingresa la hora de inicio.','warn');
+    return false;
+  }
+  if(!_session.lugar){
+    if(typeof toast==='function') toast('Ingresa el lugar de la reunión.','warn');
+    return false;
+  }
+  if(!_session.responsable_1){
+    if(typeof toast==='function') toast('Selecciona el Responsable 1.','warn');
+    return false;
+  }
+  if(!_session.responsable_2){
+    if(typeof toast==='function') toast('Selecciona el Responsable 2.','warn');
+    return false;
+  }
+  if(_session.responsable_1===_session.responsable_2){
+    if(typeof toast==='function') toast('Los dos responsables deben ser personas distintas.','warn');
+    return false;
+  }
+  return true;
+}
+
+/* ── Dispatcher: guardar estado antes de salir ────── */
+function syncStep(n){
+  if(n===1) syncStep1();
+}
+
+/* ── Dispatcher: inicializar contenido al entrar ──── */
+function initStepContent(n){
+  if(n===1) initStep1();
+}
+
+/* ── Dispatcher: validar antes de avanzar ─────────── */
+function validateStep(n){
+  if(n===1) return validateStep1();
+  return true;
+}
 
 /* ── Render barra de progreso ─────────────────────── */
 function renderProgress(){
@@ -7382,6 +7694,7 @@ function renderFooter(){
 /* ── Cambiar paso ─────────────────────────────────── */
 function goStep(n){
   if(n<1||n>STEPS.length)return;
+  syncStep(_step);
   STEPS.forEach(function(s){
     var el=$id('co-panel-'+s.n);
     if(el)el.classList.remove('active');
@@ -7391,7 +7704,7 @@ function goStep(n){
   _step=n;
   renderProgress();
   renderFooter();
-  // Scroll body al inicio
+  initStepContent(n);
   var body=$id('co-wiz-body');
   if(body)body.scrollTop=0;
 }
@@ -7399,7 +7712,6 @@ function goStep(n){
 /* ── Inicializar sesión ───────────────────────────── */
 function initSession(){
   _step=1;
-  // Leer contexto del sistema (sin consultas Supabase en esta fase)
   var semana=(typeof wkId!=='undefined')?wkId:'—';
   var cargoActivo=(typeof cargo!=='undefined')?cargo:'liq';
   _session={
@@ -7424,7 +7736,6 @@ function initSession(){
     acta_id:null,
     status:'draft'
   };
-  // Actualizar subtítulo del header del wizard
   var sub=$id('co-hdr-semana');
   if(sub) sub.textContent='Semana '+semana+' · Carga '+(cargoActivo==='liq'?'Líquida':'Seca');
 }
@@ -7435,7 +7746,19 @@ var CO={
     initSession();
     var ov=$id('co-overlay');
     if(ov)ov.style.display='flex';
-    goStep(1);
+    /* Activar panel 1 directamente sin sincronizar estado vacío */
+    STEPS.forEach(function(s){
+      var el=$id('co-panel-'+s.n);
+      if(el)el.classList.remove('active');
+    });
+    var p1=$id('co-panel-1');
+    if(p1)p1.classList.add('active');
+    renderProgress();
+    renderFooter();
+    /* Cargar personal y luego inicializar campos */
+    loadPersonal().then(function(){
+      initStep1();
+    });
   },
 
   close:function(){
@@ -7446,16 +7769,27 @@ var CO={
     _session={};
   },
 
-  goStep:function(n){goStep(n);},
-  next:function(){if(_step<STEPS.length)goStep(_step+1);},
-  prev:function(){if(_step>1)goStep(_step-1);},
+  goStep:function(n){
+    /* Navegación desde barra de progreso: libre hacia atrás, valida hacia adelante */
+    if(n<_step){
+      goStep(n);
+    } else if(n>_step){
+      if(validateStep(_step)) goStep(n);
+    }
+  },
+
+  next:function(){
+    if(_step<STEPS.length&&validateStep(_step)) goStep(_step+1);
+  },
+
+  prev:function(){
+    if(_step>1) goStep(_step-1);
+  },
 
   save:function(){
-    // Placeholder — se implementará en fase de persistencia
     alert('Guardar se implementará en la siguiente fase.');
   },
 
-  // Exponer solo para depuración en desarrollo
   _getSession:function(){return _session;}
 };
 
