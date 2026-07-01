@@ -7568,6 +7568,40 @@ if(document.readyState!=='loading'){tryInit();}
 .co-hse-info-val{font-size:13px;color:var(--w1);font-weight:600;}
 .co-hse-no-asign{display:flex;align-items:center;gap:10px;padding:16px;color:#94a3b8;font-size:13px;font-style:italic;}
 .co-hse-no-asign i{font-size:18px;}
+/* ── Compromisos Step 7 ────────────────────────── */
+.co-cmp-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px 18px 0;}
+.co-cmp-kpi{background:var(--c1);border:1px solid var(--line2);border-radius:10px;padding:12px 14px;text-align:center;}
+.co-cmp-kpi-val{font-size:26px;font-weight:800;color:var(--navy);line-height:1;}
+.co-cmp-kpi-lbl{font-size:10px;font-weight:600;color:#64748b;letter-spacing:.05em;text-transform:uppercase;margin-top:4px;}
+.co-cmp-kpi.danger .co-cmp-kpi-val{color:#dc2626;}
+.co-cmp-kpi.warn .co-cmp-kpi-val{color:#d97706;}
+.co-cmp-kpi.ok .co-cmp-kpi-val{color:#16a34a;}
+.co-cmp-hse-sugg-box{display:flex;align-items:flex-start;gap:12px;background:rgba(1,42,107,.04);border:1px solid rgba(1,42,107,.12);border-radius:10px;padding:14px 16px;margin-top:14px;}
+.co-cmp-hse-sugg-box i{font-size:18px;color:var(--navy);flex-shrink:0;margin-top:2px;}
+.co-cmp-hse-sugg-txt{flex:1;font-size:12px;display:flex;flex-direction:column;gap:3px;color:#334155;}
+.co-cmp-hse-sugg-txt strong{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--navy);}
+.co-cmp-hse-adopt-btn{font-size:11px;font-weight:700;color:var(--navy);background:rgba(1,42,107,.08);border:1px solid rgba(1,42,107,.2);border-radius:6px;padding:5px 10px;cursor:pointer;white-space:nowrap;align-self:flex-start;}
+.co-cmp-hse-adopt-btn:hover{background:rgba(1,42,107,.14);}
+.co-cmp-existing-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9;}
+.co-cmp-existing-item:last-child{border-bottom:none;}
+.co-cmp-ex-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;}
+.co-cmp-ex-dot.open{background:#f59e0b;}
+.co-cmp-ex-dot.in_progress{background:#3b82f6;}
+.co-cmp-ex-dot.overdue{background:#dc2626;}
+.co-cmp-ex-dot.completed,.co-cmp-ex-dot.closed{background:#16a34a;}
+.co-cmp-ex-txt{flex:1;font-size:12px;color:#334155;line-height:1.4;}
+.co-cmp-ex-meta{font-size:10px;color:#94a3b8;margin-top:2px;}
+.co-cmp-new-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9;}
+.co-cmp-new-item:last-child{border-bottom:none;}
+.co-cmp-new-dot{width:8px;height:8px;border-radius:50%;background:#0ea5e9;flex-shrink:0;margin-top:5px;}
+.co-cmp-new-txt{flex:1;font-size:12px;color:#334155;line-height:1.4;}
+.co-cmp-new-del{font-size:12px;color:#94a3b8;background:none;border:none;cursor:pointer;padding:2px 4px;border-radius:4px;}
+.co-cmp-new-del:hover{color:#dc2626;background:rgba(220,38,38,.07);}
+.co-cmp-add-btn{font-size:11px;font-weight:700;color:var(--navy);background:rgba(1,42,107,.07);border:1px solid rgba(1,42,107,.18);border-radius:6px;padding:4px 10px;cursor:pointer;}
+.co-cmp-add-btn:hover{background:rgba(1,42,107,.13);}
+.co-cmp-loading{color:#94a3b8;font-size:12px;padding:12px 0;font-style:italic;}
+.co-cmp-empty{color:#94a3b8;font-size:12px;padding:10px 0;font-style:italic;}
+@media(max-width:640px){.co-cmp-kpi-row{grid-template-columns:repeat(2,1fr);}}
 @media(max-width:640px){
   .co-ops-kpi-row{grid-template-columns:repeat(2,1fr);}
   .co-gen-grid{grid-template-columns:1fr;}
@@ -7859,14 +7893,69 @@ if(document.readyState!=='loading'){tryInit();}
         <div class="co-step-num">7</div>
         <div class="co-step-hdr-txt">
           <div class="co-step-ttl">Compromisos</div>
-          <div class="co-step-desc">Revisión de compromisos existentes y formalización de nuevos compromisos generados en esta sesión.</div>
+          <div class="co-step-desc">Revisión ejecutiva de compromisos del módulo CM. Los nuevos compromisos se guardan temporalmente hasta finalizar el Comité.</div>
         </div>
       </div>
-      <div class="co-placeholder">
-        <i class="ti ti-checklist"></i>
-        <strong>Próxima fase</strong><br>
-        Aquí se mostrarán los compromisos activos del módulo CM y se podrán<br>
-        crear nuevos compromisos que quedarán formalizados en el acta.
+
+      <!-- KPI resumen ejecutivo -->
+      <div class="co-cmp-kpi-row" id="co-cmp-kpis"></div>
+
+      <!-- Sugerencia HSE (si aplica) -->
+      <div id="co-cmp-hse-sugg" style="display:none;padding:0 18px 0;">
+        <div class="co-cmp-hse-sugg-box">
+          <i class="ti ti-shield-check"></i>
+          <div class="co-cmp-hse-sugg-txt">
+            <strong>Sugerencia del Momento HSE</strong>
+            <span id="co-cmp-hse-sugg-txt">—</span>
+          </div>
+          <button class="co-cmp-hse-adopt-btn" onclick="CO._adoptHseCompromiso()">
+            <i class="ti ti-plus"></i> Agregar como compromiso
+          </button>
+        </div>
+      </div>
+
+      <!-- Compromisos existentes (resumen ejecutivo) -->
+      <div class="co-form-section" style="margin-top:14px;">
+        <div class="co-form-section-ttl"><i class="ti ti-list-check"></i>Compromisos activos del módulo CM</div>
+        <div id="co-cmp-existing" style="padding:0 18px 12px;">
+          <div class="co-cmp-loading"><i class="ti ti-loader"></i> Cargando…</div>
+        </div>
+      </div>
+
+      <!-- Nuevos compromisos de esta sesión -->
+      <div class="co-form-section">
+        <div class="co-form-section-ttl" style="display:flex;align-items:center;justify-content:space-between;">
+          <span><i class="ti ti-plus"></i>Nuevos compromisos de esta sesión</span>
+          <button class="co-cmp-add-btn" onclick="CO._openCmpForm()"><i class="ti ti-plus"></i> Agregar</button>
+        </div>
+        <!-- Formulario inline (oculto por defecto) -->
+        <div id="co-cmp-form" style="display:none;padding:14px 18px;border-bottom:1px solid var(--line2);">
+          <div class="co-form-row">
+            <div class="co-form-col">
+              <label class="co-form-label">Título <span class="co-req">*</span></label>
+              <input class="co-input" type="text" id="co-cmp-titulo" placeholder="Título del compromiso…">
+            </div>
+          </div>
+          <div class="co-form-row" style="margin-top:10px;">
+            <div class="co-form-col">
+              <label class="co-form-label">Responsable</label>
+              <input class="co-input" type="text" id="co-cmp-resp" placeholder="Nombre del responsable…">
+            </div>
+            <div class="co-form-col">
+              <label class="co-form-label">Fecha límite</label>
+              <input class="co-input" type="date" id="co-cmp-fecha">
+            </div>
+          </div>
+          <div style="margin-top:10px;">
+            <label class="co-form-label">Descripción <span class="co-req-note">— opcional</span></label>
+            <textarea class="co-proj-obs-area" id="co-cmp-desc" placeholder="Descripción adicional…" style="min-height:60px;"></textarea>
+          </div>
+          <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end;">
+            <button class="inlop-btn-cancel" onclick="CO._closeCmpForm()">Cancelar</button>
+            <button class="proj-btn-primary" onclick="CO._saveCmpForm()"><i class="ti ti-device-floppy"></i> Guardar</button>
+          </div>
+        </div>
+        <div id="co-cmp-new-list" style="padding:0 18px 12px;"></div>
       </div>
     </div>
 
@@ -8708,23 +8797,14 @@ function _hseObj(){
   return _session.hse;
 }
 
-function initStep6(){
+function _renderStep6Content(snap){
   var hse=_hseObj();
   var semana=_session.semana;
-  var card=$id('co-hse-ruleta-card');
-  var temaEl=$id('co-hse-tema');
-  var obsEl=$id('co-hse-obs');
-
-  /* Leer responsable de la Ruleta (snap.hseq del módulo Project) */
-  var snap=null;
-  try{snap=projGetSnapshot(semana);}catch(e){}
+  var semLabel=semana&&semana!=='—'?semana:'—';
   var resp=snap&&snap.hseq?snap.hseq:null;
   hse.responsable=resp||null;
 
-  /* Semana actual para mostrar en tarjeta */
-  var semLabel=semana&&semana!=='—'?semana:'—';
-
-  /* Renderizar tarjeta ejecutiva */
+  var card=$id('co-hse-ruleta-card');
   if(card){
     if(resp){
       card.innerHTML='<div class="co-hse-ruleta-hdr">'
@@ -8739,15 +8819,41 @@ function initStep6(){
         +'</div>';
     } else {
       card.innerHTML='<div class="co-hse-no-asign">'
-        +'<i class="ti ti-alert-circle"></i>'
+        +'<i class="ti ti-info-circle"></i>'
         +'Sin asignación de Ruleta HSEQ para la semana '+_esc(semLabel)
         +'. Asigne el responsable desde el módulo <strong>Project</strong>.</div>';
     }
   }
 
-  /* Restaurar campos de captura manual desde _session */
+  var temaEl=$id('co-hse-tema');
+  var obsEl=$id('co-hse-obs');
   if(temaEl) temaEl.value=hse.tema_presentado||'';
   if(obsEl)  obsEl.value=hse.observaciones||'';
+}
+
+function initStep6(){
+  var semana=_session.semana;
+  var card=$id('co-hse-ruleta-card');
+
+  /* Intentar desde caché primero */
+  var snap=null;
+  try{
+    if(typeof window.projGetSnapshot==='function') snap=window.projGetSnapshot(semana);
+  }catch(e){}
+
+  if(snap){
+    _renderStep6Content(snap);
+  } else if(semana&&semana!=='—'&&typeof window.projEnsureWeekData==='function'){
+    /* Lazy-load igual que Step 3 — sin depender de visitar Project */
+    if(card) card.innerHTML='<div class="co-hse-no-asign"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Cargando datos de Ruleta…</div>';
+    window.projEnsureWeekData(semana).then(function(){
+      var s=null;
+      try{if(typeof window.projGetSnapshot==='function') s=window.projGetSnapshot(semana);}catch(e){}
+      _renderStep6Content(s);
+    }).catch(function(){_renderStep6Content(null);});
+  } else {
+    _renderStep6Content(null);
+  }
 }
 
 function syncHseTema(val){
@@ -8756,6 +8862,202 @@ function syncHseTema(val){
 
 function syncHseObs(val){
   _hseObj().observaciones=val||'';
+}
+
+/* ── Step 7: Compromisos ─────────────────────────── */
+var _cmpLoaded=false; /* evitar re-fetch en cada visita al paso */
+var _cmpExisting=[]; /* cache local de committee_commitments */
+
+function _isOverdueCmp(c){
+  if(!c.due_date)return false;
+  if(['closed','completed','cancelled'].indexOf(c.status)>=0)return false;
+  return new Date(c.due_date+'T12:00:00')<new Date(new Date().toDateString());
+}
+
+function _fmtDateCmp(s){
+  if(!s)return'—';
+  var p=s.split('-');
+  return p[2]+'/'+p[1]+'/'+p[0];
+}
+
+function _renderCmpKPIs(){
+  var el=$id('co-cmp-kpis');
+  if(!el)return;
+  var pending=_cmpExisting.filter(function(c){return c.status==='open';}).length;
+  var inprog=_cmpExisting.filter(function(c){return c.status==='in_progress';}).length;
+  var overdue=_cmpExisting.filter(_isOverdueCmp).length;
+  var done=_cmpExisting.filter(function(c){return['closed','completed'].indexOf(c.status)>=0;}).length;
+  function kpi(val,lbl,cls){
+    return'<div class="co-cmp-kpi'+(cls?' '+cls:'')+'"><div class="co-cmp-kpi-val">'+val+'</div><div class="co-cmp-kpi-lbl">'+lbl+'</div></div>';
+  }
+  el.innerHTML=kpi(pending,'Pendientes','')
+    +kpi(inprog,'En proceso','warn')
+    +kpi(overdue,'Vencidos',overdue>0?'danger':'')
+    +kpi(done,'Cumplidos (mes)','ok');
+}
+
+function _renderCmpExisting(){
+  var el=$id('co-cmp-existing');
+  if(!el)return;
+  /* Mostrar pendientes + en proceso + vencidos (resumen ejecutivo) */
+  var active=_cmpExisting.filter(function(c){
+    return['open','in_progress','blocked'].indexOf(c.status)>=0||_isOverdueCmp(c);
+  }).slice(0,10);
+  if(!active.length){
+    el.innerHTML='<div class="co-cmp-empty">Sin compromisos activos actualmente.</div>';return;
+  }
+  el.innerHTML=active.map(function(c){
+    var over=_isOverdueCmp(c);
+    var dotCls=over?'overdue':c.status;
+    return'<div class="co-cmp-existing-item">'
+      +'<div class="co-cmp-ex-dot '+dotCls+'"></div>'
+      +'<div class="co-cmp-ex-txt">'
+      +_esc(c.title)
+      +'<div class="co-cmp-ex-meta">'
+      +(c.responsible_nombre?'<i class="ti ti-user"></i> '+_esc(c.responsible_nombre)+' · ':'')
+      +'<i class="ti ti-calendar"></i> '+_fmtDateCmp(c.due_date)
+      +(over?' · <span style="color:#dc2626;font-weight:700">Vencido</span>':'')
+      +'</div></div></div>';
+  }).join('');
+  if(_cmpExisting.filter(function(c){return['open','in_progress','blocked'].indexOf(c.status)>=0||_isOverdueCmp(c);}).length>10){
+    el.innerHTML+='<div class="co-cmp-empty" style="margin-top:4px;">…y más compromisos. Ver módulo CM para el listado completo.</div>';
+  }
+}
+
+function _renderCmpNewList(){
+  var el=$id('co-cmp-new-list');
+  if(!el)return;
+  var list=_session.compromisos_nuevos||[];
+  if(!list.length){
+    el.innerHTML='<div class="co-cmp-empty">Aún no se han agregado compromisos en esta sesión.</div>';return;
+  }
+  el.innerHTML=list.map(function(c,i){
+    return'<div class="co-cmp-new-item">'
+      +'<div class="co-cmp-new-dot"></div>'
+      +'<div class="co-cmp-new-txt"><strong>'+_esc(c.titulo)+'</strong>'
+      +(c.responsable?'<div class="co-cmp-ex-meta"><i class="ti ti-user"></i> '+_esc(c.responsable)+(c.fecha_limite?' · <i class="ti ti-calendar"></i> '+_fmtDateCmp(c.fecha_limite):'')+'</div>':'')
+      +(c.descripcion?'<div style="color:#64748b;margin-top:2px;font-size:11px">'+_esc(c.descripcion)+'</div>':'')
+      +'</div>'
+      +'<button class="co-cmp-new-del" onclick="CO._removeCmpNuevo('+i+')" title="Eliminar"><i class="ti ti-trash"></i></button>'
+      +'</div>';
+  }).join('');
+}
+
+function _renderCmpHseSugg(){
+  var sugg=$id('co-cmp-hse-sugg');
+  var txt=$id('co-cmp-hse-sugg-txt');
+  if(!sugg||!txt)return;
+  var hse=_session.hse||{};
+  var obs=(hse.observaciones||'').trim();
+  var tema=(hse.tema_presentado||'').trim();
+  var text=obs||tema;
+  /* Mostrar solo si hay contenido y no fue ya adoptado */
+  var yaAdoptado=(_session.compromisos_nuevos||[]).some(function(c){return c._fromHse;});
+  if(text&&!yaAdoptado){
+    txt.textContent=text.length>120?text.substring(0,120)+'…':text;
+    sugg.style.display='block';
+  } else {
+    sugg.style.display='none';
+  }
+}
+
+function initStep7(){
+  if(!_session.compromisos_nuevos) _session.compromisos_nuevos=[];
+
+  /* Sugerencia HSE */
+  _renderCmpHseSugg();
+  /* Lista nuevos */
+  _renderCmpNewList();
+
+  /* Compromisos existentes — cargar una sola vez por sesión */
+  if(_cmpLoaded){
+    _renderCmpKPIs();
+    _renderCmpExisting();
+    return;
+  }
+  var el=$id('co-cmp-existing');
+  if(el) el.innerHTML='<div class="co-cmp-loading"><i class="ti ti-loader"></i> Cargando compromisos…</div>';
+
+  dbGet('committee_commitments','deleted_at=is.null&order=created_at.desc').then(function(rows){
+    _cmpExisting=rows||[];
+    _cmpLoaded=true;
+    _renderCmpKPIs();
+    _renderCmpExisting();
+  }).catch(function(){
+    _cmpExisting=[];
+    _cmpLoaded=true;
+    _renderCmpKPIs();
+    if(el) el.innerHTML='<div class="co-cmp-empty">No se pudo cargar la lista de compromisos.</div>';
+  });
+}
+
+function _openCmpForm(prefill){
+  var f=$id('co-cmp-form');
+  if(!f)return;
+  var tit=$id('co-cmp-titulo');
+  var resp=$id('co-cmp-resp');
+  var fecha=$id('co-cmp-fecha');
+  var desc=$id('co-cmp-desc');
+  if(tit) tit.value=(prefill&&prefill.titulo)||'';
+  if(resp) resp.value=(prefill&&prefill.responsable)||'';
+  if(fecha) fecha.value='';
+  if(desc) desc.value=(prefill&&prefill.descripcion)||'';
+  f.style.display='block';
+  if(tit) tit.focus();
+}
+
+function _closeCmpForm(){
+  var f=$id('co-cmp-form');
+  if(f) f.style.display='none';
+}
+
+function _saveCmpForm(){
+  var titulo=($id('co-cmp-titulo').value||'').trim();
+  if(!titulo){
+    toast('El título del compromiso es obligatorio.','warn');
+    $id('co-cmp-titulo').focus();
+    return;
+  }
+  var nuevo={
+    titulo:titulo,
+    responsable:($id('co-cmp-resp').value||'').trim()||null,
+    fecha_limite:$id('co-cmp-fecha').value||null,
+    descripcion:($id('co-cmp-desc').value||'').trim()||null,
+    _fromHse:false,
+    _creado_en:'comite'
+  };
+  if(!_session.compromisos_nuevos) _session.compromisos_nuevos=[];
+  _session.compromisos_nuevos.push(nuevo);
+  _closeCmpForm();
+  _renderCmpNewList();
+  toast('Compromiso agregado a la sesión','ok');
+}
+
+function _removeCmpNuevo(idx){
+  if(!_session.compromisos_nuevos) return;
+  _session.compromisos_nuevos.splice(idx,1);
+  _renderCmpNewList();
+  _renderCmpHseSugg(); /* podría volver a mostrar sugerencia HSE */
+}
+
+function _adoptHseCompromiso(){
+  var hse=_session.hse||{};
+  var obs=(hse.observaciones||'').trim();
+  var tema=(hse.tema_presentado||'').trim();
+  var texto=obs||tema;
+  if(!texto)return;
+  if(!_session.compromisos_nuevos) _session.compromisos_nuevos=[];
+  _session.compromisos_nuevos.push({
+    titulo:'Compromiso Momento HSE',
+    responsable:hse.responsable||null,
+    fecha_limite:null,
+    descripcion:texto,
+    _fromHse:true,
+    _creado_en:'comite'
+  });
+  _renderCmpNewList();
+  _renderCmpHseSugg();
+  toast('Compromiso HSE agregado a la sesión','ok');
 }
 
 /* ── Dispatcher: guardar estado antes de salir ────── */
@@ -8772,13 +9074,14 @@ function initStepContent(n){
   if(n===4) initStep4();
   if(n===5) initStep5();
   if(n===6) initStep6();
+  if(n===7) initStep7();
 }
 
 /* ── Dispatcher: validar antes de avanzar ─────────── */
 function validateStep(n){
   if(n===1) return validateStep1();
   if(n===2) return validateStep2();
-  return true; /* Pasos 3–6 siempre permiten avanzar */
+  return true; /* Pasos 3–7 siempre permiten avanzar */
 }
 
 /* ── Render barra de progreso ─────────────────────── */
@@ -8841,6 +9144,8 @@ function goStep(n){
 /* ── Inicializar sesión ───────────────────────────── */
 function initSession(){
   _step=1;
+  _cmpLoaded=false; /* forzar re-fetch de compromisos en nueva sesión */
+  _cmpExisting=[];
   var semana=(typeof wkId!=='undefined')?wkId:'—';
   var cargoActivo=(typeof cargo!=='undefined')?cargo:'liq';
   _session={
@@ -8979,6 +9284,13 @@ var CO={
   /* ── Momento HSE: sync campos ────────────────────── */
   _syncHseTema:function(val){syncHseTema(val);},
   _syncHseObs:function(val){syncHseObs(val);},
+
+  /* ── Compromisos Step 7 ──────────────────────────── */
+  _openCmpForm:function(){_openCmpForm(null);},
+  _closeCmpForm:function(){_closeCmpForm();},
+  _saveCmpForm:function(){_saveCmpForm();},
+  _removeCmpNuevo:function(idx){_removeCmpNuevo(idx);},
+  _adoptHseCompromiso:function(){_adoptHseCompromiso();},
 
   /* ── Operativo: toggle detalle colapsable ────────── */
   _toggleOpsDetalle:function(uid){
