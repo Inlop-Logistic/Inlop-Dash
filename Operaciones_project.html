@@ -8026,7 +8026,19 @@ if(document.readyState!=='loading'){tryInit();}
         </div>
       </div>
 
-      <!-- Resumen ejecutivo -->
+      <!-- Hora de finalización (auto-calculada, editable) -->
+      <div style="padding:12px 18px 0;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <i class="ti ti-clock-check" style="color:var(--navy);font-size:16px;"></i>
+          <label class="co-form-label" for="co-f-hora-fin" style="margin:0;font-weight:600;">Hora de finalización</label>
+          <input type="time" class="co-input" id="co-f-hora-fin"
+            style="max-width:130px;padding:5px 10px;font-size:14px;"
+            oninput="CO._syncHoraFin(this.value)">
+        </div>
+        <span style="font-size:11px;color:#94a3b8;">Calculada al entrar a este paso. Ajústela si la reunión ya terminó.</span>
+      </div>
+
+      <!-- Vista previa del Acta -->
       <div class="co-form-section" style="margin-top:14px;">
         <div class="co-form-section-ttl"><i class="ti ti-eye"></i>Vista previa del Acta</div>
         <div id="co-acta-preview" style="padding:0 18px 12px;">
@@ -9233,7 +9245,7 @@ function buildSnapshot(){
       kpi:snap?snap.kpi:null,
       hseq_responsable:snap?snap.hseq:null,
       tasks:snap?(snap.tasks||[]).filter(function(t){return t.real!==null&&t.real!=='';}).map(function(t){
-        return{task_id:t.task_id,sistema:t.sistema||t.tema||t.tema||'',meta:t.meta,real:t.real,estado:projCalcIndicador(t.real,t.meta).estado};
+        return{task_id:t.task_id,sistema:t.sistema||t.tema||'',meta:t.meta,real:t.real,estado:projCalcIndicador(t.real,t.meta).estado};
       }):[]
     },
     operacion:{
@@ -9446,6 +9458,14 @@ function renderActa(snap){
 var _lastSnapshot=null; /* snapshot construido en Step 8, reutilizado para PDF */
 
 function initStep8(){
+  /* Auto-calcular hora de finalización si aún no está fijada */
+  if(!_session.hora_fin){
+    var now=new Date();
+    _session.hora_fin=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  }
+  var hfEl=$id('co-f-hora-fin');
+  if(hfEl) hfEl.value=_session.hora_fin;
+
   _lastSnapshot=buildSnapshot();
   var checks=validateSnapshot(_lastSnapshot);
   var allOk=checks.every(function(c){return c.ok;});
@@ -9480,7 +9500,11 @@ async function finalizarComite(){
   var btn=$id('co-btn-finalizar');
   if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Finalizando…';}
   try{
-    if(!_lastSnapshot) _lastSnapshot=buildSnapshot();
+    /* Leer hora de fin del campo editable del Step 8 */
+    var hfEl=$id('co-f-hora-fin');
+    if(hfEl&&hfEl.value) _session.hora_fin=hfEl.value;
+    /* Siempre reconstruir el snapshot en el momento de finalizar para capturar cambios de último minuto */
+    _lastSnapshot=buildSnapshot();
     var acta=await persistSnapshot(_lastSnapshot);
     _session.acta_id=acta.id;
     _session.status='finalizado';
@@ -9518,7 +9542,7 @@ function _mostrarExito(snap,acta){
   if(stats){
     var asist=(snap.asistentes||[]).length;
     var cmpN=(snap.compromisos_nuevos||[]).length;
-    var horaFin=snap.hora_fin||new Date().toTimeString().substring(0,5);
+    var horaFin=snap.hora_fin||'—';
     stats.innerHTML=
       '<div class="co-success-stat"><div class="co-success-stat-val">'+asist+'</div><div class="co-success-stat-lbl">Asistentes</div></div>'
       +'<div class="co-success-stat"><div class="co-success-stat-val">'+cmpN+'</div><div class="co-success-stat-lbl">Acuerdos</div></div>'
@@ -9639,12 +9663,10 @@ function renderProgress(){
 function renderFooter(){
   var btnPrev=$id('co-btn-prev');
   var btnNext=$id('co-btn-next');
-  var btnSave=$id('co-btn-save');
   var info=$id('co-foot-info');
   var isLast=_step===STEPS.length;
   if(btnPrev) btnPrev.style.display=_step>1?'inline-flex':'none';
   if(btnNext) btnNext.style.display=isLast?'none':'inline-flex';
-  if(btnSave) btnSave.style.display=isLast?'inline-flex':'none';
   if(info) info.innerHTML='Paso <b>'+_step+'</b> de '+STEPS.length+' &middot; '+STEPS[_step-1].label;
 }
 
@@ -9813,6 +9835,9 @@ var CO={
   _syncHseTema:function(val){syncHseTema(val);},
   _syncHseObs:function(val){syncHseObs(val);},
 
+  /* ── Step 8: hora de finalización editable ───────── */
+  _syncHoraFin:function(val){_session.hora_fin=val||null;},
+
   /* ── Compromisos Step 7 ──────────────────────────── */
   _openCmpModal:function(){_openCmpModal();},
   _removeCmpNuevo:function(idx){_removeCmpNuevo(idx);},
@@ -9853,7 +9878,7 @@ var CO={
     if(body) body.innerHTML='<div style="text-align:center;padding:40px"><i class="ti ti-loader" style="font-size:28px;opacity:.4"></i></div>';
     var ov=$id('co-hist-overlay');
     if(ov) ov.style.display='flex';
-    dbGet('co_actas?id=eq.'+actaId+'&select=*').then(function(rows){
+    dbGet('co_actas','id=eq.'+actaId+'&select=*').then(function(rows){
       if(!rows||!rows.length){if(body)body.innerHTML='<div style="padding:24px">Acta no encontrada.</div>';return;}
       var acta=rows[0];
       if(body) body.innerHTML=renderActa(acta.snapshot||{});
