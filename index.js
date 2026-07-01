@@ -1272,6 +1272,78 @@ app.post('/auth/recuperar', async (req, res) => {
 
 const SB_SERVICE_KEY = SB_KEY;
 
+// Errores de Supabase Auth (GoTrue) que sabemos traducir a una respuesta
+// clara para el frontend. `status` es el HTTP que devolvemos nosotros
+// (no necesariamente el mismo que Supabase); `message` es el texto que
+// termina mostrándose en un Toast al usuario — nunca el mensaje técnico
+// original de Supabase.
+const SUPABASE_AUTH_ERROR_MAP = {
+  email_exists:            { status: 409, message: 'Ya existe un usuario registrado con este correo.' },
+  weak_password:           { status: 400, message: 'La contraseña es demasiado débil. Usa al menos 8 caracteres, combinando letras y números.' },
+  invalid_email:           { status: 400, message: 'El correo electrónico no es válido.' },
+  email_address_invalid:   { status: 400, message: 'El correo electrónico no es válido.' },
+  validation_failed:       { status: 400, message: 'Los datos ingresados no son válidos. Revisa el formulario.' },
+  signup_disabled:         { status: 403, message: 'La creación de usuarios está deshabilitada temporalmente.' },
+  over_request_rate_limit: { status: 429, message: 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.' },
+};
+
+// Fallback para versiones de GoTrue que no envían `error_code` estructurado
+// y solo devuelven un `msg` en texto libre — mismo mapeo, detectado por patrón.
+const SUPABASE_AUTH_LEGACY_MESSAGE_PATTERNS = [
+  { test: /already registered|already exists/i, code: 'email_exists' },
+  { test: /password.*(weak|short|at least|should be)/i, code: 'weak_password' },
+  { test: /invalid.*email|unable to validate email/i, code: 'invalid_email' },
+];
+
+function resolveSupabaseAuthErrorCode(errorCode, message) {
+  if (errorCode && SUPABASE_AUTH_ERROR_MAP[errorCode]) return errorCode;
+  if (!message) return null;
+  const legacy = SUPABASE_AUTH_LEGACY_MESSAGE_PATTERNS.find(({ test }) => test.test(message));
+  return legacy ? legacy.code : null;
+}
+
+// Error estructurado que preserva el status/código de Supabase Auth, para
+// poder mapearlo en el handler sin perder la información (a diferencia de
+// devolver `null`, que descartaba el motivo real del fallo).
+class SupabaseAuthAdminError extends Error {
+  constructor(httpStatus, rawBody) {
+    let parsed = null;
+    try { parsed = JSON.parse(rawBody); } catch { /* body no era JSON */ }
+    const errorCode = parsed?.error_code || parsed?.code;
+    const supaMessage = parsed?.msg || parsed?.message || parsed?.error_description || rawBody;
+    super(supaMessage || `Supabase Auth Admin API respondió ${httpStatus}`);
+    this.name = 'SupabaseAuthAdminError';
+    this.httpStatus = httpStatus; // status HTTP que devolvió Supabase (ej. 422)
+    this.errorCode = errorCode;   // ej. "email_exists" (puede ser undefined en respuestas legacy)
+  }
+}
+
+// Traduce un SupabaseAuthAdminError a la respuesta que debe recibir el
+// frontend. Reutilizable por cualquier endpoint que escriba en Supabase Auth
+// (hoy solo POST /usuarios). Devuelve `true` si ya respondió, `false` si el
+// error no es un SupabaseAuthAdminError y el caller debe manejarlo distinto.
+function respondSupabaseAuthError(err, res, context) {
+  if (!(err instanceof SupabaseAuthAdminError)) return false;
+
+  const code = resolveSupabaseAuthErrorCode(err.errorCode, err.message);
+  const mapped = code ? SUPABASE_AUTH_ERROR_MAP[code] : null;
+
+  if (mapped) {
+    res.status(mapped.status).json({ error: mapped.message });
+    return true;
+  }
+
+  // Supabase respondió con un error conocido (4xx propio) pero sin mapeo
+  // específico todavía — no es un fallo de nuestro backend, así que no es
+  // un 500. Se registra el código real para poder agregarlo al mapeo, y se
+  // responde con un mensaje genérico pero amigable (nunca el texto técnico
+  // de Supabase ni un stack trace).
+  console.error(`❌ ${context} — error_code de Supabase Auth sin mapear: ${err.errorCode || '(sin código)'} — ${err.message}`);
+  const status = err.httpStatus >= 400 && err.httpStatus < 500 ? err.httpStatus : 400;
+  res.status(status).json({ error: 'No se pudo completar la operación. Verifica los datos ingresados.' });
+  return true;
+}
+
 async function sbAuthAdmin(path, method = 'GET', body = null) {
   const opts = {
     method,
@@ -1282,7 +1354,7 @@ async function sbAuthAdmin(path, method = 'GET', body = null) {
   if (!r.ok) {
     const txt = await r.text();
     console.error(`SbAuthAdmin ${method} ${path} → ${r.status}: ${txt}`);
-    return null;
+    throw new SupabaseAuthAdminError(r.status, txt);
   }
   const text = await r.text();
   return text ? JSON.parse(text) : null;
@@ -1383,7 +1455,17 @@ app.post('/usuarios', requireClienteAuth, requireAdminCliente, async (req, res) 
       cargo: p.cargo || '', rol: p.rol, tipo_usuario: p.tipo_usuario,
       agencia_id: p.agencia_id || null, activo: p.activo !== false, agencias: [],
     });
-  } catch(e) { console.error('❌ POST /usuarios:', e.message); res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    // Errores conocidos de Supabase Auth (ej. email_exists) no son un fallo
+    // de nuestro backend — se mapean a un status/mensaje claro, sin 500 y
+    // sin stack trace en la respuesta.
+    if (respondSupabaseAuthError(e, res, 'POST /usuarios')) return;
+
+    // Solo los errores verdaderamente inesperados conservan el stack trace,
+    // y únicamente en los logs del servidor — el cliente nunca lo recibe.
+    console.error('❌ POST /usuarios:', e.stack || e.message);
+    res.status(500).json({ error: 'Ocurrió un error inesperado al crear el usuario. Intenta de nuevo.' });
+  }
 });
 
 // PATCH /usuarios/:id — editar perfil (nombre, cargo, rol, agencia_id, activo)
