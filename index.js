@@ -4,12 +4,38 @@ import cors from "cors";
 
 
 // ─── SUPABASE ───────────────────────────────────────────
+// Decisión de arquitectura (INLOP Event Engine, Fase 3): este backend es el
+// único escritor confiable de `notificaciones_cliente` (job syncSolicitudes
+// y demás mutaciones REST). Habilitar RLS por usuario/empresa en esa tabla
+// (requerido para exponer Supabase Realtime directo al navegador sin fugas
+// entre empresas) exige que estas escrituras corran con la SERVICE KEY, que
+// Postgres/PostgREST evalúa sin aplicar RLS. La ANON KEY (pública, usada
+// hasta ahora para todo) se evalúa como rol "anon" sin auth.uid(), y las
+// políticas RLS por usuario la habrían rechazado silenciosamente.
+//
+// Reutiliza el mismo SUPABASE_SERVICE_KEY que ya declara la sección de
+// Gestión de Usuarios (ver SB_SERVICE_KEY más abajo) — es la misma service
+// role key del proyecto, un solo nombre de variable de entorno para ambos
+// usos. Debe configurarse en las variables de entorno del servidor (Railway)
+// y NUNCA exponerse al navegador. Mientras no esté configurada, se conserva
+// el fallback a la anon key para no interrumpir el servicio — pero las
+// políticas RLS de notificaciones_cliente bloquearán las escrituras del
+// backend hasta que se configure.
 const SB_URL = "https://gtyydandwcgoaratmnqh.supabase.co/rest/v1";
-const SB_KEY = process.env.SUPABASE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0eXlkYW5kd2Nnb2FyYXRtbnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDAyMTcsImV4cCI6MjA5MjYxNjIxN30.utGZtr0L5t9hIpRABTtfhsKEsrSCBJLHcP_gQ5Hq0EI";
+const SB_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0eXlkYW5kd2Nnb2FyYXRtbnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDAyMTcsImV4cCI6MjA5MjYxNjIxN30.utGZtr0L5t9hIpRABTtfhsKEsrSCBJLHcP_gQ5Hq0EI";
+const SB_KEY = process.env.SUPABASE_SERVICE_KEY || SB_ANON_KEY;
 const SB_AUTH_URL = 'https://gtyydandwcgoaratmnqh.supabase.co/auth/v1';
 
+if (!process.env.SUPABASE_SERVICE_KEY) {
+  console.warn(
+    "⚠️  SUPABASE_SERVICE_KEY no configurada. Usando fallback (anon key). " +
+    "Las políticas RLS de notificaciones_cliente (Event Engine Fase 3) bloquearán las " +
+    "escrituras de este backend hasta configurar la service key en las variables de entorno."
+  );
+}
+
 const SB_HEADERS = {
-  "apikey": SB_KEY,
+  "apikey": SB_ANON_KEY,
   "Authorization": `Bearer ${SB_KEY}`,
   "Content-Type": "application/json",
   "Prefer": "resolution=merge-duplicates,return=representation"
@@ -1146,8 +1172,9 @@ app.post('/auth/recuperar', async (req, res) => {
 
 // ─── GESTIÓN DE USUARIOS (admin_cliente only) ────────────
 // Requiere SUPABASE_SERVICE_KEY en Railway (service_role key de Supabase).
+// Mismo secreto que SB_KEY (ver sección SUPABASE arriba) — un solo alias.
 
-const SB_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || SB_KEY;
+const SB_SERVICE_KEY = SB_KEY;
 
 async function sbAuthAdmin(path, method = 'GET', body = null) {
   const opts = {
