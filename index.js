@@ -609,6 +609,102 @@ app.get('/api/solicitudes', async (req, res) => {
   }
 });
 
+// GET /api/solicitudes/:id — detalle completo para el ERP (interno, sin auth de cliente)
+app.get('/api/solicitudes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const SOL_SELECT_DETALLE = [
+      'id','codigo_solicitud','external_ref','estado','creado_en','creado_por',
+      'empresa_cliente_id','agencia_id','agencia_nombre',
+      'tipo_operacion','tipo_vehiculo','origen','destino',
+      'fecha_requerida','observacion_coordinadora',
+      'placa_asignada','conductor_nombre','conductor_tel',
+      'controlt_trip_number','canal',
+      'fecha_confirmacion','fecha_inicio_real','fecha_fin_real',
+    ].join(',');
+
+    const sols = await sbFetch(
+      `/solicitudes?id=eq.${encodeURIComponent(id)}&limit=1&select=${SOL_SELECT_DETALLE}`
+    ) || [];
+    if (!sols.length) return res.status(404).json({ error: 'Solicitud no encontrada' });
+    const sol = sols[0];
+
+    // Enriquecer con nombres (misma lógica que GET /api/solicitudes)
+    const [empresas, agencias, usuarios] = await Promise.all([
+      sol.empresa_cliente_id
+        ? sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(sol.empresa_cliente_id)}&select=id,razon_social`)
+        : Promise.resolve([]),
+      sol.agencia_id
+        ? sbFetch(`/agencias_cliente?id=eq.${encodeURIComponent(sol.agencia_id)}&select=id,nombre`)
+        : Promise.resolve([]),
+      sol.creado_por
+        ? sbFetch(`/usuarios_cliente?id=eq.${encodeURIComponent(sol.creado_por)}&select=id,nombre`)
+        : Promise.resolve([]),
+    ]);
+
+    const cliente     = empresas?.[0]?.razon_social || '—';
+    const agencia     = agencias?.[0]?.nombre       || sol.agencia_nombre || '—';
+    const solicitante = usuarios?.[0]?.nombre       || null;
+
+    // Buscar viaje activo en caché de ControlT; si no, buscar en histórico cumplidos
+    let viaje    = null;
+    let cumplido = null;
+    if (sol.controlt_trip_number) {
+      const tripNum = String(sol.controlt_trip_number);
+      viaje = cache.viajes.data.find(v => String(v.trip_number) === tripNum) || null;
+      if (!viaje) {
+        const cs = await sbFetch(
+          `/cumplidos?id=eq.${encodeURIComponent(tripNum)}&select=id,placa,conductor,conductor_tel,fecha_viaje,fecha_finalizacion&limit=1`
+        ) || [];
+        cumplido = cs[0] || null;
+      }
+    }
+
+    // Prioridad: viaje activo > campos en solicitud > cumplido histórico
+    const conductor_nombre   = viaje?.driver_name   || sol.conductor_nombre || cumplido?.conductor  || null;
+    const conductor_telefono = viaje
+      ? extraerTelefono(viaje.driver_phone, viaje.full_driver) || null
+      : (sol.conductor_tel || cumplido?.conductor_tel || null);
+    const vehiculo_placa     = viaje?.license_plate  || sol.placa_asignada  || cumplido?.placa      || null;
+
+    res.json({
+      // Contrato Solicitud base
+      id:               sol.id,
+      codigo_solicitud: sol.codigo_solicitud,
+      external_ref:     sol.external_ref   || null,
+      canal:            sol.canal          || 'APP',
+      creado_en:        sol.creado_en,
+      solicitante,
+      cliente,
+      agencia,
+      tipo_vehiculo:    sol.tipo_vehiculo  || '',
+      tipo_operacion:   sol.tipo_operacion || '',
+      origen:           sol.origen         || '',
+      destino:          sol.destino        || '',
+      fecha_requerida:  sol.fecha_requerida || null,
+      estado:           sol.estado === 'confirmado' ? 'aprobado' : sol.estado,
+      // Contrato SolicitudDetalle extendido
+      conductor_nombre,
+      conductor_cedula:   null,
+      conductor_telefono,
+      conductor_licencia: null,
+      vehiculo_placa,
+      vehiculo_tipo:      null,
+      vehiculo_capacidad: null,
+      historial:          [],
+      actualizado_en:     sol.fecha_confirmacion || null,
+      fecha_inicio_ruta:  cumplido?.fecha_viaje        || sol.fecha_inicio_real || null,
+      fecha_fin_ruta:     cumplido?.fecha_finalizacion || sol.fecha_fin_real    || null,
+      notas:              sol.observacion_coordinadora || null,
+      distancia_km:       null,
+    });
+  } catch(e) {
+    console.error('❌ GET /api/solicitudes/:id:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // PATCH /api/solicitudes/:id/estado — cambia estado manualmente (interno, sin auth)
 app.patch('/api/solicitudes/:id/estado', async (req, res) => {
   try {
