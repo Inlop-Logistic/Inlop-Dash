@@ -2069,11 +2069,6 @@ window.updatePortalStats=updatePortalStats;
       <button class="xl-btn" onclick="window.open('https://inlop1.sharepoint.com/:x:/s/INLOP/IQA7_s7M6rcXTaiTdLmkFVK7AS-_1oaThXbqJ8QCEYyUZSw?e=mq7vbt', '_blank')" style="background:#185FA5">SharePoint</button>
       <button class="xl-clr" id="xlClr" onclick="clearMem()">✕ Limpiar</button>
     </div>
-    <!-- DEMO — REMOVER ANTES DE PRODUCCIÓN -->
-    <button style="padding:5px 12px;border-radius:6px;background:#e67e00;border:none;color:#fff;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.08em" onclick="CO._demo()" title="Modo demo: carga datos ficticios">
-      ⚡ DEMO
-    </button>
-    <!-- FIN DEMO -->
     <button class="btn-comite-hdr" id="btnComiteHdr" onclick="CO.open()">
       <i class="ti ti-clipboard-text" aria-hidden="true"></i>Comité Operativo
     </button>
@@ -8194,7 +8189,6 @@ var _session={
 /* ── Directorio de personal (caché local) ─────────── */
 var _coPersonal=[];
 var _coPersonalLoaded=false;
-var _demoMode=false;
 
 /* ── Constantes Supabase (solo lectura GET) ───────── */
 var _CO_SB_URL='https://gtyydandwcgoaratmnqh.supabase.co';
@@ -9288,10 +9282,6 @@ function validateSnapshot(snap){
 
 /* ── Persiste el acta y los compromisos nuevos ───── */
 async function persistSnapshot(snap){
-  /* Modo demo: omitir Supabase y retornar acta local */
-  if(_demoMode){
-    return{id:'demo-'+Date.now(),codigo:snap.codigo,snapshot:snap,status:'finalizado'};
-  }
   /* 1. Insertar acta */
   var actaBody={
     codigo:snap.codigo,
@@ -9755,7 +9745,6 @@ var CO={
     if(typeof window.CM!=='undefined') CM.setCoContext(false,null);
     _finalizando=false;
     _lastSnapshot=null;
-    _demoMode=false;
     var ov=$id('co-overlay');
     if(ov)ov.style.display='none';
     _step=1;
@@ -9867,7 +9856,6 @@ var CO={
     if(typeof window.CM!=='undefined') CM.setCoContext(false,null);
     _finalizando=false;
     _lastSnapshot=null;
-    _demoMode=false;
     _step=1;
     _session={};
   },
@@ -9901,47 +9889,7 @@ var CO={
     if(ico){ico.className=open?'ti ti-chevron-up':'ti ti-chevron-down';}
   },
 
-  _getSession:function(){return _session;},
-
-  /* ── MODO DEMO — REMOVER ANTES DE PRODUCCIÓN ────── */
-  _demo:function(){
-    _demoMode=true;
-    _coPersonal=[
-      {id:'d1',nombre:'Carlos Martínez',cargo:'Jefe Operativo',area:'Operaciones'},
-      {id:'d2',nombre:'Laura Gómez',cargo:'Coordinadora Logística',area:'Logística'},
-      {id:'d3',nombre:'Andrés Pérez',cargo:'Supervisor Carga Líquida',area:'Operaciones'},
-      {id:'d4',nombre:'María Torres',cargo:'Supervisora Carga Seca',area:'Operaciones'},
-      {id:'d5',nombre:'Juan Rodríguez',cargo:'Analista HSE',area:'HSE'},
-      {id:'d6',nombre:'Paola Suárez',cargo:'Auxiliar Tráfico',area:'Tráfico'},
-      {id:'d7',nombre:'Felipe Castro',cargo:'Conductor Senior',area:'Transporte'}
-    ];
-    _coPersonalLoaded=true;
-    CO.open();
-    /* Pre-poblar _session con datos demo para que el checklist pase sin navegar todos los pasos */
-    setTimeout(function(){
-      var hoy=new Date();
-      var yy=hoy.getFullYear();
-      var mm=String(hoy.getMonth()+1).padStart(2,'0');
-      var dd=String(hoy.getDate()).padStart(2,'0');
-      _session.fecha_reunion=yy+'-'+mm+'-'+dd;
-      _session.hora_inicio='08:00';
-      _session.hora_fin='09:30';
-      _session.lugar='Sala de Operaciones INLOP';
-      _session.responsable_1='d1';
-      _session.responsable_2='d2';
-      /* Sincronizar DOM del Step 1 */
-      var f=$id('co-f-fecha');if(f)f.value=_session.fecha_reunion;
-      var h=$id('co-f-hora');if(h)h.value=_session.hora_inicio;
-      var l=$id('co-f-lugar');if(l)l.value=_session.lugar;
-      var r1=$id('co-f-resp1');if(r1)r1.value=_session.responsable_1;
-      var r2=$id('co-f-resp2');if(r2)r2.value=_session.responsable_2;
-      /* Asistencia demo: todos marcados como presentes */
-      _session.asistencia=_coPersonal.map(function(p){
-        return{id:p.id,nombre:p.nombre,cargo:p.cargo,area:p.area,tipo:'personal',presente:true};
-      });
-    },150);
-  }
-  /* ── FIN MODO DEMO ──────────────────────────────── */
+  _getSession:function(){return _session;}
 };
 
 window.CO=CO;
