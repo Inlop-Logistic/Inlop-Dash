@@ -6101,6 +6101,32 @@ if(document.readyState==='loading'){
   setTimeout(_tryInitProj,100);
 }
 
+/* ── API para Comité Operativo (solo lectura, sin re-fetch) ── */
+window.projGetSnapshot=function(wk){
+  var key=wk||(typeof currentWkId==='function'?currentWkId():null);
+  if(!key||!_cache[key]) return null;
+  var data=_cache[key];
+  var tasks=(data.tasks||[]).map(function(t){return Object.assign({},t);});
+  var ok=0,risk=0,crit=0,noData=0,pctSum=0,withData=0;
+  tasks.forEach(function(t){
+    if(t.real===null||t.real===''){noData++;return;}
+    withData++;
+    var ind=calcIndicador(t.real,t.meta);
+    pctSum+=ind.pct;
+    if(ind.estado==='ok')ok++;
+    else if(ind.estado==='risk')risk++;
+    else crit++;
+  });
+  return {
+    semana:key,
+    hseq:data.hseq||null,
+    tasks:tasks,
+    kpi:{total:tasks.length,ok:ok,risk:risk,crit:crit,noData:noData,
+         efectividad:withData>0?Math.round(pctSum/withData):null}
+  };
+};
+window.projCalcIndicador=calcIndicador;
+
 })();
 </script>
 
@@ -7336,6 +7362,95 @@ if(document.readyState!=='loading'){tryInit();}
 @media(max-width:640px){
   .co-asis-summary{grid-template-columns:repeat(2,1fr);}
 }
+
+/* ── Paso 2: ajustes de área y badge responsable ───── */
+.co-asis-area-hdr{
+  padding:7px 18px 4px;
+  font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--navy2);background:rgba(1,42,107,.03);
+  border-bottom:1px solid var(--line2);
+}
+.co-asis-resp-badge{
+  display:inline-block;margin-left:8px;
+  padding:2px 7px;border-radius:20px;
+  font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  vertical-align:middle;
+}
+.co-asis-resp-badge.liq{background:rgba(1,42,107,.12);color:var(--navy);}
+.co-asis-resp-badge.seca{background:rgba(0,140,80,.12);color:#006b3c;}
+
+/* ── Paso 3: Project ─────────────────────────────── */
+.co-proj-kpi-row{
+  display:grid;grid-template-columns:repeat(5,1fr);gap:10px;
+}
+.co-proj-kpi{
+  background:var(--c1);border:1px solid var(--line2);border-radius:10px;
+  padding:12px 14px;text-align:center;
+}
+.co-proj-kpi-val{
+  font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:700;
+  color:var(--navy);line-height:1;
+}
+.co-proj-kpi-val.ok  {color:#228b22;}
+.co-proj-kpi-val.warn{color:#d97706;}
+.co-proj-kpi-val.crit{color:#c81e1e;}
+.co-proj-kpi-lbl{
+  font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:#888;margin-top:4px;
+}
+/* tabla resumen */
+.co-proj-table{
+  width:100%;border-collapse:collapse;font-size:12px;
+}
+.co-proj-table th{
+  padding:8px 12px;text-align:left;
+  font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--navy2);border-bottom:2px solid var(--line2);
+  background:rgba(1,42,107,.03);
+}
+.co-proj-table th.c{text-align:center;}
+.co-proj-table td{
+  padding:9px 12px;border-bottom:1px solid var(--line2);
+  vertical-align:middle;color:var(--w1);
+}
+.co-proj-table td.c{text-align:center;}
+.co-proj-table tr:last-child td{border-bottom:none;}
+.co-proj-table tr.crit-row td{background:rgba(200,30,30,.04);}
+.co-proj-badge{
+  display:inline-block;padding:2px 8px;border-radius:20px;
+  font-size:10px;font-weight:700;letter-spacing:.06em;
+}
+.co-proj-badge.ok  {background:rgba(34,139,34,.12);color:#228b22;}
+.co-proj-badge.warn{background:rgba(217,119,6,.12); color:#d97706;}
+.co-proj-badge.crit{background:rgba(200,30,30,.12); color:#c81e1e;}
+.co-proj-badge.none{background:rgba(0,0,0,.06);     color:#888;}
+/* barra de avance */
+.co-proj-bar-wrap{
+  width:100%;height:6px;background:var(--line2);border-radius:3px;overflow:hidden;
+  margin-top:6px;
+}
+.co-proj-bar-fill{height:100%;border-radius:3px;transition:width .4s;}
+/* campo observaciones */
+.co-proj-obs-area{
+  width:100%;min-height:80px;padding:10px 12px;
+  border:1px solid var(--line2);border-radius:8px;
+  background:var(--c0);color:var(--w1);
+  font-size:13px;font-family:inherit;resize:vertical;
+  transition:border-color .15s,box-shadow .15s;
+}
+.co-proj-obs-area:focus{
+  outline:none;border-color:var(--navy);
+  box-shadow:0 0 0 3px rgba(1,42,107,.12);
+}
+/* sin datos */
+.co-proj-no-data{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:10px;padding:40px 20px;color:#888;font-size:13px;
+}
+.co-proj-no-data i{font-size:36px;color:#ccc;}
+@media(max-width:640px){
+  .co-proj-kpi-row{grid-template-columns:repeat(2,1fr);}
+}
 </style>
 
 <!-- ═══ COMITÉ OPERATIVO — Wizard HTML ═══ -->
@@ -7505,14 +7620,24 @@ if(document.readyState!=='loading'){tryInit();}
         <div class="co-step-num">3</div>
         <div class="co-step-hdr-txt">
           <div class="co-step-ttl">Project</div>
-          <div class="co-step-desc">Seguimiento de tareas del comité. Se toma automáticamente del módulo Project para la semana activa.</div>
+          <div class="co-step-desc">Estado del módulo Project para la semana activa. Solo lectura — sin re-consulta.</div>
         </div>
       </div>
-      <div class="co-placeholder">
-        <i class="ti ti-clipboard-check"></i>
-        <strong>Próxima fase</strong><br>
-        Aquí se mostrará el estado de las tareas del comité (% real vs meta)<br>
-        tal como existen en el módulo Project al momento de iniciar el acta.
+
+      <!-- Contenido dinámico renderizado por initStep3() -->
+      <div id="co-proj-content"></div>
+
+      <!-- Observaciones -->
+      <div class="co-form-section">
+        <div class="co-form-section-ttl">
+          <i class="ti ti-pencil" aria-hidden="true"></i>Observaciones del Project
+          <span class="co-req-note">&nbsp;— opcional</span>
+        </div>
+        <div style="padding:14px 18px;">
+          <textarea class="co-proj-obs-area" id="co-proj-obs"
+            placeholder="Comentarios, alertas o acuerdos sobre el estado del Project en este comité…"
+            oninput="CO._syncProjObs(this.value)"></textarea>
+        </div>
       </div>
     </div>
 
@@ -7860,7 +7985,7 @@ function validateStep1(){
 /* Inicializar estado de asistencia en _session si está vacío */
 function initAsistenciaSession(){
   if(_session.asistencia&&_session.asistencia.length>0) return;
-  _session.asistencia=_coPersonal.map(function(p){
+  var lista=_coPersonal.map(function(p){
     return {
       id:p.id,
       nombre:p.nombre,
@@ -7870,6 +7995,14 @@ function initAsistenciaSession(){
       tipo:'colaborador'
     };
   });
+  /* Ordenar por área, luego por nombre */
+  lista.sort(function(a,b){
+    var aa=(a.area||'').toLowerCase();
+    var bb=(b.area||'').toLowerCase();
+    if(aa<bb)return -1;if(aa>bb)return 1;
+    return a.nombre.localeCompare(b.nombre);
+  });
+  _session.asistencia=lista;
 }
 
 /* Helpers contadores */
@@ -7913,14 +8046,27 @@ function renderAsisList(){
     lista.innerHTML='<div style="padding:20px;text-align:center;color:#888;font-size:13px;">No hay colaboradores cargados.</div>';
     return;
   }
+  var r1=_session.responsable_1||'';
+  var r2=_session.responsable_2||'';
   var html='';
+  var lastArea='';
   _session.asistencia.forEach(function(a,idx){
     if(a.tipo!=='colaborador')return;
+    /* Separador de área */
+    var area=a.area||'Sin área';
+    if(area!==lastArea){
+      html+='<div class="co-asis-area-hdr">'+area+'</div>';
+      lastArea=area;
+    }
     var ausClass=a.presente?'':'ausente';
+    /* Badge de responsable */
+    var badge='';
+    if(a.id&&a.id===r1) badge='<span class="co-asis-resp-badge liq">Resp. Líquida</span>';
+    else if(a.id&&a.id===r2) badge='<span class="co-asis-resp-badge seca">Resp. Seca</span>';
     html+='<div class="co-asis-card '+ausClass+'" onclick="CO._toggleAsistencia('+idx+')" title="'+(a.presente?'Marcar ausente':'Marcar presente')+'">'+
       '<div class="co-asis-avatar">'+_initials(a.nombre)+'</div>'+
       '<div class="co-asis-info">'+
-        '<div class="co-asis-nombre">'+a.nombre+'</div>'+
+        '<div class="co-asis-nombre">'+a.nombre+badge+'</div>'+
         '<div class="co-asis-cargo">'+(a.cargo||'')+(a.area?' &middot; '+a.area:'')+'</div>'+
       '</div>'+
       '<div class="co-asis-check"></div>'+
@@ -7974,23 +8120,152 @@ function validateStep2(){
   return true;
 }
 
+/* ══════════════════════════════════════════════════
+   PASO 3: PROJECT
+   ══════════════════════════════════════════════════ */
+
+function initStep3(){
+  /* Restaurar observaciones si existen */
+  var obsEl=$id('co-proj-obs');
+  if(obsEl) obsEl.value=(_session.project&&_session.project.observaciones)||'';
+
+  var cont=$id('co-proj-content');
+  if(!cont)return;
+
+  /* Intentar obtener snapshot desde el cache de Project */
+  var snap=null;
+  if(typeof window.projGetSnapshot==='function'){
+    snap=window.projGetSnapshot(_session.semana);
+  }
+
+  if(!snap){
+    /* No hay datos cargados en Project para esta semana */
+    cont.innerHTML='<div class="co-proj-no-data">'+
+      '<i class="ti ti-clipboard-x" aria-hidden="true"></i>'+
+      '<strong>Sin datos de Project</strong>'+
+      '<span>Abre el módulo Project, carga los datos de la semana '+(_session.semana||'activa')+' y vuelve a este paso.</span>'+
+    '</div>';
+    return;
+  }
+
+  /* Guardar snapshot en _session para futura persistencia */
+  if(!_session.project) _session.project={observaciones:''};
+  _session.project.snapshot=snap;
+
+  var kpi=snap.kpi;
+  var tasks=snap.tasks||[];
+
+  /* Color de efectividad global */
+  var ef=kpi.efectividad;
+  var efColor=ef===null?'#888':ef>=90?'#228b22':ef>=70?'#d97706':'#c81e1e';
+  var efTxt=ef===null?'—':ef+'%';
+
+  /* Barra de avance global */
+  var barColor=ef===null?'#ccc':ef>=90?'#228b22':ef>=70?'#d97706':'#c81e1e';
+  var barPct=ef===null?0:ef;
+
+  var html='';
+
+  /* KPIs resumen */
+  html+='<div class="co-proj-kpi-row">'+
+    '<div class="co-proj-kpi">'+
+      '<div class="co-proj-kpi-val">'+kpi.total+'</div>'+
+      '<div class="co-proj-kpi-lbl">Tareas</div>'+
+    '</div>'+
+    '<div class="co-proj-kpi">'+
+      '<div class="co-proj-kpi-val ok">'+kpi.ok+'</div>'+
+      '<div class="co-proj-kpi-lbl">En meta</div>'+
+    '</div>'+
+    '<div class="co-proj-kpi">'+
+      '<div class="co-proj-kpi-val warn">'+kpi.risk+'</div>'+
+      '<div class="co-proj-kpi-lbl">En riesgo</div>'+
+    '</div>'+
+    '<div class="co-proj-kpi">'+
+      '<div class="co-proj-kpi-val crit">'+kpi.crit+'</div>'+
+      '<div class="co-proj-kpi-lbl">Críticas</div>'+
+    '</div>'+
+    '<div class="co-proj-kpi">'+
+      '<div class="co-proj-kpi-val" style="color:'+efColor+'">'+efTxt+'</div>'+
+      '<div class="co-proj-kpi-lbl">Efectividad</div>'+
+      '<div class="co-proj-bar-wrap"><div class="co-proj-bar-fill" style="width:'+barPct+'%;background:'+barColor+'"></div></div>'+
+    '</div>'+
+  '</div>';
+
+  /* HSEQ */
+  if(snap.hseq){
+    html+='<div class="co-form-section" style="margin-top:0">'+
+      '<div class="co-form-section-ttl">'+
+        '<i class="ti ti-shield-check" aria-hidden="true"></i>Responsable HSEQ — Semana '+snap.semana+
+      '</div>'+
+      '<div style="padding:12px 18px;font-size:14px;font-weight:600;color:var(--navy)">'+snap.hseq+'</div>'+
+    '</div>';
+  }
+
+  /* Tabla de tareas */
+  html+='<div class="co-form-section" style="margin-top:0">'+
+    '<div class="co-form-section-ttl">'+
+      '<i class="ti ti-list-check" aria-hidden="true"></i>Detalle de Tareas'+
+    '</div>'+
+    '<div style="overflow-x:auto">'+
+    '<table class="co-proj-table">'+
+    '<thead><tr>'+
+      '<th>Indicador</th>'+
+      '<th class="c">Real</th>'+
+      '<th class="c">Meta</th>'+
+      '<th class="c">Estado</th>'+
+      '<th>Observación</th>'+
+    '</tr></thead><tbody>';
+
+  tasks.forEach(function(t){
+    var hasData=t.real!==null&&t.real!=='';
+    var ind=hasData&&typeof window.projCalcIndicador==='function'
+      ?window.projCalcIndicador(t.real,t.meta):null;
+    var estado=ind?ind.estado:'none';
+    var badgeLabel=!hasData?'Sin dato':estado==='ok'?'OK':estado==='risk'?'Riesgo':'Crítico';
+    var badgeClass='co-proj-badge '+(hasData?estado:'none');
+    var realTxt=hasData
+      ?(t.meta===0?String(t.real):t.real+'%')
+      :'—';
+    var metaTxt=t.meta===0?'0 (↓min)':t.meta+'%';
+    var critClass=hasData&&estado==='crit'?' class="crit-row"':'';
+    html+='<tr'+critClass+'>'+
+      '<td>'+t.tema+'</td>'+
+      '<td class="c" style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700">'+realTxt+'</td>'+
+      '<td class="c" style="color:#888;font-size:12px">'+metaTxt+'</td>'+
+      '<td class="c"><span class="'+badgeClass+'">'+badgeLabel+'</span></td>'+
+      '<td style="font-size:11px;color:#888">'+(t.obs||'—')+'</td>'+
+    '</tr>';
+  });
+
+  html+='</tbody></table></div></div>';
+
+  cont.innerHTML=html;
+}
+
+/* Sync observaciones desde textarea */
+function syncStep3Obs(val){
+  if(!_session.project) _session.project={observaciones:''};
+  _session.project.observaciones=val||'';
+}
+
 /* ── Dispatcher: guardar estado antes de salir ────── */
 function syncStep(n){
   if(n===1) syncStep1();
-  /* Paso 2 es reactivo — no hay sync adicional */
+  /* Pasos 2 y 3 son reactivos — no hay sync adicional */
 }
 
 /* ── Dispatcher: inicializar contenido al entrar ──── */
 function initStepContent(n){
   if(n===1) initStep1();
   if(n===2) initStep2();
+  if(n===3) initStep3();
 }
 
 /* ── Dispatcher: validar antes de avanzar ─────────── */
 function validateStep(n){
   if(n===1) return validateStep1();
   if(n===2) return validateStep2();
-  return true;
+  return true; /* Paso 3 siempre permite avanzar */
 }
 
 /* ── Render barra de progreso ─────────────────────── */
@@ -8074,6 +8349,7 @@ function initSession(){
     hse_observaciones:'',
     compromisos_revisados:[],
     compromisos_nuevos:[],
+    project:{observaciones:'',snapshot:null},
     acta_id:null,
     status:'draft'
   };
@@ -8173,6 +8449,9 @@ var CO={
     renderInvList();
     updateAsisCounters();
   },
+
+  /* ── Project: sync textarea observaciones ───────── */
+  _syncProjObs:function(val){syncStep3Obs(val);},
 
   _getSession:function(){return _session;},
 
