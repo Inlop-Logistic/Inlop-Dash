@@ -6102,6 +6102,11 @@ if(document.readyState==='loading'){
 }
 
 /* ── API para Comité Operativo (solo lectura, sin re-fetch) ── */
+/* Permite a CO cargar datos de Project si el cache no existe aún */
+window.projEnsureWeekData=function(wk){
+  return loadWeekData(wk);
+};
+
 window.projGetSnapshot=function(wk){
   var key=wk||(typeof currentWkId==='function'?currentWkId():null);
   if(!key||!_cache[key]) return null;
@@ -7451,6 +7456,64 @@ if(document.readyState!=='loading'){tryInit();}
 @media(max-width:640px){
   .co-proj-kpi-row{grid-template-columns:repeat(2,1fr);}
 }
+
+/* ── Paso 4: Seguimiento Operativo ────────────────── */
+.co-ops-kpi-row{
+  display:grid;grid-template-columns:repeat(5,1fr);gap:10px;
+}
+.co-ops-kpi{
+  background:var(--c1);border:1px solid var(--line2);border-radius:10px;
+  padding:12px 14px;text-align:center;
+}
+.co-ops-kpi-val{
+  font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:700;
+  color:var(--navy);line-height:1;
+}
+.co-ops-kpi-lbl{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#888;margin-top:4px;}
+.co-ops-kpi-sub{font-size:10px;color:#aaa;margin-top:2px;}
+/* banner de alerta */
+.co-ops-alert{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 16px;border-radius:8px;
+  font-size:13px;font-weight:600;
+}
+.co-ops-alert.ok  {background:rgba(34,139,34,.08);border:1px solid rgba(34,139,34,.2);color:#228b22;}
+.co-ops-alert.warn{background:rgba(217,119,6,.08); border:1px solid rgba(217,119,6,.2); color:#b45309;}
+.co-ops-alert.crit{background:rgba(200,30,30,.08); border:1px solid rgba(200,30,30,.2); color:#c81e1e;}
+.co-ops-alert i{font-size:18px;flex-shrink:0;}
+/* tabla clientes */
+.co-ops-table{width:100%;border-collapse:collapse;font-size:12px;}
+.co-ops-table th{
+  padding:8px 12px;text-align:left;
+  font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--navy2);border-bottom:2px solid var(--line2);
+  background:rgba(1,42,107,.03);
+}
+.co-ops-table th.c{text-align:center;}
+.co-ops-table td{padding:8px 12px;border-bottom:1px solid var(--line2);vertical-align:middle;}
+.co-ops-table td.c{text-align:center;}
+.co-ops-table tr:last-child td{border-bottom:none;}
+.co-ops-table tr.crit-row td{background:rgba(200,30,30,.04);}
+/* barra de cliente */
+.co-ops-bar-wrap{width:80px;height:5px;background:var(--line2);border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle;margin-left:6px;}
+.co-ops-bar-fill{height:100%;border-radius:3px;}
+/* badge */
+.co-ops-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.06em;}
+.co-ops-badge.ok  {background:rgba(34,139,34,.12);color:#228b22;}
+.co-ops-badge.warn{background:rgba(217,119,6,.12); color:#d97706;}
+.co-ops-badge.crit{background:rgba(200,30,30,.12); color:#c81e1e;}
+.co-ops-badge.none{background:rgba(0,0,0,.06);     color:#888;}
+/* título de sección carga */
+.co-ops-cargo-ttl{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 18px;
+  font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--navy);
+  border-bottom:1px solid var(--line2);background:rgba(1,42,107,.03);
+}
+@media(max-width:640px){
+  .co-ops-kpi-row{grid-template-columns:repeat(2,1fr);}
+}
 </style>
 
 <!-- ═══ COMITÉ OPERATIVO — Wizard HTML ═══ -->
@@ -7647,14 +7710,24 @@ if(document.readyState!=='loading'){tryInit();}
         <div class="co-step-num">4</div>
         <div class="co-step-hdr-txt">
           <div class="co-step-ttl">Seguimiento Operativo</div>
-          <div class="co-step-desc">KPIs, cumplimiento por cliente y alertas de incumplimiento. Se toma automáticamente de los datos activos.</div>
+          <div class="co-step-desc">Revisión ejecutiva del cumplimiento operativo para la semana activa. Solo lectura.</div>
         </div>
       </div>
-      <div class="co-placeholder">
-        <i class="ti ti-chart-bar"></i>
-        <strong>Próxima fase</strong><br>
-        Aquí se mostrarán los KPIs operativos (sol, carg, cumplimiento, déficit),<br>
-        el semáforo por cliente y las causas de incumplimiento registradas.
+
+      <!-- Contenido dinámico -->
+      <div id="co-ops-content"></div>
+
+      <!-- Observaciones -->
+      <div class="co-form-section">
+        <div class="co-form-section-ttl">
+          <i class="ti ti-pencil" aria-hidden="true"></i>Observaciones Operativas
+          <span class="co-req-note">&nbsp;— opcional</span>
+        </div>
+        <div style="padding:14px 18px;">
+          <textarea class="co-proj-obs-area" id="co-ops-obs"
+            placeholder="Comentarios, alertas o acuerdos sobre el seguimiento operativo en este comité…"
+            oninput="CO._syncOpsObs(this.value)"></textarea>
+        </div>
       </div>
     </div>
 
@@ -8124,6 +8197,75 @@ function validateStep2(){
    PASO 3: PROJECT
    ══════════════════════════════════════════════════ */
 
+function _renderStep3Content(snap){
+  var cont=$id('co-proj-content');
+  if(!cont)return;
+
+  if(!snap){
+    cont.innerHTML='<div class="co-proj-no-data">'+
+      '<i class="ti ti-clipboard-x" aria-hidden="true"></i>'+
+      '<strong>Sin información de Project para la semana seleccionada</strong>'+
+      '<span>No existe información de Project para la semana '+(_session.semana||'activa')+'.</span>'+
+    '</div>';
+    return;
+  }
+
+  /* Guardar snapshot en _session */
+  if(!_session.project) _session.project={observaciones:'',snapshot:null};
+  _session.project.snapshot=snap;
+
+  var kpi=snap.kpi;
+  var tasks=snap.tasks||[];
+  var ef=kpi.efectividad;
+  var efColor=ef===null?'#888':ef>=90?'#228b22':ef>=70?'#d97706':'#c81e1e';
+  var efTxt=ef===null?'—':ef+'%';
+  var barColor=ef===null?'#ccc':ef>=90?'#228b22':ef>=70?'#d97706':'#c81e1e';
+  var barPct=ef===null?0:ef;
+
+  var html='';
+  html+='<div class="co-proj-kpi-row">'+
+    '<div class="co-proj-kpi"><div class="co-proj-kpi-val">'+kpi.total+'</div><div class="co-proj-kpi-lbl">Tareas</div></div>'+
+    '<div class="co-proj-kpi"><div class="co-proj-kpi-val ok">'+kpi.ok+'</div><div class="co-proj-kpi-lbl">En meta</div></div>'+
+    '<div class="co-proj-kpi"><div class="co-proj-kpi-val warn">'+kpi.risk+'</div><div class="co-proj-kpi-lbl">En riesgo</div></div>'+
+    '<div class="co-proj-kpi"><div class="co-proj-kpi-val crit">'+kpi.crit+'</div><div class="co-proj-kpi-lbl">Críticas</div></div>'+
+    '<div class="co-proj-kpi">'+
+      '<div class="co-proj-kpi-val" style="color:'+efColor+'">'+efTxt+'</div>'+
+      '<div class="co-proj-kpi-lbl">Efectividad</div>'+
+      '<div class="co-proj-bar-wrap"><div class="co-proj-bar-fill" style="width:'+barPct+'%;background:'+barColor+'"></div></div>'+
+    '</div>'+
+  '</div>';
+
+  if(snap.hseq){
+    html+='<div class="co-form-section" style="margin-top:0">'+
+      '<div class="co-form-section-ttl"><i class="ti ti-shield-check" aria-hidden="true"></i>Responsable HSEQ — Semana '+snap.semana+'</div>'+
+      '<div style="padding:12px 18px;font-size:14px;font-weight:600;color:var(--navy)">'+snap.hseq+'</div>'+
+    '</div>';
+  }
+
+  html+='<div class="co-form-section" style="margin-top:0">'+
+    '<div class="co-form-section-ttl"><i class="ti ti-list-check" aria-hidden="true"></i>Detalle de Tareas</div>'+
+    '<div style="overflow-x:auto"><table class="co-proj-table">'+
+    '<thead><tr><th>Indicador</th><th class="c">Real</th><th class="c">Meta</th><th class="c">Estado</th><th>Observación</th></tr></thead><tbody>';
+
+  tasks.forEach(function(t){
+    var hasData=t.real!==null&&t.real!=='';
+    var ind=hasData&&typeof window.projCalcIndicador==='function'?window.projCalcIndicador(t.real,t.meta):null;
+    var estado=ind?ind.estado:'none';
+    var badgeLabel=!hasData?'Sin dato':estado==='ok'?'OK':estado==='risk'?'Riesgo':'Crítico';
+    var badgeClass='co-proj-badge '+(hasData?estado:'none');
+    var realTxt=hasData?(t.meta===0?String(t.real):t.real+'%'):'—';
+    var metaTxt=t.meta===0?'0 (↓min)':t.meta+'%';
+    var critClass=hasData&&estado==='crit'?' class="crit-row"':'';
+    html+='<tr'+critClass+'><td>'+t.tema+'</td>'+
+      '<td class="c" style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700">'+realTxt+'</td>'+
+      '<td class="c" style="color:#888;font-size:12px">'+metaTxt+'</td>'+
+      '<td class="c"><span class="'+badgeClass+'">'+badgeLabel+'</span></td>'+
+      '<td style="font-size:11px;color:#888">'+(t.obs||'—')+'</td></tr>';
+  });
+  html+='</tbody></table></div></div>';
+  cont.innerHTML=html;
+}
+
 function initStep3(){
   /* Restaurar observaciones si existen */
   var obsEl=$id('co-proj-obs');
@@ -8132,114 +8274,30 @@ function initStep3(){
   var cont=$id('co-proj-content');
   if(!cont)return;
 
-  /* Intentar obtener snapshot desde el cache de Project */
+  /* Intentar snapshot desde cache; si no existe, cargarlo */
   var snap=null;
   if(typeof window.projGetSnapshot==='function'){
     snap=window.projGetSnapshot(_session.semana);
   }
 
-  if(!snap){
-    /* No hay datos cargados en Project para esta semana */
-    cont.innerHTML='<div class="co-proj-no-data">'+
-      '<i class="ti ti-clipboard-x" aria-hidden="true"></i>'+
-      '<strong>Sin datos de Project</strong>'+
-      '<span>Abre el módulo Project, carga los datos de la semana '+(_session.semana||'activa')+' y vuelve a este paso.</span>'+
-    '</div>';
+  if(snap){
+    _renderStep3Content(snap);
     return;
   }
 
-  /* Guardar snapshot en _session para futura persistencia */
-  if(!_session.project) _session.project={observaciones:''};
-  _session.project.snapshot=snap;
-
-  var kpi=snap.kpi;
-  var tasks=snap.tasks||[];
-
-  /* Color de efectividad global */
-  var ef=kpi.efectividad;
-  var efColor=ef===null?'#888':ef>=90?'#228b22':ef>=70?'#d97706':'#c81e1e';
-  var efTxt=ef===null?'—':ef+'%';
-
-  /* Barra de avance global */
-  var barColor=ef===null?'#ccc':ef>=90?'#228b22':ef>=70?'#d97706':'#c81e1e';
-  var barPct=ef===null?0:ef;
-
-  var html='';
-
-  /* KPIs resumen */
-  html+='<div class="co-proj-kpi-row">'+
-    '<div class="co-proj-kpi">'+
-      '<div class="co-proj-kpi-val">'+kpi.total+'</div>'+
-      '<div class="co-proj-kpi-lbl">Tareas</div>'+
-    '</div>'+
-    '<div class="co-proj-kpi">'+
-      '<div class="co-proj-kpi-val ok">'+kpi.ok+'</div>'+
-      '<div class="co-proj-kpi-lbl">En meta</div>'+
-    '</div>'+
-    '<div class="co-proj-kpi">'+
-      '<div class="co-proj-kpi-val warn">'+kpi.risk+'</div>'+
-      '<div class="co-proj-kpi-lbl">En riesgo</div>'+
-    '</div>'+
-    '<div class="co-proj-kpi">'+
-      '<div class="co-proj-kpi-val crit">'+kpi.crit+'</div>'+
-      '<div class="co-proj-kpi-lbl">Críticas</div>'+
-    '</div>'+
-    '<div class="co-proj-kpi">'+
-      '<div class="co-proj-kpi-val" style="color:'+efColor+'">'+efTxt+'</div>'+
-      '<div class="co-proj-kpi-lbl">Efectividad</div>'+
-      '<div class="co-proj-bar-wrap"><div class="co-proj-bar-fill" style="width:'+barPct+'%;background:'+barColor+'"></div></div>'+
-    '</div>'+
-  '</div>';
-
-  /* HSEQ */
-  if(snap.hseq){
-    html+='<div class="co-form-section" style="margin-top:0">'+
-      '<div class="co-form-section-ttl">'+
-        '<i class="ti ti-shield-check" aria-hidden="true"></i>Responsable HSEQ — Semana '+snap.semana+
-      '</div>'+
-      '<div style="padding:12px 18px;font-size:14px;font-weight:600;color:var(--navy)">'+snap.hseq+'</div>'+
-    '</div>';
+  /* Cache vacío — intentar cargar via projEnsureWeekData */
+  if(typeof window.projEnsureWeekData==='function'&&_session.semana&&_session.semana!=='—'){
+    cont.innerHTML='<div class="co-proj-no-data"><i class="ti ti-loader" aria-hidden="true"></i><span>Cargando datos de Project…</span></div>';
+    window.projEnsureWeekData(_session.semana).then(function(){
+      var s=typeof window.projGetSnapshot==='function'?window.projGetSnapshot(_session.semana):null;
+      _renderStep3Content(s);
+    }).catch(function(){
+      _renderStep3Content(null);
+    });
+    return;
   }
 
-  /* Tabla de tareas */
-  html+='<div class="co-form-section" style="margin-top:0">'+
-    '<div class="co-form-section-ttl">'+
-      '<i class="ti ti-list-check" aria-hidden="true"></i>Detalle de Tareas'+
-    '</div>'+
-    '<div style="overflow-x:auto">'+
-    '<table class="co-proj-table">'+
-    '<thead><tr>'+
-      '<th>Indicador</th>'+
-      '<th class="c">Real</th>'+
-      '<th class="c">Meta</th>'+
-      '<th class="c">Estado</th>'+
-      '<th>Observación</th>'+
-    '</tr></thead><tbody>';
-
-  tasks.forEach(function(t){
-    var hasData=t.real!==null&&t.real!=='';
-    var ind=hasData&&typeof window.projCalcIndicador==='function'
-      ?window.projCalcIndicador(t.real,t.meta):null;
-    var estado=ind?ind.estado:'none';
-    var badgeLabel=!hasData?'Sin dato':estado==='ok'?'OK':estado==='risk'?'Riesgo':'Crítico';
-    var badgeClass='co-proj-badge '+(hasData?estado:'none');
-    var realTxt=hasData
-      ?(t.meta===0?String(t.real):t.real+'%')
-      :'—';
-    var metaTxt=t.meta===0?'0 (↓min)':t.meta+'%';
-    var critClass=hasData&&estado==='crit'?' class="crit-row"':'';
-    html+='<tr'+critClass+'>'+
-      '<td>'+t.tema+'</td>'+
-      '<td class="c" style="font-family:\'Barlow Condensed\',sans-serif;font-size:14px;font-weight:700">'+realTxt+'</td>'+
-      '<td class="c" style="color:#888;font-size:12px">'+metaTxt+'</td>'+
-      '<td class="c"><span class="'+badgeClass+'">'+badgeLabel+'</span></td>'+
-      '<td style="font-size:11px;color:#888">'+(t.obs||'—')+'</td>'+
-    '</tr>';
-  });
-
-  html+='</tbody></table></div></div>';
-
-  cont.innerHTML=html;
+  _renderStep3Content(null);
 }
 
 /* Sync observaciones desde textarea */
@@ -8248,10 +8306,185 @@ function syncStep3Obs(val){
   _session.project.observaciones=val||'';
 }
 
+/* ══════════════════════════════════════════════════
+   PASO 4: SEGUIMIENTO OPERATIVO
+   ══════════════════════════════════════════════════ */
+
+function _opsWs(w){
+  /* Replica ws() del scope global — calcula stats de una semana */
+  if(!w) return {sol:0,carg:0,pct:0,deficit:0};
+  var sol=w.sol||w.rows.reduce(function(a,r){return a+r.sol;},0);
+  var carg=w.carg||w.rows.reduce(function(a,r){return a+r.carg;},0);
+  return {sol:sol,carg:carg,pct:sol>0?Math.round(carg/sol*100*10)/10:0,deficit:sol-carg};
+}
+
+function _opsRp(r){return r.sol>0?Math.round(r.carg/r.sol*100):0;}
+
+function _renderOpsSection(wk, label, color){
+  if(!wk) return '';
+  var s=_opsWs(wk);
+  var META_VAL=(typeof META!=='undefined')?META:95;
+  var alertClass=s.pct>=META_VAL?'ok':s.pct>=70?'warn':'crit';
+  var alertIcon=alertClass==='ok'?'ti-circle-check':alertClass==='warn'?'ti-alert-triangle':'ti-alert-circle';
+  var alertTxt=alertClass==='ok'?'Operación normal · Meta '+META_VAL+'% superada':
+    alertClass==='warn'?'Alerta · Por debajo de meta '+META_VAL+'%':
+    'Crítico · Cumplimiento muy bajo';
+
+  var html='<div class="co-form-section" style="margin-top:0">'+
+    '<div class="co-ops-cargo-ttl" style="border-left:3px solid '+color+'">'+
+      '<i class="ti ti-truck" aria-hidden="true"></i>'+label+
+    '</div>'+
+    '<div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;">';
+
+  /* Alert banner */
+  html+='<div class="co-ops-alert '+alertClass+'">'+
+    '<i class="ti '+alertIcon+'" aria-hidden="true"></i>'+
+    alertTxt+
+  '</div>';
+
+  /* KPIs de la carga */
+  html+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">'+
+    '<div class="co-ops-kpi"><div class="co-ops-kpi-val">'+s.sol+'</div><div class="co-ops-kpi-lbl">Nominados</div></div>'+
+    '<div class="co-ops-kpi"><div class="co-ops-kpi-val" style="color:#228b22">'+s.carg+'</div><div class="co-ops-kpi-lbl">Cargados</div></div>'+
+    '<div class="co-ops-kpi"><div class="co-ops-kpi-val" style="color:'+(s.deficit>0?'#c81e1e':'#228b22')+'">'+s.deficit+'</div><div class="co-ops-kpi-lbl">Déficit</div></div>'+
+    '<div class="co-ops-kpi"><div class="co-ops-kpi-val" style="color:'+(s.pct>=META_VAL?'#228b22':s.pct>=70?'#d97706':'#c81e1e')+'">'+s.pct+'%</div><div class="co-ops-kpi-lbl">Cumplimiento</div><div class="co-ops-kpi-sub">Meta: '+META_VAL+'%</div></div>'+
+  '</div>';
+
+  /* Tabla por cliente */
+  var rows=(wk.rows||[]).filter(function(r){return r.sol>0;});
+  if(rows.length>0){
+    /* Agrupar por cliente */
+    var byC={};
+    rows.forEach(function(r){
+      var k=r.c||(r.cliente||'Sin cliente');
+      if(!byC[k])byC[k]={sol:0,carg:0,causa:''};
+      byC[k].sol+=r.sol;byC[k].carg+=r.carg;
+      if(r.causa&&!byC[k].causa)byC[k].causa=r.causa;
+    });
+    var sorted=Object.entries(byC).sort(function(a,b){
+      var pa=a[1].sol>0?Math.round(a[1].carg/a[1].sol*100):0;
+      var pb=b[1].sol>0?Math.round(b[1].carg/b[1].sol*100):0;
+      var ca=pa>=META_VAL?0:pa>=70?1:2;
+      var cb=pb>=META_VAL?0:pb>=70?1:2;
+      if(ca!==cb)return ca-cb;return pb-pa;
+    });
+
+    html+='<div style="overflow-x:auto"><table class="co-ops-table">'+
+      '<thead><tr><th>Cliente</th><th class="c">Nominados</th><th class="c">Cargados</th><th class="c">Déficit</th><th class="c">%</th><th>Causa</th></tr></thead><tbody>';
+
+    sorted.forEach(function(e){
+      var c=e[0],v=e[1];
+      var p=v.sol>0?Math.round(v.carg/v.sol*100):0;
+      var def=v.sol-v.carg;
+      var badgeClass=p>=META_VAL?'ok':p>=70?'warn':'crit';
+      var critCls=p<70?' class="crit-row"':'';
+      var barColor=p>=META_VAL?'#228b22':p>=70?'#d97706':'#c81e1e';
+      html+='<tr'+critCls+'>'+
+        '<td>'+c+'</td>'+
+        '<td class="c">'+v.sol+'</td>'+
+        '<td class="c">'+v.carg+'</td>'+
+        '<td class="c" style="color:'+(def>0?'#c81e1e':'#228b22')+'">'+def+'</td>'+
+        '<td class="c">'+
+          '<span class="co-ops-badge '+badgeClass+'">'+p+'%</span>'+
+          '<span class="co-ops-bar-wrap"><span class="co-ops-bar-fill" style="width:'+p+'%;background:'+barColor+'"></span></span>'+
+        '</td>'+
+        '<td style="font-size:11px;color:#888">'+(v.causa||'—')+'</td>'+
+      '</tr>';
+    });
+    html+='</tbody></table></div>';
+  } else {
+    html+='<div style="padding:10px;text-align:center;color:#888;font-size:12px;">Sin rutas nominadas esta semana.</div>';
+  }
+
+  html+='</div></div>';
+  return html;
+}
+
+function initStep4(){
+  /* Restaurar observaciones */
+  var obsEl=$id('co-ops-obs');
+  if(obsEl) obsEl.value=(_session.operacion&&_session.operacion.observaciones)||'';
+
+  var cont=$id('co-ops-content');
+  if(!cont)return;
+
+  var semana=_session.semana;
+  var liqWk=null,secWk=null;
+
+  /* Leer directamente de DATA_LIQ / DATA_SEC (globales) */
+  if(typeof DATA_LIQ!=='undefined'&&Array.isArray(DATA_LIQ)){
+    liqWk=DATA_LIQ.find(function(w){return w.id===semana;})||null;
+  }
+  if(typeof DATA_SEC!=='undefined'&&Array.isArray(DATA_SEC)){
+    secWk=DATA_SEC.find(function(w){return w.id===semana;})||null;
+  }
+
+  if(!liqWk&&!secWk){
+    cont.innerHTML='<div class="co-proj-no-data">'+
+      '<i class="ti ti-chart-off" aria-hidden="true"></i>'+
+      '<strong>Sin datos operativos para la semana '+( semana||'activa')+'</strong>'+
+      '<span>Carga el Excel de nominación o sincroniza con Supabase para ver el seguimiento.</span>'+
+    '</div>';
+    return;
+  }
+
+  /* Guardar estructura para futura persistencia */
+  if(!_session.operacion) _session.operacion={observaciones:'',snapshot:null};
+  _session.operacion.snapshot={semana:semana};
+
+  /* Resumen global combinado */
+  var META_VAL=(typeof META!=='undefined')?META:95;
+  var sL=_opsWs(liqWk),sS=_opsWs(secWk);
+  var totSol=sL.sol+sS.sol,totCarg=sL.carg+sS.carg,totDef=sL.deficit+sS.deficit;
+  var totPct=totSol>0?Math.round(totCarg/totSol*100*10)/10:0;
+
+  /* Conteos por estado (por ruta/cliente combinado) */
+  var allRows=[];
+  if(liqWk&&liqWk.rows)allRows=allRows.concat((liqWk.rows||[]).filter(function(r){return r.sol>0;}));
+  if(secWk&&secWk.rows)allRows=allRows.concat((secWk.rows||[]).filter(function(r){return r.sol>0;}));
+  var n100=allRows.filter(function(r){return _opsRp(r)===100;}).length;
+  var nParcial=allRows.filter(function(r){var p=_opsRp(r);return p>0&&p<100;}).length;
+  var nCrit=allRows.filter(function(r){return r.sol>0&&_opsRp(r)===0;}).length;
+
+  var globalClass=totPct>=META_VAL?'ok':totPct>=70?'warn':'crit';
+  var globalIcon=globalClass==='ok'?'ti-circle-check':globalClass==='warn'?'ti-alert-triangle':'ti-alert-circle';
+
+  var html='';
+
+  /* Banner global */
+  html+='<div class="co-ops-alert '+globalClass+'" style="margin-bottom:4px">'+
+    '<i class="ti '+globalIcon+'" style="font-size:20px" aria-hidden="true"></i>'+
+    '<div>'+
+      '<div style="font-size:14px">Cumplimiento global semana '+semana+': <strong>'+totPct+'%</strong></div>'+
+      '<div style="font-size:11px;font-weight:400;margin-top:2px">Meta: '+META_VAL+'% &nbsp;·&nbsp; '+totCarg+' cargados de '+totSol+' nominados &nbsp;·&nbsp; Déficit: '+totDef+'</div>'+
+    '</div>'+
+  '</div>';
+
+  /* KPIs resumen global */
+  html+='<div class="co-ops-kpi-row">'+
+    '<div class="co-ops-kpi"><div class="co-ops-kpi-val">'+totSol+'</div><div class="co-ops-kpi-lbl">Total nominados</div></div>'+
+    '<div class="co-ops-kpi"><div class="co-ops-kpi-val" style="color:#228b22">'+totCarg+'</div><div class="co-ops-kpi-lbl">Total cargados</div></div>'+
+    '<div class="co-ops-kpi"><div class="co-ops-kpi-val ok" style="color:#228b22">'+n100+'</div><div class="co-ops-kpi-lbl">Al 100%</div></div>'+
+    '<div class="co-ops-kpi"><div class="co-ops-kpi-val warn" style="color:#d97706">'+nParcial+'</div><div class="co-ops-kpi-lbl">Parciales</div></div>'+
+    '<div class="co-ops-kpi"><div class="co-ops-kpi-val crit" style="color:#c81e1e">'+nCrit+'</div><div class="co-ops-kpi-lbl">Críticos</div></div>'+
+  '</div>';
+
+  /* Secciones por tipo de carga */
+  html+=_renderOpsSection(liqWk,'Carga Líquida','#012A6B');
+  html+=_renderOpsSection(secWk,'Carga Seca','#006b3c');
+
+  cont.innerHTML=html;
+}
+
+function syncStep4Obs(val){
+  if(!_session.operacion) _session.operacion={observaciones:'',snapshot:null};
+  _session.operacion.observaciones=val||'';
+}
+
 /* ── Dispatcher: guardar estado antes de salir ────── */
 function syncStep(n){
   if(n===1) syncStep1();
-  /* Pasos 2 y 3 son reactivos — no hay sync adicional */
+  /* Pasos 2, 3, 4 son reactivos — no hay sync adicional */
 }
 
 /* ── Dispatcher: inicializar contenido al entrar ──── */
@@ -8259,13 +8492,14 @@ function initStepContent(n){
   if(n===1) initStep1();
   if(n===2) initStep2();
   if(n===3) initStep3();
+  if(n===4) initStep4();
 }
 
 /* ── Dispatcher: validar antes de avanzar ─────────── */
 function validateStep(n){
   if(n===1) return validateStep1();
   if(n===2) return validateStep2();
-  return true; /* Paso 3 siempre permite avanzar */
+  return true; /* Pasos 3 y 4 siempre permiten avanzar */
 }
 
 /* ── Render barra de progreso ─────────────────────── */
@@ -8350,6 +8584,7 @@ function initSession(){
     compromisos_revisados:[],
     compromisos_nuevos:[],
     project:{observaciones:'',snapshot:null},
+    operacion:{observaciones:'',snapshot:null},
     acta_id:null,
     status:'draft'
   };
@@ -8452,6 +8687,9 @@ var CO={
 
   /* ── Project: sync textarea observaciones ───────── */
   _syncProjObs:function(val){syncStep3Obs(val);},
+
+  /* ── Operativo: sync textarea observaciones ──────── */
+  _syncOpsObs:function(val){syncStep4Obs(val);},
 
   _getSession:function(){return _session;},
 
