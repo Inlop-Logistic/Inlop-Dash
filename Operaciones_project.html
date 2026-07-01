@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://alcdn.msauth.net/browser/2.32.2/js/msal-browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 :root{
   --c0:#0a0e17;--c1:#0e1420;--c2:#131b2a;--c3:#1a2436;--c4:#212e42;
@@ -6406,6 +6407,8 @@ var CM=(function(){
   var _filter='all';
   var _editId=null;
   var _panelId=null;
+  var _coContext=false;   /* true cuando el modal es abierto desde el Comité Operativo */
+  var _coCallback=null;  /* función a llamar en lugar de dbInsert cuando _coContext===true */
 
   var PRIO={
     critical:{label:'Crítica',cls:'prio-critical',dot:'🔴'},
@@ -6577,6 +6580,15 @@ var CM=(function(){
       if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Guardando...';}
       try{
         var body={title:title,description:(document.getElementById('cm-description').value||'').trim()||null,observations:(document.getElementById('cm-observations').value||'').trim()||null,committee_date:document.getElementById('cm-committee-date').value||null,due_date:dueDate,priority:document.getElementById('cm-priority').value,status:document.getElementById('cm-status').value,responsible_id:responsibleId,responsible_nombre:responsibleProfile?responsibleProfile.nombre:'',updated_at:new Date().toISOString()};
+        /* ── Contexto Comité Operativo: diferir persistencia ── */
+        if(_coContext&&_coCallback&&!_editId){
+          body.created_by_nombre=getUser().nombre;
+          body.created_at=new Date().toISOString();
+          body._responsable_id=responsibleId;
+          _coCallback(body);
+          CM.closeModal();
+          return;
+        }
         if(_editId){
           await dbUpdate('committee_commitments','id=eq.'+_editId,body);
         }else{
@@ -6670,7 +6682,15 @@ var CM=(function(){
       var id=_panelId;
       CM.closePanel();
       CM.openModal(id);
-    }
+    },
+
+    /* ── API para el Comité Operativo ────────────────── */
+    setCoContext:function(active,callback){
+      _coContext=!!active;
+      _coCallback=callback||null;
+    },
+    getList:function(){return _list;},
+    isLoaded:function(){return _list.length>0;}
   };
 })();
 
@@ -7602,6 +7622,63 @@ if(document.readyState!=='loading'){tryInit();}
 .co-cmp-loading{color:#94a3b8;font-size:12px;padding:12px 0;font-style:italic;}
 .co-cmp-empty{color:#94a3b8;font-size:12px;padding:10px 0;font-style:italic;}
 @media(max-width:640px){.co-cmp-kpi-row{grid-template-columns:repeat(2,1fr);}}
+/* ── Step 8: Cerrar Comité ─────────────────────── */
+.co-close-checklist{display:flex;flex-direction:column;gap:6px;}
+.co-close-check-item{display:flex;align-items:center;gap:10px;padding:8px 14px;border-radius:8px;font-size:13px;border:1px solid;}
+.co-close-check-item.ok{background:rgba(34,139,34,.06);border-color:rgba(34,139,34,.2);color:#166534;}
+.co-close-check-item.fail{background:rgba(220,38,38,.05);border-color:rgba(220,38,38,.18);color:#991b1b;}
+.co-close-check-item i{font-size:15px;}
+.co-close-check-lbl{flex:1;}
+.co-close-check-action{font-size:11px;font-weight:700;color:var(--navy);cursor:pointer;text-decoration:underline;}
+.co-btn-finalizar{width:100%;padding:14px 20px;border-radius:10px;border:none;background:var(--navy);color:#fff;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;letter-spacing:.04em;transition:background .2s;}
+.co-btn-finalizar:hover:not(:disabled){background:#01347f;}
+.co-btn-finalizar:disabled{background:#94a3b8;cursor:not-allowed;}
+/* ── Pantalla éxito ─────────────────────────────── */
+.co-success-box{background:#fff;border-radius:16px;padding:40px 48px;text-align:center;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.25);}
+.co-success-icon{font-size:56px;color:#16a34a;margin-bottom:12px;}
+.co-success-ttl{font-size:22px;font-weight:800;color:var(--navy);margin-bottom:6px;}
+.co-success-codigo{font-size:28px;font-weight:800;color:var(--navy);letter-spacing:.05em;background:rgba(1,42,107,.07);border-radius:8px;padding:8px 20px;display:inline-block;margin:8px 0 18px;}
+.co-success-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px;}
+.co-success-stat{background:#f8fafc;border-radius:8px;padding:10px 14px;text-align:left;}
+.co-success-stat-val{font-size:20px;font-weight:800;color:var(--navy);}
+.co-success-stat-lbl{font-size:10px;color:#64748b;font-weight:600;letter-spacing:.04em;text-transform:uppercase;}
+.co-success-actions{display:flex;flex-direction:column;gap:8px;}
+.co-success-btn{padding:10px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;display:flex;align-items:center;justify-content:center;gap:8px;}
+.co-success-btn.primary{background:var(--navy);color:#fff;}
+.co-success-btn.primary:hover{background:#01347f;}
+.co-success-btn.secondary{background:rgba(1,42,107,.08);color:var(--navy);border:1px solid rgba(1,42,107,.2);}
+.co-success-btn.secondary:hover{background:rgba(1,42,107,.14);}
+.co-success-btn.ghost{background:#f1f5f9;color:#475569;}
+.co-success-btn.ghost:hover{background:#e2e8f0;}
+/* ── Modal histórico ────────────────────────────── */
+.co-hist-box{background:#fff;border-radius:14px;width:min(860px,96vw);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden;}
+.co-hist-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line2);background:#f8fafc;}
+/* ── Botón header dinámico ──────────────────────── */
+.btn-comite-hdr.tiene-acta{background:rgba(1,42,107,.12);border:1px solid rgba(1,42,107,.3);}
+/* ── Acta CSS (usado por html2pdf) ─────────────── */
+.co-acta-page{font-family:'Arial',sans-serif;font-size:11px;color:#1e293b;line-height:1.5;}
+.co-acta-logo-hdr{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #012a6b;padding-bottom:10px;margin-bottom:16px;}
+.co-acta-logo-company{font-size:18px;font-weight:800;color:#012a6b;letter-spacing:.08em;}
+.co-acta-logo-sub{font-size:9px;color:#64748b;letter-spacing:.1em;text-transform:uppercase;}
+.co-acta-logo-codigo{font-size:14px;font-weight:700;color:#012a6b;text-align:right;}
+.co-acta-section{margin-bottom:18px;}
+.co-acta-section-ttl{font-size:10px;font-weight:700;color:#012a6b;letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid #cbd5e1;padding-bottom:4px;margin-bottom:10px;}
+.co-acta-info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+.co-acta-info-cell{background:#f8fafc;border-radius:4px;padding:6px 10px;}
+.co-acta-info-lbl{font-size:8px;color:#64748b;font-weight:700;letter-spacing:.08em;text-transform:uppercase;}
+.co-acta-info-val{font-size:11px;font-weight:600;color:#1e293b;margin-top:1px;}
+.co-acta-table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:8px;}
+.co-acta-table th{background:#012a6b;color:#fff;padding:5px 8px;text-align:left;font-size:9px;letter-spacing:.06em;text-transform:uppercase;}
+.co-acta-table td{padding:4px 8px;border-bottom:1px solid #f1f5f9;}
+.co-acta-table tr:nth-child(even) td{background:#f8fafc;}
+.co-acta-obs{background:#f8fafc;border-left:3px solid #012a6b;padding:8px 12px;font-size:10px;border-radius:0 4px 4px 0;margin-top:6px;}
+.co-acta-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;}
+.co-acta-kpi{background:#f8fafc;border-radius:4px;padding:8px;text-align:center;border:1px solid #e2e8f0;}
+.co-acta-kpi-val{font-size:18px;font-weight:800;color:#012a6b;}
+.co-acta-kpi-lbl{font-size:8px;color:#64748b;text-transform:uppercase;letter-spacing:.06em;}
+.co-acta-firma-row{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;}
+.co-acta-firma{border-top:1px solid #94a3b8;padding-top:6px;text-align:center;font-size:9px;color:#64748b;}
+.co-acta-footer{margin-top:24px;border-top:1px solid #e2e8f0;padding-top:8px;display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;}
 @media(max-width:640px){
   .co-ops-kpi-row{grid-template-columns:repeat(2,1fr);}
   .co-gen-grid{grid-template-columns:1fr;}
@@ -7887,13 +7964,13 @@ if(document.readyState!=='loading'){tryInit();}
       </div>
     </div>
 
-    <!-- PASO 7: Compromisos -->
+    <!-- PASO 7: Acuerdos del Comité -->
     <div class="co-step-panel" id="co-panel-7">
       <div class="co-step-hdr">
         <div class="co-step-num">7</div>
         <div class="co-step-hdr-txt">
-          <div class="co-step-ttl">Compromisos</div>
-          <div class="co-step-desc">Revisión ejecutiva de compromisos del módulo CM. Los nuevos compromisos se guardan temporalmente hasta finalizar el Comité.</div>
+          <div class="co-step-ttl">Acuerdos del Comité</div>
+          <div class="co-step-desc">Revisión de compromisos activos y registro de nuevos acuerdos generados en esta sesión. Se persistirán al finalizar el Comité.</div>
         </div>
       </div>
 
@@ -7909,7 +7986,7 @@ if(document.readyState!=='loading'){tryInit();}
             <span id="co-cmp-hse-sugg-txt">—</span>
           </div>
           <button class="co-cmp-hse-adopt-btn" onclick="CO._adoptHseCompromiso()">
-            <i class="ti ti-plus"></i> Agregar como compromiso
+            <i class="ti ti-plus"></i> Agregar como acuerdo
           </button>
         </div>
       </div>
@@ -7922,57 +7999,46 @@ if(document.readyState!=='loading'){tryInit();}
         </div>
       </div>
 
-      <!-- Nuevos compromisos de esta sesión -->
+      <!-- Nuevos acuerdos de esta sesión -->
       <div class="co-form-section">
         <div class="co-form-section-ttl" style="display:flex;align-items:center;justify-content:space-between;">
-          <span><i class="ti ti-plus"></i>Nuevos compromisos de esta sesión</span>
-          <button class="co-cmp-add-btn" onclick="CO._openCmpForm()"><i class="ti ti-plus"></i> Agregar</button>
-        </div>
-        <!-- Formulario inline (oculto por defecto) -->
-        <div id="co-cmp-form" style="display:none;padding:14px 18px;border-bottom:1px solid var(--line2);">
-          <div class="co-form-row">
-            <div class="co-form-col">
-              <label class="co-form-label">Título <span class="co-req">*</span></label>
-              <input class="co-input" type="text" id="co-cmp-titulo" placeholder="Título del compromiso…">
-            </div>
-          </div>
-          <div class="co-form-row" style="margin-top:10px;">
-            <div class="co-form-col">
-              <label class="co-form-label">Responsable</label>
-              <input class="co-input" type="text" id="co-cmp-resp" placeholder="Nombre del responsable…">
-            </div>
-            <div class="co-form-col">
-              <label class="co-form-label">Fecha límite</label>
-              <input class="co-input" type="date" id="co-cmp-fecha">
-            </div>
-          </div>
-          <div style="margin-top:10px;">
-            <label class="co-form-label">Descripción <span class="co-req-note">— opcional</span></label>
-            <textarea class="co-proj-obs-area" id="co-cmp-desc" placeholder="Descripción adicional…" style="min-height:60px;"></textarea>
-          </div>
-          <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end;">
-            <button class="inlop-btn-cancel" onclick="CO._closeCmpForm()">Cancelar</button>
-            <button class="proj-btn-primary" onclick="CO._saveCmpForm()"><i class="ti ti-device-floppy"></i> Guardar</button>
-          </div>
+          <span><i class="ti ti-plus"></i>Nuevos acuerdos de esta sesión</span>
+          <button class="co-cmp-add-btn" onclick="CO._openCmpModal()"><i class="ti ti-plus"></i> Agregar acuerdo</button>
         </div>
         <div id="co-cmp-new-list" style="padding:0 18px 12px;"></div>
       </div>
     </div>
 
-    <!-- PASO 8: Vista previa -->
+    <!-- PASO 8: Cerrar Comité -->
     <div class="co-step-panel" id="co-panel-8">
       <div class="co-step-hdr">
         <div class="co-step-num">8</div>
         <div class="co-step-hdr-txt">
-          <div class="co-step-ttl">Vista previa del Acta</div>
-          <div class="co-step-desc">Revisión final antes de guardar, imprimir y enviar. Esta misma plantilla se usará para el PDF.</div>
+          <div class="co-step-ttl">Cerrar Comité</div>
+          <div class="co-step-desc">Revisión final, validación y cierre oficial del Comité Operativo. Se generará el Acta y el PDF al finalizar.</div>
         </div>
       </div>
-      <div class="co-placeholder">
-        <i class="ti ti-eye"></i>
-        <strong>Próxima fase</strong><br>
-        Aquí se mostrará la plantilla completa del Acta con todos los datos capturados.<br>
-        Esta misma vista es la que se imprimirá o descargará como PDF.
+
+      <!-- Checklist de validación -->
+      <div style="padding:14px 18px 0;">
+        <div class="co-close-checklist" id="co-close-checklist">
+          <!-- renderizado por initStep8() -->
+        </div>
+      </div>
+
+      <!-- Resumen ejecutivo -->
+      <div class="co-form-section" style="margin-top:14px;">
+        <div class="co-form-section-ttl"><i class="ti ti-eye"></i>Vista previa del Acta</div>
+        <div id="co-acta-preview" style="padding:0 18px 12px;">
+          <!-- renderizado por initStep8() -->
+        </div>
+      </div>
+
+      <!-- Botón Finalizar -->
+      <div style="padding:18px;border-top:1px solid var(--line2);">
+        <button class="co-btn-finalizar" id="co-btn-finalizar" onclick="CO._finalizar()" disabled>
+          <i class="ti ti-check" aria-hidden="true"></i>Finalizar Comité
+        </button>
       </div>
     </div>
 
@@ -7990,13 +8056,46 @@ if(document.readyState!=='loading'){tryInit();}
       <button class="co-btn-nav primary" id="co-btn-next" onclick="CO.next()">
         Siguiente<i class="ti ti-chevron-right" aria-hidden="true"></i>
       </button>
-      <button class="co-btn-nav success" id="co-btn-save" onclick="CO.save()" style="display:none">
-        <i class="ti ti-device-floppy" aria-hidden="true"></i>Guardar y Generar PDF
-      </button>
     </div>
   </div>
 
 </div><!-- /co-overlay -->
+
+<!-- Pantalla de éxito: Comité Finalizado -->
+<div id="co-success-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10002;align-items:center;justify-content:center;">
+  <div class="co-success-box" id="co-success-box">
+    <div class="co-success-icon"><i class="ti ti-circle-check"></i></div>
+    <div class="co-success-ttl">Comité Finalizado</div>
+    <div class="co-success-codigo" id="co-success-codigo">—</div>
+    <div class="co-success-stats" id="co-success-stats"></div>
+    <div class="co-success-actions">
+      <button class="co-success-btn secondary" onclick="CO._verActa()"><i class="ti ti-eye"></i> Ver Acta</button>
+      <button class="co-success-btn primary" onclick="CO._descargarPDF()"><i class="ti ti-download"></i> Descargar PDF</button>
+      <button class="co-success-btn ghost" onclick="CO._cerrarExito()"><i class="ti ti-x"></i> Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal histórico: Ver Acta -->
+<div id="co-hist-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10001;align-items:center;justify-content:center;">
+  <div class="co-hist-box">
+    <div class="co-hist-hdr">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--navy)" id="co-hist-titulo">Acta del Comité</div>
+        <div style="font-size:11px;color:#64748b" id="co-hist-codigo">—</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="co-cmp-add-btn" onclick="CO._descargarPDF()"><i class="ti ti-download"></i> Descargar PDF</button>
+        <button class="co-btn-close" style="position:static" onclick="CO._cerrarHistorico()"><i class="ti ti-x"></i></button>
+      </div>
+    </div>
+    <div id="co-hist-body" style="overflow-y:auto;max-height:75vh;padding:18px;"></div>
+  </div>
+</div>
+
+<!-- Plantilla de acta (fuente para PDF y vista previa) -->
+<div id="co-acta-tpl" style="display:none;font-family:'DM Sans',Arial,sans-serif;font-size:12px;color:#1e293b;background:#fff;padding:40px;max-width:800px;margin:0 auto;">
+</div>
 
 <!-- Modal: agregar invitado -->
 <div id="co-inv-modal" role="dialog" aria-modal="true" aria-label="Agregar invitado">
@@ -8047,8 +8146,8 @@ var STEPS=[
   {n:4, label:'Seg. Operativo', icon:'ti-chart-bar'},
   {n:5, label:'Generalidades',  icon:'ti-notes'},
   {n:6, label:'Momento HSE',    icon:'ti-shield-check'},
-  {n:7, label:'Compromisos',    icon:'ti-checklist'},
-  {n:8, label:'Vista previa',   icon:'ti-eye'}
+  {n:7, label:'Acuerdos',       icon:'ti-checklist'},
+  {n:8, label:'Cerrar Comité',  icon:'ti-circle-check'}
 ];
 
 /* ── Estado interno ───────────────────────────────── */
@@ -8865,8 +8964,7 @@ function syncHseObs(val){
 }
 
 /* ── Step 7: Compromisos ─────────────────────────── */
-var _cmpLoaded=false; /* evitar re-fetch en cada visita al paso */
-var _cmpExisting=[]; /* cache local de committee_commitments */
+/* _cmpLoaded eliminado — ahora usamos CM.isLoaded() y CM.getList() */
 
 function _isOverdueCmp(c){
   if(!c.due_date)return false;
@@ -8880,27 +8978,37 @@ function _fmtDateCmp(s){
   return p[2]+'/'+p[1]+'/'+p[0];
 }
 
+function _getCmList(){
+  /* Reutiliza la lista ya cargada por el módulo CM */
+  return(typeof window.CM!=='undefined'&&CM.isLoaded())?CM.getList():[];
+}
+
 function _renderCmpKPIs(){
   var el=$id('co-cmp-kpis');
   if(!el)return;
-  var pending=_cmpExisting.filter(function(c){return c.status==='open';}).length;
-  var inprog=_cmpExisting.filter(function(c){return c.status==='in_progress';}).length;
-  var overdue=_cmpExisting.filter(_isOverdueCmp).length;
-  var done=_cmpExisting.filter(function(c){return['closed','completed'].indexOf(c.status)>=0;}).length;
+  var list=_getCmList();
+  var pending=list.filter(function(c){return c.status==='open';}).length;
+  var inprog=list.filter(function(c){return c.status==='in_progress';}).length;
+  var overdue=list.filter(_isOverdueCmp).length;
+  var done=list.filter(function(c){return['closed','completed'].indexOf(c.status)>=0;}).length;
+  var nuevos=(_session.compromisos_nuevos||[]).length;
+  var hseCount=(_session.compromisos_nuevos||[]).filter(function(c){return c._fromHse;}).length;
   function kpi(val,lbl,cls){
     return'<div class="co-cmp-kpi'+(cls?' '+cls:'')+'"><div class="co-cmp-kpi-val">'+val+'</div><div class="co-cmp-kpi-lbl">'+lbl+'</div></div>';
   }
   el.innerHTML=kpi(pending,'Pendientes','')
     +kpi(inprog,'En proceso','warn')
     +kpi(overdue,'Vencidos',overdue>0?'danger':'')
-    +kpi(done,'Cumplidos (mes)','ok');
+    +kpi(done,'Cumplidos mes','ok')
+    +kpi(nuevos,'Este comité',nuevos>0?'warn':'')
+    +(hseCount>0?kpi(hseCount,'Originados HSE',''):'');
 }
 
 function _renderCmpExisting(){
   var el=$id('co-cmp-existing');
   if(!el)return;
-  /* Mostrar pendientes + en proceso + vencidos (resumen ejecutivo) */
-  var active=_cmpExisting.filter(function(c){
+  var list=_getCmList();
+  var active=list.filter(function(c){
     return['open','in_progress','blocked'].indexOf(c.status)>=0||_isOverdueCmp(c);
   }).slice(0,10);
   if(!active.length){
@@ -8919,8 +9027,8 @@ function _renderCmpExisting(){
       +(over?' · <span style="color:#dc2626;font-weight:700">Vencido</span>':'')
       +'</div></div></div>';
   }).join('');
-  if(_cmpExisting.filter(function(c){return['open','in_progress','blocked'].indexOf(c.status)>=0||_isOverdueCmp(c);}).length>10){
-    el.innerHTML+='<div class="co-cmp-empty" style="margin-top:4px;">…y más compromisos. Ver módulo CM para el listado completo.</div>';
+  if(list.filter(function(c){return['open','in_progress','blocked'].indexOf(c.status)>=0||_isOverdueCmp(c);}).length>10){
+    el.innerHTML+='<div class="co-cmp-empty" style="margin-top:4px;">…y más. Ver módulo CM para el listado completo.</div>';
   }
 }
 
@@ -8929,14 +9037,17 @@ function _renderCmpNewList(){
   if(!el)return;
   var list=_session.compromisos_nuevos||[];
   if(!list.length){
-    el.innerHTML='<div class="co-cmp-empty">Aún no se han agregado compromisos en esta sesión.</div>';return;
+    el.innerHTML='<div class="co-cmp-empty">Aún no se han agregado acuerdos en esta sesión.</div>';return;
   }
   el.innerHTML=list.map(function(c,i){
+    var isHse=c._fromHse;
     return'<div class="co-cmp-new-item">'
-      +'<div class="co-cmp-new-dot"></div>'
-      +'<div class="co-cmp-new-txt"><strong>'+_esc(c.titulo)+'</strong>'
-      +(c.responsable?'<div class="co-cmp-ex-meta"><i class="ti ti-user"></i> '+_esc(c.responsable)+(c.fecha_limite?' · <i class="ti ti-calendar"></i> '+_fmtDateCmp(c.fecha_limite):'')+'</div>':'')
-      +(c.descripcion?'<div style="color:#64748b;margin-top:2px;font-size:11px">'+_esc(c.descripcion)+'</div>':'')
+      +'<div class="co-cmp-new-dot'+(isHse?' hse':'')+'"></div>'
+      +'<div class="co-cmp-new-txt">'
+      +(isHse?'<span style="font-size:10px;font-weight:700;color:#012a6b;letter-spacing:.04em">HSE · </span>':'')
+      +'<strong>'+_esc(c.title)+'</strong>'
+      +(c.responsible_nombre?'<div class="co-cmp-ex-meta"><i class="ti ti-user"></i> '+_esc(c.responsible_nombre)+(c.due_date?' · <i class="ti ti-calendar"></i> '+_fmtDateCmp(c.due_date):'')+'</div>':'')
+      +(c.description?'<div style="color:#64748b;margin-top:2px;font-size:11px">'+_esc(c.description)+'</div>':'')
       +'</div>'
       +'<button class="co-cmp-new-del" onclick="CO._removeCmpNuevo('+i+')" title="Eliminar"><i class="ti ti-trash"></i></button>'
       +'</div>';
@@ -8964,80 +9075,64 @@ function _renderCmpHseSugg(){
 function initStep7(){
   if(!_session.compromisos_nuevos) _session.compromisos_nuevos=[];
 
+  /* Activar contexto CO en el módulo CM para diferir persistencia */
+  if(typeof window.CM!=='undefined'){
+    CM.setCoContext(true,function(datos){
+      if(!_session.compromisos_nuevos) _session.compromisos_nuevos=[];
+      _session.compromisos_nuevos.push({
+        title:datos.title,
+        description:datos.description||null,
+        observations:datos.observations||null,
+        due_date:datos.due_date||null,
+        committee_date:datos.committee_date||null,
+        priority:datos.priority||'medium',
+        status:'open',
+        responsible_id:datos._responsable_id||null,
+        responsible_nombre:datos.responsible_nombre||null,
+        created_by_nombre:datos.created_by_nombre||null,
+        _fromHse:false,
+        _creado_en:'comite'
+      });
+      _renderCmpNewList();
+      _renderCmpKPIs();
+      toast('Acuerdo agregado a la sesión del Comité','ok');
+    });
+  }
+
   /* Sugerencia HSE */
   _renderCmpHseSugg();
   /* Lista nuevos */
   _renderCmpNewList();
 
-  /* Compromisos existentes — cargar una sola vez por sesión */
-  if(_cmpLoaded){
+  /* Compromisos existentes — reutiliza CM.getList() si ya está cargado */
+  if(typeof window.CM!=='undefined'&&CM.isLoaded()){
     _renderCmpKPIs();
     _renderCmpExisting();
-    return;
+  } else {
+    var el=$id('co-cmp-existing');
+    if(el) el.innerHTML='<div class="co-cmp-loading"><i class="ti ti-loader"></i> Cargando compromisos…</div>';
+    var p=(typeof window.CM!=='undefined')?CM.load():Promise.reject(new Error('CM no disponible'));
+    p.then(function(){
+      _renderCmpKPIs();
+      _renderCmpExisting();
+    }).catch(function(){
+      if(el) el.innerHTML='<div class="co-cmp-empty">No se pudo cargar la lista de compromisos.</div>';
+    });
   }
-  var el=$id('co-cmp-existing');
-  if(el) el.innerHTML='<div class="co-cmp-loading"><i class="ti ti-loader"></i> Cargando compromisos…</div>';
-
-  dbGet('committee_commitments','deleted_at=is.null&order=created_at.desc').then(function(rows){
-    _cmpExisting=rows||[];
-    _cmpLoaded=true;
-    _renderCmpKPIs();
-    _renderCmpExisting();
-  }).catch(function(){
-    _cmpExisting=[];
-    _cmpLoaded=true;
-    _renderCmpKPIs();
-    if(el) el.innerHTML='<div class="co-cmp-empty">No se pudo cargar la lista de compromisos.</div>';
-  });
 }
 
-function _openCmpForm(prefill){
-  var f=$id('co-cmp-form');
-  if(!f)return;
-  var tit=$id('co-cmp-titulo');
-  var resp=$id('co-cmp-resp');
-  var fecha=$id('co-cmp-fecha');
-  var desc=$id('co-cmp-desc');
-  if(tit) tit.value=(prefill&&prefill.titulo)||'';
-  if(resp) resp.value=(prefill&&prefill.responsable)||'';
-  if(fecha) fecha.value='';
-  if(desc) desc.value=(prefill&&prefill.descripcion)||'';
-  f.style.display='block';
-  if(tit) tit.focus();
-}
-
-function _closeCmpForm(){
-  var f=$id('co-cmp-form');
-  if(f) f.style.display='none';
-}
-
-function _saveCmpForm(){
-  var titulo=($id('co-cmp-titulo').value||'').trim();
-  if(!titulo){
-    toast('El título del compromiso es obligatorio.','warn');
-    $id('co-cmp-titulo').focus();
-    return;
-  }
-  var nuevo={
-    titulo:titulo,
-    responsable:($id('co-cmp-resp').value||'').trim()||null,
-    fecha_limite:$id('co-cmp-fecha').value||null,
-    descripcion:($id('co-cmp-desc').value||'').trim()||null,
-    _fromHse:false,
-    _creado_en:'comite'
-  };
-  if(!_session.compromisos_nuevos) _session.compromisos_nuevos=[];
-  _session.compromisos_nuevos.push(nuevo);
-  _closeCmpForm();
-  _renderCmpNewList();
-  toast('Compromiso agregado a la sesión','ok');
+function _openCmpModal(){
+  /* Abre el modal de CM en modo "nuevo" — la lógica de guardado está interceptada por setCoContext */
+  if(typeof window.CM==='undefined')return;
+  CM.openModal();
 }
 
 function _removeCmpNuevo(idx){
   if(!_session.compromisos_nuevos) return;
   _session.compromisos_nuevos.splice(idx,1);
   _renderCmpNewList();
-  _renderCmpHseSugg(); /* podría volver a mostrar sugerencia HSE */
+  _renderCmpKPIs();
+  _renderCmpHseSugg();
 }
 
 function _adoptHseCompromiso(){
@@ -9048,22 +9143,446 @@ function _adoptHseCompromiso(){
   if(!texto)return;
   if(!_session.compromisos_nuevos) _session.compromisos_nuevos=[];
   _session.compromisos_nuevos.push({
-    titulo:'Compromiso Momento HSE',
-    responsable:hse.responsable||null,
-    fecha_limite:null,
-    descripcion:texto,
+    title:'Acuerdo Momento HSE',
+    description:texto,
+    responsible_nombre:hse.responsable||null,
+    responsible_id:null,
+    due_date:null,
+    priority:'medium',
+    status:'open',
     _fromHse:true,
     _creado_en:'comite'
   });
   _renderCmpNewList();
+  _renderCmpKPIs();
   _renderCmpHseSugg();
-  toast('Compromiso HSE agregado a la sesión','ok');
+  toast('Acuerdo HSE agregado a la sesión','ok');
+}
+
+/* ══════════════════════════════════════════════════
+   STEP 8 — CERRAR COMITÉ
+══════════════════════════════════════════════════ */
+
+/* ── Construye el código de acta S27-2026 ───────── */
+function _buildCodigo(){
+  var sem=(_session.semana||'S?').replace(/^S/,'');
+  var anio=new Date().getFullYear();
+  return'S'+sem+'-'+anio;
+}
+
+/* ── Construye el snapshot completo ─────────────── */
+function buildSnapshot(){
+  var semana=_session.semana;
+  var snap=null;
+  try{if(typeof window.projGetSnapshot==='function') snap=window.projGetSnapshot(semana);}catch(e){}
+
+  /* Responsables: buscar en _coPersonal para obtener IDs */
+  var r1=_coPersonal.find(function(p){return p.id===_session.responsable_1;})||{};
+  var r2=_coPersonal.find(function(p){return p.id===_session.responsable_2;})||{};
+
+  /* Seguimiento Operativo */
+  var wkLiq=DATA_LIQ&&semana?DATA_LIQ.find(function(w){return w.id===semana;}):null;
+  var wkSec=DATA_SEC&&semana?DATA_SEC.find(function(w){return w.id===semana;}):null;
+  var wsLiq=wkLiq?_opsWs(wkLiq):null;
+  var wsSec=wkSec?_opsWs(wkSec):null;
+  var estadoOps='ok';
+  if(wsLiq&&wsLiq.pct<85||wsSec&&wsSec.pct<85) estadoOps='crit';
+  else if(wsLiq&&wsLiq.pct<100||wsSec&&wsSec.pct<100) estadoOps='warn';
+
+  /* Generalidades — texto ejecutivo de áreas */
+  var genAreas={};
+  var accionesTraf=[];
+  ['liq','sec'].forEach(function(c){
+    var wkA=(actions&&actions[c]&&semana)?actions[c][semana]||[]:[];
+    wkA.forEach(function(a){
+      if(a.status==='urgente'||a.status==='pendiente'||a.status==='ejecucion')
+        accionesTraf.push({txt:a.txt,status:a.status,cargo:c==='liq'?'Carga Líquida':'Carga Seca'});
+    });
+  });
+  genAreas.trafico={estado:accionesTraf.length>0?'warn':'ok',novedades:accionesTraf.length};
+  genAreas.operaciones={estado:estadoOps,liq_pct:wsLiq?wsLiq.pct:null,sec_pct:wsSec?wsSec.pct:null};
+  var tasksCrit=snap?(snap.tasks||[]).filter(function(t){
+    if(t.real===null||t.real==='')return false;
+    var ind=projCalcIndicador(t.real,t.meta);
+    return ind.estado==='crit'||ind.estado==='risk';
+  }):[];
+  genAreas.project={estado:tasksCrit.length>0?'warn':'ok',tasks_criticos:tasksCrit.length};
+  genAreas.hseq={estado:'ok',responsable:snap&&snap.hseq?snap.hseq:null};
+
+  return{
+    codigo:_buildCodigo(),
+    semana:semana,
+    anio:new Date().getFullYear(),
+    cargo:_session.cargo,
+    fecha_reunion:_session.fecha_reunion,
+    hora_inicio:_session.hora_inicio,
+    hora_fin:_session.hora_fin,
+    lugar:_session.lugar,
+    responsable_liquida_id:r1.id||_session.responsable_1||null,
+    responsable_liquida_nombre:r1.nombre||null,
+    responsable_seca_id:r2.id||_session.responsable_2||null,
+    responsable_seca_nombre:r2.nombre||null,
+    asistentes:(_session.asistencia||[]).filter(function(a){return a.presente;}).map(function(a){
+      return{nombre:a.nombre,cargo:a.cargo,area:a.area||null,tipo:a.tipo||'colaborador'};
+    }).concat((_session.invitados||[]).map(function(i){
+      return{nombre:i.nombre,cargo:i.cargo,empresa:i.empresa||null,tipo:'invitado'};
+    })),
+    project:{
+      observaciones:_session.project&&_session.project.observaciones||'',
+      kpi:snap?snap.kpi:null,
+      hseq_responsable:snap?snap.hseq:null,
+      tasks:snap?(snap.tasks||[]).filter(function(t){return t.real!==null&&t.real!=='';}).map(function(t){
+        return{task_id:t.task_id,sistema:t.sistema||t.tema||t.tema||'',meta:t.meta,real:t.real,estado:projCalcIndicador(t.real,t.meta).estado};
+      }):[]
+    },
+    operacion:{
+      observaciones:_session.operacion&&_session.operacion.observaciones||'',
+      liq:wsLiq?{sol:wsLiq.sol,carg:wsLiq.carg,pct:wsLiq.pct,deficit:wsLiq.deficit}:null,
+      sec:wsSec?{sol:wsSec.sol,carg:wsSec.carg,pct:wsSec.pct,deficit:wsSec.deficit}:null,
+      estado_general:estadoOps
+    },
+    generalidades:{
+      observaciones:_session.generalidades&&_session.generalidades.observaciones||'',
+      areas:genAreas
+    },
+    hse:{
+      responsable:_session.hse&&_session.hse.responsable||null,
+      tema_presentado:_session.hse&&_session.hse.tema_presentado||'',
+      observaciones:_session.hse&&_session.hse.observaciones||''
+    },
+    compromisos_nuevos:(_session.compromisos_nuevos||[]).map(function(c){
+      return{title:c.title,description:c.description||null,due_date:c.due_date||null,
+        responsible_id:c.responsible_id||null,responsible_nombre:c.responsible_nombre||null,
+        priority:c.priority||'medium',_fromHse:!!c._fromHse};
+    }),
+    finalizado_por:getUser().nombre,
+    finalizado_at:new Date().toISOString()
+  };
+}
+
+/* ── Valida el snapshot: retorna [{ok,label,step}] ─ */
+function validateSnapshot(snap){
+  return[
+    {label:'Encabezado',step:1,ok:!!(snap.fecha_reunion&&snap.lugar&&snap.responsable_liquida_id&&snap.responsable_seca_id)},
+    {label:'Asistencia',step:2,ok:snap.asistentes&&snap.asistentes.length>0},
+    {label:'Project',step:3,ok:true},
+    {label:'Seguimiento Operativo',step:4,ok:!!(snap.operacion&&(snap.operacion.liq||snap.operacion.sec))},
+    {label:'Generalidades',step:5,ok:true},
+    {label:'Momento HSE',step:6,ok:true},
+    {label:'Acuerdos del Comité',step:7,ok:true}
+  ];
+}
+
+/* ── Persiste el acta y los compromisos nuevos ───── */
+async function persistSnapshot(snap){
+  /* 1. Insertar acta */
+  var actaBody={
+    codigo:snap.codigo,
+    semana:snap.semana,
+    anio:snap.anio,
+    cargo:snap.cargo,
+    status:'finalizado',
+    version:1,
+    snapshot:snap,
+    created_by_nombre:snap.finalizado_por,
+    finalizado_at:snap.finalizado_at
+  };
+  var rows=await dbInsert('co_actas',actaBody);
+  var acta=rows&&rows[0]?rows[0]:null;
+  if(!acta||!acta.id) throw new Error('No se pudo crear el acta en Supabase.');
+
+  /* 2. Insertar compromisos nuevos */
+  var hoy=new Date().toISOString().split('T')[0];
+  for(var i=0;i<snap.compromisos_nuevos.length;i++){
+    var c=snap.compromisos_nuevos[i];
+    await dbInsert('committee_commitments',{
+      title:c.title,
+      description:c.description||null,
+      due_date:c.due_date||null,
+      committee_date:snap.fecha_reunion||hoy,
+      priority:c.priority||'medium',
+      status:'open',
+      responsible_id:c.responsible_id||null,
+      responsible_nombre:c.responsible_nombre||null,
+      created_by_nombre:snap.finalizado_por,
+      acta_id:acta.id,
+      es_acuerdo_hse:!!c._fromHse,
+      created_at:new Date().toISOString(),
+      updated_at:new Date().toISOString()
+    });
+  }
+
+  /* 3. Refrescar CM para que vea los nuevos compromisos */
+  if(typeof window.CM!=='undefined') CM.load().catch(function(){});
+
+  return acta;
+}
+
+/* ── Genera el HTML del acta desde snapshot ──────── */
+function renderActa(snap){
+  var fechaFmt=function(s){if(!s)return'—';var p=s.split('-');return p[2]+'/'+p[1]+'/'+p[0];};
+  var esc2=function(s){return _esc(s||'');};
+  var secTtl=function(t,ico){return'<div class="co-acta-section-ttl"><i class="ti '+ico+'" style="margin-right:5px"></i>'+t+'</div>';};
+
+  var html='<div class="co-acta-page">';
+
+  /* Encabezado */
+  html+='<div class="co-acta-logo-hdr">'
+    +'<div><div class="co-acta-logo-company">INLOP</div>'
+    +'<div class="co-acta-logo-sub">Acta del Comité Operativo</div></div>'
+    +'<div class="co-acta-logo-codigo"><div>'+esc2(snap.codigo)+'</div>'
+    +'<div style="font-size:9px;color:#64748b;font-weight:400">'+fechaFmt(snap.fecha_reunion)+'</div></div></div>';
+
+  /* Info general */
+  html+='<div class="co-acta-info-grid">'
+    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Semana</div><div class="co-acta-info-val">'+esc2(snap.semana)+'</div></div>'
+    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Cargo</div><div class="co-acta-info-val">'+(snap.cargo==='liq'?'Carga Líquida':'Carga Seca')+'</div></div>'
+    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Lugar</div><div class="co-acta-info-val">'+esc2(snap.lugar)+'</div></div>'
+    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Hora inicio</div><div class="co-acta-info-val">'+esc2(snap.hora_inicio)+'</div></div>'
+    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Hora fin</div><div class="co-acta-info-val">'+esc2(snap.hora_fin)+'</div></div>'
+    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Fecha</div><div class="co-acta-info-val">'+fechaFmt(snap.fecha_reunion)+'</div></div>'
+    +'</div>';
+
+  /* Responsables */
+  html+='<div class="co-acta-section">'+secTtl('Responsables','ti-users')
+    +'<div class="co-acta-info-grid">'
+    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Resp. Carga Líquida</div><div class="co-acta-info-val">'+esc2(snap.responsable_liquida_nombre)+'</div></div>'
+    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Resp. Carga Seca</div><div class="co-acta-info-val">'+esc2(snap.responsable_seca_nombre)+'</div></div>'
+    +'</div></div>';
+
+  /* Asistentes */
+  html+='<div class="co-acta-section">'+secTtl('Asistentes','ti-users-group')
+    +'<table class="co-acta-table"><thead><tr><th>Nombre</th><th>Cargo</th><th>Área / Empresa</th><th>Tipo</th></tr></thead><tbody>'
+    +(snap.asistentes||[]).map(function(a){
+      return'<tr><td>'+esc2(a.nombre)+'</td><td>'+esc2(a.cargo)+'</td><td>'+esc2(a.area||a.empresa||'—')+'</td><td>'+esc2(a.tipo)+'</td></tr>';
+    }).join('')
+    +'</tbody></table></div>';
+
+  /* Seguimiento Operativo */
+  var op=snap.operacion||{};
+  html+='<div class="co-acta-section">'+secTtl('Seguimiento Operativo','ti-chart-bar');
+  if(op.liq||op.sec){
+    html+='<table class="co-acta-table"><thead><tr><th>Cargo</th><th>Nominados</th><th>Cargados</th><th>Cumplimiento</th><th>Déficit</th></tr></thead><tbody>';
+    if(op.liq) html+='<tr><td>Carga Líquida</td><td>'+(op.liq.sol||0)+'</td><td>'+(op.liq.carg||0)+'</td><td>'+(op.liq.pct||0)+'%</td><td>'+(op.liq.deficit||0)+'</td></tr>';
+    if(op.sec) html+='<tr><td>Carga Seca</td><td>'+(op.sec.sol||0)+'</td><td>'+(op.sec.carg||0)+'</td><td>'+(op.sec.pct||0)+'%</td><td>'+(op.sec.deficit||0)+'</td></tr>';
+    html+='</tbody></table>';
+  }
+  if(op.observaciones) html+='<div class="co-acta-obs">'+esc2(op.observaciones)+'</div>';
+  html+='</div>';
+
+  /* Project */
+  var pr=snap.project||{};
+  html+='<div class="co-acta-section">'+secTtl('Project — Sistemas','ti-device-laptop');
+  if(pr.kpi){
+    html+='<div class="co-acta-kpi-row">'
+      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.ok||0)+'</div><div class="co-acta-kpi-lbl">OK</div></div>'
+      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.risk||0)+'</div><div class="co-acta-kpi-lbl">Riesgo</div></div>'
+      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.crit||0)+'</div><div class="co-acta-kpi-lbl">Crítico</div></div>'
+      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.efectividad!==null?pr.kpi.efectividad+'%':'—')+'</div><div class="co-acta-kpi-lbl">Efectividad</div></div>'
+      +'</div>';
+  }
+  if(pr.tasks&&pr.tasks.length){
+    html+='<table class="co-acta-table"><thead><tr><th>Sistema</th><th>Meta</th><th>Real</th><th>Estado</th></tr></thead><tbody>'
+      +pr.tasks.map(function(t){
+        var est={'ok':'✓','risk':'⚠','crit':'✗'}[t.estado]||'—';
+        return'<tr><td>'+esc2(t.sistema)+'</td><td>'+t.meta+'%</td><td>'+t.real+'%</td><td>'+est+'</td></tr>';
+      }).join('')+'</tbody></table>';
+  }
+  if(pr.observaciones) html+='<div class="co-acta-obs">'+esc2(pr.observaciones)+'</div>';
+  html+='</div>';
+
+  /* Momento HSE */
+  var hse=snap.hse||{};
+  html+='<div class="co-acta-section">'+secTtl('Momento HSE','ti-shield-check')
+    +'<div class="co-acta-info-grid">'
+    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Responsable (Ruleta)</div><div class="co-acta-info-val">'+esc2(hse.responsable||'—')+'</div></div>'
+    +'<div class="co-acta-info-cell" style="grid-column:span 2"><div class="co-acta-info-lbl">Tema presentado</div><div class="co-acta-info-val">'+esc2(hse.tema_presentado||'—')+'</div></div>'
+    +'</div>'
+    +(hse.observaciones?'<div class="co-acta-obs">'+esc2(hse.observaciones)+'</div>':'')
+    +'</div>';
+
+  /* Acuerdos / Compromisos */
+  var cmpNuevos=snap.compromisos_nuevos||[];
+  html+='<div class="co-acta-section">'+secTtl('Acuerdos del Comité','ti-checklist');
+  if(cmpNuevos.length){
+    html+='<table class="co-acta-table"><thead><tr><th>Acuerdo</th><th>Responsable</th><th>Fecha límite</th><th>HSE</th></tr></thead><tbody>'
+      +cmpNuevos.map(function(c){
+        return'<tr><td>'+esc2(c.title)+'</td><td>'+esc2(c.responsible_nombre||'—')+'</td><td>'+fechaFmt(c.due_date)+'</td><td>'+(c._fromHse?'✓':'')+'</td></tr>';
+      }).join('')+'</tbody></table>';
+  } else {
+    html+='<div style="color:#94a3b8;font-size:11px;padding:6px 0;">Sin nuevos acuerdos registrados en esta sesión.</div>';
+  }
+  html+='</div>';
+
+  /* Generalidades */
+  var gen=snap.generalidades||{};
+  if(gen.observaciones){
+    html+='<div class="co-acta-section">'+secTtl('Observaciones Generales','ti-notes')
+      +'<div class="co-acta-obs">'+esc2(gen.observaciones)+'</div></div>';
+  }
+
+  /* Firmas */
+  html+='<div class="co-acta-firma-row">'
+    +'<div class="co-acta-firma">'+esc2(snap.responsable_liquida_nombre||'—')+'<br>Resp. Carga Líquida</div>'
+    +'<div class="co-acta-firma">'+esc2(snap.responsable_seca_nombre||'—')+'<br>Resp. Carga Seca</div>'
+    +'</div>';
+
+  /* Footer */
+  html+='<div class="co-acta-footer">'
+    +'<span>'+esc2(snap.codigo)+' · Comité Operativo INLOP</span>'
+    +'<span>Generado: '+new Date().toLocaleString('es-CO',{dateStyle:'short',timeStyle:'short'})+'</span>'
+    +'<span>Pág. 1</span></div>';
+
+  html+='</div>';
+  return html;
+}
+
+/* ── Step 8: inicializar / checklist ─────────────── */
+var _lastSnapshot=null; /* snapshot construido en Step 8, reutilizado para PDF */
+
+function initStep8(){
+  _lastSnapshot=buildSnapshot();
+  var checks=validateSnapshot(_lastSnapshot);
+  var allOk=checks.every(function(c){return c.ok;});
+
+  /* Checklist */
+  var cl=$id('co-close-checklist');
+  if(cl){
+    cl.innerHTML=checks.map(function(c){
+      return'<div class="co-close-check-item '+(c.ok?'ok':'fail')+'">'
+        +'<i class="ti '+(c.ok?'ti-circle-check':'ti-circle-x')+'"></i>'
+        +'<span class="co-close-check-lbl">'+c.label+'</span>'
+        +(!c.ok?'<span class="co-close-check-action" onclick="CO.goStep('+c.step+')">Completar</span>':'')
+        +'</div>';
+    }).join('');
+  }
+
+  /* Habilitar/deshabilitar botón */
+  var btn=$id('co-btn-finalizar');
+  if(btn) btn.disabled=!allOk;
+
+  /* Vista previa */
+  var prev=$id('co-acta-preview');
+  if(prev) prev.innerHTML='<div style="border:1px solid var(--line2);border-radius:8px;overflow:hidden;">'+renderActa(_lastSnapshot)+'</div>';
+}
+
+/* ── Finalizar el comité ─────────────────────────── */
+var _finalizando=false;
+
+async function finalizarComite(){
+  if(_finalizando)return;
+  _finalizando=true;
+  var btn=$id('co-btn-finalizar');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Finalizando…';}
+  try{
+    if(!_lastSnapshot) _lastSnapshot=buildSnapshot();
+    var acta=await persistSnapshot(_lastSnapshot);
+    _session.acta_id=acta.id;
+    _session.status='finalizado';
+
+    /* Desactivar contexto CO en CM */
+    if(typeof window.CM!=='undefined') CM.setCoContext(false,null);
+
+    /* Generar PDF en segundo plano y mostrarlo disponible */
+    _generarPDF(_lastSnapshot,false /* no descarga automática, solo prepara */);
+
+    /* Actualizar botón del header */
+    _actualizarBtnHdr(_lastSnapshot.codigo);
+
+    /* Mostrar pantalla de éxito */
+    _mostrarExito(_lastSnapshot,acta);
+
+  }catch(e){
+    console.error('[CO] Error al finalizar:',e);
+    toast('Error al finalizar el comité: '+e.message,'error');
+    if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-check"></i> Finalizar Comité';}
+  }finally{
+    _finalizando=false;
+  }
+}
+
+/* ── Mostrar pantalla de éxito ───────────────────── */
+function _mostrarExito(snap,acta){
+  var ov=$id('co-overlay');
+  if(ov) ov.style.display='none';
+
+  var sov=$id('co-success-overlay');
+  var cod=$id('co-success-codigo');
+  var stats=$id('co-success-stats');
+  if(cod) cod.textContent=snap.codigo;
+  if(stats){
+    var asist=(snap.asistentes||[]).length;
+    var cmpN=(snap.compromisos_nuevos||[]).length;
+    var horaFin=snap.hora_fin||new Date().toTimeString().substring(0,5);
+    stats.innerHTML=
+      '<div class="co-success-stat"><div class="co-success-stat-val">'+asist+'</div><div class="co-success-stat-lbl">Asistentes</div></div>'
+      +'<div class="co-success-stat"><div class="co-success-stat-val">'+cmpN+'</div><div class="co-success-stat-lbl">Acuerdos</div></div>'
+      +'<div class="co-success-stat"><div class="co-success-stat-val">'+horaFin+'</div><div class="co-success-stat-lbl">Hora de cierre</div></div>'
+      +'<div class="co-success-stat"><div class="co-success-stat-val">'+snap.semana+'</div><div class="co-success-stat-lbl">Semana</div></div>';
+  }
+  if(sov){sov.style.display='flex';}
+}
+
+/* ── Genera el PDF usando html2pdf.js ────────────── */
+function _generarPDF(snap,descargar){
+  var tpl=$id('co-acta-tpl');
+  if(!tpl)return;
+  tpl.innerHTML=renderActa(snap||_lastSnapshot);
+  tpl.style.display='block';
+  if(typeof html2pdf==='undefined'){
+    toast('Librería PDF no disponible — use Imprimir (Ctrl+P)','warn');
+    tpl.style.display='none';
+    return;
+  }
+  var opt={
+    margin:[10,10,10,10],
+    filename:(snap&&snap.codigo?snap.codigo:'Acta-CO')+'.pdf',
+    image:{type:'jpeg',quality:0.97},
+    html2canvas:{scale:2,useCORS:true},
+    jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
+    pagebreak:{mode:['avoid-all','css','legacy']}
+  };
+  if(descargar){
+    html2pdf().set(opt).from(tpl).save().then(function(){tpl.style.display='none';});
+  } else {
+    tpl.style.display='none';
+  }
+}
+
+/* ── Actualizar botón del header ─────────────────── */
+function _actualizarBtnHdr(codigo){
+  var btn=$id('btnComiteHdr');
+  if(!btn)return;
+  if(codigo){
+    btn.innerHTML='<i class="ti ti-file-check" aria-hidden="true"></i>'+codigo;
+    btn.classList.add('tiene-acta');
+    btn.onclick=function(){CO._abrirHistorico(_session.acta_id);};
+  } else {
+    btn.innerHTML='<i class="ti ti-clipboard-text" aria-hidden="true"></i>Comité Operativo';
+    btn.classList.remove('tiene-acta');
+    btn.onclick=function(){CO.open();};
+  }
+}
+
+/* ── Verificar acta existente al abrir ───────────── */
+async function _checkActaExistente(){
+  var semana=_session&&_session.semana?_session.semana:null;
+  var cargoVal=(typeof cargo!=='undefined')?cargo:'liq';
+  var anio=new Date().getFullYear();
+  if(!semana||semana==='—')return null;
+  try{
+    var rows=await dbGet('co_actas','semana=eq.'+semana+'&anio=eq.'+anio+'&cargo=eq.'+cargoVal+'&status=eq.finalizado&deleted_at=is.null&order=version.desc&limit=1');
+    return rows&&rows.length?rows[0]:null;
+  }catch(e){return null;}
 }
 
 /* ── Dispatcher: guardar estado antes de salir ────── */
 function syncStep(n){
   if(n===1) syncStep1();
-  /* Pasos 2, 3, 4 son reactivos — no hay sync adicional */
+  if(n===7){
+    /* Al salir del paso 7, desactivar contexto CO en CM */
+    if(typeof window.CM!=='undefined') CM.setCoContext(false,null);
+  }
 }
 
 /* ── Dispatcher: inicializar contenido al entrar ──── */
@@ -9075,13 +9594,14 @@ function initStepContent(n){
   if(n===5) initStep5();
   if(n===6) initStep6();
   if(n===7) initStep7();
+  if(n===8) initStep8();
 }
 
 /* ── Dispatcher: validar antes de avanzar ─────────── */
 function validateStep(n){
   if(n===1) return validateStep1();
   if(n===2) return validateStep2();
-  return true; /* Pasos 3–7 siempre permiten avanzar */
+  return true; /* Pasos 3–8 siempre permiten avanzar; el step 8 valida internamente */
 }
 
 /* ── Render barra de progreso ─────────────────────── */
@@ -9185,7 +9705,6 @@ var CO={
     initSession();
     var ov=$id('co-overlay');
     if(ov)ov.style.display='flex';
-    /* Activar panel 1 directamente sin sincronizar estado vacío */
     STEPS.forEach(function(s){
       var el=$id('co-panel-'+s.n);
       if(el)el.classList.remove('active');
@@ -9194,14 +9713,23 @@ var CO={
     if(p1)p1.classList.add('active');
     renderProgress();
     renderFooter();
-    /* Cargar personal y luego inicializar campos */
     loadPersonal().then(function(){
       initStep1();
+      /* Verificar si ya existe acta para esta semana */
+      _checkActaExistente().then(function(acta){
+        if(acta){
+          _session.acta_id=acta.id;
+          _actualizarBtnHdr(acta.codigo||_buildCodigo());
+        }
+      });
     });
   },
 
   close:function(){
     if(!confirm('¿Cerrar el wizard? Los datos no guardados se perderán.'))return;
+    CM.setCoContext(false,null);
+    _finalizando=false;
+    _lastSnapshot=null;
     var ov=$id('co-overlay');
     if(ov)ov.style.display='none';
     _step=1;
@@ -9222,10 +9750,6 @@ var CO={
 
   prev:function(){
     if(_step>1) goStep(_step-1);
-  },
-
-  save:function(){
-    alert('Guardar se implementará en la siguiente fase.');
   },
 
   /* ── Asistencia ─────────────────────────────────── */
@@ -9286,11 +9810,55 @@ var CO={
   _syncHseObs:function(val){syncHseObs(val);},
 
   /* ── Compromisos Step 7 ──────────────────────────── */
-  _openCmpForm:function(){_openCmpForm(null);},
-  _closeCmpForm:function(){_closeCmpForm();},
-  _saveCmpForm:function(){_saveCmpForm();},
+  _openCmpModal:function(){_openCmpModal();},
   _removeCmpNuevo:function(idx){_removeCmpNuevo(idx);},
   _adoptHseCompromiso:function(){_adoptHseCompromiso();},
+
+  /* ── Cerrar Comité (Step 8) ──────────────────────── */
+  _finalizar:function(){finalizarComite();},
+
+  _verActa:function(){
+    var snap=_lastSnapshot;
+    if(!snap)return;
+    var body=$id('co-hist-body');
+    if(body) body.innerHTML=renderActa(snap);
+    var ov=$id('co-hist-overlay');
+    if(ov){ov.style.display='flex';}
+  },
+
+  _descargarPDF:function(){
+    _generarPDF(_lastSnapshot,true);
+  },
+
+  _cerrarExito:function(){
+    var ov=$id('co-success-overlay');
+    if(ov)ov.style.display='none';
+    /* cerrar el wizard también */
+    var wiz=$id('co-overlay');
+    if(wiz)wiz.style.display='none';
+    _step=1;
+    _session={};
+  },
+
+  _abrirHistorico:function(actaId){
+    if(!actaId){toast('No se encontró el acta.','warn');return;}
+    var body=$id('co-hist-body');
+    if(body) body.innerHTML='<div style="text-align:center;padding:40px"><i class="ti ti-loader" style="font-size:28px;opacity:.4"></i></div>';
+    var ov=$id('co-hist-overlay');
+    if(ov) ov.style.display='flex';
+    dbGet('co_actas?id=eq.'+actaId+'&select=*').then(function(rows){
+      if(!rows||!rows.length){if(body)body.innerHTML='<div style="padding:24px">Acta no encontrada.</div>';return;}
+      var acta=rows[0];
+      if(body) body.innerHTML=renderActa(acta.snapshot||{});
+    }).catch(function(){
+      if(body) body.innerHTML='<div style="padding:24px;color:var(--crit)">Error al cargar el acta.</div>';
+    });
+  },
+
+  _cerrarHistorico:function(){
+    var ov=$id('co-hist-overlay');
+    if(ov)ov.style.display='none';
+  },
 
   /* ── Operativo: toggle detalle colapsable ────────── */
   _toggleOpsDetalle:function(uid){
