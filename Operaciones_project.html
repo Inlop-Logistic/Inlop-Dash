@@ -9181,17 +9181,23 @@ function _buildCodigo(){
 function buildSnapshot(){
   var semana=_session.semana;
   var snap=null;
+  console.log('[CO-DIAG] buildSnapshot [1] semana=',semana,', responsable_1=',_session.responsable_1,', responsable_2=',_session.responsable_2);
   try{if(typeof window.projGetSnapshot==='function') snap=window.projGetSnapshot(semana);}catch(e){}
+  console.log('[CO-DIAG] buildSnapshot [2] projSnap=',snap?'OK':null);
 
   /* Responsables: buscar en _coPersonal para obtener IDs */
   var r1=_coPersonal.find(function(p){return p.id===_session.responsable_1;})||{};
   var r2=_coPersonal.find(function(p){return p.id===_session.responsable_2;})||{};
+  console.log('[CO-DIAG] buildSnapshot [3] _coPersonal.length=',_coPersonal.length,', r1=',r1.id||'no-match',', r2=',r2.id||'no-match');
 
   /* Seguimiento Operativo */
   var wkLiq=DATA_LIQ&&semana?DATA_LIQ.find(function(w){return w.id===semana;}):null;
   var wkSec=DATA_SEC&&semana?DATA_SEC.find(function(w){return w.id===semana;}):null;
+  console.log('[CO-DIAG] buildSnapshot [4] wkLiq=',wkLiq?{id:wkLiq.id,sol:wkLiq.sol,hasRows:Array.isArray(wkLiq.rows)}:null,', wkSec=',wkSec?{id:wkSec.id,sol:wkSec.sol,hasRows:Array.isArray(wkSec.rows)}:null);
   var wsLiq=wkLiq?_opsWs(wkLiq):null;
+  console.log('[CO-DIAG] buildSnapshot [5] wsLiq=',wsLiq);
   var wsSec=wkSec?_opsWs(wkSec):null;
+  console.log('[CO-DIAG] buildSnapshot [6] wsSec=',wsSec);
   var estadoOps='ok';
   if(wsLiq&&wsLiq.pct<85||wsSec&&wsSec.pct<85) estadoOps='crit';
   else if(wsLiq&&wsLiq.pct<100||wsSec&&wsSec.pct<100) estadoOps='warn';
@@ -9199,6 +9205,7 @@ function buildSnapshot(){
   /* Generalidades — texto ejecutivo de áreas */
   var genAreas={};
   var accionesTraf=[];
+  console.log('[CO-DIAG] buildSnapshot [7] acciones check, typeof actions=',typeof actions);
   ['liq','sec'].forEach(function(c){
     var wkA=(actions&&actions[c]&&semana)?actions[c][semana]||[]:[];
     wkA.forEach(function(a){
@@ -9208,6 +9215,7 @@ function buildSnapshot(){
   });
   genAreas.trafico={estado:accionesTraf.length>0?'warn':'ok',novedades:accionesTraf.length};
   genAreas.operaciones={estado:estadoOps,liq_pct:wsLiq?wsLiq.pct:null,sec_pct:wsSec?wsSec.pct:null};
+  console.log('[CO-DIAG] buildSnapshot [8] typeof projCalcIndicador=',typeof projCalcIndicador);
   var tasksCrit=snap?(snap.tasks||[]).filter(function(t){
     if(t.real===null||t.real==='')return false;
     var ind=projCalcIndicador(t.real,t.meta);
@@ -9215,6 +9223,7 @@ function buildSnapshot(){
   }):[];
   genAreas.project={estado:tasksCrit.length>0?'warn':'ok',tasks_criticos:tasksCrit.length};
   genAreas.hseq={estado:'ok',responsable:snap&&snap.hseq?snap.hseq:null};
+  console.log('[CO-DIAG] buildSnapshot [9] genAreas OK, building return object');
 
   return{
     codigo:_buildCodigo(),
@@ -9456,9 +9465,20 @@ function initStep8(){
   var hfEl=$id('co-f-hora-fin');
   if(hfEl) hfEl.value=_session.hora_fin;
 
-  _lastSnapshot=buildSnapshot();
+  /* [DIAG-TEMP] */
+  try{ _lastSnapshot=buildSnapshot(); }
+  catch(e){
+    console.error('[CO-DIAG] buildSnapshot() excepción →',e.message);
+    console.error('[CO-DIAG] stack:',e.stack);
+    var _cl=$id('co-close-checklist');
+    if(_cl) _cl.innerHTML='<div style="color:#c81e1e;padding:8px 0;font-size:13px;">'
+      +'<b>Error de diagnóstico:</b> '+e.message
+      +'<br><small>Revisa la consola del navegador para el stack completo.</small></div>';
+    return;
+  }
   var checks=validateSnapshot(_lastSnapshot);
   var allOk=checks.every(function(c){return c.ok;});
+  console.log('[CO-DIAG] validateSnapshot →',checks.map(function(c){return c.label+':'+(c.ok?'OK':'FAIL');}));
 
   /* Checklist */
   var cl=$id('co-close-checklist');
@@ -9475,10 +9495,12 @@ function initStep8(){
   /* Habilitar/deshabilitar botón */
   var btn=$id('co-btn-finalizar');
   if(btn) btn.disabled=!allOk;
+  console.log('[CO-DIAG] allOk=',allOk,'; btn.disabled=',btn?btn.disabled:'no-btn');
 
   /* Vista previa */
   var prev=$id('co-acta-preview');
   if(prev) prev.innerHTML='<div style="border:1px solid var(--line2);border-radius:8px;overflow:hidden;">'+renderActa(_lastSnapshot)+'</div>';
+  console.log('[CO-DIAG] initStep8 completado');
 }
 
 /* ── Finalizar el comité ─────────────────────────── */
