@@ -2067,6 +2067,9 @@ window.updatePortalStats=updatePortalStats;
       </label>
       <button class="xl-btn" onclick="window.open('https://inlop1.sharepoint.com/:x:/s/INLOP/IQA7_s7M6rcXTaiTdLmkFVK7AS-_1oaThXbqJ8QCEYyUZSw?e=mq7vbt', '_blank')" style="background:#185FA5">SharePoint</button>
       <button class="xl-clr" id="xlClr" onclick="clearMem()">✕ Limpiar</button>
+      <button class="btn-comite-hdr" id="btnComiteHdr" onclick="CO.open()">
+        <i class="ti ti-clipboard-text" aria-hidden="true"></i>Comité Operativo
+      </button>
     </div>
   </div>
 </header>
@@ -6900,6 +6903,563 @@ window.CM=CM;
 window.SH=SH;
 
 if(document.readyState!=='loading'){tryInit();}
+
+})();
+</script>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     COMITÉ OPERATIVO — Infraestructura (Fase 3.1)
+     CSS completamente aditivo. Scope: #co-overlay.
+     No afecta ningún estilo existente.
+     ═══════════════════════════════════════════════════════ -->
+<style>
+/* ── Botón header ── */
+.btn-comite-hdr{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:6px 14px;border-radius:6px;
+  background:var(--navy);border:1px solid var(--navy2);color:#fff;
+  font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;cursor:pointer;
+  transition:all .15s;white-space:nowrap;flex-shrink:0;
+}
+.btn-comite-hdr:hover{background:var(--navy2);box-shadow:0 0 12px var(--navy3);}
+.btn-comite-hdr i.ti{font-size:14px;}
+
+/* ── Overlay pantalla completa ── */
+#co-overlay{
+  position:fixed;inset:0;z-index:9800;
+  background:var(--c0);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+
+/* ── Header del wizard ── */
+#co-wiz-hdr{
+  background:#fff;border-bottom:2px solid var(--line2);
+  padding:0 24px;flex-shrink:0;
+  display:flex;align-items:center;gap:16px;min-height:62px;
+}
+.co-hdr-brand{
+  display:flex;flex-direction:column;justify-content:center;
+  border-right:1px solid var(--line2);padding-right:16px;
+  flex-shrink:0;
+}
+.co-hdr-title{
+  display:flex;align-items:center;gap:8px;
+  font-family:'Barlow Condensed',sans-serif;font-size:14px;
+  font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--navy);line-height:1.2;
+}
+.co-hdr-title i.ti{font-size:17px;color:var(--red);}
+.co-hdr-sub{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--w4);letter-spacing:.04em;margin-top:2px;
+}
+
+/* ── Barra de progreso ── */
+#co-progress{
+  flex:1;display:flex;align-items:center;
+  overflow-x:auto;padding:0 4px;gap:0;
+  scrollbar-width:none;
+}
+#co-progress::-webkit-scrollbar{display:none;}
+
+.co-prog-pill{display:flex;align-items:center;gap:0;flex-shrink:0;}
+
+.co-prog-node{
+  display:flex;flex-direction:column;align-items:center;
+  gap:4px;padding:0 8px;cursor:pointer;
+  transition:opacity .15s;
+}
+.co-prog-node:hover .co-prog-dot{border-color:var(--navy2);}
+
+.co-prog-dot{
+  width:30px;height:30px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Barlow Condensed',sans-serif;font-size:13px;
+  font-weight:700;border:2px solid var(--line2);
+  background:#fff;color:var(--w4);transition:all .2s;
+}
+.co-prog-dot.active{
+  background:var(--navy);border-color:var(--navy);color:#fff;
+  box-shadow:0 0 0 3px rgba(1,42,107,.15);
+}
+.co-prog-dot.done{
+  background:var(--green3);border-color:var(--green2);color:var(--green2);
+}
+.co-prog-dot.done i.ti{font-size:13px;}
+
+.co-prog-lbl{
+  font-family:'Barlow Condensed',sans-serif;font-size:9px;
+  font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--w4);text-align:center;white-space:nowrap;
+  transition:color .2s;
+}
+.co-prog-node.active .co-prog-lbl{color:var(--navy);}
+.co-prog-node.done .co-prog-lbl{color:var(--green2);}
+
+.co-prog-connector{
+  width:20px;height:2px;background:var(--line2);
+  flex-shrink:0;margin-bottom:18px; /* align with dot vertical center */
+  transition:background .3s;
+}
+.co-prog-connector.done{background:var(--green2);}
+
+/* ── Botón cerrar ── */
+.co-btn-close{
+  width:32px;height:32px;border-radius:6px;
+  background:transparent;border:1px solid var(--line2);
+  color:var(--w4);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:17px;transition:all .15s;flex-shrink:0;
+}
+.co-btn-close:hover{
+  background:var(--danger3);border-color:var(--danger);color:var(--danger);
+}
+
+/* ── Cuerpo scrollable ── */
+#co-wiz-body{
+  flex:1;overflow-y:auto;
+  padding:32px 40px;
+  display:flex;flex-direction:column;
+}
+
+/* ── Paneles de cada paso ── */
+.co-step-panel{display:none;}
+.co-step-panel.active{
+  display:flex;flex-direction:column;gap:20px;
+  animation:coFadeIn .22s ease;
+}
+@keyframes coFadeIn{
+  from{opacity:0;transform:translateY(6px);}
+  to{opacity:1;transform:none;}
+}
+
+/* ── Cabecera interna de cada paso ── */
+.co-step-hdr{
+  display:flex;align-items:flex-start;gap:12px;
+  padding-bottom:18px;border-bottom:1px solid var(--line2);
+}
+.co-step-num{
+  width:34px;height:34px;border-radius:8px;
+  background:var(--navy);color:#fff;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:16px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.co-step-hdr-txt{}
+.co-step-ttl{
+  font-family:'Barlow Condensed',sans-serif;font-size:18px;
+  font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--w1);line-height:1.2;
+}
+.co-step-desc{
+  font-size:12px;color:var(--w4);margin-top:3px;line-height:1.5;
+}
+
+/* ── Placeholder (se reemplazará fase a fase) ── */
+.co-placeholder{
+  background:var(--c3);border:2px dashed var(--line2);
+  border-radius:10px;padding:48px 24px;text-align:center;
+  color:var(--w4);font-size:13px;line-height:1.7;
+}
+.co-placeholder i.ti{
+  font-size:32px;display:block;
+  margin-bottom:10px;opacity:.35;
+}
+.co-placeholder strong{color:var(--w3);}
+
+/* ── Footer ── */
+#co-wiz-footer{
+  background:#fff;border-top:1px solid var(--line2);
+  padding:14px 24px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+}
+.co-foot-info{
+  font-family:'JetBrains Mono',monospace;font-size:10px;
+  color:var(--w4);letter-spacing:.04em;
+}
+.co-foot-info b{color:var(--navy);}
+.co-foot-actions{display:flex;align-items:center;gap:8px;}
+
+/* ── Botones de navegación ── */
+.co-btn-nav{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 18px;border-radius:6px;cursor:pointer;
+  font-family:'Barlow Condensed',sans-serif;font-size:12px;
+  font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  transition:all .15s;border:1px solid var(--line2);
+  background:transparent;color:var(--w3);white-space:nowrap;
+}
+.co-btn-nav:hover{border-color:var(--navy2);color:var(--navy);}
+.co-btn-nav.primary{
+  background:var(--navy);border-color:var(--navy);color:#fff;
+}
+.co-btn-nav.primary:hover{background:var(--navy2);}
+.co-btn-nav.success{
+  background:var(--green2);border-color:var(--green2);color:#fff;
+}
+.co-btn-nav.success:hover{background:var(--green);}
+
+/* ── Responsive ── */
+@media(max-width:768px){
+  #co-wiz-hdr{padding:0 12px;gap:10px;}
+  #co-wiz-body{padding:18px 14px;}
+  #co-wiz-footer{padding:12px 14px;}
+  #co-progress{display:none;}
+  .co-hdr-sub{display:none;}
+}
+</style>
+
+<!-- ═══ COMITÉ OPERATIVO — Wizard HTML ═══ -->
+<div id="co-overlay" style="display:none">
+
+  <!-- Header del wizard -->
+  <div id="co-wiz-hdr">
+    <div class="co-hdr-brand">
+      <div class="co-hdr-title">
+        <i class="ti ti-clipboard-text" aria-hidden="true"></i>Acta de Comité Operativo
+      </div>
+      <div class="co-hdr-sub" id="co-hdr-semana">Selecciona una semana</div>
+    </div>
+
+    <!-- Barra de progreso -->
+    <div id="co-progress"></div>
+
+    <!-- Cerrar -->
+    <button class="co-btn-close" onclick="CO.close()" title="Cerrar wizard">
+      <i class="ti ti-x" aria-hidden="true"></i>
+    </button>
+  </div>
+
+  <!-- Cuerpo scrollable -->
+  <div id="co-wiz-body">
+
+    <!-- PASO 1: Encabezado -->
+    <div class="co-step-panel active" id="co-panel-1">
+      <div class="co-step-hdr">
+        <div class="co-step-num">1</div>
+        <div class="co-step-hdr-txt">
+          <div class="co-step-ttl">Encabezado</div>
+          <div class="co-step-desc">Datos generales del acta: fecha, hora, lugar y responsables.</div>
+        </div>
+      </div>
+      <div class="co-placeholder">
+        <i class="ti ti-file-description"></i>
+        <strong>Próxima fase</strong><br>
+        Aquí se capturarán la fecha de la reunión, hora de inicio, hora de fin,<br>
+        lugar y los dos responsables del acta.
+      </div>
+    </div>
+
+    <!-- PASO 2: Asistencia -->
+    <div class="co-step-panel" id="co-panel-2">
+      <div class="co-step-hdr">
+        <div class="co-step-num">2</div>
+        <div class="co-step-hdr-txt">
+          <div class="co-step-ttl">Asistencia</div>
+          <div class="co-step-desc">Lista de participantes del comité. Los asistentes se cargan automáticamente desde el directorio de Personal.</div>
+        </div>
+      </div>
+      <div class="co-placeholder">
+        <i class="ti ti-users"></i>
+        <strong>Próxima fase</strong><br>
+        Aquí se mostrará el listado de Personal activo con checkbox de asistencia.<br>
+        Se podrán demarcar ausentes y agregar invitados externos.
+      </div>
+    </div>
+
+    <!-- PASO 3: Project -->
+    <div class="co-step-panel" id="co-panel-3">
+      <div class="co-step-hdr">
+        <div class="co-step-num">3</div>
+        <div class="co-step-hdr-txt">
+          <div class="co-step-ttl">Project</div>
+          <div class="co-step-desc">Seguimiento de tareas del comité. Se toma automáticamente del módulo Project para la semana activa.</div>
+        </div>
+      </div>
+      <div class="co-placeholder">
+        <i class="ti ti-clipboard-check"></i>
+        <strong>Próxima fase</strong><br>
+        Aquí se mostrará el estado de las tareas del comité (% real vs meta)<br>
+        tal como existen en el módulo Project al momento de iniciar el acta.
+      </div>
+    </div>
+
+    <!-- PASO 4: Seguimiento Operativo -->
+    <div class="co-step-panel" id="co-panel-4">
+      <div class="co-step-hdr">
+        <div class="co-step-num">4</div>
+        <div class="co-step-hdr-txt">
+          <div class="co-step-ttl">Seguimiento Operativo</div>
+          <div class="co-step-desc">KPIs, cumplimiento por cliente y alertas de incumplimiento. Se toma automáticamente de los datos activos.</div>
+        </div>
+      </div>
+      <div class="co-placeholder">
+        <i class="ti ti-chart-bar"></i>
+        <strong>Próxima fase</strong><br>
+        Aquí se mostrarán los KPIs operativos (sol, carg, cumplimiento, déficit),<br>
+        el semáforo por cliente y las causas de incumplimiento registradas.
+      </div>
+    </div>
+
+    <!-- PASO 5: Generalidades -->
+    <div class="co-step-panel" id="co-panel-5">
+      <div class="co-step-hdr">
+        <div class="co-step-num">5</div>
+        <div class="co-step-hdr-txt">
+          <div class="co-step-ttl">Generalidades</div>
+          <div class="co-step-desc">Puntos adicionales de agenda. Deben existir antes de iniciar el comité.</div>
+        </div>
+      </div>
+      <div class="co-placeholder">
+        <i class="ti ti-notes"></i>
+        <strong>Próxima fase</strong><br>
+        Aquí se mostrará el campo de generalidades y puntos adicionales de agenda<br>
+        que deben haberse preparado antes de la reunión.
+      </div>
+    </div>
+
+    <!-- PASO 6: Momento HSE -->
+    <div class="co-step-panel" id="co-panel-6">
+      <div class="co-step-hdr">
+        <div class="co-step-num">6</div>
+        <div class="co-step-hdr-txt">
+          <div class="co-step-ttl">Momento HSE</div>
+          <div class="co-step-desc">Responsable del momento de seguridad. Proviene automáticamente del resultado de la Ruleta HSEQ.</div>
+        </div>
+      </div>
+      <div class="co-placeholder">
+        <i class="ti ti-shield-check"></i>
+        <strong>Próxima fase</strong><br>
+        Aquí se mostrará el responsable asignado por la Ruleta HSEQ y<br>
+        un campo para registrar el tema presentado y observaciones.
+      </div>
+    </div>
+
+    <!-- PASO 7: Compromisos -->
+    <div class="co-step-panel" id="co-panel-7">
+      <div class="co-step-hdr">
+        <div class="co-step-num">7</div>
+        <div class="co-step-hdr-txt">
+          <div class="co-step-ttl">Compromisos</div>
+          <div class="co-step-desc">Revisión de compromisos existentes y formalización de nuevos compromisos generados en esta sesión.</div>
+        </div>
+      </div>
+      <div class="co-placeholder">
+        <i class="ti ti-checklist"></i>
+        <strong>Próxima fase</strong><br>
+        Aquí se mostrarán los compromisos activos del módulo CM y se podrán<br>
+        crear nuevos compromisos que quedarán formalizados en el acta.
+      </div>
+    </div>
+
+    <!-- PASO 8: Vista previa -->
+    <div class="co-step-panel" id="co-panel-8">
+      <div class="co-step-hdr">
+        <div class="co-step-num">8</div>
+        <div class="co-step-hdr-txt">
+          <div class="co-step-ttl">Vista previa del Acta</div>
+          <div class="co-step-desc">Revisión final antes de guardar, imprimir y enviar. Esta misma plantilla se usará para el PDF.</div>
+        </div>
+      </div>
+      <div class="co-placeholder">
+        <i class="ti ti-eye"></i>
+        <strong>Próxima fase</strong><br>
+        Aquí se mostrará la plantilla completa del Acta con todos los datos capturados.<br>
+        Esta misma vista es la que se imprimirá o descargará como PDF.
+      </div>
+    </div>
+
+  </div><!-- /co-wiz-body -->
+
+  <!-- Footer con navegación -->
+  <div id="co-wiz-footer">
+    <div class="co-foot-info" id="co-foot-info">
+      Paso <b>1</b> de 8 · Encabezado
+    </div>
+    <div class="co-foot-actions">
+      <button class="co-btn-nav" id="co-btn-prev" onclick="CO.prev()" style="display:none">
+        <i class="ti ti-chevron-left" aria-hidden="true"></i>Anterior
+      </button>
+      <button class="co-btn-nav primary" id="co-btn-next" onclick="CO.next()">
+        Siguiente<i class="ti ti-chevron-right" aria-hidden="true"></i>
+      </button>
+      <button class="co-btn-nav success" id="co-btn-save" onclick="CO.save()" style="display:none">
+        <i class="ti ti-device-floppy" aria-hidden="true"></i>Guardar y Generar PDF
+      </button>
+    </div>
+  </div>
+
+</div><!-- /co-overlay -->
+
+<!-- ═══ COMITÉ OPERATIVO — Módulo CO (IIFE) ═══ -->
+<script>
+(function(){
+'use strict';
+
+/* ── Definición de pasos ──────────────────────────── */
+var STEPS=[
+  {n:1, label:'Encabezado',     icon:'ti-file-description'},
+  {n:2, label:'Asistencia',     icon:'ti-users'},
+  {n:3, label:'Project',        icon:'ti-clipboard-check'},
+  {n:4, label:'Seg. Operativo', icon:'ti-chart-bar'},
+  {n:5, label:'Generalidades',  icon:'ti-notes'},
+  {n:6, label:'Momento HSE',    icon:'ti-shield-check'},
+  {n:7, label:'Compromisos',    icon:'ti-checklist'},
+  {n:8, label:'Vista previa',   icon:'ti-eye'}
+];
+
+/* ── Estado interno ───────────────────────────────── */
+var _step=1;
+var _session={
+  semana:null,
+  cargo:null,
+  fecha_reunion:null,
+  hora_inicio:null,
+  hora_fin:null,
+  lugar:null,
+  responsable_1:null,
+  responsable_2:null,
+  asistentes:[],
+  invitados:[],
+  project_snapshot:null,
+  ops_snapshot:null,
+  generalidades:'',
+  hse_responsable:null,
+  hse_tema:'',
+  hse_observaciones:'',
+  compromisos_revisados:[],
+  compromisos_nuevos:[],
+  acta_id:null,
+  status:'draft'
+};
+
+/* ── Helper DOM ───────────────────────────────────── */
+function $id(id){return document.getElementById(id);}
+
+/* ── Render barra de progreso ─────────────────────── */
+function renderProgress(){
+  var bar=$id('co-progress');
+  if(!bar)return;
+  var html='';
+  STEPS.forEach(function(s,i){
+    var isDone=s.n<_step;
+    var isActive=s.n===_step;
+    var nodeClass='co-prog-node'+(isActive?' active':isDone?' done':'');
+    var dotClass='co-prog-dot'+(isActive?' active':isDone?' done':'');
+    var dotContent=isDone
+      ?'<i class="ti ti-check" aria-hidden="true"></i>'
+      :String(s.n);
+    var connector=i<STEPS.length-1
+      ?'<div class="co-prog-connector'+(isDone?' done':'')+'"></div>'
+      :'';
+    html+='<div class="co-prog-pill">'+
+      '<div class="'+nodeClass+'" onclick="CO.goStep('+s.n+')" title="Ir a: '+s.label+'">'+
+        '<div class="'+dotClass+'">'+dotContent+'</div>'+
+        '<div class="co-prog-lbl">'+s.label+'</div>'+
+      '</div>'+connector+
+    '</div>';
+  });
+  bar.innerHTML=html;
+}
+
+/* ── Render botones y pie ─────────────────────────── */
+function renderFooter(){
+  var btnPrev=$id('co-btn-prev');
+  var btnNext=$id('co-btn-next');
+  var btnSave=$id('co-btn-save');
+  var info=$id('co-foot-info');
+  var isLast=_step===STEPS.length;
+  if(btnPrev) btnPrev.style.display=_step>1?'inline-flex':'none';
+  if(btnNext) btnNext.style.display=isLast?'none':'inline-flex';
+  if(btnSave) btnSave.style.display=isLast?'inline-flex':'none';
+  if(info) info.innerHTML='Paso <b>'+_step+'</b> de '+STEPS.length+' &middot; '+STEPS[_step-1].label;
+}
+
+/* ── Cambiar paso ─────────────────────────────────── */
+function goStep(n){
+  if(n<1||n>STEPS.length)return;
+  STEPS.forEach(function(s){
+    var el=$id('co-panel-'+s.n);
+    if(el)el.classList.remove('active');
+  });
+  var target=$id('co-panel-'+n);
+  if(target)target.classList.add('active');
+  _step=n;
+  renderProgress();
+  renderFooter();
+  // Scroll body al inicio
+  var body=$id('co-wiz-body');
+  if(body)body.scrollTop=0;
+}
+
+/* ── Inicializar sesión ───────────────────────────── */
+function initSession(){
+  _step=1;
+  // Leer contexto del sistema (sin consultas Supabase en esta fase)
+  var semana=(typeof wkId!=='undefined')?wkId:'—';
+  var cargoActivo=(typeof cargo!=='undefined')?cargo:'liq';
+  _session={
+    semana:semana,
+    cargo:cargoActivo,
+    fecha_reunion:null,
+    hora_inicio:null,
+    hora_fin:null,
+    lugar:null,
+    responsable_1:null,
+    responsable_2:null,
+    asistentes:[],
+    invitados:[],
+    project_snapshot:null,
+    ops_snapshot:null,
+    generalidades:'',
+    hse_responsable:null,
+    hse_tema:'',
+    hse_observaciones:'',
+    compromisos_revisados:[],
+    compromisos_nuevos:[],
+    acta_id:null,
+    status:'draft'
+  };
+  // Actualizar subtítulo del header del wizard
+  var sub=$id('co-hdr-semana');
+  if(sub) sub.textContent='Semana '+semana+' · Carga '+(cargoActivo==='liq'?'Líquida':'Seca');
+}
+
+/* ── API pública ──────────────────────────────────── */
+var CO={
+  open:function(){
+    initSession();
+    var ov=$id('co-overlay');
+    if(ov)ov.style.display='flex';
+    goStep(1);
+  },
+
+  close:function(){
+    if(!confirm('¿Cerrar el wizard? Los datos no guardados se perderán.'))return;
+    var ov=$id('co-overlay');
+    if(ov)ov.style.display='none';
+    _step=1;
+    _session={};
+  },
+
+  goStep:function(n){goStep(n);},
+  next:function(){if(_step<STEPS.length)goStep(_step+1);},
+  prev:function(){if(_step>1)goStep(_step-1);},
+
+  save:function(){
+    // Placeholder — se implementará en fase de persistencia
+    alert('Guardar se implementará en la siguiente fase.');
+  },
+
+  // Exponer solo para depuración en desarrollo
+  _getSession:function(){return _session;}
+};
+
+window.CO=CO;
 
 })();
 </script>
