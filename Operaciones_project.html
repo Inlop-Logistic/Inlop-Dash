@@ -9664,8 +9664,6 @@ function goStep(n){
 /* ── Inicializar sesión ───────────────────────────── */
 function initSession(){
   _step=1;
-  /* CM.isLoaded() se consulta en tiempo de render — no requiere variable local */
-  _cmpExisting=[];
   var semana=(typeof wkId!=='undefined')?wkId:'—';
   var cargoActivo=(typeof cargo!=='undefined')?cargo:'liq';
   _session={
