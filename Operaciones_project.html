@@ -9271,7 +9271,7 @@ function buildSnapshot(){
         responsible_id:c.responsible_id||null,responsible_nombre:c.responsible_nombre||null,
         priority:c.priority||'medium',_fromHse:!!c._fromHse};
     }),
-    finalizado_por:getUser().nombre,
+    finalizado_por:(function(){try{var u=JSON.parse(sessionStorage.getItem('inlop_user'));return u&&u.nombre?u.nombre:'Usuario';}catch(e){return'Usuario';}}()),
     finalizado_at:new Date().toISOString()
   };
 }
