@@ -7866,7 +7866,7 @@ if(document.readyState!=='loading'){tryInit();}
         </div>
         <div style="padding:14px 18px">
           <div id="co-evid-zona" class="co-evid-zona"
-            onclick="$id('co-evid-input').click()"
+            onclick="document.getElementById('co-evid-input').click()"
             ondragover="event.preventDefault();this.classList.add('dragover')"
             ondragleave="this.classList.remove('dragover')"
             ondrop="CO._evidDrop(event)">
@@ -9677,9 +9677,7 @@ async function persistSnapshot(snap){
     /* UPDATE — edición de acta existente */
     var upBody={
       snapshot:snap,
-      finalizado_at:snap.finalizado_at,
-      updated_by_nombre:snap.finalizado_por,
-      updated_at:new Date().toISOString()
+      finalizado_at:snap.finalizado_at
     };
     var upRows=await dbUpdate('co_actas','id=eq.'+_session.acta_id,upBody);
     acta=upRows&&upRows[0]?upRows[0]:{id:_session.acta_id};
@@ -9716,8 +9714,7 @@ async function persistSnapshot(snap){
         created_by_nombre:snap.finalizado_por,
         acta_id:acta.id,
         es_acuerdo_hse:!!c._fromHse,
-        created_at:new Date().toISOString(),
-        updated_at:new Date().toISOString()
+        created_at:new Date().toISOString()
       });
     }
   }
