@@ -9934,7 +9934,8 @@ function renderActa(snap){
 }
 
 /* ── Step 8: inicializar / checklist ─────────────── */
-var _lastSnapshot=null; /* snapshot construido en Step 8, reutilizado para PDF */
+var _lastSnapshot=null; /* snapshot del wizard (Step 8 / finalizarComite) */
+var _snapHistorico=null; /* snapshot cargado desde co-hist-overlay (Ver Acta) */
 
 function initStep8(){
   /* Auto-calcular hora de finalización si aún no está fijada */
@@ -10065,7 +10066,9 @@ function _tienePermisoEdicion(){
          :JSON.parse(sessionStorage.getItem('inlop_user')||'null');
     if(!u)return false;
     var r=(u.rol||'').toLowerCase();
-    return r==='master'||r==='administrador'||r==='liquida'||r==='seca';
+    return r==='master'||r==='administrador'
+      ||r==='liquida'||r==='responsable_liquida'
+      ||r==='seca'||r==='responsable_seca';
   }catch(e){return false;}
 }
 
@@ -10101,8 +10104,10 @@ function _autoCheckActa(){
   dbGet('co_actas','semana=eq.'+semana+'&anio=eq.'+anio+'&cargo=eq.'+cargoVal+'&status=eq.finalizado&deleted_at=is.null&order=version.desc&limit=1')
     .then(function(rows){
       if(rows&&rows.length){
-        var acta=rows[0];
-        _actualizarBtnHdr(acta);
+        _actualizarBtnHdr(rows[0]);
+      } else {
+        /* Si no hay acta para este wkId, restablecer botón por si cambió la semana */
+        _actualizarBtnHdr(null);
       }
     }).catch(function(){});
 }
@@ -10449,7 +10454,7 @@ var CO={
   },
 
   _descargarPDF:function(){
-    _generarPDF(_lastSnapshot,true);
+    _generarPDF(_lastSnapshot||_snapHistorico,true);
   },
 
   _cerrarExito:function(){
@@ -10466,6 +10471,7 @@ var CO={
 
   _abrirHistorico:function(actaId){
     if(!actaId){toast('No se encontró el acta.','warn');return;}
+    _snapHistorico=null;
     var body=$id('co-hist-body');
     if(body) body.innerHTML='<div style="text-align:center;padding:40px"><i class="ti ti-loader" style="font-size:28px;opacity:.4"></i></div>';
     var ov=$id('co-hist-overlay');
@@ -10473,13 +10479,17 @@ var CO={
     dbGet('co_actas','id=eq.'+actaId+'&select=*').then(function(rows){
       if(!rows||!rows.length){if(body)body.innerHTML='<div style="padding:24px">Acta no encontrada.</div>';return;}
       var acta=rows[0];
-      if(body) body.innerHTML=renderActa(acta.snapshot||{});
+      _snapHistorico=acta.snapshot||{};
+      if(body) body.innerHTML=renderActa(_snapHistorico);
+      var cod=$id('co-hist-codigo');
+      if(cod) cod.textContent=_snapHistorico.codigo||'';
     }).catch(function(){
       if(body) body.innerHTML='<div style="padding:24px;color:var(--crit)">Error al cargar el acta.</div>';
     });
   },
 
   _cerrarHistorico:function(){
+    _snapHistorico=null;
     var ov=$id('co-hist-overlay');
     if(ov)ov.style.display='none';
   },
@@ -10498,12 +10508,21 @@ var CO={
 
 window.CO=CO;
 
-/* Auto-verificar estado del acta al cargar la página */
-if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded',_autoCheckActa);
-} else {
+/* Auto-verificar estado del acta al cargar la página.
+   wkId arranca como 'S16' (default hardcodeado). El valor real llega ~1-3s
+   después via callback async de Supabase. Por eso programamos un retry a 3s. */
+function _initAutoCheck(){
   _autoCheckActa();
+  setTimeout(_autoCheckActa,3000);
 }
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',_initAutoCheck);
+} else {
+  _initAutoCheck();
+}
+
+/* Exponer recheck para que código externo pueda forzar re-detección */
+CO.recheck=_autoCheckActa;
 
 })();
 </script>
