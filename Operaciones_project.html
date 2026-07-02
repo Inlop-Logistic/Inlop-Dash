@@ -6952,6 +6952,10 @@ document.addEventListener('DOMContentLoaded',function(){
 // Expose globals
 window.CM=CM;
 window.SH=SH;
+window.dbGet=dbGet;
+window.dbInsert=dbInsert;
+window.dbUpdate=dbUpdate;
+window.dbUpsert=dbUpsert;
 
 if(document.readyState!=='loading'){tryInit();}
 
@@ -7569,6 +7573,10 @@ if(document.readyState!=='loading'){tryInit();}
 .co-gen-badge-pi{background:rgba(148,163,184,.12);color:#64748b;}
 .co-gen-pi-note{display:flex;align-items:center;gap:6px;color:#94a3b8;font-size:12px;font-style:italic;}
 .co-gen-pi-note i{font-size:13px;}
+.co-gen-field-wrap{margin-top:10px;padding-top:8px;border-top:1px solid #f1f5f9;}
+.co-gen-field-lbl{font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px;}
+.co-gen-field-ta{width:100%;box-sizing:border-box;resize:vertical;min-height:52px;font-size:11px;color:#334155;background:#f8fafc;border:1px solid var(--line2);border-radius:6px;padding:6px 8px;font-family:inherit;line-height:1.45;}
+.co-gen-field-ta:focus{outline:none;border-color:var(--navy);background:#fff;}
 /* ── Momento HSE Step 6 ────────────────────────── */
 .co-hse-ruleta-card{background:var(--c1);border:1px solid var(--line2);border-radius:12px;overflow:hidden;}
 .co-hse-ruleta-hdr{display:flex;align-items:center;gap:12px;padding:14px 18px;background:linear-gradient(135deg,rgba(1,42,107,.05),rgba(1,42,107,.02));border-bottom:1px solid var(--line2);}
@@ -7901,25 +7909,12 @@ if(document.readyState!=='loading'){tryInit();}
         <div class="co-step-num">5</div>
         <div class="co-step-hdr-txt">
           <div class="co-step-ttl">Generalidades</div>
-          <div class="co-step-desc">Revisión ejecutiva de novedades por área. Los datos provienen del sistema — no se registra información nueva aquí.</div>
+          <div class="co-step-desc">Revisión ejecutiva por área. Los indicadores provienen del sistema; registre novedades y observaciones propias del comité en cada tarjeta.</div>
         </div>
       </div>
 
       <!-- Tarjetas por área — renderizadas por initStep5() -->
       <div id="co-gen-content"></div>
-
-      <!-- Observaciones del comité -->
-      <div class="co-form-section">
-        <div class="co-form-section-ttl">
-          <i class="ti ti-pencil" aria-hidden="true"></i>Observaciones del Comité
-          <span class="co-req-note">&nbsp;— opcional</span>
-        </div>
-        <div style="padding:14px 18px;">
-          <textarea class="co-proj-obs-area" id="co-gen-obs"
-            placeholder="Puntos adicionales, acuerdos generales o temas tratados en el comité…"
-            oninput="CO._syncGenObs(this.value)"></textarea>
-        </div>
-      </div>
     </div>
 
     <!-- PASO 6: Momento HSE -->
@@ -8144,6 +8139,9 @@ if(document.readyState!=='loading'){tryInit();}
 <script>
 (function(){
 'use strict';
+/* ── Bridge: helpers declarados en IIFEs vecinos ─── */
+var dbGet=window.dbGet,dbInsert=window.dbInsert,dbUpdate=window.dbUpdate,dbUpsert=window.dbUpsert;
+var projGetSnapshot=window.projGetSnapshot,projCalcIndicador=window.projCalcIndicador;
 
 /* ── Definición de pasos ──────────────────────────── */
 var STEPS=[
@@ -8172,13 +8170,12 @@ var _session={
   invitados:[],
   project_snapshot:null,
   ops_snapshot:null,
-  generalidades:{observaciones:'',snapshot:null},
+  generalidades:{trafico_novedades:'',ops_observaciones:'',project_observaciones:'',documental_novedades:'',comercial_novedades:'',financiero_novedades:''},
   hse:{
-    responsable:null,        /* leído de snap.hseq — solo lectura */
-    tema_presentado:'',      /* captura manual en el comité */
-    observaciones:'',        /* textarea opcional */
-    /* Preparado para compromisos — implementación en Fase 3.8 */
-    compromisos_generados:[] /* [{texto, responsable, fecha_limite}] */
+    responsable:null,
+    tema_presentado:'',
+    observaciones:'',
+    compromisos_generados:[]
   },
   compromisos_revisados:[],
   compromisos_nuevos:[],
@@ -8765,18 +8762,27 @@ function syncStep4Obs(val){
 }
 
 /* ── Step 5: Generalidades ───────────────────────── */
+function _genObj(){
+  if(!_session.generalidades||typeof _session.generalidades!=='object')
+    _session.generalidades={trafico_novedades:'',ops_observaciones:'',project_observaciones:'',documental_novedades:'',comercial_novedades:'',financiero_novedades:''};
+  return _session.generalidades;
+}
+
+function _genFieldHtml(fieldId,fieldName,placeholder){
+  return '<div class="co-gen-field-wrap">'
+    +'<div class="co-gen-field-lbl">Novedades / Observaciones</div>'
+    +'<textarea class="co-gen-field-ta" id="'+fieldId+'" placeholder="'+placeholder+'"'
+    +' oninput="CO._syncGenField(\''+fieldName+'\',this.value)"></textarea></div>';
+}
+
 function initStep5(){
   var cont=$id('co-gen-content');
-  var obsEl=$id('co-gen-obs');
   if(!cont)return;
-  if(!_session.generalidades||typeof _session.generalidades!=='object')
-    _session.generalidades={observaciones:'',snapshot:null};
-  if(obsEl) obsEl.value=_session.generalidades.observaciones||'';
-
+  var gen=_genObj();
   var semana=_session.semana;
   var html='<div class="co-gen-grid">';
 
-  /* ── Área: Tráfico — acciones urgentes/pendientes/en ejecución ── */
+  /* ── Área: Tráfico ─────────────────────────────────── */
   var accionesTraf=[];
   ['liq','sec'].forEach(function(c){
     var wkActions=(actions&&actions[c]&&semana)?actions[c][semana]||[]:[];
@@ -8785,48 +8791,36 @@ function initStep5(){
         accionesTraf.push({txt:a.txt,resp:a.resp,status:a.status,cargo:c==='liq'?'Carga Líquida':'Carga Seca'});
     });
   });
+  var trafBody=accionesTraf.length>0
+    ? accionesTraf.slice(0,5).map(function(a){
+        var dot=a.status==='urgente'?'crit':'';
+        return '<div class="co-gen-novedad-item"><div class="co-gen-novedad-dot '+dot+'"></div>'
+          +'<div><strong>['+a.cargo+']</strong> '+_esc(a.txt)
+          +(a.resp?'<br><span style="color:#94a3b8">Resp: '+_esc(a.resp)+'</span>':'')
+          +'</div></div>';
+      }).join('')+(accionesTraf.length>5?'<div class="co-gen-sin-nov" style="margin-top:4px">…y '+(accionesTraf.length-5)+' más</div>':'')
+    : '<div class="co-gen-sin-nov">Sin acciones activas este período</div>';
   html+=_genCard('ti-truck-delivery','Tráfico',accionesTraf.length>0?'warn':'ok',
-    accionesTraf.length>0
-      ? accionesTraf.slice(0,5).map(function(a){
-          var dot=a.status==='urgente'?'crit':'';
-          return '<div class="co-gen-novedad-item"><div class="co-gen-novedad-dot '+dot+'"></div>'
-            +'<div><strong>['+a.cargo+']</strong> '+_esc(a.txt)
-            +(a.resp?'<br><span style="color:#94a3b8">Resp: '+_esc(a.resp)+'</span>':'')
-            +'</div></div>';
-        }).join('')+(accionesTraf.length>5?'<div class="co-gen-sin-nov" style="margin-top:4px">…y '+(accionesTraf.length-5)+' más</div>':'')
-      : '<div class="co-gen-sin-nov">Sin novedades en acciones activas</div>'
-  );
+    trafBody+_genFieldHtml('co-gen-trafico-obs','trafico_novedades','Novedades de tráfico, rutas afectadas, situaciones especiales…'));
 
-  /* ── Área: Operaciones — rutas < 100% ─────────────── */
-  var rutasBajas=[];
+  /* ── Área: Operaciones ─────────────────────────────── */
   var wkLiq=semana&&DATA_LIQ?DATA_LIQ.find(function(w){return w.id===semana;}):null;
   var wkSec=semana&&DATA_SEC?DATA_SEC.find(function(w){return w.id===semana;}):null;
-  [wkLiq?{w:wkLiq,label:'Carga Líquida'}:null,wkSec?{w:wkSec,label:'Carga Seca'}:null]
-    .forEach(function(entry){
-      if(!entry)return;
-      (entry.w.rutas||[]).forEach(function(r){
-        var ws=_opsWs(entry.w);
-        var sol=ws.sol,carg=ws.carg;
-        var pct=sol>0?Math.round(carg/sol*100):null;
-        if(pct!==null&&pct<100) rutasBajas.push({label:entry.label,cliente:r.cliente||r.nombre||'—',pct:pct});
-      });
-    });
-  /* alternativa: check overall pct */
   var opsItems=[];
-  if(wkLiq){var ws=_opsWs(wkLiq);if(ws.pct<100) opsItems.push({label:'Carga Líquida',pct:ws.pct,deficit:ws.deficit});}
-  if(wkSec){var ws2=_opsWs(wkSec);if(ws2.pct<100) opsItems.push({label:'Carga Seca',pct:ws2.pct,deficit:ws2.deficit});}
+  if(wkLiq){var wsL=_opsWs(wkLiq);if(wsL.pct<100)opsItems.push({label:'Carga Líquida',pct:wsL.pct,deficit:wsL.deficit});}
+  if(wkSec){var wsS=_opsWs(wkSec);if(wsS.pct<100)opsItems.push({label:'Carga Seca',pct:wsS.pct,deficit:wsS.deficit});}
+  var opsBody=opsItems.length>0
+    ? opsItems.map(function(o){
+        return '<div class="co-gen-novedad-item"><div class="co-gen-novedad-dot'+(o.pct<85?' crit':'')+'"></div>'
+          +'<div><strong>'+_esc(o.label)+'</strong>: '+o.pct+'% cumplimiento'
+          +(o.deficit?'<br><span style="color:#94a3b8">Déficit: '+o.deficit+' unid.</span>':'')
+          +'</div></div>';
+      }).join('')
+    : '<div class="co-gen-sin-nov">Cumplimiento al 100% en todos los cargos</div>';
   html+=_genCard('ti-settings','Operaciones',opsItems.length>0?'warn':'ok',
-    opsItems.length>0
-      ? opsItems.map(function(o){
-          return '<div class="co-gen-novedad-item"><div class="co-gen-novedad-dot'+(o.pct<85?' crit':'')+'"></div>'
-            +'<div><strong>'+_esc(o.label)+'</strong>: '+o.pct+'% cumplimiento'
-            +(o.deficit?'<br><span style="color:#94a3b8">Déficit: '+o.deficit+' unid.</span>':'')
-            +'</div></div>';
-        }).join('')
-      : '<div class="co-gen-sin-nov">Cumplimiento al 100% en todos los cargos</div>'
-  );
+    opsBody+_genFieldHtml('co-gen-ops-obs','ops_observaciones','Observaciones operativas, contingencias, decisiones tomadas…'));
 
-  /* ── Área: Project / Sistemas ─────────────────────── */
+  /* ── Área: Project ─────────────────────────────────── */
   var snap=null;
   try{snap=projGetSnapshot(semana);}catch(e){}
   var tasksCrit=snap?(snap.tasks||[]).filter(function(t){
@@ -8834,21 +8828,30 @@ function initStep5(){
     var ind=projCalcIndicador(t.real,t.meta);
     return ind.estado==='crit'||ind.estado==='risk';
   }):[];
+  var projBody='';
+  if(snap&&snap.kpi){
+    projBody+='<div style="display:flex;gap:10px;margin-bottom:6px">'
+      +'<div style="text-align:center;flex:1"><div style="font-size:16px;font-weight:700;color:#16a34a">'+(snap.kpi.ok||0)+'</div><div style="font-size:10px;color:#94a3b8">OK</div></div>'
+      +'<div style="text-align:center;flex:1"><div style="font-size:16px;font-weight:700;color:#d97706">'+(snap.kpi.risk||0)+'</div><div style="font-size:10px;color:#94a3b8">Riesgo</div></div>'
+      +'<div style="text-align:center;flex:1"><div style="font-size:16px;font-weight:700;color:#dc2626">'+(snap.kpi.crit||0)+'</div><div style="font-size:10px;color:#94a3b8">Crítico</div></div>'
+      +'<div style="text-align:center;flex:1"><div style="font-size:16px;font-weight:700;color:var(--navy)">'+(snap.kpi.efectividad!==null?snap.kpi.efectividad+'%':'—')+'</div><div style="font-size:10px;color:#94a3b8">Efectiv.</div></div>'
+      +'</div>';
+  }
+  if(snap){
+    projBody+=tasksCrit.length>0
+      ? tasksCrit.map(function(t){
+          var ind=projCalcIndicador(t.real,t.meta);
+          return '<div class="co-gen-novedad-item"><div class="co-gen-novedad-dot'+(ind.estado==='crit'?' crit':'')+'"></div>'
+            +'<div><strong>'+_esc(t.sistema||t.nombre||'—')+'</strong>: '+t.real+'% <span style="color:#94a3b8">(meta '+t.meta+'%)</span></div></div>';
+        }).join('')
+      : '<div class="co-gen-sin-nov">Todos los sistemas dentro de meta</div>';
+  } else {
+    projBody+='<div class="co-gen-sin-nov">Datos de Project no disponibles para esta semana</div>';
+  }
   html+=_genCard('ti-device-laptop','Project',tasksCrit.length>0?'warn':'ok',
-    snap
-      ? (tasksCrit.length>0
-          ? tasksCrit.map(function(t){
-              var ind=projCalcIndicador(t.real,t.meta);
-              return '<div class="co-gen-novedad-item">'
-                +'<div class="co-gen-novedad-dot'+(ind.estado==='crit'?' crit':'')+'"></div>'
-                +'<div><strong>'+_esc(t.sistema||t.nombre||'—')+'</strong>: '
-                +t.real+'% <span style="color:#94a3b8">(meta '+t.meta+'%)</span></div></div>';
-            }).join('')
-          : '<div class="co-gen-sin-nov">Todos los sistemas dentro de meta</div>')
-      : '<div class="co-gen-sin-nov">Datos de Project no disponibles para esta semana</div>'
-  );
+    projBody+_genFieldHtml('co-gen-project-obs','project_observaciones','Observaciones de Project, avances destacados, riesgos identificados…'));
 
-  /* ── Área: HSEQ — responsable + tema de ruleta ──────── */
+  /* ── Área: HSEQ ── solo lectura ────────────────────── */
   var hseqResp=snap&&snap.hseq?snap.hseq:null;
   var hseqTema=_session.hse&&_session.hse.tema_presentado?_session.hse.tema_presentado:null;
   html+=_genCard('ti-shield-check','HSEQ',hseqResp?'ok':'nd',
@@ -8858,19 +8861,36 @@ function initStep5(){
         +'<div><span style="color:#94a3b8">Responsable:</span> <strong>'+_esc(hseqResp)+'</strong>'
         +(hseqTema?'<br><span style="color:#94a3b8">Tema:</span> '+_esc(hseqTema):'')
         +'</div></div>'
-      : '<div class="co-gen-sin-nov">Sin asignación de Ruleta HSEQ para esta semana</div>'
-  );
+      : '<div class="co-gen-sin-nov">Sin asignación de Ruleta HSEQ para esta semana</div>');
 
-  /* ── Áreas pendientes de integración ───────────────── */
-  [{area:'Gestión Documental',ico:'ti-file-text'},{area:'Comercial',ico:'ti-trending-up'},{area:'Financiero',ico:'ti-report-money'}]
-    .forEach(function(e){
-      html+=_genCard(e.ico,e.area,'pi',
-        '<div class="co-gen-pi-note"><i class="ti ti-clock"></i> Pendiente de integración con el sistema</div>'
-      );
-    });
+  /* ── Gestión Documental ─────────────────────────────── */
+  html+=_genCard('ti-file-text','Gestión Documental','nd',
+    '<div class="co-gen-sin-nov" style="margin-bottom:4px">Sin integración automática — registre novedades manualmente.</div>'
+    +_genFieldHtml('co-gen-documental-obs','documental_novedades','Novedades de gestión documental, vencimientos, actualizaciones de procedimientos…'));
+
+  /* ── Comercial ──────────────────────────────────────── */
+  html+=_genCard('ti-trending-up','Comercial','nd',
+    '<div class="co-gen-sin-nov" style="margin-bottom:4px">Sin integración automática — registre novedades manualmente.</div>'
+    +_genFieldHtml('co-gen-comercial-obs','comercial_novedades','Novedades comerciales, negociaciones en curso, clientes clave…'));
+
+  /* ── Financiero ─────────────────────────────────────── */
+  html+=_genCard('ti-report-money','Financiero','nd',
+    '<div class="co-gen-sin-nov" style="margin-bottom:4px">Sin integración automática — registre novedades manualmente.</div>'
+    +_genFieldHtml('co-gen-financiero-obs','financiero_novedades','Novedades financieras, indicadores de cartera, situaciones de tesorería…'));
 
   html+='</div>';
   cont.innerHTML=html;
+
+  /* Restaurar valores guardados en _session */
+  var idMap=[
+    ['co-gen-trafico-obs','trafico_novedades'],
+    ['co-gen-ops-obs','ops_observaciones'],
+    ['co-gen-project-obs','project_observaciones'],
+    ['co-gen-documental-obs','documental_novedades'],
+    ['co-gen-comercial-obs','comercial_novedades'],
+    ['co-gen-financiero-obs','financiero_novedades']
+  ];
+  idMap.forEach(function(pair){var el=$id(pair[0]);if(el)el.value=gen[pair[1]]||'';});
 }
 
 function _esc(s){
@@ -8890,10 +8910,9 @@ function _genCard(icon,title,status,bodyHtml){
     +'</div>';
 }
 
-function syncStep5Obs(val){
-  if(!_session.generalidades||typeof _session.generalidades!=='object')
-    _session.generalidades={observaciones:'',snapshot:null};
-  _session.generalidades.observaciones=val||'';
+function syncGenField(field,val){
+  var gen=_genObj();
+  gen[field]=val||'';
 }
 
 /* ── Step 6: Momento HSE ─────────────────────────── */
@@ -9181,23 +9200,17 @@ function _buildCodigo(){
 function buildSnapshot(){
   var semana=_session.semana;
   var snap=null;
-  console.log('[CO-DIAG] buildSnapshot [1] semana=',semana,', responsable_1=',_session.responsable_1,', responsable_2=',_session.responsable_2);
   try{if(typeof window.projGetSnapshot==='function') snap=window.projGetSnapshot(semana);}catch(e){}
-  console.log('[CO-DIAG] buildSnapshot [2] projSnap=',snap?'OK':null);
 
   /* Responsables: buscar en _coPersonal para obtener IDs */
   var r1=_coPersonal.find(function(p){return p.id===_session.responsable_1;})||{};
   var r2=_coPersonal.find(function(p){return p.id===_session.responsable_2;})||{};
-  console.log('[CO-DIAG] buildSnapshot [3] _coPersonal.length=',_coPersonal.length,', r1=',r1.id||'no-match',', r2=',r2.id||'no-match');
 
   /* Seguimiento Operativo */
   var wkLiq=DATA_LIQ&&semana?DATA_LIQ.find(function(w){return w.id===semana;}):null;
   var wkSec=DATA_SEC&&semana?DATA_SEC.find(function(w){return w.id===semana;}):null;
-  console.log('[CO-DIAG] buildSnapshot [4] wkLiq=',wkLiq?{id:wkLiq.id,sol:wkLiq.sol,hasRows:Array.isArray(wkLiq.rows)}:null,', wkSec=',wkSec?{id:wkSec.id,sol:wkSec.sol,hasRows:Array.isArray(wkSec.rows)}:null);
   var wsLiq=wkLiq?_opsWs(wkLiq):null;
-  console.log('[CO-DIAG] buildSnapshot [5] wsLiq=',wsLiq);
   var wsSec=wkSec?_opsWs(wkSec):null;
-  console.log('[CO-DIAG] buildSnapshot [6] wsSec=',wsSec);
   var estadoOps='ok';
   if(wsLiq&&wsLiq.pct<85||wsSec&&wsSec.pct<85) estadoOps='crit';
   else if(wsLiq&&wsLiq.pct<100||wsSec&&wsSec.pct<100) estadoOps='warn';
@@ -9205,7 +9218,6 @@ function buildSnapshot(){
   /* Generalidades — texto ejecutivo de áreas */
   var genAreas={};
   var accionesTraf=[];
-  console.log('[CO-DIAG] buildSnapshot [7] acciones check, typeof actions=',typeof actions);
   ['liq','sec'].forEach(function(c){
     var wkA=(actions&&actions[c]&&semana)?actions[c][semana]||[]:[];
     wkA.forEach(function(a){
@@ -9215,7 +9227,6 @@ function buildSnapshot(){
   });
   genAreas.trafico={estado:accionesTraf.length>0?'warn':'ok',novedades:accionesTraf.length};
   genAreas.operaciones={estado:estadoOps,liq_pct:wsLiq?wsLiq.pct:null,sec_pct:wsSec?wsSec.pct:null};
-  console.log('[CO-DIAG] buildSnapshot [8] typeof projCalcIndicador=',typeof projCalcIndicador);
   var tasksCrit=snap?(snap.tasks||[]).filter(function(t){
     if(t.real===null||t.real==='')return false;
     var ind=projCalcIndicador(t.real,t.meta);
@@ -9223,7 +9234,6 @@ function buildSnapshot(){
   }):[];
   genAreas.project={estado:tasksCrit.length>0?'warn':'ok',tasks_criticos:tasksCrit.length};
   genAreas.hseq={estado:'ok',responsable:snap&&snap.hseq?snap.hseq:null};
-  console.log('[CO-DIAG] buildSnapshot [9] genAreas OK, building return object');
 
   return{
     codigo:_buildCodigo(),
@@ -9257,10 +9267,15 @@ function buildSnapshot(){
       sec:wsSec?{sol:wsSec.sol,carg:wsSec.carg,pct:wsSec.pct,deficit:wsSec.deficit}:null,
       estado_general:estadoOps
     },
-    generalidades:{
-      observaciones:_session.generalidades&&_session.generalidades.observaciones||'',
+    generalidades:(function(){var _g=_session.generalidades||{};return{
+      trafico_novedades:_g.trafico_novedades||'',
+      ops_observaciones:_g.ops_observaciones||'',
+      project_observaciones:_g.project_observaciones||'',
+      documental_novedades:_g.documental_novedades||'',
+      comercial_novedades:_g.comercial_novedades||'',
+      financiero_novedades:_g.financiero_novedades||'',
       areas:genAreas
-    },
+    };}()),
     hse:{
       responsable:_session.hse&&_session.hse.responsable||null,
       tema_presentado:_session.hse&&_session.hse.tema_presentado||'',
@@ -9432,9 +9447,25 @@ function renderActa(snap){
 
   /* Generalidades */
   var gen=snap.generalidades||{};
-  if(gen.observaciones){
-    html+='<div class="co-acta-section">'+secTtl('Observaciones Generales','ti-notes')
-      +'<div class="co-acta-obs">'+esc2(gen.observaciones)+'</div></div>';
+  var genFields=[
+    {lbl:'Novedades de Tráfico',key:'trafico_novedades'},
+    {lbl:'Observaciones Operativas',key:'ops_observaciones'},
+    {lbl:'Observaciones de Project',key:'project_observaciones'},
+    {lbl:'Novedades de Gestión Documental',key:'documental_novedades'},
+    {lbl:'Novedades Comerciales',key:'comercial_novedades'},
+    {lbl:'Novedades Financieras',key:'financiero_novedades'}
+  ];
+  var genHasContent=genFields.some(function(f){return !!(gen[f.key]);});
+  if(genHasContent){
+    html+='<div class="co-acta-section">'+secTtl('Generalidades del Comité','ti-notes');
+    genFields.forEach(function(f){
+      if(gen[f.key]){
+        html+='<div style="margin-bottom:8px">'
+          +'<div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">'+f.lbl+'</div>'
+          +'<div class="co-acta-obs">'+esc2(gen[f.key])+'</div></div>';
+      }
+    });
+    html+='</div>';
   }
 
   /* Firmas */
@@ -9465,20 +9496,9 @@ function initStep8(){
   var hfEl=$id('co-f-hora-fin');
   if(hfEl) hfEl.value=_session.hora_fin;
 
-  /* [DIAG-TEMP] */
-  try{ _lastSnapshot=buildSnapshot(); }
-  catch(e){
-    console.error('[CO-DIAG] buildSnapshot() excepción →',e.message);
-    console.error('[CO-DIAG] stack:',e.stack);
-    var _cl=$id('co-close-checklist');
-    if(_cl) _cl.innerHTML='<div style="color:#c81e1e;padding:8px 0;font-size:13px;">'
-      +'<b>Error de diagnóstico:</b> '+e.message
-      +'<br><small>Revisa la consola del navegador para el stack completo.</small></div>';
-    return;
-  }
+  _lastSnapshot=buildSnapshot();
   var checks=validateSnapshot(_lastSnapshot);
   var allOk=checks.every(function(c){return c.ok;});
-  console.log('[CO-DIAG] validateSnapshot →',checks.map(function(c){return c.label+':'+(c.ok?'OK':'FAIL');}));
 
   /* Checklist */
   var cl=$id('co-close-checklist');
@@ -9495,12 +9515,10 @@ function initStep8(){
   /* Habilitar/deshabilitar botón */
   var btn=$id('co-btn-finalizar');
   if(btn) btn.disabled=!allOk;
-  console.log('[CO-DIAG] allOk=',allOk,'; btn.disabled=',btn?btn.disabled:'no-btn');
 
   /* Vista previa */
   var prev=$id('co-acta-preview');
   if(prev) prev.innerHTML='<div style="border:1px solid var(--line2);border-radius:8px;overflow:hidden;">'+renderActa(_lastSnapshot)+'</div>';
-  console.log('[CO-DIAG] initStep8 completado');
 }
 
 /* ── Finalizar el comité ─────────────────────────── */
@@ -9718,7 +9736,7 @@ function initSession(){
     invitados:[],
     project_snapshot:null,
     ops_snapshot:null,
-    generalidades:{observaciones:'',snapshot:null},
+    generalidades:{trafico_novedades:'',ops_observaciones:'',project_observaciones:'',documental_novedades:'',comercial_novedades:'',financiero_novedades:''},
     hse:{
       responsable:null,
       tema_presentado:'',
@@ -9839,8 +9857,8 @@ var CO={
   /* ── Operativo: sync textarea observaciones ──────── */
   _syncOpsObs:function(val){syncStep4Obs(val);},
 
-  /* ── Generalidades: sync textarea observaciones ──── */
-  _syncGenObs:function(val){syncStep5Obs(val);},
+  /* ── Generalidades: sync campos editables por área ── */
+  _syncGenField:function(field,val){syncGenField(field,val);},
 
   /* ── Momento HSE: sync campos ────────────────────── */
   _syncHseTema:function(val){syncHseTema(val);},
