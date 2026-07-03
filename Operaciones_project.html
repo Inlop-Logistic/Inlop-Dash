@@ -8293,15 +8293,20 @@ function _coFetch(path){
 /* ── Cargar directorio personal desde Supabase ────── */
 function loadPersonal(){
   if(_coPersonalLoaded)return Promise.resolve(_coPersonal);
-  /* firma_base64 puede no existir aún en Supabase (pendiente de migración
-     SQL). Si el select con esa columna falla (HTTP 400 de PostgREST),
-     se reintenta sin ella para no bloquear nunca el listado de Personal. */
-  return _coFetch('/rest/v1/personal?select=id,nombre,cargo,firma_base64&order=nombre.asc')
+  /* area y firma_base64 pueden no existir aún en Supabase (columnas
+     pendientes de migración SQL). Si el select con ambas falla (HTTP 400
+     de PostgREST), se reintenta progresivamente con menos columnas para
+     no bloquear nunca el listado de Personal. */
+  return _coFetch('/rest/v1/personal?select=id,nombre,cargo,area,firma_base64&order=nombre.asc')
+    .catch(function(){
+      return _coFetch('/rest/v1/personal?select=id,nombre,cargo,area&order=nombre.asc');
+    })
     .catch(function(){
       return _coFetch('/rest/v1/personal?select=id,nombre,cargo&order=nombre.asc');
     })
     .then(function(rows){
       _coPersonal=(rows||[]).map(function(p){
+        if(p.area===undefined)p.area=null;
         if(p.firma_base64===undefined)p.firma_base64=null;
         return p;
       });
@@ -9867,18 +9872,6 @@ function buildSnapshot(){
     financiero:''
   };
 
-  /* Snapshot parcial para análisis dependientes entre sí */
-  var snapParcial={
-    semana:semana,
-    operacion:{
-      liq:wsLiq?{sol:wsLiq.sol,carg:wsLiq.carg,pct:wsLiq.pct,deficit:wsLiq.deficit}:null,
-      sec:wsSec?{sol:wsSec.sol,carg:wsSec.carg,pct:wsSec.pct,deficit:wsSec.deficit}:null
-    },
-    project:{kpi:snap?snap.kpi:null},
-    hse:{responsable:_session.hse&&_session.hse.responsable||null,tema_presentado:_session.hse&&_session.hse.tema_presentado||''},
-    compromisos_nuevos:_session.compromisos_nuevos||[]
-  };
-
   var snapFinal={
     codigo:_buildCodigo(),
     semana:semana,
@@ -9890,15 +9883,19 @@ function buildSnapshot(){
     modalidad:_session.modalidad,
     responsable_liquida_id:r1.id||_session.responsable_1||null,
     responsable_liquida_nombre:r1.nombre||null,
+    responsable_liquida_cargo:r1.cargo||null,
+    responsable_liquida_area:r1.area||null,
     responsable_liquida_firma:_getFirmaImgSrc(r1),
     responsable_seca_id:r2.id||_session.responsable_2||null,
     responsable_seca_nombre:r2.nombre||null,
+    responsable_seca_cargo:r2.cargo||null,
+    responsable_seca_area:r2.area||null,
     responsable_seca_firma:_getFirmaImgSrc(r2),
     asistentes:(_session.asistencia||[]).filter(function(a){return a.presente;}).map(function(a){
-      return{nombre:a.nombre,cargo:a.cargo,area:a.area||null,empresa:'INLOP',tipo:a.tipo||'colaborador',
+      return{id:a.id||null,nombre:a.nombre,cargo:a.cargo,area:a.area||null,empresa:'INLOP',tipo:a.tipo||'colaborador',
         firma_base64:a.firma_base64||null};
     }).concat((_session.invitados||[]).map(function(i){
-      return{nombre:i.nombre,cargo:i.cargo,empresa:i.empresa||null,tipo:'invitado',firma_base64:null};
+      return{id:null,nombre:i.nombre,cargo:i.cargo,empresa:i.empresa||null,tipo:'invitado',firma_base64:null};
     })),
     orden_dia:_buildOrdenDia(),
     operacion:{
@@ -10131,7 +10128,7 @@ function renderActa(snap){
     +(snap.asistentes||[]).map(function(a){
       var firmaCell=a.firma_base64
         ?'<img src="'+a.firma_base64+'" style="max-height:28px;max-width:80px;object-fit:contain;vertical-align:middle" alt="Firma">'
-        :'<span style="color:#94a3b8;font-size:8px">—</span>';
+        :'<span style="color:#94a3b8;font-size:8px;font-style:italic">Pendiente de registrar</span>';
       return'<tr><td>'+esc2(a.nombre)+'</td><td>'+esc2(a.cargo)+'</td><td>'+esc2(a.area||'—')+'</td><td style="text-align:center">'+firmaCell+'</td></tr>';
     }).join('')
     +'</tbody></table></div>';
@@ -10311,16 +10308,18 @@ function renderActa(snap){
       +'</div>';
   }
 
-  /* 13. Firmas */
-  var _mkFirmaCard=function(nombre,cargo,firmaSrc){
+  /* 13. Firmas — Responsables del Comité con Nombre, Cargo, Área y Firma */
+  var _mkFirmaCard=function(nombre,rolCmp,cargo,area,firmaSrc){
     var imgHtml=firmaSrc
       ?'<img class="co-acta-firma-img" src="'+firmaSrc+'" alt="Firma '+esc2(nombre)+'">'
       :'<div class="co-acta-firma-pending">Firma pendiente de registrar</div>';
-    return'<div class="co-acta-firma">'+imgHtml+'<strong>'+esc2(nombre||'—')+'</strong><br>'+esc2(cargo)+'</div>';
+    var detalle=[cargo,area].filter(Boolean).join(' · ');
+    return'<div class="co-acta-firma">'+imgHtml+'<strong>'+esc2(nombre||'—')+'</strong><br>'+esc2(rolCmp)
+      +(detalle?'<br><span style="font-size:8px;color:#94a3b8">'+esc2(detalle)+'</span>':'')+'</div>';
   };
   html+='<div class="co-acta-firma-row">'
-    +_mkFirmaCard(snap.responsable_liquida_nombre,'Resp. Carga Líquida',snap.responsable_liquida_firma||null)
-    +_mkFirmaCard(snap.responsable_seca_nombre,'Resp. Carga Seca',snap.responsable_seca_firma||null)
+    +_mkFirmaCard(snap.responsable_liquida_nombre,'Resp. Carga Líquida',snap.responsable_liquida_cargo,snap.responsable_liquida_area,snap.responsable_liquida_firma||null)
+    +_mkFirmaCard(snap.responsable_seca_nombre,'Resp. Carga Seca',snap.responsable_seca_cargo,snap.responsable_seca_area,snap.responsable_seca_firma||null)
     +'</div>';
 
   /* 14. Footer */
