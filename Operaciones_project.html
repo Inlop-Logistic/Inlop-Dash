@@ -1101,10 +1101,17 @@ body::after{
 .header-user:hover{background:#EEF2F8;}
 .header-user-chevron{font-size:10px;color:var(--w4);margin-left:2px;transition:transform .15s;}
 .header-user-wrap.open .header-user-chevron{transform:rotate(180deg);}
+/* position:fixed (no absolute): .header y .ops-body-col tienen
+   overflow:hidden, lo que recorta cualquier descendiente absolute
+   que se salga de sus límites sin importar el z-index. fixed se
+   posiciona respecto al viewport y escapa de ese recorte (ningún
+   ancestro usa transform/filter/perspective que reintroduzca un
+   containing block). La posición top/left se calcula por JS en
+   toggleHeaderUserMenu() a partir del rect real del disparador. */
 .header-user-menu{
-  display:none;position:absolute;top:calc(100% + 6px);right:0;min-width:190px;
+  display:none;position:fixed;min-width:190px;
   background:#fff;border:1px solid rgba(1,42,107,.12);border-radius:10px;
-  box-shadow:0 10px 30px rgba(1,42,107,.14);padding:6px;z-index:500;
+  box-shadow:0 10px 30px rgba(1,42,107,.14);padding:6px;z-index:2000;
 }
 .header-user-wrap.open .header-user-menu{display:block;}
 .header-user-menu-item{
@@ -1940,6 +1947,25 @@ window.updatePortalStats=updatePortalStats;
 function _inlopUser(){
   try{return JSON.parse(sessionStorage.getItem('inlop_user')||'null');}catch(e){return null;}
 }
+/* El menú es position:fixed (ver CSS) para escapar del overflow:hidden
+   de .header y .ops-body-col, así que su posición se calcula aquí a
+   partir del rect real del botón disparador, en vez de depender del
+   flujo normal del documento. */
+function _posicionarHeaderUserMenu(){
+  var btn=document.getElementById('headerUserBtn');
+  var menu=document.getElementById('headerUserMenu');
+  if(!btn||!menu)return;
+  var r=btn.getBoundingClientRect();
+  menu.style.top=(r.bottom+6)+'px';
+  menu.style.left='';
+  menu.style.right=(window.innerWidth-r.right)+'px';
+  /* En pantallas muy angostas, evitar que el menú se salga por la izquierda */
+  var minW=190;
+  if(r.right-minW<8){
+    menu.style.right='';
+    menu.style.left='8px';
+  }
+}
 function toggleHeaderUserMenu(ev){
   if(ev)ev.stopPropagation();
   var wrap=document.getElementById('headerUserWrap');
@@ -1951,14 +1977,31 @@ function toggleHeaderUserMenu(ev){
     var rol=(u&&u.rol||'').toLowerCase();
     var itemPersonal=document.getElementById('headerUserMenuPersonal');
     if(itemPersonal)itemPersonal.style.display=(rol==='master')?'flex':'none';
+    _posicionarHeaderUserMenu();
   }
 }
 document.addEventListener('click',function(ev){
   var wrap=document.getElementById('headerUserWrap');
-  if(wrap&&wrap.classList.contains('open')&&!wrap.contains(ev.target)){
-    wrap.classList.remove('open');
-  }
+  if(!wrap||!wrap.classList.contains('open'))return;
+  /* Clic fuera del menú → cerrar. Clic en un ítem del menú (incluido
+     el propio botón que abre "Personal" u otras acciones) → cerrar
+     también, para no dejarlo abierto por detrás de la pantalla que
+     esa acción abre. Solo el clic sobre el botón disparador (que ya
+     maneja su propio toggle) se excluye de este cierre automático. */
+  var btn=document.getElementById('headerUserBtn');
+  if(btn&&btn.contains(ev.target))return;
+  wrap.classList.remove('open');
 });
+/* Recalcular posición si cambia el tamaño de ventana o hay scroll
+   mientras el menú está abierto (rotación de dispositivo, redimensión
+   de ventana de escritorio, scroll de la página con el header en
+   modo sticky, etc.) */
+function _recalcularHeaderUserMenuSiAbierto(){
+  var wrap=document.getElementById('headerUserWrap');
+  if(wrap&&wrap.classList.contains('open'))_posicionarHeaderUserMenu();
+}
+window.addEventListener('resize',_recalcularHeaderUserMenuSiAbierto);
+window.addEventListener('scroll',_recalcularHeaderUserMenuSiAbierto,{passive:true,capture:true});
 function cerrarSesionInlop(){
   try{sessionStorage.removeItem('inlop_user');}catch(e){}
   if(window.parent&&typeof window.parent.cerrarSesion==='function'){window.parent.cerrarSesion();return;}
