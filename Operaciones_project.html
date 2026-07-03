@@ -3638,6 +3638,7 @@ function toggleCauseEdit(idx){
     toast('Causa actualizada y guardada.','ok');
   }
 }
+function closeModal(){const bg=document.getElementById('modalBg');if(bg)bg.classList.remove('show');editingAction=null;}
 function saveAction(){if(!editingAction)return;const acts=getActions();const d={id:Date.now(),txt:document.getElementById('mTxt').value,resp:document.getElementById('mResp').value,date:document.getElementById('mDate').value,status:document.getElementById('mStatus').value};if(editingAction.idx>=0)acts[editingAction.idx]=d;else acts.push(d);saveMem("");closeModal();if(typeof renderActions==='function') renderActions();toast('Acción guardada.','ok')}
 
 /* ════════════ HISTÓRICO TABLE ════════════ */
@@ -8292,9 +8293,18 @@ function _coFetch(path){
 /* ── Cargar directorio personal desde Supabase ────── */
 function loadPersonal(){
   if(_coPersonalLoaded)return Promise.resolve(_coPersonal);
+  /* firma_base64 puede no existir aún en Supabase (pendiente de migración
+     SQL). Si el select con esa columna falla (HTTP 400 de PostgREST),
+     se reintenta sin ella para no bloquear nunca el listado de Personal. */
   return _coFetch('/rest/v1/personal?select=id,nombre,cargo,firma_base64&order=nombre.asc')
+    .catch(function(){
+      return _coFetch('/rest/v1/personal?select=id,nombre,cargo&order=nombre.asc');
+    })
     .then(function(rows){
-      _coPersonal=rows||[];
+      _coPersonal=(rows||[]).map(function(p){
+        if(p.firma_base64===undefined)p.firma_base64=null;
+        return p;
+      });
       _coPersonalLoaded=true;
       return _coPersonal;
     })
