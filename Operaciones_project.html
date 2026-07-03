@@ -7691,7 +7691,22 @@ if(document.readyState!=='loading'){tryInit();}
 .co-acta-kpi-val{font-size:18px;font-weight:800;color:#012a6b;}
 .co-acta-kpi-lbl{font-size:8px;color:#64748b;text-transform:uppercase;letter-spacing:.06em;}
 .co-acta-firma-row{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;}
-.co-acta-firma{border-top:1px solid #94a3b8;padding-top:6px;text-align:center;font-size:9px;color:#64748b;}
+.co-acta-firma{border-top:1px solid #94a3b8;padding-top:8px;text-align:center;font-size:9px;color:#64748b;}
+.co-acta-firma-img{max-width:200px;max-height:60px;object-fit:contain;display:block;margin:0 auto 6px;}
+.co-acta-firma-pending{height:38px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:9px;font-style:italic;margin-bottom:6px;}
+/* Gestión de Firmas Digitales */
+.co-firmas-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10003;display:none;align-items:center;justify-content:center;}
+.co-firmas-box{background:#fff;border-radius:12px;width:min(620px,94vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.co-firmas-hdr{padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.co-firmas-list{overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;}
+.co-firmas-card{border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:14px;background:#f8fafc;}
+.co-firmas-card-info{flex:1;min-width:0;}
+.co-firmas-card-nombre{font-size:13px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.co-firmas-card-cargo{font-size:11px;color:#64748b;}
+.co-firmas-card-preview{width:160px;flex-shrink:0;height:54px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;}
+.co-firmas-card-preview img{max-width:150px;max-height:48px;object-fit:contain;}
+.co-firmas-card-actions{display:flex;gap:6px;flex-shrink:0;}
+.co-firmas-no-firma{font-size:10px;color:#94a3b8;font-style:italic;text-align:center;padding:4px;}
 .co-acta-footer{margin-top:24px;border-top:1px solid #e2e8f0;padding-top:8px;display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;}
 @media(max-width:640px){
   .co-ops-kpi-row{grid-template-columns:repeat(2,1fr);}
@@ -7729,7 +7744,7 @@ if(document.readyState!=='loading'){tryInit();}
         <div class="co-step-num">1</div>
         <div class="co-step-hdr-txt">
           <div class="co-step-ttl">Encabezado</div>
-          <div class="co-step-desc">Datos generales del acta: fecha, hora, lugar y responsables.</div>
+          <div class="co-step-desc">Datos generales del acta: fecha, hora, modalidad y responsables.</div>
         </div>
       </div>
       <!-- Sección 1: Datos generales -->
@@ -7766,11 +7781,15 @@ if(document.readyState!=='loading'){tryInit();}
           </div>
 
           <div class="co-form-group co-span-2">
-            <label class="co-form-label" for="co-f-lugar">
-              Lugar <span class="co-req">*</span>
+            <label class="co-form-label" for="co-f-modalidad">
+              Modalidad <span class="co-req">*</span>
             </label>
-            <input type="text" class="co-input" id="co-f-lugar"
-              maxlength="120" placeholder="Sala de Juntas">
+            <select class="co-select" id="co-f-modalidad">
+              <option value="">— Seleccionar —</option>
+              <option value="Virtual">Virtual</option>
+              <option value="Presencial">Presencial</option>
+              <option value="Híbrida">Híbrida</option>
+            </select>
           </div>
 
         </div>
@@ -7802,6 +7821,11 @@ if(document.readyState!=='loading'){tryInit();}
             </select>
           </div>
 
+        </div>
+        <div style="padding:6px 0 0;text-align:right;" id="co-link-firmas-wrap" style="display:none">
+          <button onclick="CO._abrirGestorFirmas()" style="background:none;border:none;color:var(--navy);font-size:11px;cursor:pointer;text-decoration:underline;padding:0">
+            <i class="ti ti-pencil-signature"></i> Gestionar firmas digitales
+          </button>
         </div>
       </div>
     </div>
@@ -7884,78 +7908,10 @@ if(document.readyState!=='loading'){tryInit();}
       </div>
     </div>
 
-    <!-- PASO 3: Project -->
+    <!-- PASO 3: Momento HSE -->
     <div class="co-step-panel" id="co-panel-3">
       <div class="co-step-hdr">
         <div class="co-step-num">3</div>
-        <div class="co-step-hdr-txt">
-          <div class="co-step-ttl">Project</div>
-          <div class="co-step-desc">Estado del módulo Project para la semana activa. Solo lectura — sin re-consulta.</div>
-        </div>
-      </div>
-
-      <!-- Contenido dinámico renderizado por initStep3() -->
-      <div id="co-proj-content"></div>
-
-      <!-- Observaciones -->
-      <div class="co-form-section">
-        <div class="co-form-section-ttl">
-          <i class="ti ti-pencil" aria-hidden="true"></i>Observaciones del Project
-          <span class="co-req-note">&nbsp;— opcional</span>
-        </div>
-        <div style="padding:14px 18px;">
-          <textarea class="co-proj-obs-area" id="co-proj-obs"
-            placeholder="Comentarios, alertas o acuerdos sobre el estado del Project en este comité…"
-            oninput="CO._syncProjObs(this.value)"></textarea>
-        </div>
-      </div>
-    </div>
-
-    <!-- PASO 4: Seguimiento Operativo -->
-    <div class="co-step-panel" id="co-panel-4">
-      <div class="co-step-hdr">
-        <div class="co-step-num">4</div>
-        <div class="co-step-hdr-txt">
-          <div class="co-step-ttl">Seguimiento Operativo</div>
-          <div class="co-step-desc">Revisión ejecutiva del cumplimiento operativo para la semana activa. Solo lectura.</div>
-        </div>
-      </div>
-
-      <!-- Contenido dinámico -->
-      <div id="co-ops-content"></div>
-
-      <!-- Observaciones -->
-      <div class="co-form-section">
-        <div class="co-form-section-ttl">
-          <i class="ti ti-pencil" aria-hidden="true"></i>Observaciones Operativas
-          <span class="co-req-note">&nbsp;— opcional</span>
-        </div>
-        <div style="padding:14px 18px;">
-          <textarea class="co-proj-obs-area" id="co-ops-obs"
-            placeholder="Comentarios, alertas o acuerdos sobre el seguimiento operativo en este comité…"
-            oninput="CO._syncOpsObs(this.value)"></textarea>
-        </div>
-      </div>
-    </div>
-
-    <!-- PASO 5: Generalidades -->
-    <div class="co-step-panel" id="co-panel-5">
-      <div class="co-step-hdr">
-        <div class="co-step-num">5</div>
-        <div class="co-step-hdr-txt">
-          <div class="co-step-ttl">Generalidades</div>
-          <div class="co-step-desc">Revisión ejecutiva por área. Los indicadores provienen del sistema; registre novedades y observaciones propias del comité en cada tarjeta.</div>
-        </div>
-      </div>
-
-      <!-- Tarjetas por área — renderizadas por initStep5() -->
-      <div id="co-gen-content"></div>
-    </div>
-
-    <!-- PASO 6: Momento HSE -->
-    <div class="co-step-panel" id="co-panel-6">
-      <div class="co-step-hdr">
-        <div class="co-step-num">6</div>
         <div class="co-step-hdr-txt">
           <div class="co-step-ttl">Momento HSE</div>
           <div class="co-step-desc">Responsable del momento de seguridad asignado por la Ruleta HSEQ. Registre el tema presentado y las observaciones del comité.</div>
@@ -7983,19 +7939,19 @@ if(document.readyState!=='loading'){tryInit();}
         <div class="co-form-section-ttl"><i class="ti ti-pencil"></i>Observaciones <span class="co-req-note">— opcional</span></div>
         <div style="padding:14px 18px;">
           <textarea class="co-proj-obs-area" id="co-hse-obs"
-            placeholder="Observaciones del comité sobre el momento HSE, compromisos o acuerdos derivados…"
+            placeholder="Observaciones del comité sobre el momento HSE, compromisos derivados…"
             oninput="CO._syncHseObs(this.value)"></textarea>
         </div>
       </div>
     </div>
 
-    <!-- PASO 7: Acuerdos del Comité -->
-    <div class="co-step-panel" id="co-panel-7">
+    <!-- PASO 4: Compromisos del Comité -->
+    <div class="co-step-panel" id="co-panel-4">
       <div class="co-step-hdr">
-        <div class="co-step-num">7</div>
+        <div class="co-step-num">4</div>
         <div class="co-step-hdr-txt">
-          <div class="co-step-ttl">Acuerdos del Comité</div>
-          <div class="co-step-desc">Revisión de compromisos activos y registro de nuevos acuerdos generados en esta sesión. Se persistirán al finalizar el Comité.</div>
+          <div class="co-step-ttl">Compromisos del Comité</div>
+          <div class="co-step-desc">Revisión de compromisos activos y registro de nuevos compromisos generados en esta sesión. Se persistirán al finalizar el Comité.</div>
         </div>
       </div>
 
@@ -8011,7 +7967,7 @@ if(document.readyState!=='loading'){tryInit();}
             <span id="co-cmp-hse-sugg-txt">—</span>
           </div>
           <button class="co-cmp-hse-adopt-btn" onclick="CO._adoptHseCompromiso()">
-            <i class="ti ti-plus"></i> Agregar como acuerdo
+            <i class="ti ti-plus"></i> Agregar como compromiso
           </button>
         </div>
       </div>
@@ -8024,14 +7980,82 @@ if(document.readyState!=='loading'){tryInit();}
         </div>
       </div>
 
-      <!-- Nuevos acuerdos de esta sesión -->
+      <!-- Nuevos compromisos de esta sesión -->
       <div class="co-form-section">
         <div class="co-form-section-ttl" style="display:flex;align-items:center;justify-content:space-between;">
-          <span><i class="ti ti-plus"></i>Nuevos acuerdos de esta sesión</span>
-          <button class="co-cmp-add-btn" onclick="CO._openCmpModal()"><i class="ti ti-plus"></i> Agregar acuerdo</button>
+          <span><i class="ti ti-plus"></i>Nuevos compromisos de esta sesión</span>
+          <button class="co-cmp-add-btn" onclick="CO._openCmpModal()"><i class="ti ti-plus"></i> Agregar compromiso</button>
         </div>
         <div id="co-cmp-new-list" style="padding:0 18px 12px;"></div>
       </div>
+    </div>
+
+    <!-- PASO 5: Project -->
+    <div class="co-step-panel" id="co-panel-5">
+      <div class="co-step-hdr">
+        <div class="co-step-num">5</div>
+        <div class="co-step-hdr-txt">
+          <div class="co-step-ttl">Project</div>
+          <div class="co-step-desc">Estado del módulo Project para la semana activa. Solo lectura — sin re-consulta.</div>
+        </div>
+      </div>
+
+      <!-- Contenido dinámico renderizado por initStep3() -->
+      <div id="co-proj-content"></div>
+
+      <!-- Observaciones -->
+      <div class="co-form-section">
+        <div class="co-form-section-ttl">
+          <i class="ti ti-pencil" aria-hidden="true"></i>Observaciones del Project
+          <span class="co-req-note">&nbsp;— opcional</span>
+        </div>
+        <div style="padding:14px 18px;">
+          <textarea class="co-proj-obs-area" id="co-proj-obs"
+            placeholder="Comentarios, alertas o compromisos sobre el estado del Project en este comité…"
+            oninput="CO._syncProjObs(this.value)"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- PASO 6: Seguimiento Operativo -->
+    <div class="co-step-panel" id="co-panel-6">
+      <div class="co-step-hdr">
+        <div class="co-step-num">6</div>
+        <div class="co-step-hdr-txt">
+          <div class="co-step-ttl">Seguimiento Operativo</div>
+          <div class="co-step-desc">Revisión ejecutiva del cumplimiento operativo para la semana activa. Solo lectura.</div>
+        </div>
+      </div>
+
+      <!-- Contenido dinámico -->
+      <div id="co-ops-content"></div>
+
+      <!-- Observaciones -->
+      <div class="co-form-section">
+        <div class="co-form-section-ttl">
+          <i class="ti ti-pencil" aria-hidden="true"></i>Observaciones Operativas
+          <span class="co-req-note">&nbsp;— opcional</span>
+        </div>
+        <div style="padding:14px 18px;">
+          <textarea class="co-proj-obs-area" id="co-ops-obs"
+            placeholder="Comentarios, alertas o compromisos sobre el seguimiento operativo en este comité…"
+            oninput="CO._syncOpsObs(this.value)"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- PASO 7: Generalidades -->
+    <div class="co-step-panel" id="co-panel-7">
+      <div class="co-step-hdr">
+        <div class="co-step-num">7</div>
+        <div class="co-step-hdr-txt">
+          <div class="co-step-ttl">Generalidades</div>
+          <div class="co-step-desc">Revisión ejecutiva por área. Los indicadores provienen del sistema; registre novedades y observaciones propias del comité en cada tarjeta.</div>
+        </div>
+      </div>
+
+      <!-- Tarjetas por área — renderizadas por initStep5() -->
+      <div id="co-gen-content"></div>
     </div>
 
     <!-- PASO 8: Cerrar Comité -->
@@ -8122,6 +8146,7 @@ if(document.readyState!=='loading'){tryInit();}
         <div style="font-size:11px;color:#64748b" id="co-hist-codigo">—</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
+        <button class="co-cmp-add-btn" id="co-hist-btn-firmas" style="display:none" onclick="CO._abrirGestorFirmas()"><i class="ti ti-pencil-signature"></i> Firmas</button>
         <button class="co-cmp-add-btn" onclick="CO._descargarPDF()"><i class="ti ti-download"></i> Descargar PDF</button>
         <button class="co-btn-close" style="position:static" onclick="CO._cerrarHistorico()"><i class="ti ti-x"></i></button>
       </div>
@@ -8133,6 +8158,23 @@ if(document.readyState!=='loading'){tryInit();}
 <!-- Plantilla de acta (fuente para PDF y vista previa) -->
 <div id="co-acta-tpl" style="display:none;font-family:'DM Sans',Arial,sans-serif;font-size:12px;color:#1e293b;background:#fff;padding:40px;max-width:800px;margin:0 auto;">
 </div>
+
+<!-- Gestión de Firmas Digitales -->
+<div id="co-firmas-overlay" class="co-firmas-overlay">
+  <div class="co-firmas-box">
+    <div class="co-firmas-hdr">
+      <div>
+        <div style="font-size:14px;font-weight:700;color:var(--navy)"><i class="ti ti-pencil-signature" style="margin-right:6px"></i>Firmas Digitales</div>
+        <div style="font-size:11px;color:#64748b" id="co-firmas-subtitle">Personal INLOP</div>
+      </div>
+      <button class="co-btn-close" style="position:static" onclick="CO._cerrarGestorFirmas()" title="Cerrar"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="co-firmas-list" class="co-firmas-list"></div>
+  </div>
+</div>
+<!-- Input oculto para carga de imágenes de firma -->
+<input type="file" id="co-firma-file-input" accept="image/png,image/jpeg,image/jpg,image/webp" style="display:none"
+  onchange="CO._onFirmaFile(this.files[0])">
 
 <!-- Modal: agregar invitado -->
 <div id="co-inv-modal" role="dialog" aria-modal="true" aria-label="Agregar invitado">
@@ -8182,11 +8224,11 @@ var projGetSnapshot=window.projGetSnapshot,projCalcIndicador=window.projCalcIndi
 var STEPS=[
   {n:1, label:'Encabezado',     icon:'ti-file-description'},
   {n:2, label:'Asistencia',     icon:'ti-users'},
-  {n:3, label:'Project',        icon:'ti-clipboard-check'},
-  {n:4, label:'Seg. Operativo', icon:'ti-chart-bar'},
-  {n:5, label:'Generalidades',  icon:'ti-notes'},
-  {n:6, label:'Momento HSE',    icon:'ti-shield-check'},
-  {n:7, label:'Acuerdos',       icon:'ti-checklist'},
+  {n:3, label:'Momento HSE',    icon:'ti-shield-check'},
+  {n:4, label:'Compromisos',    icon:'ti-checklist'},
+  {n:5, label:'Project',        icon:'ti-clipboard-check'},
+  {n:6, label:'Seg. Operativo', icon:'ti-chart-bar'},
+  {n:7, label:'Generalidades',  icon:'ti-notes'},
   {n:8, label:'Cerrar Comité',  icon:'ti-circle-check'}
 ];
 
@@ -8198,7 +8240,7 @@ var _session={
   fecha_reunion:null,
   hora_inicio:null,
   hora_fin:null,
-  lugar:null,
+  modalidad:null,
   responsable_1:null,
   responsable_2:null,
   asistentes:[],
@@ -8245,7 +8287,7 @@ function _coFetch(path){
 /* ── Cargar directorio personal desde Supabase ────── */
 function loadPersonal(){
   if(_coPersonalLoaded)return Promise.resolve(_coPersonal);
-  return _coFetch('/rest/v1/personal?select=id,nombre,cargo&order=nombre.asc')
+  return _coFetch('/rest/v1/personal?select=id,nombre,cargo,firma_base64&order=nombre.asc')
     .then(function(rows){
       _coPersonal=rows||[];
       _coPersonalLoaded=true;
@@ -8304,14 +8346,11 @@ function initStep1(){
     horEl.value=hh+':'+mi;
   }
 
-  /* Lugar: default "Sala de Juntas" si no hay valor previo */
-  var lugEl=$id('co-f-lugar');
-  if(lugEl&&!lugEl.value) lugEl.value='Sala de Juntas';
-
   /* Restaurar valores de _session si existen */
   if(_session.fecha_reunion&&fecEl) fecEl.value=_session.fecha_reunion;
   if(_session.hora_inicio&&horEl) horEl.value=_session.hora_inicio;
-  if(_session.lugar&&lugEl) lugEl.value=_session.lugar;
+  var modEl=$id('co-f-modalidad');
+  if(_session.modalidad&&modEl) modEl.value=_session.modalidad;
 
   fillPersonalSelects();
 
@@ -8323,18 +8362,22 @@ function initStep1(){
     var r2=$id('co-f-resp2');
     if(r2) r2.value=_session.responsable_2;
   }
+
+  /* Mostrar link "Gestionar firmas" solo para Master/Admin */
+  var linkFirmas=$id('co-link-firmas-wrap');
+  if(linkFirmas) linkFirmas.style.display=_tienePermisoFirma()?'':'none';
 }
 
 /* ── Guardar valores del Paso 1 en _session ───────── */
 function syncStep1(){
   var fecEl=$id('co-f-fecha');
   var horEl=$id('co-f-hora');
-  var lugEl=$id('co-f-lugar');
+  var modEl=$id('co-f-modalidad');
   var r1El=$id('co-f-resp1');
   var r2El=$id('co-f-resp2');
   _session.fecha_reunion=fecEl?fecEl.value:'';
   _session.hora_inicio=horEl?horEl.value:'';
-  _session.lugar=lugEl?lugEl.value.trim():'';
+  _session.modalidad=modEl?modEl.value:'';
   _session.responsable_1=r1El?r1El.value:'';
   _session.responsable_2=r2El?r2El.value:'';
 }
@@ -8350,8 +8393,8 @@ function validateStep1(){
     if(typeof toast==='function') toast('Ingresa la hora de inicio.','warn');
     return false;
   }
-  if(!_session.lugar){
-    if(typeof toast==='function') toast('Ingresa el lugar de la reunión.','warn');
+  if(!_session.modalidad){
+    if(typeof toast==='function') toast('Selecciona la modalidad de la reunión.','warn');
     return false;
   }
   if(!_session.responsable_1){
@@ -8382,6 +8425,7 @@ function initAsistenciaSession(){
       nombre:p.nombre,
       cargo:p.cargo||'',
       area:p.area||'',
+      firma_base64:p.firma_base64||null,
       empresa:'INLOP',
       presente:true,
       tipo:'colaborador'
@@ -9136,7 +9180,7 @@ function _renderCmpNewList(){
   if(!el)return;
   var list=_session.compromisos_nuevos||[];
   if(!list.length){
-    el.innerHTML='<div class="co-cmp-empty">Aún no se han agregado acuerdos en esta sesión.</div>';return;
+    el.innerHTML='<div class="co-cmp-empty">Aún no se han agregado compromisos en esta sesión.</div>';return;
   }
   el.innerHTML=list.map(function(c,i){
     var isHse=c._fromHse;
@@ -9194,7 +9238,7 @@ function initStep7(){
       });
       _renderCmpNewList();
       _renderCmpKPIs();
-      toast('Acuerdo agregado a la sesión del Comité','ok');
+      toast('Compromiso agregado a la sesión del Comité','ok');
     });
   }
 
@@ -9242,7 +9286,7 @@ function _adoptHseCompromiso(){
   if(!texto)return;
   if(!_session.compromisos_nuevos) _session.compromisos_nuevos=[];
   _session.compromisos_nuevos.push({
-    title:'Acuerdo Momento HSE',
+    title:'Compromiso Momento HSE',
     description:texto,
     responsible_nombre:hse.responsable||null,
     responsible_id:null,
@@ -9255,7 +9299,7 @@ function _adoptHseCompromiso(){
   _renderCmpNewList();
   _renderCmpKPIs();
   _renderCmpHseSugg();
-  toast('Acuerdo HSE agregado a la sesión','ok');
+  toast('Compromiso HSE agregado a la sesión','ok');
 }
 
 /* ══════════════════════════════════════════════════
@@ -9267,6 +9311,20 @@ function _buildCodigo(){
   var sem=(_session.semana||'S?').replace(/^S/,'');
   var anio=new Date().getFullYear();
   return'S'+sem+'-'+anio;
+}
+
+/* ── Semana ISO ("S27") a partir de una fecha YYYY-MM-DD ─
+   Helper local e independiente — evita dependencia cruzada
+   con el módulo Project para no acoplar arquitecturas. */
+function _semanaIdDesdeFecha(dateStr){
+  if(!dateStr)return null;
+  var d=new Date(dateStr+'T00:00:00');
+  if(isNaN(d.getTime()))return null;
+  var date=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  date.setUTCDate(date.getUTCDate()+4-(date.getUTCDay()||7));
+  var y=new Date(Date.UTC(date.getUTCFullYear(),0,1));
+  var wk=Math.ceil((((date-y)/86400000)+1)/7);
+  return'S'+wk;
 }
 
 /* ════════════════════════════════════════════════════
@@ -9488,7 +9546,7 @@ function _buildTemasTratados(snap){
   }
   temas.push('Generalidades y novedades por área (Tráfico, Operaciones, Project, Gestión Documental, Comercial, Financiero).');
   var nCmp=(snap.compromisos_nuevos||[]).length;
-  temas.push('Conclusiones y compromisos: '+nCmp+' acuerdo'+(nCmp!==1?'s nuevos definidos':'nuevo definido')+' para seguimiento.');
+  temas.push('Conclusiones y compromisos: '+nCmp+' compromiso'+(nCmp!==1?'s nuevos definidos':'nuevo definido')+' para seguimiento.');
   return temas;
 }
 
@@ -9535,9 +9593,9 @@ function _buildDecisionesComite(snap){
       +'. Los responsables deben presentar justificación y nueva fecha en la próxima sesión.');
   }
 
-  /* Acuerdos nuevos */
+  /* Compromisos nuevos */
   if(nCmp>0){
-    decisiones.push('Se registran '+nCmp+' acuerdo'+(nCmp!==1?'s nuevos':'nuevo')+' en el sistema de seguimiento de compromisos. El Coordinador de Comité verificará el avance en la sesión siguiente.');
+    decisiones.push('Se registran '+nCmp+' compromiso'+(nCmp!==1?'s nuevos':'nuevo')+' en el sistema de seguimiento de compromisos. El Coordinador de Comité verificará el avance en la sesión siguiente.');
   }
 
   if(decisiones.length===0){
@@ -9663,9 +9721,12 @@ function buildSnapshot(){
     operaciones:_buildGenResumenArea('operaciones',wsStats,[],snap,[]),
     project:_buildGenResumenArea('project',wsStats,[],snap,[]),
     hseq:_buildGenResumenArea('hseq',wsStats,[],snap,[]),
-    documental:'Módulo pendiente de integración. Registre novedades manualmente si es necesario.',
-    comercial:'Módulo pendiente de integración. Registre novedades manualmente si es necesario.',
-    financiero:'Módulo pendiente de integración. Registre novedades manualmente si es necesario.'
+    /* Documental/Comercial/Financiero: sin módulo de datos integrado.
+       Se dejan vacíos a propósito — solo aparecen en el acta si el
+       comité registra novedades manuales para esa área (BLOQUE 6). */
+    documental:'',
+    comercial:'',
+    financiero:''
   };
 
   /* Snapshot parcial para análisis dependientes entre sí */
@@ -9688,15 +9749,18 @@ function buildSnapshot(){
     fecha_reunion:_session.fecha_reunion,
     hora_inicio:_session.hora_inicio,
     hora_fin:_session.hora_fin,
-    lugar:_session.lugar,
+    modalidad:_session.modalidad,
     responsable_liquida_id:r1.id||_session.responsable_1||null,
     responsable_liquida_nombre:r1.nombre||null,
+    responsable_liquida_firma:_getFirmaImgSrc(r1),
     responsable_seca_id:r2.id||_session.responsable_2||null,
     responsable_seca_nombre:r2.nombre||null,
+    responsable_seca_firma:_getFirmaImgSrc(r2),
     asistentes:(_session.asistencia||[]).filter(function(a){return a.presente;}).map(function(a){
-      return{nombre:a.nombre,cargo:a.cargo,area:a.area||null,empresa:'INLOP',tipo:a.tipo||'colaborador'};
+      return{nombre:a.nombre,cargo:a.cargo,area:a.area||null,empresa:'INLOP',tipo:a.tipo||'colaborador',
+        firma_base64:a.firma_base64||null};
     }).concat((_session.invitados||[]).map(function(i){
-      return{nombre:i.nombre,cargo:i.cargo,empresa:i.empresa||null,tipo:'invitado'};
+      return{nombre:i.nombre,cargo:i.cargo,empresa:i.empresa||null,tipo:'invitado',firma_base64:null};
     })),
     orden_dia:_buildOrdenDia(),
     operacion:{
@@ -9740,10 +9804,15 @@ function buildSnapshot(){
     finalizado_at:new Date().toISOString()
   };
 
-  /* Compromisos revisados desde CM — todos los activos al momento del comité */
+  /* Compromisos revisados desde CM — únicamente los que pertenecen a la
+     semana de este comité (según la fecha en que fueron generados) */
   var _cmList=typeof window.CM!=='undefined'?CM.getList():[];
   var _hoy=new Date(); _hoy.setHours(0,0,0,0);
-  snapFinal.compromisos_revisados=_cmList.filter(function(c){return!c.deleted_at;}).map(function(c){
+  snapFinal.compromisos_revisados=_cmList.filter(function(c){
+    if(c.deleted_at)return false;
+    if(!c.committee_date)return false;
+    return _semanaIdDesdeFecha(c.committee_date)===semana;
+  }).map(function(c){
     return{id:c.id,code:c.code||null,title:c.title,responsible_nombre:c.responsible_nombre||null,
       due_date:c.due_date||null,status:c.status,observations:c.observations||null,
       created_by_nombre:c.created_by_nombre||null,committee_date:c.committee_date||null};
@@ -9767,13 +9836,13 @@ function buildSnapshot(){
 /* ── Valida el snapshot: retorna [{ok,label,step}] ─ */
 function validateSnapshot(snap){
   return[
-    {label:'Encabezado',step:1,ok:!!(snap.fecha_reunion&&snap.lugar&&snap.responsable_liquida_id&&snap.responsable_seca_id)},
+    {label:'Encabezado',step:1,ok:!!(snap.fecha_reunion&&snap.modalidad&&snap.responsable_liquida_id&&snap.responsable_seca_id)},
     {label:'Asistencia',step:2,ok:snap.asistentes&&snap.asistentes.length>0},
-    {label:'Project',step:3,ok:true},
-    {label:'Seguimiento Operativo',step:4,ok:true},
-    {label:'Generalidades',step:5,ok:true},
-    {label:'Momento HSE',step:6,ok:true},
-    {label:'Acuerdos del Comité',step:7,ok:true}
+    {label:'Momento HSE',step:3,ok:true},
+    {label:'Compromisos del Comité',step:4,ok:true},
+    {label:'Project',step:5,ok:true},
+    {label:'Seguimiento Operativo',step:6,ok:true},
+    {label:'Generalidades',step:7,ok:true}
   ];
 }
 
@@ -9849,7 +9918,7 @@ function renderActa(snap){
   /* 1. Encabezado */
   html+='<div class="co-acta-logo-hdr">'
     +'<div><div class="co-acta-logo-company">INLOP</div>'
-    +'<div class="co-acta-logo-sub">Acta del Comité Operativo</div></div>'
+    +'<div class="co-acta-logo-sub">Acta del Comité</div></div>'
     +'<div class="co-acta-logo-codigo"><div>'+esc2(snap.codigo)+'</div>'
     +'<div style="font-size:9px;color:#64748b;font-weight:400">'+fechaFmt(snap.fecha_reunion)+'</div></div></div>';
 
@@ -9857,7 +9926,7 @@ function renderActa(snap){
   html+='<div class="co-acta-info-grid">'
     +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Semana</div><div class="co-acta-info-val">'+esc2(snap.semana)+'</div></div>'
     +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Tipo de Comité</div><div class="co-acta-info-val">Comité Operativo Semanal</div></div>'
-    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Lugar</div><div class="co-acta-info-val">'+esc2(snap.lugar)+'</div></div>'
+    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Modalidad</div><div class="co-acta-info-val">'+esc2(snap.modalidad||snap.lugar||'—')+'</div></div>'
     +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Hora inicio</div><div class="co-acta-info-val">'+esc2(snap.hora_inicio)+'</div></div>'
     +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Hora fin</div><div class="co-acta-info-val">'+esc2(snap.hora_fin)+'</div></div>'
     +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Fecha</div><div class="co-acta-info-val">'+fechaFmt(snap.fecha_reunion)+'</div></div>'
@@ -9879,32 +9948,100 @@ function renderActa(snap){
       +'</ol></div>';
   }
 
-  /* 5. Temas Tratados */
-  var temas=snap.temas_tratados||[];
-  if(temas.length){
-    html+='<div class="co-acta-section">'+secTtl('Temas Tratados','ti-message-dots')
-      +'<ul style="margin:0;padding-left:18px;font-size:11px;color:#334155;line-height:1.7">'
-      +temas.map(function(t){return'<li>'+esc2(t)+'</li>';}).join('')
-      +'</ul></div>';
-  }
+  /* ═══ A partir de aquí el orden del acta replica exactamente el
+     orden del Wizard: Asistencia → Momento HSE → Compromisos →
+     Project → Seguimiento Operativo → Generalidades → Cierre ═══ */
 
-  /* 6. Asistentes */
+  /* 5. Asistentes (Paso 2 del Wizard) */
   html+='<div class="co-acta-section">'+secTtl('Asistentes','ti-users-group')
-    +'<table class="co-acta-table"><thead><tr><th>Nombre</th><th>Cargo</th><th>Área</th><th>Empresa</th></tr></thead><tbody>'
+    +'<table class="co-acta-table"><thead><tr><th>Nombre</th><th>Cargo</th><th>Área</th><th>Empresa</th><th style="width:90px;text-align:center">Firma</th></tr></thead><tbody>'
     +(snap.asistentes||[]).map(function(a){
       var emp=a.tipo==='invitado'?(a.empresa||'—'):'INLOP';
-      return'<tr><td>'+esc2(a.nombre)+'</td><td>'+esc2(a.cargo)+'</td><td>'+esc2(a.area||'—')+'</td><td>'+esc2(emp)+'</td></tr>';
+      var firmaCell=a.firma_base64
+        ?'<img src="'+a.firma_base64+'" style="max-height:28px;max-width:80px;object-fit:contain;vertical-align:middle" alt="Firma">'
+        :'<span style="color:#94a3b8;font-size:8px">—</span>';
+      return'<tr><td>'+esc2(a.nombre)+'</td><td>'+esc2(a.cargo)+'</td><td>'+esc2(a.area||'—')+'</td><td>'+esc2(emp)+'</td><td style="text-align:center">'+firmaCell+'</td></tr>';
     }).join('')
     +'</tbody></table></div>';
 
-  /* 6. Evidencia de Asistencia */
+  /* Evidencia de Asistencia */
   if(snap.evidencia_asistencia){
     html+='<div class="co-acta-section">'+secTtl('Evidencia de Asistencia','ti-camera')
       +'<img src="'+snap.evidencia_asistencia+'" style="max-width:100%;border-radius:6px;display:block;margin:0 auto;max-height:260px;object-fit:contain" alt="Evidencia de asistencia">'
       +'</div>';
   }
 
-  /* 7. Seguimiento Operativo */
+  /* 6. Momento HSE (Paso 3 del Wizard) */
+  var hse=snap.hse||{};
+  html+='<div class="co-acta-section">'+secTtl('Momento HSE','ti-shield-check')
+    +'<div class="co-acta-info-grid">'
+    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Responsable (Ruleta)</div><div class="co-acta-info-val">'+esc2(hse.responsable||'—')+'</div></div>'
+    +'<div class="co-acta-info-cell" style="grid-column:span 2"><div class="co-acta-info-lbl">Tema presentado</div><div class="co-acta-info-val">'+esc2(hse.tema_presentado||'—')+'</div></div>'
+    +'</div>'
+    +(hse.observaciones?'<div class="co-acta-obs">'+esc2(hse.observaciones)+'</div>':'')
+    +'</div>';
+
+  /* 7. Compromisos (Paso 4 del Wizard) — activos del período + nuevos de esta sesión */
+  var cmpRev=snap.compromisos_revisados||[];
+  html+='<div class="co-acta-section">'+secTtl('Compromisos del Período','ti-clipboard-check');
+  if(cmpRev.length){
+    var _hoyRev=new Date(); _hoyRev.setHours(0,0,0,0);
+    var _estadoLbl={'open':'Abierto','in_progress':'En proceso','closed':'Cerrado','completed':'Completado'};
+    html+='<table class="co-acta-table"><thead><tr><th>Cód.</th><th>Compromiso</th><th>Responsable</th><th>Vence</th><th>Estado</th></tr></thead><tbody>'
+      +cmpRev.map(function(c){
+        var done=['closed','completed'].indexOf(c.status)>=0;
+        var over=!done&&c.due_date&&new Date(c.due_date)<_hoyRev;
+        var badge=done?'🟢':over?'🔴':c.status==='in_progress'?'🟡':'⚪';
+        var lbl=_estadoLbl[c.status]||c.status;
+        if(over) lbl='Vencido';
+        return'<tr><td style="font-size:9px;color:#64748b">'+esc2(c.code||'—')+'</td>'
+          +'<td>'+esc2(c.title)+'</td>'
+          +'<td>'+esc2(c.responsible_nombre||'—')+'</td>'
+          +'<td>'+fechaFmt(c.due_date)+'</td>'
+          +'<td style="white-space:nowrap">'+badge+' '+lbl+'</td></tr>';
+      }).join('')+'</tbody></table>';
+  } else {
+    html+='<div style="color:#94a3b8;font-size:11px;padding:6px 0;">No hay compromisos registrados en el sistema para esta semana.</div>';
+  }
+  html+='</div>';
+
+  var cmpNuevos=snap.compromisos_nuevos||[];
+  html+='<div class="co-acta-section">'+secTtl('Compromisos del Comité','ti-checklist');
+  if(cmpNuevos.length){
+    html+='<table class="co-acta-table"><thead><tr><th>Compromiso</th><th>Responsable</th><th>Fecha límite</th><th>HSE</th></tr></thead><tbody>'
+      +cmpNuevos.map(function(c){
+        return'<tr><td>'+esc2(c.title)+'</td><td>'+esc2(c.responsible_nombre||'—')+'</td><td>'+fechaFmt(c.due_date)+'</td><td>'+(c._fromHse?'✓':'')+'</td></tr>';
+      }).join('')+'</tbody></table>';
+  } else {
+    html+='<div style="color:#94a3b8;font-size:11px;padding:6px 0;">Sin nuevos compromisos registrados en esta sesión.</div>';
+  }
+  html+='</div>';
+
+  /* 8. Project (Paso 5 del Wizard) */
+  var pr=snap.project||{};
+  html+='<div class="co-acta-section">'+secTtl('Project — Sistemas','ti-device-laptop');
+  if(pr.kpi){
+    html+='<div class="co-acta-kpi-row">'
+      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.ok||0)+'</div><div class="co-acta-kpi-lbl">OK</div></div>'
+      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.risk||0)+'</div><div class="co-acta-kpi-lbl">Riesgo</div></div>'
+      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.crit||0)+'</div><div class="co-acta-kpi-lbl">Crítico</div></div>'
+      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.efectividad!==null?pr.kpi.efectividad+'%':'—')+'</div><div class="co-acta-kpi-lbl">Efectividad</div></div>'
+      +'</div>';
+  }
+  if(pr.tasks&&pr.tasks.length){
+    html+='<table class="co-acta-table"><thead><tr><th>Sistema / Indicador</th><th>Meta</th><th>Real</th><th>Estado</th><th>Observación</th></tr></thead><tbody>'
+      +pr.tasks.map(function(t){
+        var dot={'ok':'🟢','risk':'🟡','crit':'🔴','noData':'⚪'}[t.estado]||'⚪';
+        var realStr=t.real!==null?t.real+'%':'—';
+        var metaStr=t.meta!==null?t.meta+'%':'—';
+        return'<tr><td>'+esc2(t.sistema)+'</td><td>'+metaStr+'</td><td>'+realStr+'</td><td>'+dot+'</td><td>'+esc2(t.obs||'')+'</td></tr>';
+      }).join('')+'</tbody></table>';
+  }
+  html+=anaBlk(pr.analisis_ejecutivo);
+  if(pr.observaciones) html+='<div class="co-acta-obs" style="margin-top:6px">'+esc2(pr.observaciones)+'</div>';
+  html+='</div>';
+
+  /* 9. Seguimiento Operativo (Paso 6 del Wizard) */
   var op=snap.operacion||{};
   html+='<div class="co-acta-section">'+secTtl('Seguimiento Operativo','ti-chart-bar');
 
@@ -9945,55 +10082,7 @@ function renderActa(snap){
 
   html+='</div>';
 
-  /* 8. Project */
-  var pr=snap.project||{};
-  html+='<div class="co-acta-section">'+secTtl('Project — Sistemas','ti-device-laptop');
-  if(pr.kpi){
-    html+='<div class="co-acta-kpi-row">'
-      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.ok||0)+'</div><div class="co-acta-kpi-lbl">OK</div></div>'
-      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.risk||0)+'</div><div class="co-acta-kpi-lbl">Riesgo</div></div>'
-      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.crit||0)+'</div><div class="co-acta-kpi-lbl">Crítico</div></div>'
-      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.efectividad!==null?pr.kpi.efectividad+'%':'—')+'</div><div class="co-acta-kpi-lbl">Efectividad</div></div>'
-      +'</div>';
-  }
-  if(pr.tasks&&pr.tasks.length){
-    html+='<table class="co-acta-table"><thead><tr><th>Sistema / Indicador</th><th>Meta</th><th>Real</th><th>Estado</th><th>Observación</th></tr></thead><tbody>'
-      +pr.tasks.map(function(t){
-        var dot={'ok':'🟢','risk':'🟡','crit':'🔴','noData':'⚪'}[t.estado]||'⚪';
-        var realStr=t.real!==null?t.real+'%':'—';
-        var metaStr=t.meta!==null?t.meta+'%':'—';
-        return'<tr><td>'+esc2(t.sistema)+'</td><td>'+metaStr+'</td><td>'+realStr+'</td><td>'+dot+'</td><td>'+esc2(t.obs||'')+'</td></tr>';
-      }).join('')+'</tbody></table>';
-  }
-  html+=anaBlk(pr.analisis_ejecutivo);
-  if(pr.observaciones) html+='<div class="co-acta-obs" style="margin-top:6px">'+esc2(pr.observaciones)+'</div>';
-  html+='</div>';
-
-  /* 9. Compromisos del Período */
-  var cmpRev=snap.compromisos_revisados||[];
-  html+='<div class="co-acta-section">'+secTtl('Compromisos del Período','ti-clipboard-check');
-  if(cmpRev.length){
-    var _hoyRev=new Date(); _hoyRev.setHours(0,0,0,0);
-    var _estadoLbl={'open':'Abierto','in_progress':'En proceso','closed':'Cerrado','completed':'Completado'};
-    html+='<table class="co-acta-table"><thead><tr><th>Cód.</th><th>Compromiso</th><th>Responsable</th><th>Vence</th><th>Estado</th></tr></thead><tbody>'
-      +cmpRev.map(function(c){
-        var done=['closed','completed'].indexOf(c.status)>=0;
-        var over=!done&&c.due_date&&new Date(c.due_date)<_hoyRev;
-        var badge=done?'🟢':over?'🔴':c.status==='in_progress'?'🟡':'⚪';
-        var lbl=_estadoLbl[c.status]||c.status;
-        if(over) lbl='Vencido';
-        return'<tr><td style="font-size:9px;color:#64748b">'+esc2(c.code||'—')+'</td>'
-          +'<td>'+esc2(c.title)+'</td>'
-          +'<td>'+esc2(c.responsible_nombre||'—')+'</td>'
-          +'<td>'+fechaFmt(c.due_date)+'</td>'
-          +'<td style="white-space:nowrap">'+badge+' '+lbl+'</td></tr>';
-      }).join('')+'</tbody></table>';
-  } else {
-    html+='<div style="color:#94a3b8;font-size:11px;padding:6px 0;">No hay compromisos registrados en el sistema para este período.</div>';
-  }
-  html+='</div>';
-
-  /* 10. Generalidades */
+  /* 10. Generalidades (Paso 7 del Wizard) */
   var gen=snap.generalidades||{};
   var autoGen=gen.auto||{};
   var genAreas=[
@@ -10020,30 +10109,18 @@ function renderActa(snap){
     html+='<div class="co-acta-section">'+secTtl('Generalidades del Comité','ti-notes')+genHtml+'</div>';
   }
 
-  /* 11. Momento HSE */
-  var hse=snap.hse||{};
-  html+='<div class="co-acta-section">'+secTtl('Momento HSE','ti-shield-check')
-    +'<div class="co-acta-info-grid">'
-    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Responsable (Ruleta)</div><div class="co-acta-info-val">'+esc2(hse.responsable||'—')+'</div></div>'
-    +'<div class="co-acta-info-cell" style="grid-column:span 2"><div class="co-acta-info-lbl">Tema presentado</div><div class="co-acta-info-val">'+esc2(hse.tema_presentado||'—')+'</div></div>'
-    +'</div>'
-    +(hse.observaciones?'<div class="co-acta-obs">'+esc2(hse.observaciones)+'</div>':'')
-    +'</div>';
+  /* ═══ Cierre del Acta (Paso 8 del Wizard: Cerrar Comité) ═══ */
 
-  /* 12. Acuerdos del Comité */
-  var cmpNuevos=snap.compromisos_nuevos||[];
-  html+='<div class="co-acta-section">'+secTtl('Acuerdos del Comité','ti-checklist');
-  if(cmpNuevos.length){
-    html+='<table class="co-acta-table"><thead><tr><th>Acuerdo</th><th>Responsable</th><th>Fecha límite</th><th>HSE</th></tr></thead><tbody>'
-      +cmpNuevos.map(function(c){
-        return'<tr><td>'+esc2(c.title)+'</td><td>'+esc2(c.responsible_nombre||'—')+'</td><td>'+fechaFmt(c.due_date)+'</td><td>'+(c._fromHse?'✓':'')+'</td></tr>';
-      }).join('')+'</tbody></table>';
-  } else {
-    html+='<div style="color:#94a3b8;font-size:11px;padding:6px 0;">Sin nuevos acuerdos registrados en esta sesión.</div>';
+  /* 11. Temas Tratados */
+  var temas=snap.temas_tratados||[];
+  if(temas.length){
+    html+='<div class="co-acta-section">'+secTtl('Temas Tratados','ti-message-dots')
+      +'<ul style="margin:0;padding-left:18px;font-size:11px;color:#334155;line-height:1.7">'
+      +temas.map(function(t){return'<li>'+esc2(t)+'</li>';}).join('')
+      +'</ul></div>';
   }
-  html+='</div>';
 
-  /* 13. Decisiones del Comité */
+  /* 12. Decisiones del Comité */
   var decisiones=snap.decisiones_comite||[];
   if(decisiones.length){
     html+='<div class="co-acta-section">'+secTtl('Decisiones del Comité','ti-gavel')
@@ -10052,17 +10129,23 @@ function renderActa(snap){
       +'</ol></div>';
   }
 
-  /* 14. Conclusión Ejecutiva */
+  /* 13. Conclusión Ejecutiva */
   if(snap.conclusion_ejecutiva){
     html+='<div class="co-acta-section">'+secTtl('Conclusión Ejecutiva','ti-star')
       +'<div style="font-size:11px;color:#1e293b;line-height:1.65;white-space:pre-line">'+esc2(snap.conclusion_ejecutiva)+'</div>'
       +'</div>';
   }
 
-  /* 15. Firmas */
+  /* 14. Firmas */
+  var _mkFirmaCard=function(nombre,cargo,firmaSrc){
+    var imgHtml=firmaSrc
+      ?'<img class="co-acta-firma-img" src="'+firmaSrc+'" alt="Firma '+esc2(nombre)+'">'
+      :'<div class="co-acta-firma-pending">Firma pendiente de registrar</div>';
+    return'<div class="co-acta-firma">'+imgHtml+'<strong>'+esc2(nombre||'—')+'</strong><br>'+esc2(cargo)+'</div>';
+  };
   html+='<div class="co-acta-firma-row">'
-    +'<div class="co-acta-firma">'+esc2(snap.responsable_liquida_nombre||'—')+'<br>Resp. Carga Líquida</div>'
-    +'<div class="co-acta-firma">'+esc2(snap.responsable_seca_nombre||'—')+'<br>Resp. Carga Seca</div>'
+    +_mkFirmaCard(snap.responsable_liquida_nombre,'Resp. Carga Líquida',snap.responsable_liquida_firma||null)
+    +_mkFirmaCard(snap.responsable_seca_nombre,'Resp. Carga Seca',snap.responsable_seca_firma||null)
     +'</div>';
 
   /* 15. Footer */
@@ -10167,7 +10250,7 @@ function _mostrarExito(snap,acta,esEdicion){
     var horaFin=snap.hora_fin||'—';
     stats.innerHTML=
       '<div class="co-success-stat"><div class="co-success-stat-val">'+asist+'</div><div class="co-success-stat-lbl">Asistentes</div></div>'
-      +'<div class="co-success-stat"><div class="co-success-stat-val">'+cmpN+'</div><div class="co-success-stat-lbl">Acuerdos</div></div>'
+      +'<div class="co-success-stat"><div class="co-success-stat-val">'+cmpN+'</div><div class="co-success-stat-lbl">Compromisos</div></div>'
       +'<div class="co-success-stat"><div class="co-success-stat-val">'+horaFin+'</div><div class="co-success-stat-lbl">Hora de cierre</div></div>'
       +'<div class="co-success-stat"><div class="co-success-stat-val">'+snap.semana+'</div><div class="co-success-stat-lbl">Semana</div></div>';
   }
@@ -10211,6 +10294,150 @@ function _tienePermisoEdicion(){
       ||r==='liquida'||r==='responsable_liquida'
       ||r==='seca'||r==='responsable_seca';
   }catch(e){return false;}
+}
+
+/* ═══════════════════════════════════════════════════
+   FIRMAS DIGITALES — Bloque FASE 5.4
+   ════════════════════════════════════════════════════ */
+
+/* Solo Master y Administrador pueden modificar firmas */
+function _tienePermisoFirma(){
+  try{
+    var u=window.INLOP&&window.INLOP.currentUser?window.INLOP.currentUser
+         :JSON.parse(sessionStorage.getItem('inlop_user')||'null');
+    if(!u)return false;
+    var r=(u.rol||'').toLowerCase();
+    return r==='master'||r==='administrador';
+  }catch(e){return false;}
+}
+
+/* Retorna la imagen de firma: soporta firma_url (Storage futuro) y firma_base64 */
+function _getFirmaImgSrc(p){
+  if(!p)return null;
+  return p.firma_url||p.firma_base64||null;
+}
+
+/* Variable para tracking del upload en curso */
+var _firmaUploadPersonId=null;
+
+/* Abrir modal de gestión de firmas */
+function _abrirGestorFirmas(){
+  _firmaUploadPersonId=null;
+  var ov=$id('co-firmas-overlay');
+  if(ov){ov.style.display='flex';}
+  _renderGestorFirmas();
+}
+
+/* Cerrar modal */
+function _cerrarGestorFirmas(){
+  var ov=$id('co-firmas-overlay');
+  if(ov)ov.style.display='none';
+  _firmaUploadPersonId=null;
+}
+
+/* Renderizar lista de personal con firmas */
+function _renderGestorFirmas(){
+  var list=$id('co-firmas-list');
+  if(!list)return;
+  var esAdmin=_tienePermisoFirma();
+  var sub=$id('co-firmas-subtitle');
+  if(sub)sub.textContent=esAdmin?'Solo Master y Administrador pueden modificar firmas.':'Vista de firmas registradas.';
+
+  if(!_coPersonal.length){
+    list.innerHTML='<div style="padding:24px;text-align:center;color:#94a3b8;font-size:12px">No hay personal cargado. Asegúrese de abrir el Comité primero.</div>';
+    return;
+  }
+
+  list.innerHTML=_coPersonal.map(function(p){
+    var firmaSrc=_getFirmaImgSrc(p);
+    var previewHtml=firmaSrc
+      ?'<img src="'+firmaSrc+'" style="max-width:150px;max-height:48px;object-fit:contain" alt="Firma de '+_esc(p.nombre)+'">'
+      :'<div class="co-firmas-no-firma">Sin firma registrada</div>';
+
+    var actHtml='';
+    if(esAdmin){
+      actHtml='<div class="co-firmas-card-actions">'
+        +'<button class="co-cmp-add-btn" onclick="CO._subirFirma('+p.id+')" style="font-size:11px;padding:5px 10px" title="'+(firmaSrc?'Cambiar firma':'Subir firma')+'">'
+        +'<i class="ti ti-upload"></i> '+(firmaSrc?'Cambiar':'Subir')+'</button>';
+      if(firmaSrc){
+        actHtml+='<button onclick="CO._eliminarFirma('+p.id+')" style="background:none;border:1px solid #fca5a5;color:#dc2626;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:11px" title="Eliminar firma">'
+          +'<i class="ti ti-trash"></i></button>';
+      }
+      actHtml+='</div>';
+    }
+
+    return'<div class="co-firmas-card">'
+      +'<div class="co-firmas-card-info"><div class="co-firmas-card-nombre">'+_esc(p.nombre)+'</div>'
+      +'<div class="co-firmas-card-cargo">'+_esc(p.cargo||'—')+'</div></div>'
+      +'<div class="co-firmas-card-preview">'+previewHtml+'</div>'
+      +actHtml
+      +'</div>';
+  }).join('');
+}
+
+/* Trigger carga de imagen para una persona */
+function _subirFirma(personId){
+  if(!_tienePermisoFirma()){toast('Sin permiso para modificar firmas.','warn');return;}
+  _firmaUploadPersonId=personId;
+  var inp=$id('co-firma-file-input');
+  if(inp){inp.value='';inp.click();}
+}
+
+/* Callback del input file — procesa imagen y llama a _guardarFirma */
+function _onFirmaFile(file){
+  if(!file||!_firmaUploadPersonId)return;
+  var id=_firmaUploadPersonId;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    var img=new Image();
+    img.onload=function(){
+      var canvas=document.createElement('canvas');
+      var maxW=320,maxH=90;
+      var ratio=Math.min(maxW/img.width,maxH/img.height,1);
+      canvas.width=Math.round(img.width*ratio);
+      canvas.height=Math.round(img.height*ratio);
+      var ctx=canvas.getContext('2d');
+      /* Fondo transparente: PNG preserva transparencia */
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(img,0,0,canvas.width,canvas.height);
+      _guardarFirma(id,canvas.toDataURL('image/png'));
+    };
+    img.onerror=function(){toast('No se pudo leer la imagen.','warn');};
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+/* Guarda firma en Supabase y actualiza caché en memoria */
+async function _guardarFirma(personId,b64){
+  try{
+    await dbUpdate('personal','id=eq.'+personId,{firma_base64:b64,firma_updated_at:new Date().toISOString()});
+    var p=_coPersonal.find(function(x){return x.id===personId;});
+    if(p)p.firma_base64=b64;
+    var a=(_session.asistencia||[]).find(function(x){return x.id===personId;});
+    if(a)a.firma_base64=b64;
+    toast('Firma guardada correctamente.','ok');
+    _renderGestorFirmas();
+  }catch(e){
+    toast('Error al guardar firma: '+e.message,'error');
+  }
+}
+
+/* Elimina firma de Supabase y actualiza caché en memoria */
+async function _eliminarFirma(personId){
+  if(!_tienePermisoFirma()){toast('Sin permiso para modificar firmas.','warn');return;}
+  if(!confirm('¿Eliminar la firma de este colaborador? Esta acción no se puede deshacer.'))return;
+  try{
+    await dbUpdate('personal','id=eq.'+personId,{firma_base64:null,firma_updated_at:new Date().toISOString()});
+    var p=_coPersonal.find(function(x){return x.id===personId;});
+    if(p)p.firma_base64=null;
+    var a=(_session.asistencia||[]).find(function(x){return x.id===personId;});
+    if(a)a.firma_base64=null;
+    toast('Firma eliminada.','ok');
+    _renderGestorFirmas();
+  }catch(e){
+    toast('Error al eliminar firma: '+e.message,'error');
+  }
 }
 
 /* ── Actualizar botón del header según estado acta ─ */
@@ -10270,22 +10497,26 @@ async function _checkActaExistente(){
 /* ── Dispatcher: guardar estado antes de salir ────── */
 function syncStep(n){
   if(n===1) syncStep1();
-  if(n===7){
-    /* Al salir del paso 7, desactivar contexto CO en CM */
+  if(n===4){
+    /* Al salir del paso 4 (Compromisos), desactivar contexto CO en CM */
     if(typeof window.CM!=='undefined') CM.setCoContext(false,null);
   }
 }
 
 /* ── Dispatcher: inicializar contenido al entrar ──── */
+/* Mapa: paso lógico del wizard → función de inicialización.
+   Los nombres de función (initStep3..initStep7) datan del orden anterior
+   y se conservan para no romper referencias internas; solo cambia el
+   paso lógico (n) desde el que se disparan. */
 function initStepContent(n){
-  if(n===1) initStep1();
-  if(n===2) initStep2();
-  if(n===3) initStep3();
-  if(n===4) initStep4();
-  if(n===5) initStep5();
-  if(n===6) initStep6();
-  if(n===7) initStep7();
-  if(n===8) initStep8();
+  if(n===1) initStep1();       /* Encabezado */
+  if(n===2) initStep2();       /* Asistencia */
+  if(n===3) initStep6();       /* Momento HSE */
+  if(n===4) initStep7();       /* Compromisos */
+  if(n===5) initStep3();       /* Project */
+  if(n===6) initStep4();       /* Seguimiento Operativo */
+  if(n===7) initStep5();       /* Generalidades */
+  if(n===8) initStep8();       /* Cerrar Comité */
 }
 
 /* ── Dispatcher: validar antes de avanzar ─────────── */
@@ -10361,7 +10592,7 @@ function initSession(){
     fecha_reunion:null,
     hora_inicio:null,
     hora_fin:null,
-    lugar:null,
+    modalidad:null,
     responsable_1:null,
     responsable_2:null,
     asistencia:[],
@@ -10443,7 +10674,7 @@ var CO={
       _session.fecha_reunion=snap.fecha_reunion||null;
       _session.hora_inicio=snap.hora_inicio||null;
       _session.hora_fin=snap.hora_fin||null;
-      _session.lugar=snap.lugar||null;
+      _session.modalidad=snap.modalidad||snap.lugar||null;
       _session.responsable_1=snap.responsable_liquida_id||null;
       _session.responsable_2=snap.responsable_seca_id||null;
       _session.asistencia=(snap.asistentes||[]).map(function(a){
@@ -10617,6 +10848,9 @@ var CO={
     if(body) body.innerHTML='<div style="text-align:center;padding:40px"><i class="ti ti-loader" style="font-size:28px;opacity:.4"></i></div>';
     var ov=$id('co-hist-overlay');
     if(ov) ov.style.display='flex';
+    /* Mostrar botón Firmas solo para Master/Admin */
+    var btnF=$id('co-hist-btn-firmas');
+    if(btnF) btnF.style.display=_tienePermisoFirma()?'':'none';
     dbGet('co_actas','id=eq.'+actaId+'&select=*').then(function(rows){
       if(!rows||!rows.length){if(body)body.innerHTML='<div style="padding:24px">Acta no encontrada.</div>';return;}
       var acta=rows[0];
@@ -10643,6 +10877,13 @@ var CO={
     var open=el.classList.toggle('open');
     if(ico){ico.className=open?'ti ti-chevron-up':'ti ti-chevron-down';}
   },
+
+  /* ── Firmas Digitales ────────────────────────────── */
+  _abrirGestorFirmas:function(){_abrirGestorFirmas();},
+  _cerrarGestorFirmas:function(){_cerrarGestorFirmas();},
+  _subirFirma:function(personId){_subirFirma(personId);},
+  _eliminarFirma:function(personId){_eliminarFirma(personId);},
+  _onFirmaFile:function(file){_onFirmaFile(file);},
 
   _getSession:function(){return _session;}
 };
