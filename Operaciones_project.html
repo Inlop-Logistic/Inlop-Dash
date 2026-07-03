@@ -9460,7 +9460,7 @@ function _buildProjAnalisis(snap){
   if(criticos.length===0&&enRiesgo.length===0&&tasksConDatos.length>0){
     txt='El módulo Project muestra un comportamiento saludable esta semana, con la totalidad de los indicadores reportados dentro de la meta establecida.';
   } else if(criticos.length>0){
-    txt='El módulo Project presenta '+criticos.length+' indicador'+(criticos.length!==1?'es':'')+' en estado crítico, lo que exige atención prioritaria por parte de los responsables.';
+    txt='El módulo Project presenta '+criticos.length+' indicador'+(criticos.length!==1?'es':'')+' de alta prioridad, que exige'+(criticos.length!==1?'n':'')+' atención inmediata por parte de los responsables.';
   } else if(enRiesgo.length>0){
     txt='El módulo Project se mantiene en general estable, aunque '+enRiesgo.length+' indicador'+(enRiesgo.length!==1?'es':'')+' se ubica en zona de riesgo y amerita seguimiento cercano.';
   } else {
@@ -9495,7 +9495,7 @@ function _buildProjAnalisis(snap){
   /* Impacto esperado y prioridad para la próxima semana */
   if(criticos.length>0){
     txt+=' De no atenderse, estos indicadores podrían afectar la continuidad operativa y el cumplimiento de compromisos con clientes. '
-      +'La prioridad para la próxima semana es cerrar los planes de acción sobre los sistemas críticos.';
+      +'La prioridad para la próxima semana es cerrar los planes de acción sobre los sistemas de mayor prioridad.';
   } else if(enRiesgo.length>0){
     txt+=' El impacto esperado es moderado si se atiende oportunamente. La prioridad para la próxima semana es reforzar el monitoreo de los sistemas en riesgo.';
   } else if(tasksSinDatos.length>0){
@@ -9512,7 +9512,7 @@ function _buildGenResumenArea(area,wsStats,clientes,snap,accionesTraf){
   if(area==='trafico'){
     var criticos=accionesTraf.filter(function(a){return a.status==='urgente';});
     var activos=accionesTraf.length;
-    if(activos===0) return 'No se registran novedades críticas en tráfico durante la semana.';
+    if(activos===0) return 'No se registran novedades de alta prioridad en tráfico durante la semana.';
     if(criticos.length>0) return 'Se registran '+activos+' acción'+(activos!==1?'es':'')+' activa'+(activos!==1?'s':'')+' en tráfico, de las cuales '+criticos.length+' son urgentes. Requiere atención inmediata.';
     return 'Se registran '+activos+' acción'+(activos!==1?'es':'')+' activa'+(activos!==1?'s':'')+' en tráfico en estado pendiente o en ejecución.';
   }
@@ -9529,7 +9529,7 @@ function _buildGenResumenArea(area,wsStats,clientes,snap,accionesTraf){
   if(area==='project'){
     if(!snap) return 'No se dispone de datos del módulo Project para esta semana.';
     var kpi=snap.kpi||{};
-    if(kpi.crit>0) return kpi.total+' indicadores evaluados — '+kpi.crit+' crítico'+(kpi.crit!==1?'s':'')+' y '+kpi.risk+' en riesgo. Requiere atención prioritaria.';
+    if(kpi.crit>0) return kpi.total+' indicadores evaluados — '+kpi.crit+' de alta prioridad y '+kpi.risk+' en seguimiento. Requiere atención prioritaria.';
     if(kpi.risk>0) return kpi.total+' indicadores evaluados — '+kpi.risk+' en riesgo. Se recomienda seguimiento activo.';
     return kpi.total+' indicadores evaluados — todos dentro de meta. Efectividad: '+(kpi.efectividad!==null?kpi.efectividad+'%':'N/D')+'.';
   }
@@ -9629,7 +9629,7 @@ function _buildDecisionesComite(snap){
   /* Decisiones Project */
   if(pr.kpi){
     if(pr.kpi.crit>0){
-      decisiones.push('Se ordena plan de mejora inmediato para los '+pr.kpi.crit+' indicador'+(pr.kpi.crit!==1?'es':'')+' crítico'+(pr.kpi.crit!==1?'s':'')+' del módulo Project. Responsables deben presentar avance en la próxima sesión.');
+      decisiones.push('Se ordena plan de mejora inmediato para los '+pr.kpi.crit+' indicador'+(pr.kpi.crit!==1?'es':'')+' de alta prioridad del módulo Project. Responsables deben presentar avance en la próxima sesión.');
     } else if(pr.kpi.risk>0){
       decisiones.push('Se acuerda monitoreo semanal de los '+pr.kpi.risk+' indicador'+(pr.kpi.risk!==1?'es':'')+' en riesgo del módulo Project para prevenir escalamiento.');
     }
@@ -9696,8 +9696,8 @@ function _buildConclusionEjecutiva(snap){
   /* Project */
   if(pr.kpi&&pr.kpi.total>0){
     if(pr.kpi.crit>0){
-      txt+=' En el módulo Project se identificaron indicadores críticos que requieren un plan de acción inmediato.';
-      prioridades.push('indicadores críticos de Project');
+      txt+=' En el módulo Project se identificaron indicadores de alta prioridad que requieren un plan de acción inmediato.';
+      prioridades.push('indicadores de alta prioridad en Project');
     } else if(pr.kpi.risk>0){
       txt+=' Project se mantiene en general estable, aunque persisten indicadores en zona de riesgo que ameritan monitoreo.';
       prioridades.push('seguimiento de indicadores en riesgo de Project');
@@ -9737,12 +9737,12 @@ function _buildConclusionEjecutiva(snap){
 
   /* Cierre con prioridades */
   if(prioridades.length>0){
-    txt+=' Las prioridades que el Comité deja definidas para la próxima semana son: '+prioridades.join(', ')+'.';
+    txt+=' Las decisiones y acciones definidas por el Comité para la próxima semana son: '+prioridades.join(', ')+'.';
   } else {
-    txt+=' El Comité no identifica frentes críticos adicionales y mantiene el monitoreo regular de la operación.';
+    txt+=' El Comité no identifica frentes adicionales de atención y mantiene el monitoreo regular de la operación.';
   }
 
-  txt+=' Con estos acuerdos, el Comité da por concluida la sesión y deja formalmente cerrada la presente acta.';
+  txt+=' Con estas decisiones, el Comité da por concluida la sesión y deja formalmente cerrada la presente acta.';
   return txt;
 }
 
@@ -9780,7 +9780,7 @@ function _buildResumenEjecutivo(snap){
   var estadoGeneral=op.estado_general||'ok';
   var txt;
   if(estadoGeneral==='crit'){
-    txt='La semana '+semana+' presentó desviaciones importantes que requirieron la atención prioritaria del Comité.';
+    txt='Durante la semana '+semana+' la operación presentó resultados que requirieron seguimiento prioritario por parte del Comité.';
   } else if(estadoGeneral==='warn'){
     txt='La semana '+semana+' tuvo un comportamiento mixto, con resultados favorables en algunos frentes y aspectos puntuales por atender.';
   } else {
@@ -9796,7 +9796,7 @@ function _buildResumenEjecutivo(snap){
     txt+=' Por su parte, '+listaY(seguimiento)+' '
       +(seguimiento.length>1?'requieren':'requiere')+' seguimiento particular por parte del Comité en los próximos días.';
   } else {
-    txt+=' No se identifican frentes críticos que exijan intervención inmediata.';
+    txt+=' No se identifican frentes que exijan intervención inmediata.';
   }
 
   if(nCmp>0){
@@ -10075,6 +10075,14 @@ function renderActa(snap){
       +'</div>';
   }
 
+  /* Objetivo del Comité — texto fijo institucional, inmediatamente
+     después del Resumen Ejecutivo */
+  html+='<div class="co-acta-section">'+secTtl('Objetivo del Comité','ti-target-arrow')
+    +'<div class="co-acta-interp-box">El Comité tiene como propósito revisar el desempeño de la operación durante la semana evaluada, '
+    +'realizar seguimiento a los compromisos establecidos, analizar los principales indicadores de gestión y definir las acciones '
+    +'necesarias para fortalecer la operación y apoyar la toma de decisiones de la organización.</div>'
+    +'</div>';
+
   /* 2. Información General */
   html+='<div class="co-acta-info-grid">'
     +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Semana</div><div class="co-acta-info-val">'+esc2(snap.semana)+'</div></div>'
@@ -10119,13 +10127,12 @@ function renderActa(snap){
 
   /* 5. Asistentes (Paso 2 del Wizard) */
   html+='<div class="co-acta-section">'+secTtl('Asistentes','ti-users-group')
-    +'<table class="co-acta-table"><thead><tr><th>Nombre</th><th>Cargo</th><th>Área</th><th>Empresa</th><th style="width:90px;text-align:center">Firma</th></tr></thead><tbody>'
+    +'<table class="co-acta-table"><thead><tr><th>Nombre</th><th>Cargo</th><th>Área</th><th style="width:90px;text-align:center">Firma</th></tr></thead><tbody>'
     +(snap.asistentes||[]).map(function(a){
-      var emp=a.tipo==='invitado'?(a.empresa||'—'):'INLOP';
       var firmaCell=a.firma_base64
         ?'<img src="'+a.firma_base64+'" style="max-height:28px;max-width:80px;object-fit:contain;vertical-align:middle" alt="Firma">'
         :'<span style="color:#94a3b8;font-size:8px">—</span>';
-      return'<tr><td>'+esc2(a.nombre)+'</td><td>'+esc2(a.cargo)+'</td><td>'+esc2(a.area||'—')+'</td><td>'+esc2(emp)+'</td><td style="text-align:center">'+firmaCell+'</td></tr>';
+      return'<tr><td>'+esc2(a.nombre)+'</td><td>'+esc2(a.cargo)+'</td><td>'+esc2(a.area||'—')+'</td><td style="text-align:center">'+firmaCell+'</td></tr>';
     }).join('')
     +'</tbody></table></div>';
 
@@ -10182,14 +10189,26 @@ function renderActa(snap){
   }
   html+='</div>';
 
+  /* Temas Tratados — minuta ejecutiva en prosa, inmediatamente después de
+     Compromisos, reflejando el desarrollo natural de la reunión.
+     Compatibilidad: actas anteriores a FASE 5.5B guardan este campo
+     como arreglo de viñetas; se normaliza a texto continuo. */
+  var temasRaw=snap.temas_tratados;
+  var temasTxt=Array.isArray(temasRaw)?temasRaw.join(' '):(temasRaw||'');
+  if(temasTxt){
+    html+='<div class="co-acta-section">'+secTtl('Temas Tratados','ti-message-dots')
+      +'<div style="font-size:11px;color:#334155;line-height:1.7">'+esc2(temasTxt)+'</div>'
+      +'</div>';
+  }
+
   /* 8. Project (Paso 5 del Wizard) */
   var pr=snap.project||{};
   html+='<div class="co-acta-section">'+secTtl('Project — Sistemas','ti-device-laptop');
   if(pr.kpi){
     html+='<div class="co-acta-kpi-row">'
-      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.ok||0)+'</div><div class="co-acta-kpi-lbl">OK</div></div>'
-      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.risk||0)+'</div><div class="co-acta-kpi-lbl">Riesgo</div></div>'
-      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.crit||0)+'</div><div class="co-acta-kpi-lbl">Crítico</div></div>'
+      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.ok||0)+'</div><div class="co-acta-kpi-lbl">Cumplimiento esperado</div></div>'
+      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.risk||0)+'</div><div class="co-acta-kpi-lbl">Requiere seguimiento</div></div>'
+      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.crit||0)+'</div><div class="co-acta-kpi-lbl">Prioridad de atención</div></div>'
       +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.efectividad!==null?pr.kpi.efectividad+'%':'—')+'</div><div class="co-acta-kpi-lbl">Efectividad</div></div>'
       +'</div>';
   }
@@ -10276,18 +10295,7 @@ function renderActa(snap){
 
   /* ═══ Cierre del Acta (Paso 8 del Wizard: Cerrar Comité) ═══ */
 
-  /* 11. Temas Tratados — minuta ejecutiva en prosa.
-     Compatibilidad: actas anteriores a FASE 5.5B guardan este campo
-     como arreglo de viñetas; se normaliza a texto continuo. */
-  var temasRaw=snap.temas_tratados;
-  var temasTxt=Array.isArray(temasRaw)?temasRaw.join(' '):(temasRaw||'');
-  if(temasTxt){
-    html+='<div class="co-acta-section">'+secTtl('Temas Tratados','ti-message-dots')
-      +'<div style="font-size:11px;color:#334155;line-height:1.7">'+esc2(temasTxt)+'</div>'
-      +'</div>';
-  }
-
-  /* 12. Decisiones del Comité */
+  /* 11. Decisiones del Comité */
   var decisiones=snap.decisiones_comite||[];
   if(decisiones.length){
     html+='<div class="co-acta-section">'+secTtl('Decisiones del Comité','ti-gavel')
@@ -10296,14 +10304,14 @@ function renderActa(snap){
       +'</ol></div>';
   }
 
-  /* 13. Conclusión Ejecutiva */
+  /* 12. Conclusión Ejecutiva */
   if(snap.conclusion_ejecutiva){
     html+='<div class="co-acta-section">'+secTtl('Conclusión Ejecutiva','ti-star')
       +'<div style="font-size:11px;color:#1e293b;line-height:1.65;white-space:pre-line">'+esc2(snap.conclusion_ejecutiva)+'</div>'
       +'</div>';
   }
 
-  /* 14. Firmas */
+  /* 13. Firmas */
   var _mkFirmaCard=function(nombre,cargo,firmaSrc){
     var imgHtml=firmaSrc
       ?'<img class="co-acta-firma-img" src="'+firmaSrc+'" alt="Firma '+esc2(nombre)+'">'
@@ -10315,7 +10323,7 @@ function renderActa(snap){
     +_mkFirmaCard(snap.responsable_seca_nombre,'Resp. Carga Seca',snap.responsable_seca_firma||null)
     +'</div>';
 
-  /* 15. Footer */
+  /* 14. Footer */
   html+='<div class="co-acta-footer">'
     +'<span>'+esc2(snap.codigo)+' · Comité Operativo INLOP</span>'
     +'<span>Generado: '+new Date().toLocaleString('es-CO',{dateStyle:'short',timeStyle:'short'})+'</span>'
