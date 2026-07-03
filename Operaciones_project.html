@@ -7671,35 +7671,39 @@ if(document.readyState!=='loading'){tryInit();}
 .btn-comite-hdr.editar-acta{background:rgba(16,110,60,.12);border:1px solid rgba(16,110,60,.3);color:#106e3c;}
 .btn-comite-hdr.editar-acta:hover{background:rgba(16,110,60,.2);}
 /* ── Acta CSS (usado por html2pdf) ─────────────── */
-.co-acta-page{font-family:'Arial',sans-serif;font-size:11px;color:#1e293b;line-height:1.55;}
-.co-acta-logo-hdr{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #012a6b;padding-bottom:10px;margin-bottom:18px;}
-.co-acta-logo-company{font-size:18px;font-weight:800;color:#012a6b;letter-spacing:.08em;}
-.co-acta-logo-sub{font-size:9px;color:#64748b;letter-spacing:.1em;text-transform:uppercase;}
-.co-acta-logo-codigo{font-size:14px;font-weight:700;color:#012a6b;text-align:right;}
-.co-acta-section{margin-bottom:20px;}
-.co-acta-section-ttl{font-size:10px;font-weight:700;color:#012a6b;letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid #cbd5e1;padding-bottom:5px;margin-bottom:11px;}
+.co-acta-page{font-family:'Georgia','Times New Roman',serif;font-size:11px;color:#1e293b;line-height:1.6;}
+.co-acta-page b,.co-acta-page strong{font-family:'Arial',sans-serif;}
+.co-acta-logo-hdr{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #012a6b;padding-bottom:12px;margin-bottom:16px;font-family:'Arial',sans-serif;}
+.co-acta-logo-company{font-size:19px;font-weight:800;color:#012a6b;letter-spacing:.08em;}
+.co-acta-logo-sub{font-size:9px;color:#64748b;letter-spacing:.12em;text-transform:uppercase;margin-top:2px;}
+.co-acta-logo-codigo{font-size:14px;font-weight:700;color:#012a6b;text-align:right;font-family:'Arial',sans-serif;}
+/* Caja compacta Estado de Gestión — encabezado */
+.co-acta-estado-box{display:inline-flex;align-items:center;gap:8px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:20px;padding:6px 16px;font-size:10.5px;font-weight:700;color:#1e293b;font-family:'Arial',sans-serif;margin-top:10px;letter-spacing:.02em;}
+.co-acta-section{margin-bottom:22px;page-break-after:auto;}
+/* Banner institucional de sección — reemplaza el subrayado plano */
+.co-acta-section-ttl{font-family:'Arial',sans-serif;font-size:10px;font-weight:700;color:#fff;background:#012a6b;letter-spacing:.1em;text-transform:uppercase;padding:7px 12px;border-radius:4px;margin-bottom:12px;page-break-after:avoid;break-after:avoid;display:flex;align-items:center;}
 .co-acta-info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
-.co-acta-info-cell{background:#f8fafc;border-radius:4px;padding:6px 10px;}
+.co-acta-info-cell{background:#f8fafc;border:1px solid #e8edf3;border-radius:5px;padding:7px 10px;font-family:'Arial',sans-serif;}
 .co-acta-info-lbl{font-size:8px;color:#64748b;font-weight:700;letter-spacing:.08em;text-transform:uppercase;}
-.co-acta-info-val{font-size:11px;font-weight:600;color:#1e293b;margin-top:1px;}
-.co-acta-table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:8px;page-break-inside:avoid;break-inside:avoid;}
-.co-acta-table th{background:#012a6b;color:#fff;padding:5px 8px;text-align:left;font-size:9px;letter-spacing:.06em;text-transform:uppercase;}
-.co-acta-table td{padding:4px 8px;border-bottom:1px solid #f1f5f9;}
+.co-acta-info-val{font-size:11px;font-weight:600;color:#1e293b;margin-top:2px;}
+.co-acta-table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:8px;font-family:'Arial',sans-serif;page-break-inside:avoid;break-inside:avoid;}
+.co-acta-table th{background:#012a6b;color:#fff;padding:6px 8px;text-align:left;font-size:9px;letter-spacing:.06em;text-transform:uppercase;}
+.co-acta-table td{padding:5px 8px;border-bottom:1px solid #f1f5f9;}
 .co-acta-table tr:nth-child(even) td{background:#f8fafc;}
-.co-acta-obs{background:#f8fafc;border-left:3px solid #012a6b;padding:8px 12px;font-size:10px;border-radius:0 4px 4px 0;margin-top:6px;}
-.co-acta-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;}
-.co-acta-kpi{background:#f8fafc;border-radius:4px;padding:8px;text-align:center;border:1px solid #e2e8f0;}
-.co-acta-kpi-val{font-size:18px;font-weight:800;color:#012a6b;}
-.co-acta-kpi-lbl{font-size:8px;color:#64748b;text-transform:uppercase;letter-spacing:.06em;}
-.co-acta-firma-row{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:32px;page-break-inside:avoid;break-inside:avoid;}
+.co-acta-obs{background:#f8fafc;border-left:3px solid #012a6b;padding:8px 12px;font-size:10px;border-radius:0 4px 4px 0;margin-top:6px;font-family:'Arial',sans-serif;}
+.co-acta-kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px;}
+.co-acta-kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:9px 4px;text-align:center;}
+.co-acta-kpi-val{font-family:'Arial',sans-serif;font-size:17px;font-weight:800;color:#012a6b;}
+.co-acta-kpi-lbl{font-family:'Arial',sans-serif;font-size:7.5px;color:#64748b;text-transform:uppercase;letter-spacing:.04em;line-height:1.3;margin-top:2px;}
+.co-acta-resultado-comite{background:#eef4ff;border:1px solid #c7d9f5;border-left:3px solid #012a6b;border-radius:0 5px 5px 0;padding:8px 12px;font-size:10px;color:#012a6b;margin-top:6px;font-family:'Arial',sans-serif;}
+.co-acta-resultado-comite b{font-family:'Arial',sans-serif;}
+.co-acta-firma-row{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:32px;page-break-inside:avoid;break-inside:avoid;font-family:'Arial',sans-serif;}
 .co-acta-firma{border-top:1px solid #94a3b8;padding-top:8px;text-align:center;font-size:9px;color:#64748b;}
 .co-acta-firma-img{max-width:200px;max-height:60px;object-fit:contain;display:block;margin:0 auto 6px;}
 .co-acta-firma-pending{height:38px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:9px;font-style:italic;margin-bottom:6px;}
-/* Resumen Ejecutivo e Interpretación de Resultados (FASE 5.5B) */
-.co-acta-resumen-box{background:linear-gradient(135deg,#f0f9ff 0%,#eef2ff 100%);border:1px solid #bfdbfe;border-left:4px solid #012a6b;border-radius:0 8px 8px 0;padding:14px 16px;font-size:11px;color:#1e3a5f;line-height:1.7;page-break-inside:avoid;break-inside:avoid;}
-.co-acta-interp-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;font-size:10.5px;color:#475569;line-height:1.6;page-break-inside:avoid;break-inside:avoid;}
-.co-acta-legend-row{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;}
-.co-acta-legend-item{display:flex;align-items:center;gap:6px;font-size:10px;color:#334155;}
+/* Resumen del Comité y Objetivo del Comité — cajas institucionales */
+.co-acta-resumen-box{background:linear-gradient(135deg,#f0f9ff 0%,#eef2ff 100%);border:1px solid #bfdbfe;border-left:4px solid #012a6b;border-radius:0 8px 8px 0;padding:14px 16px;font-size:11px;color:#1e3a5f;line-height:1.75;page-break-inside:avoid;break-inside:avoid;}
+.co-acta-interp-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;font-size:10.5px;color:#475569;line-height:1.65;page-break-inside:avoid;break-inside:avoid;}
 /* Gestión de Firmas Digitales */
 .co-firmas-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10003;display:none;align-items:center;justify-content:center;}
 .co-firmas-box{background:#fff;border-radius:12px;width:min(620px,94vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3);}
@@ -9347,6 +9351,56 @@ function _semanaIdDesdeFecha(dateStr){
   return'S'+wk;
 }
 
+/* ── Orden institucional de Asistentes (FASE 5.6A) ───
+   Prioridad de área y, dentro de cada área, por jerarquía de cargo.
+   El dato de área proviene de la tabla personal (columna "area"); si
+   un colaborador no tiene área asignada cae al final ("Otros"). */
+var _AREA_ORDEN=['Gerencia','Desarrollo','Operaciones','Tráfico','Gestión Documental','HSEQ','SIG','Comercial','Contabilidad','Pagos'];
+var _CARGO_JERARQUIA=['gerente','director','coordinador','jefe','líder','lider','analista','auxiliar','asistente'];
+function _ordenAsistentes(lista){
+  function _areaIdx(area){
+    var a=(area||'').toLowerCase();
+    if(!a)return _AREA_ORDEN.length;
+    var i=_AREA_ORDEN.findIndex(function(x){return a.indexOf(x.toLowerCase())>=0;});
+    return i>=0?i:_AREA_ORDEN.length;
+  }
+  function _cargoIdx(cargo){
+    var c=(cargo||'').toLowerCase();
+    var i=_CARGO_JERARQUIA.findIndex(function(k){return c.indexOf(k)>=0;});
+    return i>=0?i:_CARGO_JERARQUIA.length;
+  }
+  return (lista||[]).slice().sort(function(a,b){
+    var ai=_areaIdx(a.area),bi=_areaIdx(b.area);
+    if(ai!==bi)return ai-bi;
+    var ci=_cargoIdx(a.cargo),cbi=_cargoIdx(b.cargo);
+    if(ci!==cbi)return ci-cbi;
+    return (a.nombre||'').localeCompare(b.nombre||'');
+  });
+}
+
+/* ── Estado de Gestión — badge compacto de 4 niveles (FASE 5.6A) ─── */
+function _buildEstadoGestion(snap){
+  var op=snap.operacion||{};
+  var pr=snap.project||{};
+  var rev=snap.compromisos_revisados||[];
+  var hoy=new Date(); hoy.setHours(0,0,0,0);
+  var vencidos=rev.filter(function(c){
+    if(!c.due_date||['closed','completed'].indexOf(c.status)>=0)return false;
+    return new Date(c.due_date)<hoy;
+  }).length;
+
+  if(op.estado_general==='crit'||(pr.kpi&&pr.kpi.crit>0)){
+    return{emoji:'🔴',label:'Atención inmediata'};
+  }
+  if(vencidos>0||(pr.kpi&&pr.kpi.risk>0)){
+    return{emoji:'🟠',label:'Requiere acción'};
+  }
+  if(op.estado_general==='warn'){
+    return{emoji:'🟡',label:'En seguimiento'};
+  }
+  return{emoji:'🟢',label:'Cumplido'};
+}
+
 /* ════════════════════════════════════════════════════
    MOTOR DE ANÁLISIS INTELIGENTE (reglas, sin IA)
    ════════════════════════════════════════════════════ */
@@ -9438,36 +9492,55 @@ function _buildOpsAnalisis(label,wsStats,clientes){
   return txt;
 }
 
-/* Genera análisis ejecutivo para Project — estado general, indicadores
-   destacados y en seguimiento, impacto y prioridad (FASE 5.5B) */
+/* Genera el "Resultado del Comité" que cierra cada bloque de Seguimiento
+   Operativo — una instrucción concreta de seguimiento (FASE 5.6A) */
+function _buildResultadoComite(label,clientes){
+  var criticos=clientes.filter(function(c){return c.estado==='crit';});
+  var enRiesgo=clientes.filter(function(c){return c.estado==='warn';});
+  if(criticos.length>0){
+    return'El Comité solicita realizar seguimiento al cliente '+criticos[0].cliente
+      +' durante la próxima semana, verificando el cumplimiento de las acciones definidas para recuperar el nivel de servicio.';
+  }
+  if(enRiesgo.length>0){
+    return'El Comité solicita mantener seguimiento preventivo al cliente '+enRiesgo[0].cliente
+      +' durante la próxima semana, con el fin de asegurar el cumplimiento sostenido de la meta.';
+  }
+  return'El Comité valida el cumplimiento de '+label+' durante la semana y solicita mantener las condiciones actuales de servicio.';
+}
+
+/* Genera análisis ejecutivo para Project. Responde: ¿qué ocurrió?,
+   ¿qué requiere seguimiento?, ¿qué decidió el Comité? Terminología
+   institucional: Tareas / En Meta / En Seguimiento / En Atención /
+   Efectividad — misma lógica de kpi.ok/risk/crit, solo cambia el
+   lenguaje hacia el usuario (FASE 5.6A). */
 function _buildProjAnalisis(snap){
   if(!snap) return 'No se dispone de información del módulo Project para esta semana.';
   var kpi=snap.kpi||{total:0,ok:0,risk:0,crit:0,noData:0,efectividad:null};
   var tasks=snap.tasks||[];
   var ef=kpi.efectividad;
 
-  if(kpi.total===0) return 'El módulo Project no registra indicadores configurados para esta semana.';
+  if(kpi.total===0) return 'El módulo Project no registra tareas configuradas para esta semana.';
 
   var tasksConDatos=tasks.filter(function(t){return t.real!==null&&t.real!=='';});
   var tasksSinDatos=tasks.filter(function(t){return t.real===null||t.real==='';});
-  var criticos=tasksConDatos.filter(function(t){
+  var enAtencion=tasksConDatos.filter(function(t){
     var ind=projCalcIndicador(t.real,t.meta);return ind&&ind.estado==='crit';
   });
-  var enRiesgo=tasksConDatos.filter(function(t){
+  var enSeguimiento=tasksConDatos.filter(function(t){
     var ind=projCalcIndicador(t.real,t.meta);return ind&&ind.estado==='risk';
   });
   var enMeta=tasksConDatos.filter(function(t){
     var ind=projCalcIndicador(t.real,t.meta);return ind&&ind.estado==='ok';
   });
 
-  /* Estado general del módulo */
+  /* ¿Qué ocurrió? */
   var txt;
-  if(criticos.length===0&&enRiesgo.length===0&&tasksConDatos.length>0){
-    txt='El módulo Project muestra un comportamiento saludable esta semana, con la totalidad de los indicadores reportados dentro de la meta establecida.';
-  } else if(criticos.length>0){
-    txt='El módulo Project presenta '+criticos.length+' indicador'+(criticos.length!==1?'es':'')+' de alta prioridad, que exige'+(criticos.length!==1?'n':'')+' atención inmediata por parte de los responsables.';
-  } else if(enRiesgo.length>0){
-    txt='El módulo Project se mantiene en general estable, aunque '+enRiesgo.length+' indicador'+(enRiesgo.length!==1?'es':'')+' se ubica en zona de riesgo y amerita seguimiento cercano.';
+  if(enAtencion.length===0&&enSeguimiento.length===0&&tasksConDatos.length>0){
+    txt='Durante la semana, el módulo Project registró un comportamiento favorable: la totalidad de las tareas con reporte se ubicaron en meta.';
+  } else if(enAtencion.length>0){
+    txt='Durante la semana, el módulo Project registró '+enAtencion.length+' tarea'+(enAtencion.length!==1?'s':'')+' en atención, que requiere'+(enAtencion.length!==1?'n':'')+' intervención prioritaria de los responsables.';
+  } else if(enSeguimiento.length>0){
+    txt='Durante la semana, el módulo Project se mantuvo en general estable, aunque '+enSeguimiento.length+' tarea'+(enSeguimiento.length!==1?'s':'')+' pasó'+(enSeguimiento.length!==1?'ron':'')+' a seguimiento y amerita'+(enSeguimiento.length!==1?'n':'')+' monitoreo cercano.';
   } else {
     txt='El módulo Project no cuenta con reportes suficientes esta semana para determinar su comportamiento general.';
   }
@@ -9477,36 +9550,35 @@ function _buildProjAnalisis(snap){
     txt+=' La efectividad del período se ubica en '+ef+'%, reflejando '+efTxt+'.';
   }
 
-  /* Indicadores destacados */
   if(enMeta.length>0){
     var nomOk=enMeta.slice(0,3).map(function(t){return t.sistema||t.tema||'—';}).join(', ');
     txt+=' Se destaca el cumplimiento sostenido de '+nomOk+(enMeta.length>3?' y otros sistemas':'')+'.';
   }
 
-  /* Indicadores que requieren seguimiento */
-  if(criticos.length>0){
-    var nomCrit=criticos.slice(0,3).map(function(t){return t.sistema||t.tema||'—';}).join(', ');
-    txt+=' Los indicadores que requieren mayor atención son '+nomCrit
-      +(criticos.length>3?' y '+(criticos.length-3)+' más':'')+', con valores por debajo de lo esperado.';
-  } else if(enRiesgo.length>0){
-    var nomRisk=enRiesgo.slice(0,3).map(function(t){return t.sistema||t.tema||'—';}).join(', ');
-    txt+=' '+nomRisk+(enRiesgo.length>3?' y otros sistemas':'')+' deben mantenerse en observación para evitar un deterioro adicional.';
+  /* ¿Qué requiere seguimiento? */
+  if(enAtencion.length>0){
+    var nomCrit=enAtencion.slice(0,3).map(function(t){return t.sistema||t.tema||'—';}).join(', ');
+    txt+=' Las tareas que requieren mayor atención son '+nomCrit
+      +(enAtencion.length>3?' y '+(enAtencion.length-3)+' más':'')+', con valores por debajo de lo esperado.';
+  } else if(enSeguimiento.length>0){
+    var nomRisk=enSeguimiento.slice(0,3).map(function(t){return t.sistema||t.tema||'—';}).join(', ');
+    txt+=' '+nomRisk+(enSeguimiento.length>3?' y otros sistemas':'')+' deben mantenerse en observación para evitar un deterioro adicional.';
   }
 
   if(tasksSinDatos.length>0){
-    txt+=' Adicionalmente, '+tasksSinDatos.length+' indicador'+(tasksSinDatos.length!==1?'es':'')+' aún no cuenta'+(tasksSinDatos.length!==1?'n':'')+' con reporte de avance.';
+    txt+=' Adicionalmente, '+tasksSinDatos.length+' tarea'+(tasksSinDatos.length!==1?'s':'')+' aún no cuenta'+(tasksSinDatos.length!==1?'n':'')+' con reporte de avance.';
   }
 
-  /* Impacto esperado y prioridad para la próxima semana */
-  if(criticos.length>0){
-    txt+=' De no atenderse, estos indicadores podrían afectar la continuidad operativa y el cumplimiento de compromisos con clientes. '
-      +'La prioridad para la próxima semana es cerrar los planes de acción sobre los sistemas de mayor prioridad.';
-  } else if(enRiesgo.length>0){
-    txt+=' El impacto esperado es moderado si se atiende oportunamente. La prioridad para la próxima semana es reforzar el monitoreo de los sistemas en riesgo.';
+  /* ¿Qué decidió el Comité? */
+  if(enAtencion.length>0){
+    txt+=' De no atenderse, estas tareas podrían afectar la continuidad operativa y el cumplimiento de compromisos con clientes. '
+      +'El Comité decide priorizar el cierre de los planes de acción sobre estas tareas antes de la próxima sesión.';
+  } else if(enSeguimiento.length>0){
+    txt+=' El Comité decide mantener monitoreo activo sobre estas tareas para evitar que escalen a un nivel de mayor prioridad.';
   } else if(tasksSinDatos.length>0){
-    txt+=' La prioridad para la próxima semana es completar el reporte pendiente para contar con una lectura integral del módulo.';
+    txt+=' El Comité solicita completar el reporte pendiente antes del próximo cierre semanal.';
   } else {
-    txt+=' La prioridad para la próxima semana es sostener el nivel de desempeño alcanzado.';
+    txt+=' El Comité da por satisfactorio el desempeño del módulo y solicita sostener el nivel alcanzado.';
   }
 
   return txt;
@@ -9534,9 +9606,9 @@ function _buildGenResumenArea(area,wsStats,clientes,snap,accionesTraf){
   if(area==='project'){
     if(!snap) return 'No se dispone de datos del módulo Project para esta semana.';
     var kpi=snap.kpi||{};
-    if(kpi.crit>0) return kpi.total+' indicadores evaluados — '+kpi.crit+' de alta prioridad y '+kpi.risk+' en seguimiento. Requiere atención prioritaria.';
-    if(kpi.risk>0) return kpi.total+' indicadores evaluados — '+kpi.risk+' en riesgo. Se recomienda seguimiento activo.';
-    return kpi.total+' indicadores evaluados — todos dentro de meta. Efectividad: '+(kpi.efectividad!==null?kpi.efectividad+'%':'N/D')+'.';
+    if(kpi.crit>0) return kpi.total+' tareas evaluadas — '+kpi.crit+' en atención y '+kpi.risk+' en seguimiento. Requiere atención prioritaria.';
+    if(kpi.risk>0) return kpi.total+' tareas evaluadas — '+kpi.risk+' en seguimiento. Se recomienda monitoreo activo.';
+    return kpi.total+' tareas evaluadas — todas en meta. Efectividad: '+(kpi.efectividad!==null?kpi.efectividad+'%':'N/D')+'.';
   }
   if(area==='hseq'){
     var resp=snap&&snap.hseq?snap.hseq:null;
@@ -9626,20 +9698,20 @@ function _buildDecisionesComite(snap){
     var cargos=[];
     if(liqBajo) cargos.push('Carga Líquida ('+op.liq.pct+'%)');
     if(secBajo) cargos.push('Carga Seca ('+op.sec.pct+'%)');
-    decisiones.push('Seguimiento prioritario al cumplimiento operativo de '+cargos.join(' y ')+', con reporte de causas y plan de acción al próximo comité.');
+    decisiones.push('El Comité decide dar seguimiento prioritario al cumplimiento operativo de '+cargos.join(' y ')+', con reporte de causas y plan de acción en la próxima sesión.');
   } else if((op.liq&&op.liq.pct>=metaVal)||(op.sec&&op.sec.pct>=metaVal)){
-    decisiones.push('Se valida el cumplimiento operativo de la semana. Se instruye mantener las condiciones que garantizaron los resultados.');
+    decisiones.push('El Comité valida el cumplimiento operativo de la semana y define mantener las condiciones que garantizaron los resultados.');
   }
 
   /* Decisiones Project */
   if(pr.kpi){
     if(pr.kpi.crit>0){
-      decisiones.push('Se ordena plan de mejora inmediato para los '+pr.kpi.crit+' indicador'+(pr.kpi.crit!==1?'es':'')+' de alta prioridad del módulo Project. Responsables deben presentar avance en la próxima sesión.');
+      decisiones.push('El Comité decide que los '+pr.kpi.crit+' indicador'+(pr.kpi.crit!==1?'es':'')+' en atención del módulo Project reciban un plan de mejora inmediato, con presentación de avance en la próxima sesión.');
     } else if(pr.kpi.risk>0){
-      decisiones.push('Se acuerda monitoreo semanal de los '+pr.kpi.risk+' indicador'+(pr.kpi.risk!==1?'es':'')+' en riesgo del módulo Project para prevenir escalamiento.');
+      decisiones.push('El Comité define monitoreo semanal para los '+pr.kpi.risk+' indicador'+(pr.kpi.risk!==1?'es':'')+' en seguimiento del módulo Project, con el fin de prevenir su escalamiento.');
     }
     if(pr.kpi.noData>0){
-      decisiones.push('Se insta a los responsables a reportar los indicadores pendientes del módulo Project antes del cierre de la semana.');
+      decisiones.push('El Comité solicita a los responsables reportar los indicadores pendientes del módulo Project antes del cierre de la semana.');
     }
   }
 
@@ -9649,17 +9721,17 @@ function _buildDecisionesComite(snap){
     return new Date(c.due_date)<new Date();
   });
   if(vencidos.length>0){
-    decisiones.push('Se '+(vencidos.length!==1?'revisaron':'revisó')+' '+vencidos.length+' compromiso'+(vencidos.length!==1?'s':'')+' vencido'+(vencidos.length!==1?'s':'')
-      +'. Los responsables deben presentar justificación y nueva fecha en la próxima sesión.');
+    decisiones.push('El Comité revisó '+vencidos.length+' compromiso'+(vencidos.length!==1?'s':'')+' vencido'+(vencidos.length!==1?'s':'')
+      +' y decide que los responsables presenten justificación y nueva fecha en la próxima sesión.');
   }
 
   /* Compromisos nuevos */
   if(nCmp>0){
-    decisiones.push('Se '+(nCmp!==1?'registran':'registra')+' '+nCmp+' '+(nCmp!==1?'compromisos nuevos':'compromiso nuevo')+' en el sistema de seguimiento de compromisos. El Coordinador de Comité verificará el avance en la sesión siguiente.');
+    decisiones.push('El Comité define '+nCmp+' '+(nCmp!==1?'nuevos compromisos':'nuevo compromiso')+' de seguimiento, cuyo avance será verificado por el Coordinador de Comité en la sesión siguiente.');
   }
 
   if(decisiones.length===0){
-    decisiones.push('El Comité concluye la sesión sin decisiones extraordinarias. Se instruye continuar con las actividades operativas regulares.');
+    decisiones.push('El Comité concluye la sesión sin decisiones extraordinarias y define continuar con las actividades operativas regulares.');
   }
 
   return decisiones;
@@ -9701,11 +9773,11 @@ function _buildConclusionEjecutiva(snap){
   /* Project */
   if(pr.kpi&&pr.kpi.total>0){
     if(pr.kpi.crit>0){
-      txt+=' En el módulo Project se identificaron indicadores de alta prioridad que requieren un plan de acción inmediato.';
-      prioridades.push('indicadores de alta prioridad en Project');
+      txt+=' En el módulo Project se identificaron tareas en atención que requieren un plan de acción inmediato.';
+      prioridades.push('tareas en atención de Project');
     } else if(pr.kpi.risk>0){
-      txt+=' Project se mantiene en general estable, aunque persisten indicadores en zona de riesgo que ameritan monitoreo.';
-      prioridades.push('seguimiento de indicadores en riesgo de Project');
+      txt+=' Project se mantiene en general estable, aunque persisten tareas en seguimiento que ameritan monitoreo.';
+      prioridades.push('seguimiento de tareas en Project');
     } else {
       txt+=' El módulo Project confirmó un comportamiento favorable en la totalidad de sus indicadores.';
     }
@@ -9751,9 +9823,11 @@ function _buildConclusionEjecutiva(snap){
   return txt;
 }
 
-/* Genera el Resumen Ejecutivo — apertura del acta, breve y orientada a
-   invitar la lectura del documento completo (FASE 5.5B) */
-function _buildResumenEjecutivo(snap){
+/* Genera el Resumen del Comité — apertura del acta, redactado en tono
+   de Director de Operaciones. Cubre comportamiento general, Project,
+   Operación, compromisos y decisiones tomadas. No utiliza "Mixto",
+   "Regular" ni "Crítico" (FASE 5.6A). */
+function _buildResumenComite(snap){
   var op=snap.operacion||{};
   var pr=snap.project||{};
   var rev=snap.compromisos_revisados||[];
@@ -9785,11 +9859,11 @@ function _buildResumenEjecutivo(snap){
   var estadoGeneral=op.estado_general||'ok';
   var txt;
   if(estadoGeneral==='crit'){
-    txt='Durante la semana '+semana+' la operación presentó resultados que requirieron seguimiento prioritario por parte del Comité.';
+    txt='Durante la semana '+semana+' la operación presentó resultados que demandaron seguimiento prioritario por parte del Comité.';
   } else if(estadoGeneral==='warn'){
-    txt='La semana '+semana+' tuvo un comportamiento mixto, con resultados favorables en algunos frentes y aspectos puntuales por atender.';
+    txt='Durante la semana '+semana+' la operación mantuvo resultados favorables en varios frentes, con algunos aspectos puntuales que el Comité decidió atender.';
   } else {
-    txt='La semana '+semana+' cerró con un comportamiento estable y dentro de los parámetros esperados por la compañía.';
+    txt='Durante la semana '+semana+' la operación se desarrolló dentro de los parámetros esperados por la compañía.';
   }
 
   if(positivos.length>0){
@@ -9799,13 +9873,13 @@ function _buildResumenEjecutivo(snap){
 
   if(seguimiento.length>0){
     txt+=' Por su parte, '+listaY(seguimiento)+' '
-      +(seguimiento.length>1?'requieren':'requiere')+' seguimiento particular por parte del Comité en los próximos días.';
+      +(seguimiento.length>1?'quedan':'queda')+' bajo seguimiento particular del Comité en los próximos días.';
   } else {
     txt+=' No se identifican frentes que exijan intervención inmediata.';
   }
 
   if(nCmp>0){
-    txt+=' Durante la sesión se '+(nCmp!==1?'definieron':'definió')+' '+nCmp+' compromiso'+(nCmp!==1?'s':'')+' orientado'+(nCmp!==1?'s':'')+' a fortalecer los puntos identificados.';
+    txt+=' En esta sesión el Comité '+(nCmp!==1?'definió':'definió')+' '+nCmp+' compromiso'+(nCmp!==1?'s':'')+' orientado'+(nCmp!==1?'s':'')+' a fortalecer los puntos identificados.';
   }
 
   txt+=' A continuación se presenta el detalle de cada frente evaluado, con el análisis y las decisiones adoptadas por el Comité durante la sesión.';
@@ -9891,21 +9965,23 @@ function buildSnapshot(){
     responsable_seca_cargo:r2.cargo||null,
     responsable_seca_area:r2.area||null,
     responsable_seca_firma:_getFirmaImgSrc(r2),
-    asistentes:(_session.asistencia||[]).filter(function(a){return a.presente;}).map(function(a){
+    asistentes:_ordenAsistentes((_session.asistencia||[]).filter(function(a){return a.presente;}).map(function(a){
       return{id:a.id||null,nombre:a.nombre,cargo:a.cargo,area:a.area||null,empresa:'INLOP',tipo:a.tipo||'colaborador',
         firma_base64:a.firma_base64||null};
     }).concat((_session.invitados||[]).map(function(i){
       return{id:null,nombre:i.nombre,cargo:i.cargo,empresa:i.empresa||null,tipo:'invitado',firma_base64:null};
-    })),
+    }))),
     orden_dia:_buildOrdenDia(),
     operacion:{
       observaciones:_session.operacion&&_session.operacion.observaciones||'',
       liq:wsLiq?{sol:wsLiq.sol,carg:wsLiq.carg,pct:wsLiq.pct,deficit:wsLiq.deficit}:null,
       liq_clientes:liqClientes,
       liq_analisis:wsLiq?_buildOpsAnalisis('Carga Líquida',wsLiq,liqClientes):'',
+      liq_resultado_comite:wsLiq?_buildResultadoComite('Carga Líquida',liqClientes):'',
       sec:wsSec?{sol:wsSec.sol,carg:wsSec.carg,pct:wsSec.pct,deficit:wsSec.deficit}:null,
       sec_clientes:secClientes,
       sec_analisis:wsSec?_buildOpsAnalisis('Carga Seca',wsSec,secClientes):'',
+      sec_resultado_comite:wsSec?_buildResultadoComite('Carga Seca',secClientes):'',
       estado_general:estadoOps
     },
     project:{
@@ -9965,7 +10041,8 @@ function buildSnapshot(){
   snapFinal.decisiones_comite=_buildDecisionesComite(snapFinal);
   snapFinal.temas_tratados=_buildTemasTratados(snapFinal);
   snapFinal.conclusion_ejecutiva=_buildConclusionEjecutiva(snapFinal);
-  snapFinal.resumen_ejecutivo=_buildResumenEjecutivo(snapFinal);
+  snapFinal.resumen_comite=_buildResumenComite(snapFinal);
+  snapFinal.estado_gestion=_buildEstadoGestion(snapFinal);
   return snapFinal;
 }
 
@@ -10058,29 +10135,13 @@ function renderActa(snap){
 
   var html='<div class="co-acta-page">';
 
-  /* 1. Encabezado */
+  /* 1. ENCABEZADO */
   html+='<div class="co-acta-logo-hdr">'
     +'<div><div class="co-acta-logo-company">INLOP</div>'
     +'<div class="co-acta-logo-sub">Acta del Comité</div></div>'
     +'<div class="co-acta-logo-codigo"><div>'+esc2(snap.codigo)+'</div>'
     +'<div style="font-size:9px;color:#64748b;font-weight:400">'+fechaFmt(snap.fecha_reunion)+'</div></div></div>';
 
-  /* Resumen Ejecutivo — inmediatamente después del encabezado */
-  if(snap.resumen_ejecutivo){
-    html+='<div class="co-acta-section">'+secTtl('Resumen Ejecutivo','ti-report-analytics')
-      +'<div class="co-acta-resumen-box">'+esc2(snap.resumen_ejecutivo)+'</div>'
-      +'</div>';
-  }
-
-  /* Objetivo del Comité — texto fijo institucional, inmediatamente
-     después del Resumen Ejecutivo */
-  html+='<div class="co-acta-section">'+secTtl('Objetivo del Comité','ti-target-arrow')
-    +'<div class="co-acta-interp-box">El Comité tiene como propósito revisar el desempeño de la operación durante la semana evaluada, '
-    +'realizar seguimiento a los compromisos establecidos, analizar los principales indicadores de gestión y definir las acciones '
-    +'necesarias para fortalecer la operación y apoyar la toma de decisiones de la organización.</div>'
-    +'</div>';
-
-  /* 2. Información General */
   html+='<div class="co-acta-info-grid">'
     +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Semana</div><div class="co-acta-info-val">'+esc2(snap.semana)+'</div></div>'
     +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Tipo de Comité</div><div class="co-acta-info-val">Comité Operativo Semanal</div></div>'
@@ -10088,41 +10149,22 @@ function renderActa(snap){
     +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Hora inicio</div><div class="co-acta-info-val">'+esc2(snap.hora_inicio)+'</div></div>'
     +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Hora fin</div><div class="co-acta-info-val">'+esc2(snap.hora_fin)+'</div></div>'
     +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Fecha</div><div class="co-acta-info-val">'+fechaFmt(snap.fecha_reunion)+'</div></div>'
+    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Resp. Carga Líquida</div><div class="co-acta-info-val">'+esc2(snap.responsable_liquida_nombre||'—')+'</div></div>'
+    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Resp. Carga Seca</div><div class="co-acta-info-val">'+esc2(snap.responsable_seca_nombre||'—')+'</div></div>'
     +'</div>';
 
-  /* 3. Responsables */
-  html+='<div class="co-acta-section">'+secTtl('Responsables','ti-users')
-    +'<div class="co-acta-info-grid">'
-    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Resp. Carga Líquida</div><div class="co-acta-info-val">'+esc2(snap.responsable_liquida_nombre)+'</div></div>'
-    +'<div class="co-acta-info-cell"><div class="co-acta-info-lbl">Resp. Carga Seca</div><div class="co-acta-info-val">'+esc2(snap.responsable_seca_nombre)+'</div></div>'
-    +'</div></div>';
+  /* Estado de Gestión — caja compacta institucional */
+  var eg=snap.estado_gestion||{emoji:'🟢',label:'Cumplido'};
+  html+='<div class="co-acta-estado-box">'+eg.emoji+'&nbsp; Estado de Gestión: '+esc2(eg.label)+'</div>';
 
-  /* 4. Orden del Día */
-  var od=snap.orden_dia||[];
-  if(od.length){
-    html+='<div class="co-acta-section">'+secTtl('Orden del Día','ti-list-numbers')
-      +'<ol style="margin:0;padding-left:18px;font-size:11px;color:#334155;line-height:1.7">'
-      +od.map(function(item){return'<li>'+esc2(item)+'</li>';}).join('')
-      +'</ol></div>';
-  }
+  /* 2. OBJETIVO DEL COMITÉ */
+  html+='<div class="co-acta-section">'+secTtl('Objetivo del Comité','ti-target-arrow')
+    +'<div class="co-acta-interp-box">El Comité tiene como propósito revisar el desempeño de la operación durante la semana evaluada, '
+    +'realizar seguimiento a los compromisos establecidos, analizar los principales indicadores de gestión y definir las acciones '
+    +'necesarias para fortalecer la operación y apoyar la toma de decisiones de la organización.</div>'
+    +'</div>';
 
-  /* Interpretación de los Resultados — leyenda previa al detalle */
-  html+='<div class="co-acta-section">'+secTtl('Interpretación de los Resultados','ti-info-circle')
-    +'<div class="co-acta-interp-box">'
-    +'Los resultados presentados en esta acta permiten conocer el comportamiento general de la operación durante la semana evaluada. '
-    +'Cada indicador facilita identificar fortalezas, oportunidades de mejora y prioridades de seguimiento para apoyar la toma de decisiones del Comité.'
-    +'<div class="co-acta-legend-row">'
-    +'<div class="co-acta-legend-item">🟢 Cumplimiento esperado</div>'
-    +'<div class="co-acta-legend-item">🟡 Con oportunidades de mejora</div>'
-    +'<div class="co-acta-legend-item">🟠 Requiere seguimiento</div>'
-    +'<div class="co-acta-legend-item">🔴 Prioridad de atención</div>'
-    +'</div></div></div>';
-
-  /* ═══ A partir de aquí el orden del acta replica exactamente el
-     orden del Wizard: Asistencia → Momento HSE → Compromisos →
-     Project → Seguimiento Operativo → Generalidades → Cierre ═══ */
-
-  /* 5. Asistentes (Paso 2 del Wizard) */
+  /* 3. ASISTENTES */
   html+='<div class="co-acta-section">'+secTtl('Asistentes','ti-users-group')
     +'<table class="co-acta-table"><thead><tr><th>Nombre</th><th>Cargo</th><th>Área</th><th style="width:90px;text-align:center">Firma</th></tr></thead><tbody>'
     +(snap.asistentes||[]).map(function(a){
@@ -10133,14 +10175,43 @@ function renderActa(snap){
     }).join('')
     +'</tbody></table></div>';
 
-  /* Evidencia de Asistencia */
+  /* 4. EVIDENCIA DE ASISTENCIA */
   if(snap.evidencia_asistencia){
     html+='<div class="co-acta-section">'+secTtl('Evidencia de Asistencia','ti-camera')
       +'<img src="'+snap.evidencia_asistencia+'" style="max-width:100%;border-radius:6px;display:block;margin:0 auto;max-height:260px;object-fit:contain" alt="Evidencia de asistencia">'
       +'</div>';
   }
 
-  /* 6. Momento HSE (Paso 3 del Wizard) */
+  /* 5. RESUMEN DEL COMITÉ (compatibilidad: actas anteriores a 5.6A
+     guardan este campo como resumen_ejecutivo) */
+  var resumenTxt=snap.resumen_comite||snap.resumen_ejecutivo;
+  if(resumenTxt){
+    html+='<div class="co-acta-section">'+secTtl('Resumen del Comité','ti-report-analytics')
+      +'<div class="co-acta-resumen-box">'+esc2(resumenTxt)+'</div>'
+      +'</div>';
+  }
+
+  /* 6. ORDEN DEL DÍA */
+  var od=snap.orden_dia||[];
+  if(od.length){
+    html+='<div class="co-acta-section">'+secTtl('Orden del Día','ti-list-numbers')
+      +'<ol style="margin:0;padding-left:18px;font-size:11px;color:#334155;line-height:1.7">'
+      +od.map(function(item){return'<li>'+esc2(item)+'</li>';}).join('')
+      +'</ol></div>';
+  }
+
+  /* 7. TEMAS TRATADOS — minuta ejecutiva en prosa, sin listas.
+     Compatibilidad: actas anteriores a FASE 5.5B guardan este campo
+     como arreglo de viñetas; se normaliza a texto continuo. */
+  var temasRaw=snap.temas_tratados;
+  var temasTxt=Array.isArray(temasRaw)?temasRaw.join(' '):(temasRaw||'');
+  if(temasTxt){
+    html+='<div class="co-acta-section">'+secTtl('Temas Tratados','ti-message-dots')
+      +'<div style="font-size:11px;color:#334155;line-height:1.7">'+esc2(temasTxt)+'</div>'
+      +'</div>';
+  }
+
+  /* 8. MOMENTO HSE */
   var hse=snap.hse||{};
   html+='<div class="co-acta-section">'+secTtl('Momento HSE','ti-shield-check')
     +'<div class="co-acta-info-grid">'
@@ -10150,9 +10221,12 @@ function renderActa(snap){
     +(hse.observaciones?'<div class="co-acta-obs">'+esc2(hse.observaciones)+'</div>':'')
     +'</div>';
 
-  /* 7. Compromisos (Paso 4 del Wizard) — activos del período + nuevos de esta sesión */
+  /* 9. LECTURA DE COMPROMISOS — activos del período + nuevos de esta sesión */
   var cmpRev=snap.compromisos_revisados||[];
-  html+='<div class="co-acta-section">'+secTtl('Compromisos del Período','ti-clipboard-check');
+  var cmpNuevos=snap.compromisos_nuevos||[];
+  html+='<div class="co-acta-section">'+secTtl('Lectura de Compromisos','ti-clipboard-check');
+
+  html+='<div style="font-size:9px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Compromisos del período</div>';
   if(cmpRev.length){
     var _hoyRev=new Date(); _hoyRev.setHours(0,0,0,0);
     var _estadoLbl={'open':'Abierto','in_progress':'En proceso','closed':'Cerrado','completed':'Completado'};
@@ -10172,10 +10246,8 @@ function renderActa(snap){
   } else {
     html+='<div style="color:#94a3b8;font-size:11px;padding:6px 0;">No hay compromisos registrados en el sistema para esta semana.</div>';
   }
-  html+='</div>';
 
-  var cmpNuevos=snap.compromisos_nuevos||[];
-  html+='<div class="co-acta-section">'+secTtl('Compromisos del Comité','ti-checklist');
+  html+='<div style="font-size:9px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.07em;margin:12px 0 6px">Nuevos compromisos de esta sesión</div>';
   if(cmpNuevos.length){
     html+='<table class="co-acta-table"><thead><tr><th>Compromiso</th><th>Responsable</th><th>Fecha límite</th><th>HSE</th></tr></thead><tbody>'
       +cmpNuevos.map(function(c){
@@ -10186,31 +10258,22 @@ function renderActa(snap){
   }
   html+='</div>';
 
-  /* Temas Tratados — minuta ejecutiva en prosa, inmediatamente después de
-     Compromisos, reflejando el desarrollo natural de la reunión.
-     Compatibilidad: actas anteriores a FASE 5.5B guardan este campo
-     como arreglo de viñetas; se normaliza a texto continuo. */
-  var temasRaw=snap.temas_tratados;
-  var temasTxt=Array.isArray(temasRaw)?temasRaw.join(' '):(temasRaw||'');
-  if(temasTxt){
-    html+='<div class="co-acta-section">'+secTtl('Temas Tratados','ti-message-dots')
-      +'<div style="font-size:11px;color:#334155;line-height:1.7">'+esc2(temasTxt)+'</div>'
-      +'</div>';
-  }
-
-  /* 8. Project (Paso 5 del Wizard) */
+  /* 10. PROJECT — terminología institucional: Tareas / En Meta /
+     En Seguimiento / En Atención / Efectividad (misma lógica de
+     kpi.total/ok/risk/crit, solo cambia la comunicación) */
   var pr=snap.project||{};
-  html+='<div class="co-acta-section">'+secTtl('Project — Sistemas','ti-device-laptop');
+  html+='<div class="co-acta-section">'+secTtl('Project','ti-device-laptop');
   if(pr.kpi){
     html+='<div class="co-acta-kpi-row">'
-      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.ok||0)+'</div><div class="co-acta-kpi-lbl">Cumplimiento esperado</div></div>'
-      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.risk||0)+'</div><div class="co-acta-kpi-lbl">Requiere seguimiento</div></div>'
-      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.crit||0)+'</div><div class="co-acta-kpi-lbl">Prioridad de atención</div></div>'
+      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.total||0)+'</div><div class="co-acta-kpi-lbl">Tareas</div></div>'
+      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.ok||0)+'</div><div class="co-acta-kpi-lbl">En Meta</div></div>'
+      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.risk||0)+'</div><div class="co-acta-kpi-lbl">En Seguimiento</div></div>'
+      +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.crit||0)+'</div><div class="co-acta-kpi-lbl">En Atención</div></div>'
       +'<div class="co-acta-kpi"><div class="co-acta-kpi-val">'+(pr.kpi.efectividad!==null?pr.kpi.efectividad+'%':'—')+'</div><div class="co-acta-kpi-lbl">Efectividad</div></div>'
       +'</div>';
   }
   if(pr.tasks&&pr.tasks.length){
-    html+='<table class="co-acta-table"><thead><tr><th>Sistema / Indicador</th><th>Meta</th><th>Real</th><th>Estado</th><th>Observación</th></tr></thead><tbody>'
+    html+='<table class="co-acta-table"><thead><tr><th>Tarea</th><th>Meta</th><th>Real</th><th>Estado</th><th>Observación</th></tr></thead><tbody>'
       +pr.tasks.map(function(t){
         var dot={'ok':'🟢','risk':'🟡','crit':'🔴','noData':'⚪'}[t.estado]||'⚪';
         var realStr=t.real!==null?t.real+'%':'—';
@@ -10222,7 +10285,7 @@ function renderActa(snap){
   if(pr.observaciones) html+='<div class="co-acta-obs" style="margin-top:6px">'+esc2(pr.observaciones)+'</div>';
   html+='</div>';
 
-  /* 9. Seguimiento Operativo (Paso 6 del Wizard) */
+  /* 11. SEGUIMIENTO OPERATIVO */
   var op=snap.operacion||{};
   html+='<div class="co-acta-section">'+secTtl('Seguimiento Operativo','ti-chart-bar');
 
@@ -10242,6 +10305,7 @@ function renderActa(snap){
     }
     html+=anaBlk(op.liq_analisis);
     if(op.observaciones) html+='<div class="co-acta-obs" style="margin-top:6px">'+esc2(op.observaciones)+'</div>';
+    if(op.liq_resultado_comite) html+='<div class="co-acta-resultado-comite"><b>Resultado del Comité:</b> '+esc2(op.liq_resultado_comite)+'</div>';
   }
 
   /* Carga Seca */
@@ -10259,11 +10323,12 @@ function renderActa(snap){
         }).join('')+'</tbody></table>';
     }
     html+=anaBlk(op.sec_analisis);
+    if(op.sec_resultado_comite) html+='<div class="co-acta-resultado-comite"><b>Resultado del Comité:</b> '+esc2(op.sec_resultado_comite)+'</div>';
   }
 
   html+='</div>';
 
-  /* 10. Generalidades (Paso 7 del Wizard) */
+  /* 12. GENERALIDADES */
   var gen=snap.generalidades||{};
   var autoGen=gen.auto||{};
   var genAreas=[
@@ -10290,9 +10355,7 @@ function renderActa(snap){
     html+='<div class="co-acta-section">'+secTtl('Generalidades del Comité','ti-notes')+genHtml+'</div>';
   }
 
-  /* ═══ Cierre del Acta (Paso 8 del Wizard: Cerrar Comité) ═══ */
-
-  /* 11. Decisiones del Comité */
+  /* 13. DECISIONES DEL COMITÉ */
   var decisiones=snap.decisiones_comite||[];
   if(decisiones.length){
     html+='<div class="co-acta-section">'+secTtl('Decisiones del Comité','ti-gavel')
@@ -10301,14 +10364,14 @@ function renderActa(snap){
       +'</ol></div>';
   }
 
-  /* 12. Conclusión Ejecutiva */
+  /* 14. CONCLUSIÓN EJECUTIVA */
   if(snap.conclusion_ejecutiva){
     html+='<div class="co-acta-section">'+secTtl('Conclusión Ejecutiva','ti-star')
       +'<div style="font-size:11px;color:#1e293b;line-height:1.65;white-space:pre-line">'+esc2(snap.conclusion_ejecutiva)+'</div>'
       +'</div>';
   }
 
-  /* 13. Firmas — Responsables del Comité con Nombre, Cargo, Área y Firma */
+  /* 15. FIRMAS — Responsables del Comité con Nombre, Cargo, Área y Firma */
   var _mkFirmaCard=function(nombre,rolCmp,cargo,area,firmaSrc){
     var imgHtml=firmaSrc
       ?'<img class="co-acta-firma-img" src="'+firmaSrc+'" alt="Firma '+esc2(nombre)+'">'
@@ -10317,16 +10380,20 @@ function renderActa(snap){
     return'<div class="co-acta-firma">'+imgHtml+'<strong>'+esc2(nombre||'—')+'</strong><br>'+esc2(rolCmp)
       +(detalle?'<br><span style="font-size:8px;color:#94a3b8">'+esc2(detalle)+'</span>':'')+'</div>';
   };
-  html+='<div class="co-acta-firma-row">'
+  html+='<div class="co-acta-section">'+secTtl('Firmas','ti-signature')
+    +'<div class="co-acta-firma-row">'
     +_mkFirmaCard(snap.responsable_liquida_nombre,'Resp. Carga Líquida',snap.responsable_liquida_cargo,snap.responsable_liquida_area,snap.responsable_liquida_firma||null)
     +_mkFirmaCard(snap.responsable_seca_nombre,'Resp. Carga Seca',snap.responsable_seca_cargo,snap.responsable_seca_area,snap.responsable_seca_firma||null)
-    +'</div>';
+    +'</div></div>';
 
-  /* 14. Footer */
+  /* Footer (el encabezado institucional y la paginación real
+     "Página X de Y" se agregan como capa vectorial sobre el PDF final
+     en _generarPDF, ya que el footer HTML solo existe en la última
+     página renderizada por html2canvas) */
   html+='<div class="co-acta-footer">'
     +'<span>'+esc2(snap.codigo)+' · Comité Operativo INLOP</span>'
     +'<span>Generado: '+new Date().toLocaleString('es-CO',{dateStyle:'short',timeStyle:'short'})+'</span>'
-    +'<span>Pág. 1</span></div>';
+    +'</div>';
 
   html+='</div>';
   return html;
@@ -10367,7 +10434,7 @@ function initStep8(){
 
   /* Vista previa */
   var prev=$id('co-acta-preview');
-  if(prev) prev.innerHTML='<div style="border:1px solid var(--line2);border-radius:8px;overflow:hidden;">'+renderActa(_lastSnapshot)+'</div>';
+  if(prev) prev.innerHTML='<div style="background:#fff;max-width:800px;margin:0 auto;padding:40px;border:1px solid var(--line2);border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,.08);overflow:hidden;">'+renderActa(_lastSnapshot)+'</div>';
 }
 
 /* ── Finalizar el comité ─────────────────────────── */
@@ -10435,23 +10502,45 @@ function _mostrarExito(snap,acta,esEdicion){
 function _generarPDF(snap,descargar){
   var tpl=$id('co-acta-tpl');
   if(!tpl)return;
-  tpl.innerHTML=renderActa(snap||_lastSnapshot);
+  var snapUsed=snap||_lastSnapshot;
+  tpl.innerHTML=renderActa(snapUsed);
   tpl.style.display='block';
   if(typeof html2pdf==='undefined'){
     toast('Librería PDF no disponible — use Imprimir (Ctrl+P)','warn');
     tpl.style.display='none';
     return;
   }
+  /* Márgenes ampliados arriba/abajo para dejar espacio al encabezado
+     institucional y a la paginación "Página X de Y" que se agregan
+     como capa vectorial (texto real, no rasterizado) sobre cada
+     página del PDF — mantiene la identidad visual del Preview sin
+     perder nitidez ni aumentar el peso del archivo. */
   var opt={
-    margin:[10,10,10,10],
-    filename:(snap&&snap.codigo?snap.codigo:'Acta-CO')+'.pdf',
+    margin:[16,10,14,10],
+    filename:(snapUsed&&snapUsed.codigo?snapUsed.codigo:'Acta-CO')+'.pdf',
     image:{type:'jpeg',quality:0.97},
     html2canvas:{scale:2,useCORS:true},
     jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
     pagebreak:{mode:['avoid-all','css','legacy']}
   };
   if(descargar){
-    html2pdf().set(opt).from(tpl).save().then(function(){tpl.style.display='none';});
+    var codigo=(snapUsed&&snapUsed.codigo)||'';
+    html2pdf().set(opt).from(tpl).toPdf().get('pdf').then(function(pdf){
+      var total=pdf.internal.getNumberOfPages();
+      var pageW=pdf.internal.pageSize.getWidth();
+      var pageH=pdf.internal.pageSize.getHeight();
+      for(var i=1;i<=total;i++){
+        pdf.setPage(i);
+        pdf.setFont('helvetica','bold');
+        pdf.setFontSize(8);
+        pdf.setTextColor(1,42,107);
+        pdf.text('INLOP · Acta del Comité'+(codigo?' — '+codigo:''),10,10);
+        pdf.setFont('helvetica','normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(140,140,140);
+        pdf.text('Página '+i+' de '+total,pageW-10,pageH-6,{align:'right'});
+      }
+    }).save().then(function(){tpl.style.display='none';});
   } else {
     tpl.style.display='none';
   }
@@ -10994,7 +11083,7 @@ var CO={
     var snap=_lastSnapshot;
     if(!snap)return;
     var body=$id('co-hist-body');
-    if(body) body.innerHTML=renderActa(snap);
+    if(body) body.innerHTML='<div style="background:#fff;max-width:800px;margin:0 auto;padding:40px;box-shadow:0 2px 10px rgba(0,0,0,.08);">'+renderActa(snap)+'</div>';
     var ov=$id('co-hist-overlay');
     if(ov){ov.style.display='flex';}
   },
@@ -11029,7 +11118,7 @@ var CO={
       if(!rows||!rows.length){if(body)body.innerHTML='<div style="padding:24px">Acta no encontrada.</div>';return;}
       var acta=rows[0];
       _snapHistorico=acta.snapshot||{};
-      if(body) body.innerHTML=renderActa(_snapHistorico);
+      if(body) body.innerHTML='<div style="background:#fff;max-width:800px;margin:0 auto;padding:40px;box-shadow:0 2px 10px rgba(0,0,0,.08);">'+renderActa(_snapHistorico)+'</div>';
       var cod=$id('co-hist-codigo');
       if(cod) cod.textContent=_snapHistorico.codigo||'';
     }).catch(function(){
