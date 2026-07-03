@@ -1089,13 +1089,33 @@ body::after{
   letter-spacing:.04em;
 }
 
+.header-user-wrap{position:relative;}
 .header-user{
   display:flex; align-items:center; gap:8px;
   padding:3px 11px 3px 4px;
   border-radius:100px;
   background:#F5F7FA;
   border:1px solid rgba(1,42,107,0.1);
+  cursor:pointer; user-select:none;
 }
+.header-user:hover{background:#EEF2F8;}
+.header-user-chevron{font-size:10px;color:var(--w4);margin-left:2px;transition:transform .15s;}
+.header-user-wrap.open .header-user-chevron{transform:rotate(180deg);}
+.header-user-menu{
+  display:none;position:absolute;top:calc(100% + 6px);right:0;min-width:190px;
+  background:#fff;border:1px solid rgba(1,42,107,.12);border-radius:10px;
+  box-shadow:0 10px 30px rgba(1,42,107,.14);padding:6px;z-index:500;
+}
+.header-user-wrap.open .header-user-menu{display:block;}
+.header-user-menu-item{
+  display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:7px;
+  font-size:12.5px;color:var(--w1,#0A0E27);cursor:pointer;white-space:nowrap;
+}
+.header-user-menu-item:hover{background:#F5F7FA;}
+.header-user-menu-item i{font-size:15px;color:var(--navy);width:16px;text-align:center;}
+.header-user-menu-item.danger{color:#DC2626;}
+.header-user-menu-item.danger i{color:#DC2626;}
+.header-user-menu-sep{height:1px;background:rgba(1,42,107,.08);margin:5px 4px;}
 .header-user-av{
   width:26px;height:26px;border-radius:50%;
   background:linear-gradient(135deg,var(--navy),#3B82F6);
@@ -1915,6 +1935,36 @@ function updatePortalStats(){
   }
 }
 window.updatePortalStats=updatePortalStats;
+
+/* ── Menú desplegable del perfil (header) ──────────────── */
+function _inlopUser(){
+  try{return JSON.parse(sessionStorage.getItem('inlop_user')||'null');}catch(e){return null;}
+}
+function toggleHeaderUserMenu(ev){
+  if(ev)ev.stopPropagation();
+  var wrap=document.getElementById('headerUserWrap');
+  if(!wrap)return;
+  var willOpen=!wrap.classList.contains('open');
+  wrap.classList.toggle('open',willOpen);
+  if(willOpen){
+    var u=_inlopUser();
+    var rol=(u&&u.rol||'').toLowerCase();
+    var itemPersonal=document.getElementById('headerUserMenuPersonal');
+    if(itemPersonal)itemPersonal.style.display=(rol==='master')?'flex':'none';
+  }
+}
+document.addEventListener('click',function(ev){
+  var wrap=document.getElementById('headerUserWrap');
+  if(wrap&&wrap.classList.contains('open')&&!wrap.contains(ev.target)){
+    wrap.classList.remove('open');
+  }
+});
+function cerrarSesionInlop(){
+  try{sessionStorage.removeItem('inlop_user');}catch(e){}
+  if(window.parent&&typeof window.parent.cerrarSesion==='function'){window.parent.cerrarSesion();return;}
+  if(window.top&&typeof window.top.cerrarSesion==='function'){window.top.cerrarSesion();return;}
+  volverPortal();
+}
 </script>
 
 <!-- HTML del módulo Operaciones -->
@@ -2052,11 +2102,29 @@ window.updatePortalStats=updatePortalStats;
     </button>
     <div class="live-pip" id="hdrLivePip" style="display:none"><span class="live-d"></span>En vivo</div>
     <div class="header-clock" id="headerClock">—</div>
-    <div class="header-user">
-      <div class="header-user-av" id="headerUserAv">JC</div>
-      <div class="header-user-info">
-        <div class="header-user-name" id="headerUserName">Operador INLOP</div>
-        <div class="header-user-rol" id="headerUserRol">Cartagena · CO</div>
+    <div class="header-user-wrap" id="headerUserWrap">
+      <div class="header-user" id="headerUserBtn" onclick="toggleHeaderUserMenu(event)">
+        <div class="header-user-av" id="headerUserAv">JC</div>
+        <div class="header-user-info">
+          <div class="header-user-name" id="headerUserName">Operador INLOP</div>
+          <div class="header-user-rol" id="headerUserRol">Cartagena · CO</div>
+        </div>
+        <i class="ti ti-chevron-down header-user-chevron" aria-hidden="true"></i>
+      </div>
+      <div class="header-user-menu" id="headerUserMenu">
+        <div class="header-user-menu-item" onclick="toast('Próximamente disponible','info')">
+          <i class="ti ti-user-circle" aria-hidden="true"></i>Mi Perfil
+        </div>
+        <div class="header-user-menu-item" id="headerUserMenuPersonal" style="display:none" onclick="PersonalMaestro.open()">
+          <i class="ti ti-users" aria-hidden="true"></i>Personal
+        </div>
+        <div class="header-user-menu-item" onclick="toast('Próximamente disponible','info')">
+          <i class="ti ti-settings" aria-hidden="true"></i>Configuración
+        </div>
+        <div class="header-user-menu-sep"></div>
+        <div class="header-user-menu-item danger" onclick="cerrarSesionInlop()">
+          <i class="ti ti-logout" aria-hidden="true"></i>Cerrar sesión
+        </div>
       </div>
     </div>
 
@@ -6964,6 +7032,339 @@ if(document.readyState!=='loading'){tryInit();}
 })();
 </script>
 
+<!-- ═══════════════════════════════════════════════════════
+     MÓDULO PERSONAL — Maestro de Colaboradores (FASE 5.7)
+     Fuente oficial de información de todos los colaboradores.
+     Consumido por el Comité Operativo; preparado para ser
+     reutilizado en el futuro por ERP, SIG, HSEQ, Calidad,
+     aprobaciones y flujos documentales sin necesidad de
+     rediseñar su arquitectura de datos.
+     ═══════════════════════════════════════════════════════ -->
+<script>
+var PersonalMaestro=(function(){
+'use strict';
+
+/* Bridge: helpers declarados en el módulo CM (mismo patrón que CO) */
+var dbInsert=window.dbInsert,dbUpdate=window.dbUpdate;
+
+/* Lista normalizada de áreas — evita duplicidad por variaciones
+   de escritura. Toda el área de un colaborador debe ser una de
+   estas opciones (select, no texto libre). */
+var AREAS=['Gerencia','Desarrollo','Operaciones','Tráfico','Gestión Documental','Comercial','HSEQ','SIG','Contabilidad','Pagos'];
+
+var _list=[];
+var _loaded=false;
+var _loading=null;
+var _search='';
+var _sortField='nombre';
+var _sortAsc=true;
+var _editId=null;      /* id del colaborador en edición, null = nuevo */
+var _firmaPendiente=undefined; /* undefined=sin cambio, null=eliminar, string=nueva firma */
+
+function _esc(s){
+  if(!s)return'';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _currentUser(){
+  try{return JSON.parse(sessionStorage.getItem('inlop_user')||'null');}catch(e){return null;}
+}
+
+/* Único punto de verdad para el permiso de acceso — se valida
+   tanto para mostrar la interfaz como antes de cada operación. */
+function esMaster(){
+  var u=_currentUser();
+  return!!(u&&(u.rol||'').toLowerCase()==='master');
+}
+
+/* Fetch directo con rechazo real en HTTP no-ok — dbGet() (bridge
+   compartido) traga cualquier error y siempre resuelve con [],
+   lo que impide distinguir "tabla vacía" de "columna inexistente".
+   Aquí sí se necesita ese rechazo para poder degradar en cascada. */
+function _fetchPersonal(qs){
+  var url=window.SUPABASE_URL+'/rest/v1/personal?'+qs;
+  return fetch(url,{headers:{'apikey':window.SUPABASE_KEY,'Authorization':'Bearer '+window.SUPABASE_KEY}})
+    .then(function(r){
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      return r.json();
+    });
+}
+
+/* ── Carga con fallback en cascada: nunca debe bloquear el
+   listado de Personal aunque falten columnas en Supabase. */
+function load(force){
+  if(_loaded&&!force)return Promise.resolve(_list);
+  if(_loading)return _loading;
+  var full='select=id,nombre,cargo,area,activo,firma_base64&order=nombre.asc';
+  var sinFirma='select=id,nombre,cargo,area,activo&order=nombre.asc';
+  var sinArea='select=id,nombre,cargo,activo&order=nombre.asc';
+  var minimo='select=id,nombre,cargo&order=nombre.asc';
+  _loading=_fetchPersonal(full)
+    .catch(function(){return _fetchPersonal(sinFirma);})
+    .catch(function(){return _fetchPersonal(sinArea);})
+    .catch(function(){return _fetchPersonal(minimo);})
+    .then(function(rows){
+      _list=(rows||[]).map(function(p){
+        return{
+          id:p.id,
+          nombre:p.nombre||'',
+          cargo:p.cargo||'',
+          area:p.area!==undefined?p.area:null,
+          activo:p.activo!==undefined?!!p.activo:true,
+          firma_base64:p.firma_base64!==undefined?p.firma_base64:null
+        };
+      });
+      _loaded=true;
+      _loading=null;
+      return _list;
+    })
+    .catch(function(e){
+      _list=[];_loaded=true;_loading=null;
+      toast('No se pudo cargar el Personal: '+e.message,'error');
+      return _list;
+    });
+  return _loading;
+}
+
+function getAll(){return _list.slice();}
+function getActivos(){return _list.filter(function(p){return p.activo!==false;});}
+
+/* ── Abrir / cerrar pantalla principal ────────────── */
+function open(){
+  if(!esMaster()){
+    toast('Solo el rol Master puede administrar Personal.','warn');
+    return;
+  }
+  var ov=document.getElementById('pm-overlay');
+  var btnNew=document.getElementById('pm-btn-new');
+  if(btnNew)btnNew.style.display=esMaster()?'flex':'none';
+  if(ov)ov.style.display='flex';
+  load().then(render);
+}
+function close(){
+  var ov=document.getElementById('pm-overlay');
+  if(ov)ov.style.display='none';
+}
+
+function _setSearch(v){_search=(v||'').toLowerCase();render();}
+function _setSort(field){
+  if(_sortField===field)_sortAsc=!_sortAsc;
+  else{_sortField=field;_sortAsc=true;}
+  render();
+}
+
+/* ── Render de la tabla ───────────────────────────── */
+function render(){
+  var tbody=document.getElementById('pm-tbody');
+  var empty=document.getElementById('pm-empty');
+  if(!tbody)return;
+
+  var rows=_list.filter(function(p){
+    if(!_search)return true;
+    return(p.nombre||'').toLowerCase().indexOf(_search)>=0
+      ||(p.cargo||'').toLowerCase().indexOf(_search)>=0
+      ||(p.area||'').toLowerCase().indexOf(_search)>=0;
+  });
+
+  rows.sort(function(a,b){
+    var av=(a[_sortField]||'');var bv=(b[_sortField]||'');
+    if(_sortField==='activo'){av=a.activo?1:0;bv=b.activo?1:0;}
+    else{av=String(av).toLowerCase();bv=String(bv).toLowerCase();}
+    if(av<bv)return _sortAsc?-1:1;
+    if(av>bv)return _sortAsc?1:-1;
+    return 0;
+  });
+
+  if(!rows.length){
+    tbody.innerHTML='';
+    if(empty)empty.style.display='block';
+    return;
+  }
+  if(empty)empty.style.display='none';
+
+  var master=esMaster();
+  tbody.innerHTML=rows.map(function(p){
+    var firmaCell=p.firma_base64
+      ?'<img class="pm-firma-mini" src="'+p.firma_base64+'" alt="Firma">'
+      :'<span class="pm-firma-mini-pending">Pendiente</span>';
+    var estadoBadge=p.activo
+      ?'<span class="pm-badge activo">🟢 Activo</span>'
+      :'<span class="pm-badge inactivo">🔴 Inactivo</span>';
+    var accion=master
+      ?'<button class="pm-btn-edit" onclick="PersonalMaestro._openModal('+p.id+')"><i class="ti ti-edit"></i> Editar</button>'
+      :'';
+    return'<tr><td>'+_esc(p.nombre)+'</td><td>'+_esc(p.cargo||'—')+'</td><td>'+_esc(p.area||'—')+'</td>'
+      +'<td>'+estadoBadge+'</td><td>'+firmaCell+'</td><td>'+accion+'</td></tr>';
+  }).join('');
+}
+
+/* ── Modal crear/editar ───────────────────────────── */
+function _fillAreaSelect(){
+  var sel=document.getElementById('pm-f-area');
+  if(!sel)return;
+  sel.innerHTML='<option value="">— Seleccionar —</option>'
+    +AREAS.map(function(a){return'<option value="'+a+'">'+a+'</option>';}).join('');
+}
+
+function _openModal(id){
+  if(!esMaster()){toast('Solo el rol Master puede administrar Personal.','warn');return;}
+  _editId=id||null;
+  _firmaPendiente=undefined;
+  _fillAreaSelect();
+
+  var ttl=document.getElementById('pm-modal-ttl');
+  var nombreEl=document.getElementById('pm-f-nombre');
+  var cargoEl=document.getElementById('pm-f-cargo');
+  var areaEl=document.getElementById('pm-f-area');
+  var btnQuitar=document.getElementById('pm-btn-quitar-firma');
+  var preview=document.getElementById('pm-firma-preview');
+
+  if(_editId){
+    var p=_list.find(function(x){return x.id===_editId;});
+    if(!p){toast('Colaborador no encontrado.','warn');return;}
+    if(ttl)ttl.textContent='Editar Colaborador';
+    if(nombreEl)nombreEl.value=p.nombre||'';
+    if(cargoEl)cargoEl.value=p.cargo||'';
+    if(areaEl)areaEl.value=p.area||'';
+    _setEstado(p.activo!==false);
+    if(preview){
+      preview.innerHTML=p.firma_base64
+        ?'<img src="'+p.firma_base64+'" alt="Firma">'
+        :'<span class="pm-firma-mini-pending">Sin firma registrada</span>';
+    }
+    if(btnQuitar)btnQuitar.style.display=p.firma_base64?'inline-flex':'none';
+  } else {
+    if(ttl)ttl.textContent='Nuevo Colaborador';
+    if(nombreEl)nombreEl.value='';
+    if(cargoEl)cargoEl.value='';
+    if(areaEl)areaEl.value='';
+    _setEstado(true);
+    if(preview)preview.innerHTML='<span class="pm-firma-mini-pending">Sin firma registrada</span>';
+    if(btnQuitar)btnQuitar.style.display='none';
+  }
+
+  var ov=document.getElementById('pm-modal-overlay');
+  if(ov)ov.style.display='flex';
+}
+
+function _closeModal(){
+  var ov=document.getElementById('pm-modal-overlay');
+  if(ov)ov.style.display='none';
+  _editId=null;
+  _firmaPendiente=undefined;
+}
+
+function _setEstado(activo){
+  var elA=document.getElementById('pm-estado-activo');
+  var elI=document.getElementById('pm-estado-inactivo');
+  if(elA)elA.className='pm-estado-opt'+(activo?' on activo':'');
+  if(elI)elI.className='pm-estado-opt'+(!activo?' on inactivo':'');
+  if(elA)elA.dataset.on=activo?'1':'0';
+  if(elI)elI.dataset.on=(!activo)?'1':'0';
+}
+function _getEstadoActual(){
+  var elA=document.getElementById('pm-estado-activo');
+  return!!(elA&&elA.dataset.on==='1');
+}
+
+/* ── Guardar (crear o actualizar) ─────────────────── */
+async function _save(){
+  if(!esMaster()){toast('Solo el rol Master puede administrar Personal.','warn');return;}
+  var nombre=(document.getElementById('pm-f-nombre').value||'').trim();
+  var cargo=(document.getElementById('pm-f-cargo').value||'').trim();
+  var area=document.getElementById('pm-f-area').value||null;
+  var activo=_getEstadoActual();
+
+  if(!nombre){toast('Ingresa el nombre del colaborador.','warn');return;}
+
+  var body={nombre:nombre,cargo:cargo||null,area:area,activo:activo};
+  if(_firmaPendiente!==undefined)body.firma_base64=_firmaPendiente;
+
+  try{
+    if(_editId){
+      await dbUpdate('personal','id=eq.'+_editId,body);
+      var p=_list.find(function(x){return x.id===_editId;});
+      if(p)Object.assign(p,body,{firma_base64:_firmaPendiente!==undefined?_firmaPendiente:p.firma_base64});
+      toast('Colaborador actualizado correctamente.','ok');
+    } else {
+      var rows=await dbInsert('personal',body);
+      if(rows&&rows[0])_list.push({
+        id:rows[0].id,nombre:nombre,cargo:cargo||'',area:area,activo:activo,
+        firma_base64:_firmaPendiente!==undefined?_firmaPendiente:null
+      });
+      toast('Colaborador creado correctamente.','ok');
+    }
+    _closeModal();
+    render();
+  }catch(e){
+    toast('Error al guardar: '+e.message,'error');
+  }
+}
+
+/* ── Firma digital: subir / cambiar / eliminar ────── */
+function _pickFirmaFile(){
+  var inp=document.getElementById('pm-firma-file-input');
+  if(inp){inp.value='';inp.click();}
+}
+
+function _onFirmaFile(file){
+  if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    var img=new Image();
+    img.onload=function(){
+      var canvas=document.createElement('canvas');
+      var maxW=320,maxH=90;
+      var ratio=Math.min(maxW/img.width,maxH/img.height,1);
+      canvas.width=Math.round(img.width*ratio);
+      canvas.height=Math.round(img.height*ratio);
+      var ctx=canvas.getContext('2d');
+      ctx.clearRect(0,0,canvas.width,canvas.height); /* preserva transparencia PNG */
+      ctx.drawImage(img,0,0,canvas.width,canvas.height);
+      var b64=canvas.toDataURL('image/png');
+      _firmaPendiente=b64;
+      var preview=document.getElementById('pm-firma-preview');
+      if(preview)preview.innerHTML='<img src="'+b64+'" alt="Firma">';
+      var btnQuitar=document.getElementById('pm-btn-quitar-firma');
+      if(btnQuitar)btnQuitar.style.display='inline-flex';
+    };
+    img.onerror=function(){toast('No se pudo leer la imagen.','warn');};
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function _eliminarFirma(){
+  _firmaPendiente=null;
+  var preview=document.getElementById('pm-firma-preview');
+  if(preview)preview.innerHTML='<span class="pm-firma-mini-pending">Sin firma registrada</span>';
+  var btnQuitar=document.getElementById('pm-btn-quitar-firma');
+  if(btnQuitar)btnQuitar.style.display='none';
+}
+
+return{
+  AREAS:AREAS,
+  esMaster:esMaster,
+  load:load,
+  getAll:getAll,
+  getActivos:getActivos,
+  open:open,
+  close:close,
+  render:render,
+  _setSearch:_setSearch,
+  _setSort:_setSort,
+  _openModal:_openModal,
+  _closeModal:_closeModal,
+  _setEstado:_setEstado,
+  _save:_save,
+  _pickFirmaFile:_pickFirmaFile,
+  _onFirmaFile:_onFirmaFile,
+  _eliminarFirma:_eliminarFirma
+};
+})();
+window.PersonalMaestro=PersonalMaestro;
+</script>
+
 
 <!-- ═══════════════════════════════════════════════════════
      COMITÉ OPERATIVO — Infraestructura (Fase 3.1)
@@ -7704,20 +8105,59 @@ if(document.readyState!=='loading'){tryInit();}
 /* Resumen del Comité y Objetivo del Comité — cajas institucionales */
 .co-acta-resumen-box{background:linear-gradient(135deg,#f0f9ff 0%,#eef2ff 100%);border:1px solid #bfdbfe;border-left:4px solid #012a6b;border-radius:0 8px 8px 0;padding:14px 16px;font-size:11px;color:#1e3a5f;line-height:1.75;page-break-inside:avoid;break-inside:avoid;}
 .co-acta-interp-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;font-size:10.5px;color:#475569;line-height:1.65;page-break-inside:avoid;break-inside:avoid;}
-/* Gestión de Firmas Digitales */
-.co-firmas-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10003;display:none;align-items:center;justify-content:center;}
-.co-firmas-box{background:#fff;border-radius:12px;width:min(620px,94vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3);}
-.co-firmas-hdr{padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
-.co-firmas-list{overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;}
-.co-firmas-card{border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:14px;background:#f8fafc;}
-.co-firmas-card-info{flex:1;min-width:0;}
-.co-firmas-card-nombre{font-size:13px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.co-firmas-card-cargo{font-size:11px;color:#64748b;}
-.co-firmas-card-preview{width:160px;flex-shrink:0;height:54px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;}
-.co-firmas-card-preview img{max-width:150px;max-height:48px;object-fit:contain;}
-.co-firmas-card-actions{display:flex;gap:6px;flex-shrink:0;}
-.co-firmas-no-firma{font-size:10px;color:#94a3b8;font-style:italic;text-align:center;padding:4px;}
 .co-acta-footer{margin-top:24px;border-top:1px solid #e2e8f0;padding-top:8px;display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;}
+
+/* ══════════════ MÓDULO PERSONAL (Maestro de Colaboradores) ══════════ */
+.pm-overlay{position:fixed;inset:0;background:rgba(10,14,39,.55);z-index:10010;display:none;align-items:center;justify-content:center;}
+.pm-box{background:#fff;border-radius:14px;width:min(1000px,96vw);max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.3);}
+.pm-hdr{padding:18px 22px;border-bottom:1px solid rgba(1,42,107,.1);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:linear-gradient(135deg,#f8fafc 0%,#eef2f8 100%);}
+.pm-hdr-ttl{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:var(--navy);letter-spacing:.02em;}
+.pm-hdr-sub{font-size:11.5px;color:#64748b;margin-top:1px;}
+.pm-body{overflow-y:auto;padding:18px 22px;flex:1;}
+.pm-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.pm-search{flex:1;min-width:220px;position:relative;}
+.pm-search input{width:100%;padding:9px 12px 9px 34px;border:1px solid rgba(1,42,107,.16);border-radius:8px;font-size:12.5px;outline:none;}
+.pm-search input:focus{border-color:var(--navy);}
+.pm-search i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:14px;}
+.pm-btn-new{background:var(--navy);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.pm-btn-new:hover{background:#0a3a8f;}
+.pm-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+.pm-table th{text-align:left;padding:9px 10px;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid rgba(1,42,107,.1);cursor:pointer;user-select:none;white-space:nowrap;}
+.pm-table th:hover{color:var(--navy);}
+.pm-table td{padding:9px 10px;border-bottom:1px solid #f1f5f9;vertical-align:middle;}
+.pm-table tr:hover td{background:#f8fafc;}
+.pm-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:10.5px;font-weight:700;}
+.pm-badge.activo{background:#e6f7ef;color:#00875f;}
+.pm-badge.inactivo{background:#fdecec;color:#dc2626;}
+.pm-firma-mini{max-width:70px;max-height:24px;object-fit:contain;}
+.pm-firma-mini-pending{font-size:9px;color:#94a3b8;font-style:italic;}
+.pm-btn-edit{background:none;border:1px solid rgba(1,42,107,.2);color:var(--navy);border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;}
+.pm-btn-edit:hover{background:#f0f4fa;}
+.pm-empty{text-align:center;padding:40px;color:#94a3b8;font-size:13px;}
+/* Modal crear/editar colaborador */
+.pm-modal-overlay{position:fixed;inset:0;background:rgba(10,14,39,.6);z-index:10011;display:none;align-items:center;justify-content:center;}
+.pm-modal-box{background:#fff;border-radius:14px;width:min(480px,94vw);max-height:90vh;overflow-y:auto;box-shadow:0 24px 70px rgba(0,0,0,.3);}
+.pm-modal-hdr{padding:16px 20px;border-bottom:1px solid rgba(1,42,107,.1);display:flex;align-items:center;justify-content:space-between;}
+.pm-modal-ttl{font-size:15px;font-weight:700;color:var(--navy);}
+.pm-modal-body{padding:18px 20px;display:flex;flex-direction:column;gap:14px;}
+.pm-field label{display:block;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;}
+.pm-field input[type=text],.pm-field select{width:100%;padding:9px 11px;border:1px solid rgba(1,42,107,.18);border-radius:7px;font-size:13px;outline:none;}
+.pm-field input[type=text]:focus,.pm-field select:focus{border-color:var(--navy);}
+.pm-estado-toggle{display:flex;gap:8px;}
+.pm-estado-opt{flex:1;text-align:center;padding:9px;border-radius:7px;border:1px solid rgba(1,42,107,.18);font-size:12.5px;font-weight:600;cursor:pointer;color:#64748b;}
+.pm-estado-opt.on.activo{background:#e6f7ef;border-color:#00875f;color:#00875f;}
+.pm-estado-opt.on.inactivo{background:#fdecec;border-color:#dc2626;color:#dc2626;}
+.pm-firma-box{border:1px dashed rgba(1,42,107,.25);border-radius:8px;padding:12px;display:flex;align-items:center;gap:12px;}
+.pm-firma-preview{width:140px;height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;}
+.pm-firma-preview img{max-width:130px;max-height:42px;object-fit:contain;}
+.pm-firma-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.pm-modal-footer{padding:14px 20px;border-top:1px solid rgba(1,42,107,.1);display:flex;justify-content:flex-end;gap:10px;}
+.pm-btn-cancel{background:none;border:1px solid rgba(1,42,107,.2);color:#475569;border-radius:7px;padding:9px 16px;font-size:12.5px;cursor:pointer;}
+.pm-btn-save{background:var(--navy);color:#fff;border:none;border-radius:7px;padding:9px 18px;font-size:12.5px;font-weight:600;cursor:pointer;}
+@media(max-width:640px){
+  .pm-table{font-size:11px;}
+  .pm-table th,.pm-table td{padding:7px 6px;}
+}
 @media(max-width:640px){
   .co-ops-kpi-row{grid-template-columns:repeat(2,1fr);}
   .co-gen-grid{grid-template-columns:1fr;}
@@ -7833,8 +8273,8 @@ if(document.readyState!=='loading'){tryInit();}
 
         </div>
         <div style="padding:6px 0 0;text-align:right;" id="co-link-firmas-wrap" style="display:none">
-          <button onclick="CO._abrirGestorFirmas()" style="background:none;border:none;color:var(--navy);font-size:11px;cursor:pointer;text-decoration:underline;padding:0">
-            <i class="ti ti-pencil-signature"></i> Gestionar firmas digitales
+          <button onclick="PersonalMaestro.open()" style="background:none;border:none;color:var(--navy);font-size:11px;cursor:pointer;text-decoration:underline;padding:0">
+            <i class="ti ti-users"></i> Administrar Personal
           </button>
         </div>
       </div>
@@ -8156,7 +8596,7 @@ if(document.readyState!=='loading'){tryInit();}
         <div style="font-size:11px;color:#64748b" id="co-hist-codigo">—</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button class="co-cmp-add-btn" id="co-hist-btn-firmas" style="display:none" onclick="CO._abrirGestorFirmas()"><i class="ti ti-pencil-signature"></i> Firmas</button>
+        <button class="co-cmp-add-btn" id="co-hist-btn-firmas" style="display:none" onclick="PersonalMaestro.open()"><i class="ti ti-users"></i> Personal</button>
         <button class="co-cmp-add-btn" onclick="CO._descargarPDF()"><i class="ti ti-download"></i> Descargar PDF</button>
         <button class="co-btn-close" style="position:static" onclick="CO._cerrarHistorico()"><i class="ti ti-x"></i></button>
       </div>
@@ -8169,22 +8609,92 @@ if(document.readyState!=='loading'){tryInit();}
 <div id="co-acta-tpl" style="display:none;font-family:'DM Sans',Arial,sans-serif;font-size:12px;color:#1e293b;background:#fff;padding:40px;max-width:800px;margin:0 auto;">
 </div>
 
-<!-- Gestión de Firmas Digitales -->
-<div id="co-firmas-overlay" class="co-firmas-overlay">
-  <div class="co-firmas-box">
-    <div class="co-firmas-hdr">
+<!-- ═══ MÓDULO PERSONAL — Maestro de Colaboradores ═══ -->
+<div id="pm-overlay" class="pm-overlay">
+  <div class="pm-box">
+    <div class="pm-hdr">
       <div>
-        <div style="font-size:14px;font-weight:700;color:var(--navy)"><i class="ti ti-pencil-signature" style="margin-right:6px"></i>Firmas Digitales</div>
-        <div style="font-size:11px;color:#64748b" id="co-firmas-subtitle">Personal INLOP</div>
+        <div class="pm-hdr-ttl">PERSONAL</div>
+        <div class="pm-hdr-sub">Administración de Colaboradores</div>
       </div>
-      <button class="co-btn-close" style="position:static" onclick="CO._cerrarGestorFirmas()" title="Cerrar"><i class="ti ti-x"></i></button>
+      <button class="co-btn-close" style="position:static" onclick="PersonalMaestro.close()" title="Cerrar"><i class="ti ti-x"></i></button>
     </div>
-    <div id="co-firmas-list" class="co-firmas-list"></div>
+    <div class="pm-body">
+      <div class="pm-toolbar">
+        <div class="pm-search">
+          <i class="ti ti-search" aria-hidden="true"></i>
+          <input type="text" id="pm-search-input" placeholder="Buscar colaborador..." oninput="PersonalMaestro._setSearch(this.value)">
+        </div>
+        <button class="pm-btn-new" id="pm-btn-new" onclick="PersonalMaestro._openModal()">
+          <i class="ti ti-plus" aria-hidden="true"></i>Nuevo Colaborador
+        </button>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="pm-table">
+          <thead>
+            <tr>
+              <th onclick="PersonalMaestro._setSort('nombre')">Nombre</th>
+              <th onclick="PersonalMaestro._setSort('cargo')">Cargo</th>
+              <th onclick="PersonalMaestro._setSort('area')">Área</th>
+              <th onclick="PersonalMaestro._setSort('activo')">Estado</th>
+              <th>Firma</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="pm-tbody"></tbody>
+        </table>
+      </div>
+      <div id="pm-empty" class="pm-empty" style="display:none">No se encontraron colaboradores.</div>
+    </div>
   </div>
 </div>
-<!-- Input oculto para carga de imágenes de firma -->
-<input type="file" id="co-firma-file-input" accept="image/png,image/jpeg,image/jpg,image/webp" style="display:none"
-  onchange="CO._onFirmaFile(this.files[0])">
+
+<!-- Modal crear/editar colaborador -->
+<div id="pm-modal-overlay" class="pm-modal-overlay">
+  <div class="pm-modal-box">
+    <div class="pm-modal-hdr">
+      <div class="pm-modal-ttl" id="pm-modal-ttl">Nuevo Colaborador</div>
+      <button class="co-btn-close" style="position:static" onclick="PersonalMaestro._closeModal()" title="Cerrar"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="pm-modal-body">
+      <div class="pm-field">
+        <label for="pm-f-nombre">Nombre</label>
+        <input type="text" id="pm-f-nombre" maxlength="120" placeholder="Nombre completo">
+      </div>
+      <div class="pm-field">
+        <label for="pm-f-cargo">Cargo</label>
+        <input type="text" id="pm-f-cargo" maxlength="100" placeholder="Ej. Coordinador de Operaciones">
+      </div>
+      <div class="pm-field">
+        <label for="pm-f-area">Área</label>
+        <select id="pm-f-area"><option value="">— Seleccionar —</option></select>
+      </div>
+      <div class="pm-field">
+        <label>Estado</label>
+        <div class="pm-estado-toggle">
+          <div class="pm-estado-opt" id="pm-estado-activo" onclick="PersonalMaestro._setEstado(true)">Activo</div>
+          <div class="pm-estado-opt" id="pm-estado-inactivo" onclick="PersonalMaestro._setEstado(false)">Inactivo</div>
+        </div>
+      </div>
+      <div class="pm-field">
+        <label>Firma Digital</label>
+        <div class="pm-firma-box">
+          <div class="pm-firma-preview" id="pm-firma-preview"><span class="pm-firma-mini-pending">Sin firma registrada</span></div>
+          <div class="pm-firma-actions">
+            <button class="pm-btn-edit" onclick="PersonalMaestro._pickFirmaFile()"><i class="ti ti-upload"></i> Subir / Cambiar</button>
+            <button class="pm-btn-edit" id="pm-btn-quitar-firma" style="display:none;color:#dc2626;border-color:#fca5a5" onclick="PersonalMaestro._eliminarFirma()"><i class="ti ti-trash"></i> Eliminar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="pm-modal-footer">
+      <button class="pm-btn-cancel" onclick="PersonalMaestro._closeModal()">Cancelar</button>
+      <button class="pm-btn-save" onclick="PersonalMaestro._save()">Guardar</button>
+    </div>
+  </div>
+</div>
+<input type="file" id="pm-firma-file-input" accept="image/png,image/jpeg,image/jpg,image/webp" style="display:none"
+  onchange="PersonalMaestro._onFirmaFile(this.files[0])">
 
 <!-- Modal: agregar invitado -->
 <div id="co-inv-modal" role="dialog" aria-modal="true" aria-label="Agregar invitado">
@@ -8274,53 +8784,30 @@ var _session={
 var _coPersonal=[];
 var _coPersonalLoaded=false;
 
-/* ── Constantes Supabase (solo lectura GET) ───────── */
-var _CO_SB_URL='https://gtyydandwcgoaratmnqh.supabase.co';
-var _CO_SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0eXlkYW5kd2Nnb2FyYXRtbnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDAyMTcsImV4cCI6MjA5MjYxNjIxN30.utGZtr0L5t9hIpRABTtfhsKEsrSCBJLHcP_gQ5Hq0EI';
-
 /* ── Helper DOM ───────────────────────────────────── */
 function $id(id){return document.getElementById(id);}
 
-/* ── Fetch helper (GET solo lectura) ──────────────── */
-function _coFetch(path){
-  return fetch(_CO_SB_URL+path,{
-    headers:{
-      'apikey':_CO_SB_KEY,
-      'Authorization':'Bearer '+_CO_SB_KEY
-    }
-  }).then(function(r){
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    return r.json();
-  });
-}
-
-/* ── Cargar directorio personal desde Supabase ────── */
+/* ── Cargar directorio personal desde el Maestro (FASE 5.7) ─
+   CO ya no consulta Supabase directamente: el Maestro de
+   Colaboradores (PersonalMaestro) es la única fuente de verdad.
+   Solo se exponen aquí los colaboradores ACTIVOS — los inactivos
+   no deben ofrecerse para selección en nuevos Comités, aunque
+   sigan apareciendo tal cual quedaron en las actas históricas
+   (el snapshot ya persistido nunca se modifica). */
 function loadPersonal(){
   if(_coPersonalLoaded)return Promise.resolve(_coPersonal);
-  /* area y firma_base64 pueden no existir aún en Supabase (columnas
-     pendientes de migración SQL). Si el select con ambas falla (HTTP 400
-     de PostgREST), se reintenta progresivamente con menos columnas para
-     no bloquear nunca el listado de Personal. */
-  return _coFetch('/rest/v1/personal?select=id,nombre,cargo,area,firma_base64&order=nombre.asc')
-    .catch(function(){
-      return _coFetch('/rest/v1/personal?select=id,nombre,cargo,area&order=nombre.asc');
-    })
-    .catch(function(){
-      return _coFetch('/rest/v1/personal?select=id,nombre,cargo&order=nombre.asc');
-    })
-    .then(function(rows){
-      _coPersonal=(rows||[]).map(function(p){
-        if(p.area===undefined)p.area=null;
-        if(p.firma_base64===undefined)p.firma_base64=null;
-        return p;
-      });
-      _coPersonalLoaded=true;
-      return _coPersonal;
-    })
-    .catch(function(){
-      _coPersonal=[];
-      return [];
-    });
+  if(typeof window.PersonalMaestro==='undefined'){
+    _coPersonal=[];_coPersonalLoaded=true;
+    return Promise.resolve([]);
+  }
+  return window.PersonalMaestro.load().then(function(){
+    _coPersonal=window.PersonalMaestro.getActivos();
+    _coPersonalLoaded=true;
+    return _coPersonal;
+  }).catch(function(){
+    _coPersonal=[];
+    return [];
+  });
 }
 
 /* ── Poblar selects de responsables ───────────────── */
@@ -8387,9 +8874,9 @@ function initStep1(){
     if(r2) r2.value=_session.responsable_2;
   }
 
-  /* Mostrar link "Gestionar firmas" solo para Master/Admin */
+  /* Mostrar link "Administrar Personal" únicamente para Master */
   var linkFirmas=$id('co-link-firmas-wrap');
-  if(linkFirmas) linkFirmas.style.display=_tienePermisoFirma()?'':'none';
+  if(linkFirmas) linkFirmas.style.display=(typeof PersonalMaestro!=='undefined'&&PersonalMaestro.esMaster())?'':'none';
 }
 
 /* ── Guardar valores del Paso 1 en _session ───────── */
@@ -10560,147 +11047,16 @@ function _tienePermisoEdicion(){
 }
 
 /* ═══════════════════════════════════════════════════
-   FIRMAS DIGITALES — Bloque FASE 5.4
+   PERSONAL — FASE 5.7: la gestión de firmas, cargo, área
+   y estado ahora vive exclusivamente en el módulo global
+   PersonalMaestro (Maestro de Colaboradores). CO solo
+   consume esa información — ver loadPersonal().
    ════════════════════════════════════════════════════ */
-
-/* Solo Master y Administrador pueden modificar firmas */
-function _tienePermisoFirma(){
-  try{
-    var u=window.INLOP&&window.INLOP.currentUser?window.INLOP.currentUser
-         :JSON.parse(sessionStorage.getItem('inlop_user')||'null');
-    if(!u)return false;
-    var r=(u.rol||'').toLowerCase();
-    return r==='master'||r==='administrador';
-  }catch(e){return false;}
-}
 
 /* Retorna la imagen de firma: soporta firma_url (Storage futuro) y firma_base64 */
 function _getFirmaImgSrc(p){
   if(!p)return null;
   return p.firma_url||p.firma_base64||null;
-}
-
-/* Variable para tracking del upload en curso */
-var _firmaUploadPersonId=null;
-
-/* Abrir modal de gestión de firmas */
-function _abrirGestorFirmas(){
-  _firmaUploadPersonId=null;
-  var ov=$id('co-firmas-overlay');
-  if(ov){ov.style.display='flex';}
-  _renderGestorFirmas();
-}
-
-/* Cerrar modal */
-function _cerrarGestorFirmas(){
-  var ov=$id('co-firmas-overlay');
-  if(ov)ov.style.display='none';
-  _firmaUploadPersonId=null;
-}
-
-/* Renderizar lista de personal con firmas */
-function _renderGestorFirmas(){
-  var list=$id('co-firmas-list');
-  if(!list)return;
-  var esAdmin=_tienePermisoFirma();
-  var sub=$id('co-firmas-subtitle');
-  if(sub)sub.textContent=esAdmin?'Solo Master y Administrador pueden modificar firmas.':'Vista de firmas registradas.';
-
-  if(!_coPersonal.length){
-    list.innerHTML='<div style="padding:24px;text-align:center;color:#94a3b8;font-size:12px">No hay personal cargado. Asegúrese de abrir el Comité primero.</div>';
-    return;
-  }
-
-  list.innerHTML=_coPersonal.map(function(p){
-    var firmaSrc=_getFirmaImgSrc(p);
-    var previewHtml=firmaSrc
-      ?'<img src="'+firmaSrc+'" style="max-width:150px;max-height:48px;object-fit:contain" alt="Firma de '+_esc(p.nombre)+'">'
-      :'<div class="co-firmas-no-firma">Sin firma registrada</div>';
-
-    var actHtml='';
-    if(esAdmin){
-      actHtml='<div class="co-firmas-card-actions">'
-        +'<button class="co-cmp-add-btn" onclick="CO._subirFirma('+p.id+')" style="font-size:11px;padding:5px 10px" title="'+(firmaSrc?'Cambiar firma':'Subir firma')+'">'
-        +'<i class="ti ti-upload"></i> '+(firmaSrc?'Cambiar':'Subir')+'</button>';
-      if(firmaSrc){
-        actHtml+='<button onclick="CO._eliminarFirma('+p.id+')" style="background:none;border:1px solid #fca5a5;color:#dc2626;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:11px" title="Eliminar firma">'
-          +'<i class="ti ti-trash"></i></button>';
-      }
-      actHtml+='</div>';
-    }
-
-    return'<div class="co-firmas-card">'
-      +'<div class="co-firmas-card-info"><div class="co-firmas-card-nombre">'+_esc(p.nombre)+'</div>'
-      +'<div class="co-firmas-card-cargo">'+_esc(p.cargo||'—')+'</div></div>'
-      +'<div class="co-firmas-card-preview">'+previewHtml+'</div>'
-      +actHtml
-      +'</div>';
-  }).join('');
-}
-
-/* Trigger carga de imagen para una persona */
-function _subirFirma(personId){
-  if(!_tienePermisoFirma()){toast('Sin permiso para modificar firmas.','warn');return;}
-  _firmaUploadPersonId=personId;
-  var inp=$id('co-firma-file-input');
-  if(inp){inp.value='';inp.click();}
-}
-
-/* Callback del input file — procesa imagen y llama a _guardarFirma */
-function _onFirmaFile(file){
-  if(!file||!_firmaUploadPersonId)return;
-  var id=_firmaUploadPersonId;
-  var reader=new FileReader();
-  reader.onload=function(ev){
-    var img=new Image();
-    img.onload=function(){
-      var canvas=document.createElement('canvas');
-      var maxW=320,maxH=90;
-      var ratio=Math.min(maxW/img.width,maxH/img.height,1);
-      canvas.width=Math.round(img.width*ratio);
-      canvas.height=Math.round(img.height*ratio);
-      var ctx=canvas.getContext('2d');
-      /* Fondo transparente: PNG preserva transparencia */
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      ctx.drawImage(img,0,0,canvas.width,canvas.height);
-      _guardarFirma(id,canvas.toDataURL('image/png'));
-    };
-    img.onerror=function(){toast('No se pudo leer la imagen.','warn');};
-    img.src=ev.target.result;
-  };
-  reader.readAsDataURL(file);
-}
-
-/* Guarda firma en Supabase y actualiza caché en memoria */
-async function _guardarFirma(personId,b64){
-  try{
-    await dbUpdate('personal','id=eq.'+personId,{firma_base64:b64,firma_updated_at:new Date().toISOString()});
-    var p=_coPersonal.find(function(x){return x.id===personId;});
-    if(p)p.firma_base64=b64;
-    var a=(_session.asistencia||[]).find(function(x){return x.id===personId;});
-    if(a)a.firma_base64=b64;
-    toast('Firma guardada correctamente.','ok');
-    _renderGestorFirmas();
-  }catch(e){
-    toast('Error al guardar firma: '+e.message,'error');
-  }
-}
-
-/* Elimina firma de Supabase y actualiza caché en memoria */
-async function _eliminarFirma(personId){
-  if(!_tienePermisoFirma()){toast('Sin permiso para modificar firmas.','warn');return;}
-  if(!confirm('¿Eliminar la firma de este colaborador? Esta acción no se puede deshacer.'))return;
-  try{
-    await dbUpdate('personal','id=eq.'+personId,{firma_base64:null,firma_updated_at:new Date().toISOString()});
-    var p=_coPersonal.find(function(x){return x.id===personId;});
-    if(p)p.firma_base64=null;
-    var a=(_session.asistencia||[]).find(function(x){return x.id===personId;});
-    if(a)a.firma_base64=null;
-    toast('Firma eliminada.','ok');
-    _renderGestorFirmas();
-  }catch(e){
-    toast('Error al eliminar firma: '+e.message,'error');
-  }
 }
 
 /* ── Actualizar botón del header según estado acta ─ */
@@ -11111,9 +11467,9 @@ var CO={
     if(body) body.innerHTML='<div style="text-align:center;padding:40px"><i class="ti ti-loader" style="font-size:28px;opacity:.4"></i></div>';
     var ov=$id('co-hist-overlay');
     if(ov) ov.style.display='flex';
-    /* Mostrar botón Firmas solo para Master/Admin */
+    /* Mostrar botón Personal únicamente para Master */
     var btnF=$id('co-hist-btn-firmas');
-    if(btnF) btnF.style.display=_tienePermisoFirma()?'':'none';
+    if(btnF) btnF.style.display=(typeof PersonalMaestro!=='undefined'&&PersonalMaestro.esMaster())?'':'none';
     dbGet('co_actas','id=eq.'+actaId+'&select=*').then(function(rows){
       if(!rows||!rows.length){if(body)body.innerHTML='<div style="padding:24px">Acta no encontrada.</div>';return;}
       var acta=rows[0];
@@ -11140,13 +11496,6 @@ var CO={
     var open=el.classList.toggle('open');
     if(ico){ico.className=open?'ti ti-chevron-up':'ti ti-chevron-down';}
   },
-
-  /* ── Firmas Digitales ────────────────────────────── */
-  _abrirGestorFirmas:function(){_abrirGestorFirmas();},
-  _cerrarGestorFirmas:function(){_cerrarGestorFirmas();},
-  _subirFirma:function(personId){_subirFirma(personId);},
-  _eliminarFirma:function(personId){_eliminarFirma(personId);},
-  _onFirmaFile:function(file){_onFirmaFile(file);},
 
   _getSession:function(){return _session;}
 };
