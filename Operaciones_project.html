@@ -7234,7 +7234,7 @@ function render(){
       ?'<span class="pm-badge activo">🟢 Activo</span>'
       :'<span class="pm-badge inactivo">🔴 Inactivo</span>';
     var accion=master
-      ?'<button class="pm-btn-edit" onclick="PersonalMaestro._openModal('+p.id+')"><i class="ti ti-edit"></i> Editar</button>'
+      ?'<button class="pm-btn-edit" onclick="PersonalMaestro._openModal(\''+_esc(p.id)+'\')"><i class="ti ti-edit"></i> Editar</button>'
       :'';
     return'<tr><td>'+_esc(p.nombre)+'</td><td>'+_esc(p.cargo||'—')+'</td><td>'+_esc(p.area||'—')+'</td>'
       +'<td>'+estadoBadge+'</td><td>'+firmaCell+'</td><td>'+accion+'</td></tr>';
