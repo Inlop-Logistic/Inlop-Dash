@@ -2,7 +2,7 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import { useAuth } from "@/state/AuthContext";
 import {
   LayoutDashboard, ClipboardList, Truck, Map,
-  AlertTriangle, Car, CalendarDays, CheckSquare,
+  AlertTriangle, Car, CalendarClock, CheckSquare,
   LogOut, ChevronRight, ChevronLeft,
 } from "lucide-react";
 import { TopbarSearch } from "@/components/layout/TopbarSearch";
@@ -24,7 +24,7 @@ const NAV_SECTIONS: NavSection[] = [
       { id: "mapa",        label: "Mapa GPS",     icon: <Map             className="w-4 h-4" /> },
       { id: "alarmas",     label: "Alarmas",      icon: <AlertTriangle   className="w-4 h-4" /> },
       { id: "vehiculos",   label: "Vehículos",    icon: <Car             className="w-4 h-4" /> },
-      { id: "planeados",   label: "Planeados",    icon: <CalendarDays    className="w-4 h-4" /> },
+      { id: "programacion", label: "Programación", icon: <CalendarClock  className="w-4 h-4" /> },
       { id: "cumplidos",   label: "Cumplidos",    icon: <CheckSquare     className="w-4 h-4" /> },
     ],
   },

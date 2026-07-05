@@ -29,3 +29,9 @@ export function fmtFechaCort(iso: string | null | undefined): string {
     day: "2-digit", month: "short", year: "numeric",
   });
 }
+
+/** Solo hora: "10:35 a. m." — para bandejas operativas con hora de salida. */
+export function fmtHora(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
+}

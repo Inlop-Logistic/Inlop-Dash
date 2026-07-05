@@ -2074,6 +2074,148 @@ app.get("/api/planeados", async (req, res) => {
   }
 });
 
+// ─── PROGRAMACIÓN ───────────────────────────────────────────────────────────
+// REQUIERE migración Supabase antes de activar PATCH:
+//   ALTER TABLE planeados
+//     ADD COLUMN IF NOT EXISTS estado_programacion text NOT NULL DEFAULT 'programado',
+//     ADD COLUMN IF NOT EXISTS observaciones        text,
+//     ADD COLUMN IF NOT EXISTS actualizado_en       timestamptz;
+
+// GET /api/programacion — bandeja operativa (viajes planeados no activos)
+app.get("/api/programacion", async (req, res) => {
+  try {
+    const { desde, hasta } = req.query;
+    const hoyInicio = new Date();
+    hoyInicio.setHours(0, 0, 0, 0);
+    const desdeStr = desde || hoyInicio.toISOString().slice(0, 10);
+    const hastaStr = hasta || hoyInicio.toISOString().slice(0, 10);
+
+    const data = await sbFetch(
+      `/planeados?fecha_programada_dia=gte.${desdeStr}&fecha_programada_dia=lte.${hastaStr}&activo_en_resume=eq.false&order=schedulate_origin.asc&limit=500`
+    );
+    res.json(data || []);
+  } catch (e) {
+    console.error("❌ GET /api/programacion:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/programacion/:id/solicitud — solicitud origen vinculada al viaje
+// Un viaje sin solicitud asociada es un estado de negocio válido → { vinculada: false }.
+// Solo un error de infraestructura devuelve 500.
+app.get("/api/programacion/:id/solicitud", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const SOL_SELECT = [
+      'id','codigo_solicitud','external_ref','canal','creado_en','creado_por',
+      'empresa_cliente_id','agencia_id','agencia_nombre',
+      'estado','fecha_confirmacion',
+    ].join(',');
+
+    const sols = await sbFetch(
+      `/solicitudes?controlt_trip_number=eq.${encodeURIComponent(id)}&limit=1&select=${SOL_SELECT}`
+    );
+
+    if (sols === null) {
+      return res.status(500).json({ error: "Error consultando solicitudes" });
+    }
+
+    if (sols.length === 0) {
+      return res.json({ vinculada: false });
+    }
+
+    const sol = sols[0];
+
+    const [empresas, agencias, usuarios] = await Promise.all([
+      sol.empresa_cliente_id
+        ? sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(sol.empresa_cliente_id)}&select=id,razon_social`)
+        : Promise.resolve([]),
+      sol.agencia_id
+        ? sbFetch(`/agencias_cliente?id=eq.${encodeURIComponent(sol.agencia_id)}&select=id,nombre`)
+        : Promise.resolve([]),
+      sol.creado_por
+        ? sbFetch(`/usuarios_cliente?id=eq.${encodeURIComponent(sol.creado_por)}&select=id,nombre`)
+        : Promise.resolve([]),
+    ]);
+
+    res.json({
+      vinculada:          true,
+      id:                 sol.id,
+      codigo_solicitud:   sol.codigo_solicitud,
+      external_ref:       sol.external_ref          || null,
+      canal:              sol.canal                 || null,
+      creado_en:          sol.creado_en,
+      fecha_confirmacion: sol.fecha_confirmacion    || null,
+      estado:             sol.estado === 'confirmado' ? 'aprobado' : sol.estado,
+      solicitante:        usuarios?.[0]?.nombre     || null,
+      cliente:            empresas?.[0]?.razon_social || '—',
+      agencia:            agencias?.[0]?.nombre     || sol.agencia_nombre || '—',
+    });
+  } catch (e) {
+    console.error("❌ GET /api/programacion/:id/solicitud:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/programacion/:id — detalle de un viaje planeado por trip_number
+app.get("/api/programacion/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = await sbFetch(
+      `/planeados?trip_number=eq.${encodeURIComponent(id)}&limit=1`
+    );
+    if (!data || data.length === 0) return res.status(404).json({ error: "No encontrado" });
+    res.json(data[0]);
+  } catch (e) {
+    console.error("❌ GET /api/programacion/:id:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/programacion/:id/estado — cambia estado ERP del viaje
+// Solo actualiza estado_programacion. Las observaciones son exclusivas de /observaciones.
+app.patch("/api/programacion/:id/estado", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { estado } = req.body || {};
+    const ESTADOS_VALIDOS = ["programado", "asignado", "no_show", "cancelado"];
+    if (!ESTADOS_VALIDOS.includes(estado)) {
+      return res.status(400).json({ error: `Estado inválido: ${estado}` });
+    }
+    await sbFetch(
+      `/planeados?trip_number=eq.${encodeURIComponent(id)}`,
+      "PATCH",
+      { estado_programacion: estado, actualizado_en: new Date().toISOString() }
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("❌ PATCH /api/programacion/:id/estado:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/programacion/:id/observaciones — guarda nota del operador
+// Endpoint exclusivo para observaciones; no toca estado_programacion.
+app.patch("/api/programacion/:id/observaciones", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { observaciones } = req.body || {};
+    if (observaciones === undefined) {
+      return res.status(400).json({ error: "El campo observaciones es requerido" });
+    }
+    await sbFetch(
+      `/planeados?trip_number=eq.${encodeURIComponent(id)}`,
+      "PATCH",
+      { observaciones, actualizado_en: new Date().toISOString() }
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("❌ PATCH /api/programacion/:id/observaciones:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Health check
 app.get("/health", (req, res) => {
   const estados = {};

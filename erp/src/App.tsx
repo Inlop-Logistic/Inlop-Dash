@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import type { Vista } from "@/types/navigation";
 import { LoginPage } from "@/pages/LoginPage";
 import { SolicitudesPage } from "@/pages/SolicitudesPage";
+import { ProgramacionPage } from "@/pages/ProgramacionPage";
 
 function ComingSoon({ titulo }: { titulo: string }) {
   return (
@@ -29,7 +30,8 @@ function AppInner() {
   if (!user) return <LoginPage />;
 
   const renderPage = () => {
-    if (vista === "solicitudes") return <SolicitudesPage />;
+    if (vista === "solicitudes")  return <SolicitudesPage />;
+    if (vista === "programacion") return <ProgramacionPage />;
     return <ComingSoon titulo={vista.charAt(0).toUpperCase() + vista.slice(1)} />;
   };
 
