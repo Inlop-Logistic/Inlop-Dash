@@ -2081,7 +2081,7 @@ app.get("/api/planeados", async (req, res) => {
 //     ADD COLUMN IF NOT EXISTS observaciones        text,
 //     ADD COLUMN IF NOT EXISTS actualizado_en       timestamptz;
 
-// GET /api/programacion — bandeja operativa (viajes planeados no activos)
+// GET /api/programacion — bandeja operativa completa del día (todos los viajes del rango)
 app.get("/api/programacion", async (req, res) => {
   try {
     const { desde, hasta } = req.query;
@@ -2091,7 +2091,7 @@ app.get("/api/programacion", async (req, res) => {
     const hastaStr = hasta || hoyInicio.toISOString().slice(0, 10);
 
     const data = await sbFetch(
-      `/planeados?fecha_programada_dia=gte.${desdeStr}&fecha_programada_dia=lte.${hastaStr}&activo_en_resume=eq.false&order=schedulate_origin.asc&limit=500`
+      `/planeados?fecha_programada_dia=gte.${desdeStr}&fecha_programada_dia=lte.${hastaStr}&order=schedulate_origin.asc&limit=500`
     );
     res.json(data || []);
   } catch (e) {
@@ -2179,7 +2179,7 @@ app.patch("/api/programacion/:id/estado", async (req, res) => {
   try {
     const { id } = req.params;
     const { estado } = req.body || {};
-    const ESTADOS_VALIDOS = ["programado", "asignado", "no_show", "cancelado"];
+    const ESTADOS_VALIDOS = ["programado", "cancelado"];
     if (!ESTADOS_VALIDOS.includes(estado)) {
       return res.status(400).json({ error: `Estado inválido: ${estado}` });
     }
@@ -2212,6 +2212,49 @@ app.patch("/api/programacion/:id/observaciones", async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     console.error("❌ PATCH /api/programacion/:id/observaciones:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/programacion/:id/sync — reintenta sincronizar un viaje individual con la caché de la plataforma
+app.post("/api/programacion/:id/sync", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const activeIds = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
+    const estaActivo = activeIds.has(id);
+
+    const viajeCache = [...cache.viajes.data, ...(cache.pendientes.data || [])].find(v => v.trip_number === id);
+
+    if (viajeCache) {
+      const f = parseSchedulate(viajeCache.schedulate_origin);
+      await sbFetch(
+        `/planeados?trip_number=eq.${encodeURIComponent(id)}`,
+        'PATCH',
+        {
+          license_plate:         viajeCache.license_plate         || null,
+          driver_name:           viajeCache.driver_name           || null,
+          company_customer_name: viajeCache.company_customer_name || null,
+          city_origin:           viajeCache.city_origin           || null,
+          city_destination:      viajeCache.city_destination      || null,
+          origin_address:        viajeCache.origin_address        || null,
+          schedulate_origin:     viajeCache.schedulate_origin     || null,
+          fecha_programada_dia:  f ? f.toISOString().slice(0, 10) : null,
+          activo_en_resume:      estaActivo,
+          actualizado_en:        new Date().toISOString(),
+        }
+      );
+    } else {
+      await sbFetch(
+        `/planeados?trip_number=eq.${encodeURIComponent(id)}`,
+        'PATCH',
+        { activo_en_resume: estaActivo, actualizado_en: new Date().toISOString() }
+      );
+    }
+
+    res.json({ ok: true, activo_en_resume: estaActivo });
+  } catch (e) {
+    console.error("❌ POST /api/programacion/:id/sync:", e.message);
     res.status(500).json({ error: e.message });
   }
 });

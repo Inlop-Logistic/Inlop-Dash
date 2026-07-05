@@ -3,7 +3,7 @@ import { KpiCard, PageHeader, Card, DataTable, Button } from "@/components/ui";
 import { useProgramacion } from "./hooks/useProgramacion";
 import { CentroOperativo } from "./components/CentroOperativo";
 import { COLUMNS } from "./components/ProgramacionTableColumns";
-import { TABS } from "./constants";
+import { TABS, tabCount } from "./constants";
 
 export function ProgramacionPage() {
   const {
@@ -15,7 +15,7 @@ export function ProgramacionPage() {
     setPanelId, panelViaje,
     accionLoading,
     filtradas, kpis,
-    cargar, handleEstado,
+    cargar, handleEstado, handleSync,
   } = useProgramacion();
 
   return (
@@ -63,11 +63,11 @@ export function ProgramacionPage() {
           onClick={() => setTabEstado("asignado")}
         />
         <KpiCard
-          label="No show"
-          value={kpis.no_show}
+          label="Cancelados"
+          value={kpis.cancelado}
           icon={<XCircle className="w-4.5 h-4.5" />}
-          color="#9F1239" bg="var(--danger-bg)"
-          onClick={() => setTabEstado("no_show")}
+          color="var(--gray-600)" bg="var(--gray-100)"
+          onClick={() => setTabEstado("cancelado")}
         />
       </div>
 
@@ -111,9 +111,7 @@ export function ProgramacionPage() {
       <div className="flex items-center gap-1.5 flex-wrap" role="tablist">
         {TABS.map((t) => {
           const active = tabEstado === t.id;
-          const count  = t.id === "todos"
-            ? data.length
-            : data.filter((v) => v.estado_programacion === t.id).length;
+          const count  = tabCount(data, t.id);
           return (
             <button
               key={t.id}
@@ -177,6 +175,7 @@ export function ProgramacionPage() {
           viaje={panelViaje}
           onClose={() => setPanelId(null)}
           onEstado={handleEstado}
+          onSync={handleSync}
           accionLoading={accionLoading}
         />
       )}

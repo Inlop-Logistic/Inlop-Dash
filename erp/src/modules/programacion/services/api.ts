@@ -22,3 +22,10 @@ export function guardarObservacion(id: string, observaciones: string) {
 export function obtenerSolicitudVinculada(tripNumber: string) {
   return req<SolicitudVinculadaResult>(`/api/programacion/${encodeURIComponent(tripNumber)}/solicitud`);
 }
+
+export function sincronizarViaje(tripNumber: string) {
+  return req<{ ok: boolean; activo_en_resume: boolean }>(
+    `/api/programacion/${encodeURIComponent(tripNumber)}/sync`,
+    { method: "POST" },
+  );
+}

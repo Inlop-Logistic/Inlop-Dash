@@ -1,21 +1,23 @@
 import { useEffect, useState } from "react";
 import {
-  User, Car, MapPin, FileText, AlertCircle, Link2, CheckCircle2,
+  User, Car, MapPin, FileText, AlertCircle, Link2, CheckCircle2, RefreshCw, AlertTriangle,
 } from "lucide-react";
 import { fmtFecha, fmtFechaCort, fmtHora } from "@/utils/date";
 import { SidePanel, PanelSection, InfoRow, Button } from "@/components/ui";
 import type { ViajeResumen, EstadoProgramacion, SolicitudVinculadaResult } from "../types";
 import { guardarObservacion, obtenerSolicitudVinculada } from "../services/api";
 import { EstadoBadge } from "./EstadoBadge";
+import { estadoVisual } from "../constants";
 
 interface CentroOperativoProps {
   viaje: ViajeResumen;
   onClose: () => void;
   onEstado: (id: string, estado: EstadoProgramacion) => Promise<void>;
+  onSync: (id: string) => Promise<void>;
   accionLoading: boolean;
 }
 
-export function CentroOperativo({ viaje, onClose, onEstado, accionLoading }: CentroOperativoProps) {
+export function CentroOperativo({ viaje, onClose, onEstado, onSync, accionLoading }: CentroOperativoProps) {
   const [obs, setObs]             = useState(viaje.observaciones ?? "");
   const [savingObs, setSavingObs] = useState(false);
   const [obsSaved, setObsSaved]   = useState(false);
@@ -36,7 +38,10 @@ export function CentroOperativo({ viaje, onClose, onEstado, accionLoading }: Cen
     return () => { cancelled = true; };
   }, [viaje.trip_number]);
 
-  const estaActivo = viaje.estado_programacion === "programado" || viaje.estado_programacion === "asignado";
+  const estadoD    = estadoVisual(viaje);
+  const esCancelado = viaje.estado_programacion === "cancelado";
+  const esVencido   = estadoD === "vencido";
+  const esperandoActivacion = !viaje.activo_en_resume && !esCancelado;
 
   const handleGuardarObs = async () => {
     setSavingObs(true);
@@ -50,17 +55,20 @@ export function CentroOperativo({ viaje, onClose, onEstado, accionLoading }: Cen
     }
   };
 
-  const footer = estaActivo ? (
+  const footer = !esCancelado ? (
     <div className="px-6 py-4 flex flex-col gap-2.5">
-      <Button
-        variant="danger"
-        size="lg"
-        className="w-full justify-center"
-        loading={accionLoading}
-        onClick={() => onEstado(viaje.trip_number, "no_show")}
-      >
-        Marcar No show
-      </Button>
+      {esperandoActivacion && (
+        <Button
+          variant="outline"
+          size="lg"
+          className="w-full justify-center"
+          icon={<RefreshCw className="w-3.5 h-3.5" />}
+          loading={accionLoading}
+          onClick={() => onSync(viaje.trip_number)}
+        >
+          Reintentar sincronización
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="lg"
@@ -79,10 +87,24 @@ export function CentroOperativo({ viaje, onClose, onEstado, accionLoading }: Cen
       onClose={onClose}
       title={viaje.trip_number}
       subtitle={viaje.company_customer_name ?? undefined}
-      headerRight={<EstadoBadge estado={viaje.estado_programacion} />}
+      headerRight={<EstadoBadge estado={estadoD} />}
       footer={footer}
       width="480px"
     >
+      {/* Alerta vencido */}
+      {esVencido && (
+        <div
+          className="mx-5 mt-4 flex items-start gap-2.5 px-4 py-3 rounded-xl text-[12px] font-medium"
+          style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A" }}
+        >
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "#F59E0B" }} />
+          <span>
+            La hora programada ya transcurrió y el viaje no se ha activado en la plataforma de seguimiento.
+            Verifica el estado con el conductor y usa "Reintentar sincronización" si ya inició.
+          </span>
+        </div>
+      )}
+
       {/* Identificación */}
       <PanelSection title="Identificación" icon={<FileText className="w-3.5 h-3.5" />} first>
         <InfoRow label="Trip number"      value={viaje.trip_number} mono />

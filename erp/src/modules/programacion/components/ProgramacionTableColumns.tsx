@@ -1,24 +1,33 @@
-import { ChevronRight, User, Car, ArrowRight } from "lucide-react";
+import { ChevronRight, User, Car, ArrowRight, AlertTriangle } from "lucide-react";
 import { fmtHora } from "@/utils/date";
 import type { Column } from "@/components/ui";
 import type { ViajeResumen } from "../types";
 import { EstadoBadge } from "./EstadoBadge";
+import { estadoVisual } from "../constants";
 
 export const COLUMNS: Column<ViajeResumen>[] = [
   {
     key: "hora",
     header: "Hora",
-    width: "110px",
-    render: (v) => (
-      <div>
-        <div className="text-[13px] font-bold tabular-nums" style={{ color: "var(--navy)" }}>
-          {fmtHora(v.schedulate_origin)}
+    width: "120px",
+    render: (v) => {
+      const esVencido = estadoVisual(v) === "vencido";
+      return (
+        <div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[13px] font-bold tabular-nums" style={{ color: esVencido ? "#92400E" : "var(--navy)" }}>
+              {fmtHora(v.schedulate_origin)}
+            </span>
+            {esVencido && (
+              <AlertTriangle className="w-3 h-3 shrink-0" style={{ color: "#F59E0B" }} />
+            )}
+          </div>
+          <div className="text-[11px] font-mono" style={{ color: "var(--gray-400)" }}>
+            {v.trip_number}
+          </div>
         </div>
-        <div className="text-[11px] font-mono" style={{ color: "var(--gray-400)" }}>
-          {v.trip_number}
-        </div>
-      </div>
-    ),
+      );
+    },
   },
   {
     key: "cliente",
@@ -68,8 +77,8 @@ export const COLUMNS: Column<ViajeResumen>[] = [
   {
     key: "estado",
     header: "Estado",
-    width: "120px",
-    render: (v) => <EstadoBadge estado={v.estado_programacion} />,
+    width: "130px",
+    render: (v) => <EstadoBadge estado={estadoVisual(v)} />,
   },
   {
     key: "arrow",

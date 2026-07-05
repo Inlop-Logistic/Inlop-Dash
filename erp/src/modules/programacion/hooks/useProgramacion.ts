@@ -1,7 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { hoy } from "@/utils/date";
 import type { ViajeResumen, EstadoProgramacion } from "../types";
-import { listarProgramacion, cambiarEstadoProgramacion } from "../services/api";
+import { listarProgramacion, cambiarEstadoProgramacion, sincronizarViaje } from "../services/api";
+import { estadoVisual } from "../constants";
+
+type TabEstado = "todos" | "programado" | "asignado" | "cancelado";
 
 export function useProgramacion() {
   const [data, setData]           = useState<ViajeResumen[]>([]);
@@ -10,7 +13,7 @@ export function useProgramacion() {
   const [desde, setDesde]         = useState(hoy());
   const [hasta, setHasta]         = useState(hoy());
   const [busqueda, setBusqueda]   = useState("");
-  const [tabEstado, setTabEstado] = useState<"todos" | EstadoProgramacion>("todos");
+  const [tabEstado, setTabEstado] = useState<TabEstado>("todos");
   const [panelId, setPanelId]     = useState<string | null>(null);
   const [accionLoading, setAccionLoading] = useState(false);
 
@@ -41,10 +44,24 @@ export function useProgramacion() {
     }
   };
 
+  const handleSync = async (id: string) => {
+    setAccionLoading(true);
+    try {
+      const result = await sincronizarViaje(id);
+      setData((prev) =>
+        prev.map((v) => v.trip_number === id ? { ...v, activo_en_resume: result.activo_en_resume } : v)
+      );
+    } finally {
+      setAccionLoading(false);
+    }
+  };
+
   const filtradas = useMemo(() => {
     const term = busqueda.trim().toLowerCase();
     return data.filter((v) => {
-      if (tabEstado !== "todos" && v.estado_programacion !== tabEstado) return false;
+      if (tabEstado === "programado" && (v.activo_en_resume || v.estado_programacion === "cancelado")) return false;
+      if (tabEstado === "asignado"   && !v.activo_en_resume) return false;
+      if (tabEstado === "cancelado"  && v.estado_programacion !== "cancelado") return false;
       if (!term) return true;
       return (
         v.trip_number.toLowerCase().includes(term) ||
@@ -59,9 +76,9 @@ export function useProgramacion() {
 
   const kpis = useMemo(() => ({
     total:      data.length,
-    programado: data.filter((v) => v.estado_programacion === "programado").length,
-    asignado:   data.filter((v) => v.estado_programacion === "asignado").length,
-    no_show:    data.filter((v) => v.estado_programacion === "no_show").length,
+    programado: data.filter((v) => estadoVisual(v) === "programado").length,
+    asignado:   data.filter((v) => estadoVisual(v) === "asignado").length,
+    cancelado:  data.filter((v) => estadoVisual(v) === "cancelado").length,
   }), [data]);
 
   const panelViaje = panelId ? data.find((v) => v.trip_number === panelId) ?? null : null;
@@ -75,6 +92,6 @@ export function useProgramacion() {
     panelId, setPanelId, panelViaje,
     accionLoading,
     filtradas, kpis,
-    cargar, handleEstado,
+    cargar, handleEstado, handleSync,
   };
 }
