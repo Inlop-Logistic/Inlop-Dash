@@ -59,6 +59,66 @@ async function sbFetch(path, method="GET", body=null) {
   return text ? JSON.parse(text) : null;
 }
 
+// ─── PUSH NOTIFICATIONS (INLOP Event Engine, Fase 4A — Sprint 4.4) ────
+// Canal Push: reutiliza exactamente el mismo insertsNotif que ya escribe
+// notificaciones_cliente (ver syncSolicitudes/_notifs más abajo) — no existe
+// un flujo paralelo de generación de notificaciones para Push.
+//
+// Degradación segura (mismo patrón que SUPABASE_SERVICE_KEY arriba): sin
+// VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY configuradas, enviarPush() es un no-op
+// con un único warning — el backend sigue funcionando con Realtime como
+// único canal de entrega.
+import webpush from "web-push";
+
+const VAPID_PUBLIC_KEY  = process.env.VAPID_PUBLIC_KEY  || "";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
+const VAPID_SUBJECT     = process.env.VAPID_SUBJECT || "mailto:soporte@inlop.com.co";
+
+const PUSH_CONFIGURADO = Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
+
+if (PUSH_CONFIGURADO) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+} else {
+  console.warn(
+    "⚠️  VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY no configuradas. Push deshabilitado " +
+    "(generar con: npx web-push generate-vapid-keys) — el backend continúa " +
+    "funcionando con normalidad; las notificaciones siguen entregándose por Realtime."
+  );
+}
+
+// Envía push a todas las suscripciones activas de un usuario. Nunca lanza:
+// un fallo de Push no debe interrumpir syncSolicitudes ni ninguna mutación
+// de negocio que ya escribió su notificación en notificaciones_cliente.
+async function enviarPush(usuarioId, payload) {
+  if (!PUSH_CONFIGURADO || !usuarioId) return;
+  try {
+    const subs = await sbFetch(
+      `/push_subscriptions?usuario_id=eq.${encodeURIComponent(usuarioId)}&activo=eq.true`
+    ) || [];
+    if (!subs.length) return;
+
+    const body = JSON.stringify(payload);
+    await Promise.allSettled(subs.map(async (s) => {
+      try {
+        await webpush.sendNotification(
+          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+          body,
+        );
+      } catch (err) {
+        // 404/410 → endpoint expirado/revocado por el navegador: desactivar,
+        // no borrar (trazabilidad, ver migración 0002_push_subscriptions.sql).
+        if (err.statusCode === 404 || err.statusCode === 410) {
+          await sbFetch(`/push_subscriptions?id=eq.${encodeURIComponent(s.id)}`, "PATCH", { activo: false });
+        } else {
+          console.error(`❌ Push a ${s.endpoint}:`, err.message);
+        }
+      }
+    }));
+  } catch (e) {
+    console.error("❌ enviarPush:", e.message);
+  }
+}
+
 // Parsear schedulate_origin DD/MM/YYYY HH:MM:SS
 function parseSchedulate(str) {
   if (!str) return null;
@@ -1024,8 +1084,22 @@ async function syncSolicitudes() {
       if (r !== null) updOk++;
     }
     for (let i = 0; i < insertsNotif.length; i += 50) {
-      await sbFetch('/notificaciones_cliente', 'POST', insertsNotif.slice(i, i + 50));
+      const lote = insertsNotif.slice(i, i + 50).map(({ _push, ...fila }) => fila);
+      await sbFetch('/notificaciones_cliente', 'POST', lote);
     }
+
+    // Canal Push (Fase 4A/Sprint 4.4): mismo insertsNotif ya persistido arriba,
+    // no un flujo paralelo. Fire-and-forget vía Promise.allSettled — un fallo
+    // de push nunca debe bloquear ni reintentar el ciclo de syncSolicitudes.
+    await Promise.allSettled(
+      insertsNotif
+        .filter((notif) => notif._push)
+        .map((notif) => enviarPush(notif.usuario_id, {
+          title: notif.titulo,
+          body: notif.mensaje,
+          action: notif._push,
+        })),
+    );
 
     console.log(`📋 syncSolicitudes OK: ${updOk}/${updates.length} upd | ${insertsNotif.length} notifs | ${pendVerif.length} verif cumplidos`);
   } catch(e) {
@@ -1071,6 +1145,11 @@ function _fields(viaje, nuevoEstado, ahora, esPrimerEnlace) {
   return f;
 }
 
+// `_push` viaja junto al registro pero NUNCA se persiste en notificaciones_cliente
+// (no existe esa columna, ver supabase/migrations 0001) — se extrae y se
+// descarta justo antes del INSERT (syncSolicitudes) y solo se usa para
+// construir el payload del canal Push (mismo action_type/action_payload que
+// consume executeEventAction en el frontend, Blueprint v3.0 §5.2/§5.4).
 function _notifs(sol, nuevoEstado, viaje, estadoAnterior) {
   const cod   = sol.codigo_solicitud;
   const placa = viaje?.license_plate || '';
@@ -1078,13 +1157,16 @@ function _notifs(sol, nuevoEstado, viaje, estadoAnterior) {
   const obs   = sol.observacion_coordinadora ? `\n${sol.observacion_coordinadora}` : '';
   const uid   = sol.creado_por;
   const sid   = sol.id;
-  const n = (tipo, titulo, mensaje) => ({ usuario_id: uid, solicitud_id: sid, tipo, titulo, mensaje });
+  const n = (tipo, titulo, mensaje, actionType = 'OPEN_SERVICE') => ({
+    usuario_id: uid, solicitud_id: sid, tipo, titulo, mensaje,
+    _push: { action_type: actionType, action_payload: { servicio_id: sid } },
+  });
   if (nuevoEstado === 'confirmado' && estadoAnterior === 'pendiente')
     return [n('confirmacion', 'Servicio confirmado', `Tu servicio ${cod} ha sido confirmado. Vehículo: ${placa}. Conductor: ${cond}.${obs}`)];
   if (nuevoEstado === 'en_ruta' && estadoAnterior === 'pendiente')
-    return [n('confirmacion', 'Servicio en camino', `Tu servicio ${cod} fue confirmado y ya está en operación. Vehículo: ${placa}. Conductor: ${cond}.${obs}`)];
+    return [n('confirmacion', 'Servicio en camino', `Tu servicio ${cod} fue confirmado y ya está en operación. Vehículo: ${placa}. Conductor: ${cond}.${obs}`, 'OPEN_TRACKING')];
   if (nuevoEstado === 'en_ruta' && estadoAnterior === 'confirmado')
-    return [n('info', 'Tu servicio está en camino', `El servicio ${cod} inició operación.`)];
+    return [n('info', 'Tu servicio está en camino', `El servicio ${cod} inició operación.`, 'OPEN_TRACKING')];
   if (nuevoEstado === 'completado')
     return [n('info', 'Servicio completado', `El servicio ${cod} fue completado exitosamente.`)];
   if (nuevoEstado === 'cancelado')
@@ -2065,6 +2147,48 @@ app.delete('/notificaciones', requireClienteAuth, async (req, res) => {
     await sbFetch(`/notificaciones_cliente?usuario_id=eq.${encodeURIComponent(req.userId)}`, 'DELETE');
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /push/suscripcion — registra (o actualiza, si el endpoint ya existía)
+// la suscripción Push de este dispositivo/navegador (Fase 4A, Sprint 4.4).
+// Upsert vía Prefer: resolution=merge-duplicates (SB_HEADERS, ya default en
+// sbFetch) sobre la unicidad de `endpoint` (migración 0002_push_subscriptions.sql).
+app.post('/push/suscripcion', requireClienteAuth, async (req, res) => {
+  try {
+    const { endpoint, keys } = req.body || {};
+    if (!endpoint || !keys?.p256dh || !keys?.auth) {
+      return res.status(400).json({ error: 'endpoint y keys.{p256dh,auth} son requeridos' });
+    }
+    await sbFetch('/push_subscriptions', 'POST', [{
+      usuario_id: req.userId,
+      endpoint,
+      p256dh: keys.p256dh,
+      auth: keys.auth,
+      user_agent: req.headers['user-agent'] || null,
+      activo: true,
+    }]);
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('❌ POST /push/suscripcion:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /push/suscripcion — el usuario desactivó Push desde Perfil, o el
+// navegador canceló la suscripción. Solo borra la propia (usuario_id + endpoint).
+app.delete('/push/suscripcion', requireClienteAuth, async (req, res) => {
+  try {
+    const { endpoint } = req.body || {};
+    if (!endpoint) return res.status(400).json({ error: 'endpoint es requerido' });
+    await sbFetch(
+      `/push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}&usuario_id=eq.${encodeURIComponent(req.userId)}`,
+      'DELETE',
+    );
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('❌ DELETE /push/suscripcion:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // GET /catalogos/agencias
