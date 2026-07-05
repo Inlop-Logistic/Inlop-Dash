@@ -1,4 +1,4 @@
-import { RefreshCw, Search, CalendarClock, Clock, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { RefreshCw, Search, CalendarClock, Clock, Activity, XCircle, AlertCircle } from "lucide-react";
 import { KpiCard, PageHeader, Card, DataTable, Button } from "@/components/ui";
 import { useProgramacion } from "./hooks/useProgramacion";
 import { CentroOperativo } from "./components/CentroOperativo";
@@ -42,23 +42,23 @@ export function ProgramacionPage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard
-          label="Hoy"
+          label="Programados hoy"
           value={kpis.total}
           icon={<CalendarClock className="w-4.5 h-4.5" />}
           color="var(--navy)" bg="#DBEAFE"
           onClick={() => setTabEstado("todos")}
         />
         <KpiCard
-          label="Programados"
-          value={kpis.programado}
+          label="Pendientes por iniciar"
+          value={kpis.pendiente}
           icon={<Clock className="w-4.5 h-4.5" />}
           color="#374151" bg="var(--gray-100)"
           onClick={() => setTabEstado("programado")}
         />
         <KpiCard
-          label="Asignados"
-          value={kpis.asignado}
-          icon={<CheckCircle2 className="w-4.5 h-4.5" />}
+          label="Activos"
+          value={kpis.activo}
+          icon={<Activity className="w-4.5 h-4.5" />}
           color="#1D4ED8" bg="#DBEAFE"
           onClick={() => setTabEstado("asignado")}
         />

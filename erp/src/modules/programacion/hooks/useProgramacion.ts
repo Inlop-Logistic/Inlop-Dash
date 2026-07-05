@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from "react";
 import { hoy } from "@/utils/date";
 import type { ViajeResumen, EstadoProgramacion } from "../types";
 import { listarProgramacion, cambiarEstadoProgramacion, sincronizarViaje } from "../services/api";
-import { estadoVisual } from "../constants";
 
 type TabEstado = "todos" | "programado" | "asignado" | "cancelado";
 
@@ -75,10 +74,10 @@ export function useProgramacion() {
   }, [data, tabEstado, busqueda]);
 
   const kpis = useMemo(() => ({
-    total:      data.length,
-    programado: data.filter((v) => estadoVisual(v) === "programado").length,
-    asignado:   data.filter((v) => estadoVisual(v) === "asignado").length,
-    cancelado:  data.filter((v) => estadoVisual(v) === "cancelado").length,
+    total:    data.length,
+    pendiente: data.filter((v) => !v.activo_en_resume && v.estado_programacion !== "cancelado").length,
+    activo:    data.filter((v) => v.activo_en_resume).length,
+    cancelado: data.filter((v) => v.estado_programacion === "cancelado").length,
   }), [data]);
 
   const panelViaje = panelId ? data.find((v) => v.trip_number === panelId) ?? null : null;
