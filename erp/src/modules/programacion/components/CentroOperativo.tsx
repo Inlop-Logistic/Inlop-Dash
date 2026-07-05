@@ -86,7 +86,7 @@ export function CentroOperativo({ viaje, onClose, onEstado, onSync, accionLoadin
       open
       onClose={onClose}
       title={viaje.trip_number}
-      subtitle={viaje.company_customer_name ?? undefined}
+      subtitle={viaje.nombre_cliente ?? undefined}
       headerRight={<EstadoBadge estado={estadoD} />}
       footer={footer}
       width="480px"
@@ -108,7 +108,7 @@ export function CentroOperativo({ viaje, onClose, onEstado, onSync, accionLoadin
       {/* Identificación */}
       <PanelSection title="Identificación" icon={<FileText className="w-3.5 h-3.5" />} first>
         <InfoRow label="Trip number"      value={viaje.trip_number} mono />
-        <InfoRow label="Cliente"          value={viaje.company_customer_name} />
+        <InfoRow label="Cliente"          value={viaje.nombre_cliente} />
         <InfoRow label="Fecha programada" value={fmtFechaCort(viaje.fecha_programada_dia)} />
         <InfoRow label="Hora salida"      value={fmtHora(viaje.schedulate_origin)} />
         <InfoRow label="Detectado"        value={fmtFecha(viaje.fecha_detectado)} />

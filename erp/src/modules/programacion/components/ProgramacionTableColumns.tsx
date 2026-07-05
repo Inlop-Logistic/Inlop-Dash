@@ -33,8 +33,8 @@ export const COLUMNS: Column<ViajeResumen>[] = [
     key: "cliente",
     header: "Cliente",
     render: (v) => (
-      <div className="text-[13px] font-medium truncate" style={{ color: v.company_customer_name ? "var(--gray-800)" : "var(--gray-300)" }}>
-        {v.company_customer_name ?? "Sin cliente"}
+      <div className="text-[13px] font-medium truncate" style={{ color: v.nombre_cliente ? "var(--gray-800)" : "var(--gray-300)" }}>
+        {v.nombre_cliente ?? "Sin cliente"}
       </div>
     ),
   },

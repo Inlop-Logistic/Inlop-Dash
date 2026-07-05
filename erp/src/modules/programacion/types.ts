@@ -4,7 +4,11 @@ export interface ViajeResumen {
   trip_number: string;
   license_plate: string | null;
   driver_name: string | null;
+  /** Valor original recibido del TMS. Conservado para auditoría y trazabilidad. */
   company_customer_name: string | null;
+  /** Nombre oficial resuelto por el backend: razon_social cuando homologado, company_customer_name como fallback. */
+  nombre_cliente: string | null;
+  empresa_cliente_id: string | null;
   city_origin: string | null;
   city_destination: string | null;
   origin_address: string | null;

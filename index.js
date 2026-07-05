@@ -1,6 +1,10 @@
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
+import { buildLookupMap, resolveCustomer } from './services/customerResolver.js';
+
+// Mapa de resolución de clientes — reconstruido cada 10 min desde empresas_cliente
+let customerLookupMap = new Map();
 
 
 // ─── SUPABASE ───────────────────────────────────────────
@@ -353,6 +357,19 @@ async function syncPendientes() {
   }
 }
 
+// ─── CUSTOMER LOOKUP ────────────────────────────────────
+// Carga empresas_cliente y reconstruye el mapa de resolución.
+// Se llama al inicio y cada 10 min para capturar nuevas homologaciones.
+async function refreshCustomerLookup() {
+  try {
+    const empresas = await sbFetch('/empresas_cliente?activa=eq.true&select=id,razon_social,nombre_controlt') || [];
+    customerLookupMap = buildLookupMap(empresas);
+    console.log(`🏢 Customer lookup: ${customerLookupMap.size} entradas`);
+  } catch (e) {
+    console.error('❌ refreshCustomerLookup:', e.message);
+  }
+}
+
 // ─── SYNC PLANEADOS ─────────────────────────────────────
 async function syncPlaneados() {
   try {
@@ -391,12 +408,14 @@ async function syncPlaneados() {
       const estaActivo = activeIds.has(v.trip_number);
       const viajeResume = cache.viajes.data.find(r => r.trip_number === v.trip_number);
       const cliente = viajeResume?.company_customer_name || v.company_customer_name || null;
+      const resolved = resolveCustomer(cliente, customerLookupMap);
 
       const row = {
         trip_number:           v.trip_number,
         license_plate:         v.license_plate         || null,
         driver_name:           v.driver_name           || null,
         company_customer_name: cliente,
+        empresa_cliente_id:    resolved.empresa_cliente_id,
         city_origin:           v.city_origin           || null,
         city_destination:      v.city_destination      || null,
         origin_address:        v.origin_address        || null,
@@ -785,22 +804,24 @@ async function syncCumplidos() {
       if (!v.trip_number) continue;
       const existe = existentes.get(v.trip_number);
       const cliente = (v.company_customer_name || '').split(',')[0].trim();
+      const resolved = resolveCustomer(cliente, customerLookupMap);
 
       if (!existe) {
         const row = {
-          id:              v.trip_number,
-          manifiesto:      v.number_order || '',
-          placa:           v.license_plate || '',
-          conductor:       v.driver_name || '',
-          conductor_tel:   extraerTelefono(v.driver_phone, v.full_driver),
-          cliente:         cliente,
-          estado_controlt: v.state_travel || '',
-          estado_cumplido: 'LIVE',
-          pct:             parseFloat(v.percentage_travel) || 0,
-          fecha_viaje:     v.activated_on || v.created_on || '',
-          origen:          v.origin_city_name || '',
-          destino:         v.destiny_city_name || '',
-          tiene_soporte:   false,
+          id:                  v.trip_number,
+          manifiesto:          v.number_order || '',
+          placa:               v.license_plate || '',
+          conductor:           v.driver_name || '',
+          conductor_tel:       extraerTelefono(v.driver_phone, v.full_driver),
+          cliente:             cliente,
+          empresa_cliente_id:  resolved.empresa_cliente_id,
+          estado_controlt:     v.state_travel || '',
+          estado_cumplido:     'LIVE',
+          pct:                 parseFloat(v.percentage_travel) || 0,
+          fecha_viaje:         v.activated_on || v.created_on || '',
+          origen:              v.origin_city_name || '',
+          destino:             v.destiny_city_name || '',
+          tiene_soporte:       false,
         };
         await sbFetch('/cumplidos', 'POST', row);
         insertados++;
@@ -810,6 +831,7 @@ async function syncCumplidos() {
           pct:             parseFloat(v.percentage_travel) || 0,
         };
         if (!existe.cliente && cliente) patch.cliente = cliente;
+        if (!existe.empresa_cliente_id && resolved.empresa_cliente_id) patch.empresa_cliente_id = resolved.empresa_cliente_id;
         await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(v.trip_number)}`, 'PATCH', patch);
         actualizados++;
       }
@@ -2075,13 +2097,18 @@ app.get("/api/planeados", async (req, res) => {
 });
 
 // ─── PROGRAMACIÓN ───────────────────────────────────────────────────────────
-// REQUIERE migración Supabase antes de activar PATCH:
+// REQUIERE migración Supabase (ejecutar una vez):
 //   ALTER TABLE planeados
 //     ADD COLUMN IF NOT EXISTS estado_programacion text NOT NULL DEFAULT 'programado',
 //     ADD COLUMN IF NOT EXISTS observaciones        text,
-//     ADD COLUMN IF NOT EXISTS actualizado_en       timestamptz;
+//     ADD COLUMN IF NOT EXISTS actualizado_en       timestamptz,
+//     ADD COLUMN IF NOT EXISTS empresa_cliente_id   uuid REFERENCES empresas_cliente(id);
+//   ALTER TABLE cumplidos
+//     ADD COLUMN IF NOT EXISTS empresa_cliente_id   uuid REFERENCES empresas_cliente(id);
 
-// GET /api/programacion — bandeja operativa completa del día (todos los viajes del rango)
+// GET /api/programacion — bandeja operativa completa del día
+// Enriquece cada fila con nombre_cliente: razon_social oficial cuando existe,
+// company_customer_name como fallback. El original siempre se conserva.
 app.get("/api/programacion", async (req, res) => {
   try {
     const { desde, hasta } = req.query;
@@ -2093,7 +2120,25 @@ app.get("/api/programacion", async (req, res) => {
     const data = await sbFetch(
       `/planeados?fecha_programada_dia=gte.${desdeStr}&fecha_programada_dia=lte.${hastaStr}&order=schedulate_origin.asc&limit=500`
     );
-    res.json(data || []);
+
+    const rows = data || [];
+
+    // Resolver razon_social para filas con empresa_cliente_id
+    const empIds = [...new Set(rows.map(r => r.empresa_cliente_id).filter(Boolean))];
+    let empMap = {};
+    if (empIds.length) {
+      const empresas = await sbFetch(
+        `/empresas_cliente?id=in.(${empIds.map(encodeURIComponent).join(',')})&select=id,razon_social`
+      ) || [];
+      empresas.forEach(e => { empMap[e.id] = e.razon_social; });
+    }
+
+    const enriched = rows.map(r => ({
+      ...r,
+      nombre_cliente: (r.empresa_cliente_id && empMap[r.empresa_cliente_id]) || r.company_customer_name || null,
+    }));
+
+    res.json(enriched);
   } catch (e) {
     console.error("❌ GET /api/programacion:", e.message);
     res.status(500).json({ error: e.message });
@@ -2290,6 +2335,7 @@ app.listen(process.env.PORT || 3000, async () => {
   console.log("📊 Modo caché: ControlT se consulta 1 vez/minuto en background");
 
   try {
+    await refreshCustomerLookup();
     await refreshToken();
     await syncViajes();
     await syncAlarmas();
@@ -2301,10 +2347,11 @@ app.listen(process.env.PORT || 3000, async () => {
     console.error("❌ Error inicialización:", e.message);
   }
 
-  setInterval(syncViajes,       60 * 1000);
-  setInterval(syncAlarmas,      70 * 1000);
-  setInterval(syncPendientes,    5 * 60 * 1000);
-  setInterval(syncPlaneados,     5 * 60 * 1000);
-  setInterval(syncCumplidos,    60 * 1000);
-  setInterval(syncSolicitudes,  65 * 1000);
+  setInterval(refreshCustomerLookup, 10 * 60 * 1000);
+  setInterval(syncViajes,             60 * 1000);
+  setInterval(syncAlarmas,            70 * 1000);
+  setInterval(syncPendientes,          5 * 60 * 1000);
+  setInterval(syncPlaneados,           5 * 60 * 1000);
+  setInterval(syncCumplidos,          60 * 1000);
+  setInterval(syncSolicitudes,        65 * 1000);
 });
