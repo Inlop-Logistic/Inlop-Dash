@@ -163,6 +163,43 @@ function requireInternalApiKey(req, res, next) {
   next();
 }
 
+// ─── ACCESO LEGADO — SOLUCIÓN TEMPORAL ─────────────────────────────────────
+// DECISIÓN TÉCNICA (LEGACY-01): TorreControl.html continúa operando mientras
+// avanza la migración al ERP. Para no comprometer la seguridad del ERP
+// (requireInternalApiKey, INTERNAL_API_KEY), se introduce un token separado
+// (LEGACY_TC_TOKEN) que solo aplica a los 5 endpoints que TorreControl.html
+// necesita. requireInternalApiKey permanece intacto y aplicado al resto de la API.
+//
+// ELIMINAR cuando TorreControl.html sea dado de baja definitivamente.
+// Endpoints autorizados: GET /api/data, GET /api/alarmas, GET /api/pendientes,
+//   GET /api/solicitudes, PATCH /api/solicitudes/:id/estado
+// Bootstrap: GET /legacy/tc-init (sin auth) retorna { token } para que el
+// cliente lo obtenga en tiempo de ejecución sin hardcodear en el HTML.
+const LEGACY_TC_TOKEN = process.env.LEGACY_TC_TOKEN || "";
+
+if (!LEGACY_TC_TOKEN) {
+  console.warn(
+    "⚠️  LEGACY_TC_TOKEN no configurada. Los endpoints legados quedarán inaccesibles " +
+    "para el cliente de torre de control hasta configurar esta variable en Railway."
+  );
+}
+
+function requireLegacyOrInternal(req, res, next) {
+  // Acceso ERP: header x-internal-api-key con INTERNAL_API_KEY
+  if (INTERNAL_API_KEY && req.headers["x-internal-api-key"] === INTERNAL_API_KEY) {
+    return next();
+  }
+  // Acceso legado: header x-legacy-token con LEGACY_TC_TOKEN
+  if (LEGACY_TC_TOKEN && req.headers["x-legacy-token"] === LEGACY_TC_TOKEN) {
+    return next();
+  }
+  // Fail-closed: si ninguna key está configurada, responder 503
+  if (!INTERNAL_API_KEY && !LEGACY_TC_TOKEN) {
+    return res.status(503).json({ error: "Servicio no disponible: credenciales no configuradas" });
+  }
+  return res.status(401).json({ error: "No autorizado" });
+}
+
 // Parsear schedulate_origin DD/MM/YYYY HH:MM:SS
 function parseSchedulate(str) {
   if (!str) return null;
@@ -182,6 +219,16 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "TorreControl.html")));
 app.get("/TorreControl.html", (req, res) => res.sendFile(path.join(__dirname, "TorreControl.html")));
+
+// Bootstrap legado — sin autenticación (intencional).
+// Retorna el token que la torre de control necesita para llamar los endpoints autorizados.
+// No expone datos de negocio. ELIMINAR junto con LEGACY-01.
+app.get("/legacy/tc-init", (req, res) => {
+  if (!LEGACY_TC_TOKEN) {
+    return res.status(503).json({ error: "Token legado no configurado" });
+  }
+  res.json({ token: LEGACY_TC_TOKEN });
+});
 
 const LOGIN_URL = "https://integrations.controlt.io/Auth/login";
 const BASE_URL  = "https://app.controlt.com.co/apipublic/api";
@@ -624,15 +671,15 @@ async function syncAlarmas() {
 
 // ─── ENDPOINTS — responden siempre del caché ────────────
 
-app.get("/api/data", requireInternalApiKey, (req, res) => {
+app.get("/api/data", requireLegacyOrInternal, (req, res) => {
   res.json(cache.viajes.data);
 });
 
-app.get("/api/alarmas", requireInternalApiKey, (req, res) => {
+app.get("/api/alarmas", requireLegacyOrInternal, (req, res) => {
   res.json(cache.alarmas.data);
 });
 
-app.get("/api/pendientes", requireInternalApiKey, async (req, res) => {
+app.get("/api/pendientes", requireLegacyOrInternal, async (req, res) => {
   try {
     if ((Date.now() - cache.pendientes.ts) > 5 * 60 * 1000 || cache.pendientes.data.length === 0) {
       await syncPendientes();
@@ -677,7 +724,7 @@ app.get("/api/pendientes", requireInternalApiKey, async (req, res) => {
 
 
 // ─── SOLICITUDES (Módulo de Demanda) ─────────────────────────────────────────
-app.get('/api/solicitudes', requireInternalApiKey, async (req, res) => {
+app.get('/api/solicitudes', requireLegacyOrInternal, async (req, res) => {
   try {
     const { desde, hasta, estado } = req.query;
     // Usar fecha local Colombia para el default de "hoy"
@@ -855,7 +902,7 @@ app.get('/api/solicitudes/:id', requireInternalApiKey, async (req, res) => {
 });
 
 // PATCH /api/solicitudes/:id/estado — cambia estado manualmente (interno, sin auth)
-app.patch('/api/solicitudes/:id/estado', requireInternalApiKey, async (req, res) => {
+app.patch('/api/solicitudes/:id/estado', requireLegacyOrInternal, async (req, res) => {
   try {
     const { id } = req.params;
     const { estado, conductor_nombre, placa_asignada, conductor_tel } = req.body;
