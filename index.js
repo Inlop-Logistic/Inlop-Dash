@@ -3,6 +3,23 @@ import fetch from "node-fetch";
 import cors from "cors";
 import { buildLookupMap, resolveCustomer } from './services/customerResolver.js';
 
+// ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
+// Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
+// lenta o colgada de cualquiera de esos servicios podía acumular conexiones
+// abiertas indefinidamente. Envoltorio mínimo sobre fetch con AbortController;
+// no cambia la firma de uso (misma llamada fetch(url, opts)).
+const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
+
+async function fetchConTimeout(url, opts = {}, timeoutMs = DEFAULT_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...opts, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Mapa de resolución de clientes — reconstruido cada 10 min desde empresas_cliente
 let customerLookupMap = new Map();
 
@@ -48,7 +65,7 @@ const SB_HEADERS = {
 async function sbFetch(path, method="GET", body=null) {
   const opts = { method, headers: SB_HEADERS };
   if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(`${SB_URL}${path}`, opts);
+  const r = await fetchConTimeout(`${SB_URL}${path}`, opts);
   if (!r.ok) {
     const txt = await r.text();
     console.error(`Supabase ${method} ${path} → ${r.status}: ${txt}`);
@@ -119,6 +136,33 @@ async function enviarPush(usuarioId, payload) {
   }
 }
 
+// ─── PROTECCIÓN DE ENDPOINTS INTERNOS (Hotfix RC v1.0) ─────────────────
+// Los endpoints /api/* (Torre de Control / ERP interno) no tenían ningún
+// control de acceso — cualquiera que conociera la URL podía leer y mutar
+// datos operativos. Fix mínimo: exigir un secreto compartido por header,
+// fail-closed (si INTERNAL_API_KEY no está configurada, estos endpoints
+// quedan inaccesibles en vez de abiertos). No reemplaza una autenticación
+// por usuario — es la protección mínima estable para esta hotfix; ver
+// informe de riesgos pendientes sobre TorreControl.html.
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || "";
+
+if (!INTERNAL_API_KEY) {
+  console.warn(
+    "⚠️  INTERNAL_API_KEY no configurada. Los endpoints internos /api/* " +
+    "quedan inaccesibles (fail-closed) hasta configurar esta variable."
+  );
+}
+
+function requireInternalApiKey(req, res, next) {
+  if (!INTERNAL_API_KEY) {
+    return res.status(503).json({ error: "Servicio no disponible: INTERNAL_API_KEY no configurada" });
+  }
+  if (req.headers["x-internal-api-key"] !== INTERNAL_API_KEY) {
+    return res.status(401).json({ error: "No autorizado" });
+  }
+  next();
+}
+
 // Parsear schedulate_origin DD/MM/YYYY HH:MM:SS
 function parseSchedulate(str) {
   if (!str) return null;
@@ -161,7 +205,7 @@ function cacheVigente(key) {
 // ─── TOKEN ──────────────────────────────────────────────
 async function refreshToken() {
   console.log("🔄 Renovando token ControlT...");
-  const res = await fetch(LOGIN_URL, {
+  const res = await fetchConTimeout(LOGIN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -202,7 +246,7 @@ async function getCtPublicToken() {
   if (!expired && ctPublicToken) return ctPublicToken;
 
   console.log('🔑 Renovando token ControlT API Pública...');
-  const res = await fetch(`${CT_PUBLIC_URL}/login/oauth`, {
+  const res = await fetchConTimeout(`${CT_PUBLIC_URL}/login/oauth`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `username=${encodeURIComponent(CT_PUBLIC_USER)}&password=${encodeURIComponent(CT_PUBLIC_PASS)}`
@@ -216,10 +260,10 @@ async function getCtPublicToken() {
 }
 
 // GET /api/ct/travel/:id
-app.get('/api/ct/travel/:id', async (req, res) => {
+app.get('/api/ct/travel/:id', requireInternalApiKey, async (req, res) => {
   try {
     const token = await getCtPublicToken();
-    const r = await fetch(`${CT_PUBLIC_URL}/Travel/${req.params.id}`, {
+    const r = await fetchConTimeout(`${CT_PUBLIC_URL}/Travel/${req.params.id}`, {
       headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
     });
     if (!r.ok) {
@@ -236,10 +280,10 @@ app.get('/api/ct/travel/:id', async (req, res) => {
 });
 
 // GET /api/ct/travel/list — lista viajes activos via Travel API pública
-app.get('/api/ct/travel/list', async (req, res) => {
+app.get('/api/ct/travel/list', requireInternalApiKey, async (req, res) => {
   try {
     const token = await getCtPublicToken();
-    const r = await fetch(`${CT_PUBLIC_URL}/Travel/List`, {
+    const r = await fetchConTimeout(`${CT_PUBLIC_URL}/Travel/List`, {
       headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
     });
     const txt = await r.text();
@@ -255,7 +299,7 @@ app.get('/api/ct/travel/list', async (req, res) => {
 });
 
 // POST /api/ct/binnacle
-app.post('/api/ct/binnacle', async (req, res) => {
+app.post('/api/ct/binnacle', requireInternalApiKey, async (req, res) => {
   try {
     const token = await getCtPublicToken();
     const { trip_number, id_monitoring_order, date_start, date_end, take = 100, page = 1 } = req.body;
@@ -266,7 +310,7 @@ app.post('/api/ct/binnacle', async (req, res) => {
     if (date_start)          body.date_start          = date_start;
     if (date_end)            body.date_end            = date_end;
 
-    const r = await fetch(`${CT_PUBLIC_URL}/ControlTower/binnacle`, {
+    const r = await fetchConTimeout(`${CT_PUBLIC_URL}/ControlTower/binnacle`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -292,7 +336,7 @@ app.post('/api/ct/binnacle', async (req, res) => {
 async function safeFetch(path, fallback = []) {
   const doRequest = async () => {
     const token = currentToken;
-    return fetch(`${BASE_URL}${path}`, {
+    return fetchConTimeout(`${BASE_URL}${path}`, {
       method: "GET",
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
     });
@@ -580,15 +624,15 @@ async function syncAlarmas() {
 
 // ─── ENDPOINTS — responden siempre del caché ────────────
 
-app.get("/api/data", (req, res) => {
+app.get("/api/data", requireInternalApiKey, (req, res) => {
   res.json(cache.viajes.data);
 });
 
-app.get("/api/alarmas", (req, res) => {
+app.get("/api/alarmas", requireInternalApiKey, (req, res) => {
   res.json(cache.alarmas.data);
 });
 
-app.get("/api/pendientes", async (req, res) => {
+app.get("/api/pendientes", requireInternalApiKey, async (req, res) => {
   try {
     if ((Date.now() - cache.pendientes.ts) > 5 * 60 * 1000 || cache.pendientes.data.length === 0) {
       await syncPendientes();
@@ -633,7 +677,7 @@ app.get("/api/pendientes", async (req, res) => {
 
 
 // ─── SOLICITUDES (Módulo de Demanda) ─────────────────────────────────────────
-app.get('/api/solicitudes', async (req, res) => {
+app.get('/api/solicitudes', requireInternalApiKey, async (req, res) => {
   try {
     const { desde, hasta, estado } = req.query;
     // Usar fecha local Colombia para el default de "hoy"
@@ -715,7 +759,7 @@ app.get('/api/solicitudes', async (req, res) => {
 });
 
 // GET /api/solicitudes/:id — detalle completo para el ERP (interno, sin auth de cliente)
-app.get('/api/solicitudes/:id', async (req, res) => {
+app.get('/api/solicitudes/:id', requireInternalApiKey, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -811,7 +855,7 @@ app.get('/api/solicitudes/:id', async (req, res) => {
 });
 
 // PATCH /api/solicitudes/:id/estado — cambia estado manualmente (interno, sin auth)
-app.patch('/api/solicitudes/:id/estado', async (req, res) => {
+app.patch('/api/solicitudes/:id/estado', requireInternalApiKey, async (req, res) => {
   try {
     const { id } = req.params;
     const { estado, conductor_nombre, placa_asignada, conductor_tel } = req.body;
@@ -1236,7 +1280,7 @@ async function requireClienteAuth(req, res, next) {
   if (!hdr.startsWith('Bearer ')) return res.status(401).json({ error: 'No autenticado' });
   const token = hdr.slice(7);
   try {
-    const r = await fetch(`${SB_AUTH_URL}/user`, {
+    const r = await fetchConTimeout(`${SB_AUTH_URL}/user`, {
       headers: { 'Authorization': `Bearer ${token}`, 'apikey': SB_KEY }
     });
     if (!r.ok) return res.status(401).json({ error: 'Token inválido o expirado' });
@@ -1302,7 +1346,7 @@ app.post('/auth/login', async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'email y password requeridos' });
   try {
-    const r = await fetch(`${SB_AUTH_URL}/token?grant_type=password`, {
+    const r = await fetchConTimeout(`${SB_AUTH_URL}/token?grant_type=password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': SB_KEY },
       body: JSON.stringify({ email, password })
@@ -1346,7 +1390,7 @@ app.post('/auth/cambiar-password', requireClienteAuth, async (req, res) => {
   if (!passwordNueva) return res.status(400).json({ error: 'passwordNueva requerido' });
   try {
     const token = (req.headers.authorization || '').slice(7);
-    const r = await fetch(`${SB_AUTH_URL}/user`, {
+    const r = await fetchConTimeout(`${SB_AUTH_URL}/user`, {
       method: 'PUT',
       headers: { 'Authorization': `Bearer ${token}`, 'apikey': SB_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: passwordNueva })
@@ -1361,7 +1405,7 @@ app.post('/auth/recuperar', async (req, res) => {
   const { email } = req.body || {};
   if (!email) return res.status(400).json({ error: 'email requerido' });
   try {
-    await fetch(`${SB_AUTH_URL}/recover`, {
+    await fetchConTimeout(`${SB_AUTH_URL}/recover`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': SB_KEY },
       body: JSON.stringify({ email })
@@ -1454,7 +1498,7 @@ async function sbAuthAdmin(path, method = 'GET', body = null) {
     headers: { 'apikey': SB_SERVICE_KEY, 'Authorization': `Bearer ${SB_SERVICE_KEY}`, 'Content-Type': 'application/json' }
   };
   if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(`${SB_AUTH_URL}${path}`, opts);
+  const r = await fetchConTimeout(`${SB_AUTH_URL}${path}`, opts);
   if (!r.ok) {
     const txt = await r.text();
     console.error(`SbAuthAdmin ${method} ${path} → ${r.status}: ${txt}`);
@@ -2205,7 +2249,7 @@ app.get('/catalogos/vehiculos', (req, res) => {
 });
 
 // Planeados — desde Supabase
-app.get("/api/planeados", async (req, res) => {
+app.get("/api/planeados", requireInternalApiKey, async (req, res) => {
   try {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -2233,7 +2277,7 @@ app.get("/api/planeados", async (req, res) => {
 // GET /api/programacion — bandeja operativa completa del día
 // Enriquece cada fila con nombre_cliente: razon_social oficial cuando existe,
 // company_customer_name como fallback. El original siempre se conserva.
-app.get("/api/programacion", async (req, res) => {
+app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
   try {
     const { desde, hasta } = req.query;
     const hoyInicio = new Date();
@@ -2272,7 +2316,7 @@ app.get("/api/programacion", async (req, res) => {
 // GET /api/programacion/:id/solicitud — solicitud origen vinculada al viaje
 // Un viaje sin solicitud asociada es un estado de negocio válido → { vinculada: false }.
 // Solo un error de infraestructura devuelve 500.
-app.get("/api/programacion/:id/solicitud", async (req, res) => {
+app.get("/api/programacion/:id/solicitud", requireInternalApiKey, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -2328,7 +2372,7 @@ app.get("/api/programacion/:id/solicitud", async (req, res) => {
 });
 
 // GET /api/programacion/:id — detalle de un viaje planeado por trip_number
-app.get("/api/programacion/:id", async (req, res) => {
+app.get("/api/programacion/:id", requireInternalApiKey, async (req, res) => {
   try {
     const { id } = req.params;
     const data = await sbFetch(
@@ -2344,7 +2388,7 @@ app.get("/api/programacion/:id", async (req, res) => {
 
 // PATCH /api/programacion/:id/estado — cambia estado ERP del viaje
 // Solo actualiza estado_programacion. Las observaciones son exclusivas de /observaciones.
-app.patch("/api/programacion/:id/estado", async (req, res) => {
+app.patch("/api/programacion/:id/estado", requireInternalApiKey, async (req, res) => {
   try {
     const { id } = req.params;
     const { estado } = req.body || {};
@@ -2366,7 +2410,7 @@ app.patch("/api/programacion/:id/estado", async (req, res) => {
 
 // PATCH /api/programacion/:id/observaciones — guarda nota del operador
 // Endpoint exclusivo para observaciones; no toca estado_programacion.
-app.patch("/api/programacion/:id/observaciones", async (req, res) => {
+app.patch("/api/programacion/:id/observaciones", requireInternalApiKey, async (req, res) => {
   try {
     const { id } = req.params;
     const { observaciones } = req.body || {};
@@ -2386,7 +2430,7 @@ app.patch("/api/programacion/:id/observaciones", async (req, res) => {
 });
 
 // POST /api/programacion/:id/sync — reintenta sincronizar un viaje individual con la caché de la plataforma
-app.post("/api/programacion/:id/sync", async (req, res) => {
+app.post("/api/programacion/:id/sync", requireInternalApiKey, async (req, res) => {
   try {
     const { id } = req.params;
 
