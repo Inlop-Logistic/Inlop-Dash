@@ -55,6 +55,26 @@ if (!process.env.SUPABASE_SERVICE_KEY) {
   );
 }
 
+// ─── AUTHENTICATION HOTFIX v1.0.1 — redirect_to propio del Portal Cliente ──
+// Antes, POST /auth/recuperar llamaba a Supabase Auth (/recover) sin
+// `redirect_to`, por lo que GoTrue usaba el "Site URL" del proyecto Supabase
+// compartido (config. única a nivel de proyecto) — hoy apuntado al ERP. El
+// enlace del correo de recuperación llevaba a los usuarios del Portal
+// Cliente al ERP en producción. Con esta variable, el Portal Cliente envía
+// su propio destino en cada solicitud, sin tocar el Site URL global ni crear
+// un proyecto Supabase nuevo (Supabase permite un `redirect_to` distinto por
+// llamada, siempre que esté en la lista blanca de "Redirect URLs" del
+// proyecto — paso manual en el dashboard de Supabase, fuera de este código).
+const CLIENT_PORTAL_URL = process.env.CLIENT_PORTAL_URL || "";
+if (!CLIENT_PORTAL_URL) {
+  console.warn(
+    "⚠️  CLIENT_PORTAL_URL no configurada. Los correos de recuperación de " +
+    "contraseña del Portal Cliente usarán el Site URL por defecto del " +
+    "proyecto Supabase (compartido con otros productos INLOP) en vez del " +
+    "propio — configura esta variable en Railway."
+  );
+}
+
 const SB_HEADERS = {
   "apikey": SB_ANON_KEY,
   "Authorization": `Bearer ${SB_KEY}`,
@@ -1452,7 +1472,14 @@ app.post('/auth/recuperar', async (req, res) => {
   const { email } = req.body || {};
   if (!email) return res.status(400).json({ error: 'email requerido' });
   try {
-    await fetchConTimeout(`${SB_AUTH_URL}/recover`, {
+    // redirect_to va como query param (no en el body) — así lo construye el
+    // propio SDK de Supabase (auth-js `resetPasswordForEmail`) contra este
+    // mismo endpoint GoTrue. Sin CLIENT_PORTAL_URL configurada, se omite el
+    // parámetro y GoTrue cae a su comportamiento previo (Site URL del proyecto).
+    const recoverUrl = CLIENT_PORTAL_URL
+      ? `${SB_AUTH_URL}/recover?redirect_to=${encodeURIComponent(`${CLIENT_PORTAL_URL}/recuperar-confirmar`)}`
+      : `${SB_AUTH_URL}/recover`;
+    await fetchConTimeout(recoverUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': SB_KEY },
       body: JSON.stringify({ email })
