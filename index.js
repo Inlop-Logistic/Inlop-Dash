@@ -2,6 +2,7 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 import { buildLookupMap, resolveCustomer } from './services/customerResolver.js';
+import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } from './services/authScope.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -1374,6 +1375,25 @@ function requireAdminCliente(req, res, next) {
   next();
 }
 
+// ─── UNIFIED AUTHORIZATION SCOPE — Sprint 4.7 ──────────────────────────────
+// Resuelve una sola vez por request el Scope (empresa + agencia) del usuario
+// ya autenticado por requireClienteAuth, y lo deja en req.scope para que
+// todos los endpoints de /servicios* lo reutilicen (ver services/authScope.js
+// y CLAUDE.md §5.5). Se monta después de requireClienteAuth, nunca antes —
+// depende de req.userId/req.empresaId/req.userPerfil que esa función coloca.
+async function attachScope(req, res, next) {
+  try {
+    req.scope = await resolverScopeUsuario(
+      { userId: req.userId, empresaId: req.empresaId, perfil: req.userPerfil },
+      { sbFetch }
+    );
+    next();
+  } catch (e) {
+    console.error('❌ attachScope:', e.message);
+    res.status(500).json({ error: 'Error resolviendo permisos' });
+  }
+}
+
 // viaje: objeto de cache.viajes (activo en ControlT) — fuente de verdad para datos en tiempo real
 // cumplido: fila de tabla cumplidos — solo disponible cuando el viaje ya finalizó
 function mapSolicitud(sol, viaje = null, cumplido = null) {
@@ -1972,14 +1992,27 @@ app.get('/empresa/config', requireClienteAuth, requireAdminCliente, async (req, 
 
 
 // ─── SERVICIOS ───────────────────────────────────────────
-app.get('/servicios', requireClienteAuth, async (req, res) => {
+// Sprint 4.7: todas las rutas de /servicios* comparten un único Router con
+// requireClienteAuth + attachScope montados una sola vez (antes se repetía
+// requireClienteAuth por endpoint y cada uno validaba — o no — empresa/
+// agencia por su cuenta). Todo acceso a `solicitudes` pasa por
+// construirFiltroScope()/obtenerSolicitudEnScope() — ningún endpoint compara
+// empresa_cliente_id/agencia_id manualmente. Recursos fuera del scope
+// devuelven 404 de forma consistente (nunca 403): no se confirma a un
+// usuario sin acceso que el recurso existe en otra empresa/agencia.
+const serviciosRouter = express.Router();
+serviciosRouter.use(requireClienteAuth, attachScope);
+
+serviciosRouter.get('/', async (req, res) => {
   try {
-    const { estado, tipoOperacion, tipoVehiculo, agenciaIds, busqueda, desde, hasta } = req.query;
-    let qs = `/solicitudes?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&order=creado_en.desc&limit=200`;
+    const { estado, tipoOperacion, tipoVehiculo, agenciaId, busqueda, desde, hasta } = req.query;
+    const filtroScope = construirFiltroScope(req.scope, { agenciaId });
+    if (filtroScope === null) return res.json([]);
+
+    let qs = `/solicitudes?${filtroScope}&order=creado_en.desc&limit=200`;
     if (estado)        qs += `&estado=eq.${encodeURIComponent(estado === 'aprobado' ? 'confirmado' : estado)}`;
     if (tipoOperacion) qs += `&tipo_operacion=eq.${encodeURIComponent(tipoOperacion)}`;
     if (tipoVehiculo)  qs += `&tipo_vehiculo=in.(${String(tipoVehiculo).split(',').map(encodeURIComponent).join(',')})`;
-    if (agenciaIds)    qs += `&agencia_id=in.(${String(agenciaIds).split(',').map(encodeURIComponent).join(',')})`;
     if (desde)         qs += `&fecha_requerida=gte.${encodeURIComponent(desde)}`;
     if (hasta)         qs += `&fecha_requerida=lte.${encodeURIComponent(hasta + 'T23:59:59Z')}`;
 
@@ -2022,12 +2055,10 @@ app.get('/servicios', requireClienteAuth, async (req, res) => {
 });
 
 // GET /servicios/:id
-app.get('/servicios/:id', requireClienteAuth, async (req, res) => {
+serviciosRouter.get('/:id', async (req, res) => {
   try {
-    const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&limit=1`) || [];
-    if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
-    const sol = sols[0];
-    if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
+    const sol = await obtenerSolicitudEnScope(req.params.id, req.scope, { sbFetch });
+    if (!sol) return res.status(404).json({ error: 'Servicio no encontrado' });
     let viaje   = null;
     let cumplido = null;
     if (sol.controlt_trip_number) {
@@ -2048,12 +2079,12 @@ app.get('/servicios/:id', requireClienteAuth, async (req, res) => {
 });
 
 // GET /servicios/:id/paradas
-app.get('/servicios/:id/paradas', requireClienteAuth, async (req, res) => {
+serviciosRouter.get('/:id/paradas', async (req, res) => {
   try {
-    const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&select=id,empresa_cliente_id,origen,destino,estado&limit=1`) || [];
-    if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
-    const sol = sols[0];
-    if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
+    const sol = await obtenerSolicitudEnScope(req.params.id, req.scope, {
+      sbFetch, select: 'id,empresa_cliente_id,origen,destino,estado',
+    });
+    if (!sol) return res.status(404).json({ error: 'Servicio no encontrado' });
 
     const estadoOrigen = sol.estado === 'completado' ? 'entregado'
       : sol.estado === 'en_ruta' ? 'en_camino' : 'pendiente';
@@ -2093,10 +2124,17 @@ app.get('/servicios/:id/paradas', requireClienteAuth, async (req, res) => {
 });
 
 // GET /servicios/:id/vehiculo
-app.get('/servicios/:id/vehiculo', requireClienteAuth, async (req, res) => {
+// Hallazgo Bloqueante (Auditoría 4.6): este endpoint no validaba empresa NI
+// agencia — cualquier usuario autenticado, de cualquier empresa, podía leer
+// GPS en vivo + placa de una solicitud ajena conociendo/adivinando su id.
+// Ahora pasa por obtenerSolicitudEnScope como cualquier otro endpoint.
+serviciosRouter.get('/:id/vehiculo', async (req, res) => {
   try {
-    const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&select=controlt_trip_number&limit=1`) || [];
-    const tripNum = sols[0]?.controlt_trip_number;
+    const sol = await obtenerSolicitudEnScope(req.params.id, req.scope, {
+      sbFetch, select: 'controlt_trip_number',
+    });
+    if (!sol) return res.status(404).json({ error: 'Servicio no encontrado' });
+    const tripNum = sol.controlt_trip_number;
     if (!tripNum) return res.status(404).json({ error: 'Sin vehículo asignado' });
     const viaje = cache.viajes.data.find(v => String(v.trip_number) === String(tripNum));
     const lat = parseFloat(viaje?.latitude || viaje?.lat || '');
@@ -2114,11 +2152,18 @@ app.get('/servicios/:id/vehiculo', requireClienteAuth, async (req, res) => {
 });
 
 // POST /servicios
-app.post('/servicios', requireClienteAuth, async (req, res) => {
+serviciosRouter.post('/', async (req, res) => {
   try {
     const { tipo_vehiculo, tipo_operacion, origen, destino, fecha_requerida,
             observaciones, agencia_id, agencia_nombre, external_ref } = req.body || {};
     if (!fecha_requerida) return res.status(400).json({ error: 'fecha_requerida requerido' });
+
+    // La agencia declarada debe pertenecer al scope de quien crea la
+    // solicitud (mismo principio que ya aplicaba PUT /usuarios/:id/agencias,
+    // ausente aquí hasta ahora — Auditoría 4.6, hallazgo Medio #6).
+    if (agencia_id && req.scope.agenciaIds !== null && !req.scope.agenciaIds.includes(agencia_id)) {
+      return res.status(403).json({ error: 'Agencia fuera de tu alcance' });
+    }
 
     const last = await sbFetch('/solicitudes?select=codigo_solicitud&order=creado_en.desc&limit=1') || [];
     const lastCode = last[0]?.codigo_solicitud;
@@ -2153,14 +2198,12 @@ app.post('/servicios', requireClienteAuth, async (req, res) => {
 });
 
 // PATCH /servicios/:id
-app.patch('/servicios/:id', requireClienteAuth, async (req, res) => {
+serviciosRouter.patch('/:id', async (req, res) => {
   try {
     console.log(`🔧 PATCH /servicios/${req.params.id} — body keys: ${Object.keys(req.body || {}).join(', ')}`);
-    const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&limit=1`) || [];
-    if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
-    const sol = sols[0];
-    console.log(`🔧 sol encontrado: estado=${sol.estado} empresa=${sol.empresa_cliente_id} req.empresa=${req.empresaId}`);
-    if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
+    const sol = await obtenerSolicitudEnScope(req.params.id, req.scope, { sbFetch });
+    if (!sol) return res.status(404).json({ error: 'Servicio no encontrado' });
+    console.log(`🔧 sol encontrado: estado=${sol.estado} empresa=${sol.empresa_cliente_id}`);
     if (sol.estado !== 'pendiente') return res.status(400).json({ error: `No editable en estado: ${sol.estado}` });
 
     const { fecha_requerida, observaciones, origen, destino, tipo_vehiculo, tipo_operacion, external_ref } = req.body || {};
@@ -2192,12 +2235,10 @@ app.patch('/servicios/:id', requireClienteAuth, async (req, res) => {
 });
 
 // POST /servicios/:id/cancelar
-app.post('/servicios/:id/cancelar', requireClienteAuth, async (req, res) => {
+serviciosRouter.post('/:id/cancelar', async (req, res) => {
   try {
-    const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&limit=1`) || [];
-    if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
-    const sol = sols[0];
-    if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
+    const sol = await obtenerSolicitudEnScope(req.params.id, req.scope, { sbFetch });
+    if (!sol) return res.status(404).json({ error: 'Servicio no encontrado' });
     if (!['pendiente', 'confirmado'].includes(sol.estado))
       return res.status(400).json({ error: `No cancelable en estado: ${sol.estado}` });
     const fecha_cancelacion = new Date().toISOString();
@@ -2208,6 +2249,8 @@ app.post('/servicios/:id/cancelar', requireClienteAuth, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+app.use('/servicios', serviciosRouter);
 
 // GET /notificaciones
 app.get('/notificaciones', requireClienteAuth, async (req, res) => {

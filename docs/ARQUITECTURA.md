@@ -748,6 +748,53 @@ API general:       300 requests / minuto
 Webhooks:          100 requests / minuto
 ```
 
+### 7.7 Unified Authorization Scope — Portal Cliente (Sprint 4.7)
+
+> Decisión aprobada tras la Certificación de Autorización Sprint 4.6, que
+> encontró que `GET /servicios/:id/vehiculo` no validaba empresa ni agencia
+> (fuga cross-empresa de GPS/placa), y que `GET /servicios` dependía de un
+> filtro por agencia aplicado solo en el frontend (`appclienteinlop`) — los
+> datos de todas las agencias de la empresa cruzaban la red igual, solo se
+> ocultaban en la UI. Ver `appclienteinlop/CLAUDE.md §5.5` para la regla de
+> ingeniería completa.
+
+Todas las rutas de `/servicios*` en `index.js` comparten un único
+`express.Router()` con `requireClienteAuth` + `attachScope` montados una sola
+vez (`serviciosRouter.use(requireClienteAuth, attachScope)`). `attachScope`
+resuelve, por request, el **Scope** del usuario (empresa + agencias
+asignadas + rol) vía `resolverScopeUsuario()` en `services/authScope.js` — la
+misma fuente de datos (`usuario_agencias`) que ya usa `buildSessionData()`
+para `permisos.agencia_ids`, no una fuente nueva.
+
+Ningún endpoint compara `empresa_cliente_id`/`agencia_id` manualmente después
+de traer una fila. En su lugar:
+
+- **Listados** (`GET /servicios`) construyen su `WHERE` con
+  `construirFiltroScope(scope, { agenciaId })` — un filtro de agencia pedido
+  por el cliente se **intersecta** con el scope, nunca lo amplía.
+- **Recursos por id** (`GET/PATCH /servicios/:id`, `POST /servicios/:id/cancelar`,
+  `GET /servicios/:id/paradas`, `GET /servicios/:id/vehiculo`) usan
+  `obtenerSolicitudEnScope(id, scope)`, que aplica el mismo filtro **dentro**
+  de la consulta por id. Un recurso fuera de scope y un recurso inexistente
+  son indistinguibles para quien pregunta: ambos responden **404**, nunca
+  403 — no se confirma a un usuario sin acceso que el recurso existe en otra
+  empresa/agencia.
+- **Creación** (`POST /servicios`) valida que la `agencia_id` declarada
+  pertenezca al scope de quien crea la solicitud.
+
+Roles con visibilidad de toda la empresa (hoy solo `admin_cliente`) se
+expresan como pertenencia a `ROLES_CON_ACCESO_TOTAL_EMPRESA` (un `Set`
+nombrado en `services/authScope.js`), no como condicionales repetidos —
+agregar un rol futuro con el mismo privilegio es una línea en ese conjunto.
+
+**Impacto en el frontend:** los filtros por agencia que existían en
+`ServiciosPage.tsx`, `SeguimientoPage.tsx`, `MetricsSection.tsx`,
+`RecentServicesSection.tsx` y `RecentActivitySection.tsx` (todos derivados de
+`agenciasIds.has(s.agencia_id)`) pasan a ser redundantes — el backend ya
+entrega solo lo que corresponde — y se eliminaron como parte de este mismo
+sprint. Ver `appclienteinlop/docs/architecture/ARCHITECTURE_DECISIONS.md`
+ADR-007 para el detalle completo de la decisión y sus consecuencias.
+
 ---
 
 ## 8. Arquitectura de Base de Datos
