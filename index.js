@@ -231,7 +231,48 @@ function parseSchedulate(str) {
 }
 
 const app = express();
-app.use(cors());
+
+// ─── CORS — lista blanca por variable de entorno ─────────────────────────────
+// Peticiones sin header Origin (server-to-server, curl, Postman, Railway health)
+// pasan siempre. Solo las peticiones cross-origin del navegador se filtran.
+// CLIENT_PORTAL_URL se incluye automáticamente si está configurada (reutiliza
+// la misma variable que ya declara POST /auth/recuperar — no hay que duplicarla).
+const _allowedOriginsSet = new Set(
+  [
+    ...(process.env.ALLOWED_ORIGINS || "").split(",").map(s => s.trim()).filter(Boolean),
+    CLIENT_PORTAL_URL,
+  ].filter(Boolean)
+);
+// Localhost solo en entornos no-producción (desarrollo local y staging con NODE_ENV sin set)
+if (process.env.NODE_ENV !== "production") {
+  ["http://localhost:3000", "http://localhost:5173", "http://localhost:4173"].forEach(
+    o => _allowedOriginsSet.add(o)
+  );
+}
+if (!_allowedOriginsSet.size) {
+  console.warn(
+    "⚠️  CORS: ningún origen permitido configurado (ALLOWED_ORIGINS + CLIENT_PORTAL_URL vacíos). " +
+    "Las peticiones cross-origin del navegador serán rechazadas — configura al menos CLIENT_PORTAL_URL."
+  );
+}
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // server-to-server / health checks
+    if (_allowedOriginsSet.has(origin)) return callback(null, true);
+    callback(new Error(`CORS: origen no permitido: ${origin}`));
+  },
+  credentials: true,
+}));
+
+// ─── SECURITY HEADERS ────────────────────────────────────────────────────────
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  next();
+});
+
 app.use(express.json());
 
 // Servir TorreControl.html directamente desde la raíz
