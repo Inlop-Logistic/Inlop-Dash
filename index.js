@@ -1210,6 +1210,7 @@ async function syncSolicitudes() {
           title: notif.titulo,
           body: notif.mensaje,
           action: notif._push,
+          tag: notif._push.tag,
         })),
     );
 
@@ -1271,7 +1272,7 @@ function _notifs(sol, nuevoEstado, viaje, estadoAnterior) {
   const sid   = sol.id;
   const n = (tipo, titulo, mensaje, actionType = 'OPEN_SERVICE') => ({
     usuario_id: uid, solicitud_id: sid, tipo, titulo, mensaje,
-    _push: { action_type: actionType, action_payload: { servicio_id: sid } },
+    _push: { action_type: actionType, action_payload: { servicio_id: sid }, tag: `push-${nuevoEstado}-${sid}` },
   });
   if (nuevoEstado === 'confirmado' && estadoAnterior === 'pendiente')
     return [n('confirmacion', 'Servicio confirmado', `Tu servicio ${cod} ha sido confirmado. Vehículo: ${placa}. Conductor: ${cond}.${obs}`)];
@@ -2320,7 +2321,7 @@ app.post('/push/suscripcion', requireClienteAuth, async (req, res) => {
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
       return res.status(400).json({ error: 'endpoint y keys.{p256dh,auth} son requeridos' });
     }
-    await sbFetch('/push_subscriptions', 'POST', [{
+    const result = await sbFetch('/push_subscriptions?on_conflict=endpoint', 'POST', [{
       usuario_id: req.userId,
       endpoint,
       p256dh: keys.p256dh,
@@ -2328,6 +2329,7 @@ app.post('/push/suscripcion', requireClienteAuth, async (req, res) => {
       user_agent: req.headers['user-agent'] || null,
       activo: true,
     }]);
+    if (!result) return res.status(500).json({ error: 'Error al registrar la suscripción' });
     res.json({ ok: true });
   } catch(e) {
     console.error('❌ POST /push/suscripcion:', e.message);
