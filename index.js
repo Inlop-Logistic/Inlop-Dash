@@ -1,15 +1,83 @@
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
+import { buildLookupMap, resolveCustomer } from './services/customerResolver.js';
+import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } from './services/authScope.js';
+
+// ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
+// Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
+// lenta o colgada de cualquiera de esos servicios podía acumular conexiones
+// abiertas indefinidamente. Envoltorio mínimo sobre fetch con AbortController;
+// no cambia la firma de uso (misma llamada fetch(url, opts)).
+const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
+
+async function fetchConTimeout(url, opts = {}, timeoutMs = DEFAULT_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...opts, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Mapa de resolución de clientes — reconstruido cada 10 min desde empresas_cliente
+let customerLookupMap = new Map();
 
 
 // ─── SUPABASE ───────────────────────────────────────────
+// Decisión de arquitectura (INLOP Event Engine, Fase 3): este backend es el
+// único escritor confiable de `notificaciones_cliente` (job syncSolicitudes
+// y demás mutaciones REST). Habilitar RLS por usuario/empresa en esa tabla
+// (requerido para exponer Supabase Realtime directo al navegador sin fugas
+// entre empresas) exige que estas escrituras corran con la SERVICE KEY, que
+// Postgres/PostgREST evalúa sin aplicar RLS. La ANON KEY (pública, usada
+// hasta ahora para todo) se evalúa como rol "anon" sin auth.uid(), y las
+// políticas RLS por usuario la habrían rechazado silenciosamente.
+//
+// Reutiliza el mismo SUPABASE_SERVICE_KEY que ya declara la sección de
+// Gestión de Usuarios (ver SB_SERVICE_KEY más abajo) — es la misma service
+// role key del proyecto, un solo nombre de variable de entorno para ambos
+// usos. Debe configurarse en las variables de entorno del servidor (Railway)
+// y NUNCA exponerse al navegador. Mientras no esté configurada, se conserva
+// el fallback a la anon key para no interrumpir el servicio — pero las
+// políticas RLS de notificaciones_cliente bloquearán las escrituras del
+// backend hasta que se configure.
 const SB_URL = "https://gtyydandwcgoaratmnqh.supabase.co/rest/v1";
-const SB_KEY = process.env.SUPABASE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0eXlkYW5kd2Nnb2FyYXRtbnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDAyMTcsImV4cCI6MjA5MjYxNjIxN30.utGZtr0L5t9hIpRABTtfhsKEsrSCBJLHcP_gQ5Hq0EI";
+const SB_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0eXlkYW5kd2Nnb2FyYXRtbnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDAyMTcsImV4cCI6MjA5MjYxNjIxN30.utGZtr0L5t9hIpRABTtfhsKEsrSCBJLHcP_gQ5Hq0EI";
+const SB_KEY = process.env.SUPABASE_SERVICE_KEY || SB_ANON_KEY;
 const SB_AUTH_URL = 'https://gtyydandwcgoaratmnqh.supabase.co/auth/v1';
 
+if (!process.env.SUPABASE_SERVICE_KEY) {
+  console.warn(
+    "⚠️  SUPABASE_SERVICE_KEY no configurada. Usando fallback (anon key). " +
+    "Las políticas RLS de notificaciones_cliente (Event Engine Fase 3) bloquearán las " +
+    "escrituras de este backend hasta configurar la service key en las variables de entorno."
+  );
+}
+
+// ─── AUTHENTICATION HOTFIX v1.0.1 — redirect_to propio del Portal Cliente ──
+// Antes, POST /auth/recuperar llamaba a Supabase Auth (/recover) sin
+// `redirect_to`, por lo que GoTrue usaba el "Site URL" del proyecto Supabase
+// compartido (config. única a nivel de proyecto) — hoy apuntado al ERP. El
+// enlace del correo de recuperación llevaba a los usuarios del Portal
+// Cliente al ERP en producción. Con esta variable, el Portal Cliente envía
+// su propio destino en cada solicitud, sin tocar el Site URL global ni crear
+// un proyecto Supabase nuevo (Supabase permite un `redirect_to` distinto por
+// llamada, siempre que esté en la lista blanca de "Redirect URLs" del
+// proyecto — paso manual en el dashboard de Supabase, fuera de este código).
+const CLIENT_PORTAL_URL = process.env.CLIENT_PORTAL_URL || "";
+if (!CLIENT_PORTAL_URL) {
+  console.warn(
+    "⚠️  CLIENT_PORTAL_URL no configurada. Los correos de recuperación de " +
+    "contraseña del Portal Cliente usarán el Site URL por defecto del " +
+    "proyecto Supabase (compartido con otros productos INLOP) en vez del " +
+    "propio — configura esta variable en Railway."
+  );
+}
+
 const SB_HEADERS = {
-  "apikey": SB_KEY,
+  "apikey": SB_ANON_KEY,
   "Authorization": `Bearer ${SB_KEY}`,
   "Content-Type": "application/json",
   "Prefer": "resolution=merge-duplicates,return=representation"
@@ -18,7 +86,7 @@ const SB_HEADERS = {
 async function sbFetch(path, method="GET", body=null) {
   const opts = { method, headers: SB_HEADERS };
   if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(`${SB_URL}${path}`, opts);
+  const r = await fetchConTimeout(`${SB_URL}${path}`, opts);
   if (!r.ok) {
     const txt = await r.text();
     console.error(`Supabase ${method} ${path} → ${r.status}: ${txt}`);
@@ -27,6 +95,130 @@ async function sbFetch(path, method="GET", body=null) {
   if (method === "DELETE") return null;
   const text = await r.text();
   return text ? JSON.parse(text) : null;
+}
+
+// ─── PUSH NOTIFICATIONS (INLOP Event Engine, Fase 4A — Sprint 4.4) ────
+// Canal Push: reutiliza exactamente el mismo insertsNotif que ya escribe
+// notificaciones_cliente (ver syncSolicitudes/_notifs más abajo) — no existe
+// un flujo paralelo de generación de notificaciones para Push.
+//
+// Degradación segura (mismo patrón que SUPABASE_SERVICE_KEY arriba): sin
+// VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY configuradas, enviarPush() es un no-op
+// con un único warning — el backend sigue funcionando con Realtime como
+// único canal de entrega.
+import webpush from "web-push";
+
+const VAPID_PUBLIC_KEY  = process.env.VAPID_PUBLIC_KEY  || "";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
+const VAPID_SUBJECT     = process.env.VAPID_SUBJECT || "mailto:soporte@inlop.com.co";
+
+const PUSH_CONFIGURADO = Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
+
+if (PUSH_CONFIGURADO) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+} else {
+  console.warn(
+    "⚠️  VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY no configuradas. Push deshabilitado " +
+    "(generar con: npx web-push generate-vapid-keys) — el backend continúa " +
+    "funcionando con normalidad; las notificaciones siguen entregándose por Realtime."
+  );
+}
+
+// Envía push a todas las suscripciones activas de un usuario. Nunca lanza:
+// un fallo de Push no debe interrumpir syncSolicitudes ni ninguna mutación
+// de negocio que ya escribió su notificación en notificaciones_cliente.
+async function enviarPush(usuarioId, payload) {
+  if (!PUSH_CONFIGURADO || !usuarioId) return;
+  try {
+    const subs = await sbFetch(
+      `/push_subscriptions?usuario_id=eq.${encodeURIComponent(usuarioId)}&activo=eq.true`
+    ) || [];
+    if (!subs.length) return;
+
+    const body = JSON.stringify(payload);
+    await Promise.allSettled(subs.map(async (s) => {
+      try {
+        await webpush.sendNotification(
+          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+          body,
+        );
+      } catch (err) {
+        // 404/410 → endpoint expirado/revocado por el navegador: desactivar,
+        // no borrar (trazabilidad, ver migración 0002_push_subscriptions.sql).
+        if (err.statusCode === 404 || err.statusCode === 410) {
+          await sbFetch(`/push_subscriptions?id=eq.${encodeURIComponent(s.id)}`, "PATCH", { activo: false });
+        } else {
+          console.error(`❌ Push a ${s.endpoint}:`, err.message);
+        }
+      }
+    }));
+  } catch (e) {
+    console.error("❌ enviarPush:", e.message);
+  }
+}
+
+// ─── PROTECCIÓN DE ENDPOINTS INTERNOS (Hotfix RC v1.0) ─────────────────
+// Los endpoints /api/* (Torre de Control / ERP interno) no tenían ningún
+// control de acceso — cualquiera que conociera la URL podía leer y mutar
+// datos operativos. Fix mínimo: exigir un secreto compartido por header,
+// fail-closed (si INTERNAL_API_KEY no está configurada, estos endpoints
+// quedan inaccesibles en vez de abiertos). No reemplaza una autenticación
+// por usuario — es la protección mínima estable para esta hotfix; ver
+// informe de riesgos pendientes sobre TorreControl.html.
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || "";
+
+if (!INTERNAL_API_KEY) {
+  console.warn(
+    "⚠️  INTERNAL_API_KEY no configurada. Los endpoints internos /api/* " +
+    "quedan inaccesibles (fail-closed) hasta configurar esta variable."
+  );
+}
+
+function requireInternalApiKey(req, res, next) {
+  if (!INTERNAL_API_KEY) {
+    return res.status(503).json({ error: "Servicio no disponible: INTERNAL_API_KEY no configurada" });
+  }
+  if (req.headers["x-internal-api-key"] !== INTERNAL_API_KEY) {
+    return res.status(401).json({ error: "No autorizado" });
+  }
+  next();
+}
+
+// ─── ACCESO LEGADO — SOLUCIÓN TEMPORAL ─────────────────────────────────────
+// DECISIÓN TÉCNICA (LEGACY-01): TorreControl.html continúa operando mientras
+// avanza la migración al ERP. Para no comprometer la seguridad del ERP
+// (requireInternalApiKey, INTERNAL_API_KEY), se introduce un token separado
+// (LEGACY_TC_TOKEN) que solo aplica a los 5 endpoints que TorreControl.html
+// necesita. requireInternalApiKey permanece intacto y aplicado al resto de la API.
+//
+// ELIMINAR cuando TorreControl.html sea dado de baja definitivamente.
+// Endpoints autorizados: GET /api/data, GET /api/alarmas, GET /api/pendientes,
+//   GET /api/solicitudes, PATCH /api/solicitudes/:id/estado
+// Bootstrap: GET /legacy/tc-init (sin auth) retorna { token } para que el
+// cliente lo obtenga en tiempo de ejecución sin hardcodear en el HTML.
+const LEGACY_TC_TOKEN = process.env.LEGACY_TC_TOKEN || "";
+
+if (!LEGACY_TC_TOKEN) {
+  console.warn(
+    "⚠️  LEGACY_TC_TOKEN no configurada. Los endpoints legados quedarán inaccesibles " +
+    "para el cliente de torre de control hasta configurar esta variable en Railway."
+  );
+}
+
+function requireLegacyOrInternal(req, res, next) {
+  // Acceso ERP: header x-internal-api-key con INTERNAL_API_KEY
+  if (INTERNAL_API_KEY && req.headers["x-internal-api-key"] === INTERNAL_API_KEY) {
+    return next();
+  }
+  // Acceso legado: header x-legacy-token con LEGACY_TC_TOKEN
+  if (LEGACY_TC_TOKEN && req.headers["x-legacy-token"] === LEGACY_TC_TOKEN) {
+    return next();
+  }
+  // Fail-closed: si ninguna key está configurada, responder 503
+  if (!INTERNAL_API_KEY && !LEGACY_TC_TOKEN) {
+    return res.status(503).json({ error: "Servicio no disponible: credenciales no configuradas" });
+  }
+  return res.status(401).json({ error: "No autorizado" });
 }
 
 // Parsear schedulate_origin DD/MM/YYYY HH:MM:SS
@@ -39,7 +231,48 @@ function parseSchedulate(str) {
 }
 
 const app = express();
-app.use(cors());
+
+// ─── CORS — lista blanca por variable de entorno ─────────────────────────────
+// Peticiones sin header Origin (server-to-server, curl, Postman, Railway health)
+// pasan siempre. Solo las peticiones cross-origin del navegador se filtran.
+// CLIENT_PORTAL_URL se incluye automáticamente si está configurada (reutiliza
+// la misma variable que ya declara POST /auth/recuperar — no hay que duplicarla).
+const _allowedOriginsSet = new Set(
+  [
+    ...(process.env.ALLOWED_ORIGINS || "").split(",").map(s => s.trim()).filter(Boolean),
+    CLIENT_PORTAL_URL,
+  ].filter(Boolean)
+);
+// Localhost solo en entornos no-producción (desarrollo local y staging con NODE_ENV sin set)
+if (process.env.NODE_ENV !== "production") {
+  ["http://localhost:3000", "http://localhost:5173", "http://localhost:4173"].forEach(
+    o => _allowedOriginsSet.add(o)
+  );
+}
+if (!_allowedOriginsSet.size) {
+  console.warn(
+    "⚠️  CORS: ningún origen permitido configurado (ALLOWED_ORIGINS + CLIENT_PORTAL_URL vacíos). " +
+    "Las peticiones cross-origin del navegador serán rechazadas — configura al menos CLIENT_PORTAL_URL."
+  );
+}
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // server-to-server / health checks
+    if (_allowedOriginsSet.has(origin)) return callback(null, true);
+    callback(new Error(`CORS: origen no permitido: ${origin}`));
+  },
+  credentials: true,
+}));
+
+// ─── SECURITY HEADERS ────────────────────────────────────────────────────────
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  next();
+});
+
 app.use(express.json());
 
 // Servir TorreControl.html directamente desde la raíz
@@ -49,6 +282,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 app.use(express.static(__dirname));
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "TorreControl.html")));
 app.get("/TorreControl.html", (req, res) => res.sendFile(path.join(__dirname, "TorreControl.html")));
+
+// Bootstrap legado — sin autenticación (intencional).
+// Retorna el token que la torre de control necesita para llamar los endpoints autorizados.
+// No expone datos de negocio. ELIMINAR junto con LEGACY-01.
+app.get("/legacy/tc-init", (req, res) => {
+  if (!LEGACY_TC_TOKEN) {
+    return res.status(503).json({ error: "Token legado no configurado" });
+  }
+  res.json({ token: LEGACY_TC_TOKEN });
+});
 
 const LOGIN_URL = "https://integrations.controlt.io/Auth/login";
 const BASE_URL  = "https://app.controlt.com.co/apipublic/api";
@@ -72,7 +315,7 @@ function cacheVigente(key) {
 // ─── TOKEN ──────────────────────────────────────────────
 async function refreshToken() {
   console.log("🔄 Renovando token ControlT...");
-  const res = await fetch(LOGIN_URL, {
+  const res = await fetchConTimeout(LOGIN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -113,7 +356,7 @@ async function getCtPublicToken() {
   if (!expired && ctPublicToken) return ctPublicToken;
 
   console.log('🔑 Renovando token ControlT API Pública...');
-  const res = await fetch(`${CT_PUBLIC_URL}/login/oauth`, {
+  const res = await fetchConTimeout(`${CT_PUBLIC_URL}/login/oauth`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `username=${encodeURIComponent(CT_PUBLIC_USER)}&password=${encodeURIComponent(CT_PUBLIC_PASS)}`
@@ -127,10 +370,10 @@ async function getCtPublicToken() {
 }
 
 // GET /api/ct/travel/:id
-app.get('/api/ct/travel/:id', async (req, res) => {
+app.get('/api/ct/travel/:id', requireInternalApiKey, async (req, res) => {
   try {
     const token = await getCtPublicToken();
-    const r = await fetch(`${CT_PUBLIC_URL}/Travel/${req.params.id}`, {
+    const r = await fetchConTimeout(`${CT_PUBLIC_URL}/Travel/${req.params.id}`, {
       headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
     });
     if (!r.ok) {
@@ -147,10 +390,10 @@ app.get('/api/ct/travel/:id', async (req, res) => {
 });
 
 // GET /api/ct/travel/list — lista viajes activos via Travel API pública
-app.get('/api/ct/travel/list', async (req, res) => {
+app.get('/api/ct/travel/list', requireInternalApiKey, async (req, res) => {
   try {
     const token = await getCtPublicToken();
-    const r = await fetch(`${CT_PUBLIC_URL}/Travel/List`, {
+    const r = await fetchConTimeout(`${CT_PUBLIC_URL}/Travel/List`, {
       headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
     });
     const txt = await r.text();
@@ -166,7 +409,7 @@ app.get('/api/ct/travel/list', async (req, res) => {
 });
 
 // POST /api/ct/binnacle
-app.post('/api/ct/binnacle', async (req, res) => {
+app.post('/api/ct/binnacle', requireInternalApiKey, async (req, res) => {
   try {
     const token = await getCtPublicToken();
     const { trip_number, id_monitoring_order, date_start, date_end, take = 100, page = 1 } = req.body;
@@ -177,7 +420,7 @@ app.post('/api/ct/binnacle', async (req, res) => {
     if (date_start)          body.date_start          = date_start;
     if (date_end)            body.date_end            = date_end;
 
-    const r = await fetch(`${CT_PUBLIC_URL}/ControlTower/binnacle`, {
+    const r = await fetchConTimeout(`${CT_PUBLIC_URL}/ControlTower/binnacle`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -203,7 +446,7 @@ app.post('/api/ct/binnacle', async (req, res) => {
 async function safeFetch(path, fallback = []) {
   const doRequest = async () => {
     const token = currentToken;
-    return fetch(`${BASE_URL}${path}`, {
+    return fetchConTimeout(`${BASE_URL}${path}`, {
       method: "GET",
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
     });
@@ -310,6 +553,19 @@ async function syncPendientes() {
   }
 }
 
+// ─── CUSTOMER LOOKUP ────────────────────────────────────
+// Carga empresas_cliente y reconstruye el mapa de resolución.
+// Se llama al inicio y cada 10 min para capturar nuevas homologaciones.
+async function refreshCustomerLookup() {
+  try {
+    const empresas = await sbFetch('/empresas_cliente?activa=eq.true&select=id,razon_social,nombre_controlt') || [];
+    customerLookupMap = buildLookupMap(empresas);
+    console.log(`🏢 Customer lookup: ${customerLookupMap.size} entradas`);
+  } catch (e) {
+    console.error('❌ refreshCustomerLookup:', e.message);
+  }
+}
+
 // ─── SYNC PLANEADOS ─────────────────────────────────────
 async function syncPlaneados() {
   try {
@@ -348,12 +604,14 @@ async function syncPlaneados() {
       const estaActivo = activeIds.has(v.trip_number);
       const viajeResume = cache.viajes.data.find(r => r.trip_number === v.trip_number);
       const cliente = viajeResume?.company_customer_name || v.company_customer_name || null;
+      const resolved = resolveCustomer(cliente, customerLookupMap);
 
       const row = {
         trip_number:           v.trip_number,
         license_plate:         v.license_plate         || null,
         driver_name:           v.driver_name           || null,
         company_customer_name: cliente,
+        empresa_cliente_id:    resolved.empresa_cliente_id,
         city_origin:           v.city_origin           || null,
         city_destination:      v.city_destination      || null,
         origin_address:        v.origin_address        || null,
@@ -458,15 +716,15 @@ async function syncAlarmas() {
 
 // ─── ENDPOINTS — responden siempre del caché ────────────
 
-app.get("/api/data", (req, res) => {
+app.get("/api/data", requireLegacyOrInternal, (req, res) => {
   res.json(cache.viajes.data);
 });
 
-app.get("/api/alarmas", (req, res) => {
+app.get("/api/alarmas", requireLegacyOrInternal, (req, res) => {
   res.json(cache.alarmas.data);
 });
 
-app.get("/api/pendientes", async (req, res) => {
+app.get("/api/pendientes", requireLegacyOrInternal, async (req, res) => {
   try {
     if ((Date.now() - cache.pendientes.ts) > 5 * 60 * 1000 || cache.pendientes.data.length === 0) {
       await syncPendientes();
@@ -508,7 +766,7 @@ app.get("/api/pendientes", async (req, res) => {
 
 
 // ─── SOLICITUDES (Módulo de Demanda) ─────────────────────────────────────────
-app.get('/api/solicitudes', async (req, res) => {
+app.get('/api/solicitudes', requireLegacyOrInternal, async (req, res) => {
   try {
     const { desde, hasta, estado } = req.query;
     // Usar fecha local Colombia para el default de "hoy"
@@ -589,8 +847,104 @@ app.get('/api/solicitudes', async (req, res) => {
   }
 });
 
+// GET /api/solicitudes/:id — detalle completo para el ERP (interno, sin auth de cliente)
+app.get('/api/solicitudes/:id', requireInternalApiKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const SOL_SELECT_DETALLE = [
+      'id','codigo_solicitud','external_ref','estado','creado_en','creado_por',
+      'empresa_cliente_id','agencia_id','agencia_nombre',
+      'tipo_operacion','tipo_vehiculo','origen','destino',
+      'fecha_requerida','observacion_coordinadora',
+      'placa_asignada','conductor_nombre','conductor_tel',
+      'controlt_trip_number','canal',
+      'fecha_confirmacion','fecha_inicio_real','fecha_fin_real',
+    ].join(',');
+
+    const sols = await sbFetch(
+      `/solicitudes?id=eq.${encodeURIComponent(id)}&limit=1&select=${SOL_SELECT_DETALLE}`
+    ) || [];
+    if (!sols.length) return res.status(404).json({ error: 'Solicitud no encontrada' });
+    const sol = sols[0];
+
+    // Enriquecer con nombres (misma lógica que GET /api/solicitudes)
+    const [empresas, agencias, usuarios] = await Promise.all([
+      sol.empresa_cliente_id
+        ? sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(sol.empresa_cliente_id)}&select=id,razon_social`)
+        : Promise.resolve([]),
+      sol.agencia_id
+        ? sbFetch(`/agencias_cliente?id=eq.${encodeURIComponent(sol.agencia_id)}&select=id,nombre`)
+        : Promise.resolve([]),
+      sol.creado_por
+        ? sbFetch(`/usuarios_cliente?id=eq.${encodeURIComponent(sol.creado_por)}&select=id,nombre`)
+        : Promise.resolve([]),
+    ]);
+
+    const cliente     = empresas?.[0]?.razon_social || '—';
+    const agencia     = agencias?.[0]?.nombre       || sol.agencia_nombre || '—';
+    const solicitante = usuarios?.[0]?.nombre       || null;
+
+    // Buscar viaje activo en caché de ControlT; si no, buscar en histórico cumplidos
+    let viaje    = null;
+    let cumplido = null;
+    if (sol.controlt_trip_number) {
+      const tripNum = String(sol.controlt_trip_number);
+      viaje = cache.viajes.data.find(v => String(v.trip_number) === tripNum) || null;
+      if (!viaje) {
+        const cs = await sbFetch(
+          `/cumplidos?id=eq.${encodeURIComponent(tripNum)}&select=id,placa,conductor,conductor_tel,fecha_viaje,fecha_finalizacion&limit=1`
+        ) || [];
+        cumplido = cs[0] || null;
+      }
+    }
+
+    // Prioridad: viaje activo > campos en solicitud > cumplido histórico
+    const conductor_nombre   = viaje?.driver_name   || sol.conductor_nombre || cumplido?.conductor  || null;
+    const conductor_telefono = viaje
+      ? extraerTelefono(viaje.driver_phone, viaje.full_driver) || null
+      : (sol.conductor_tel || cumplido?.conductor_tel || null);
+    const vehiculo_placa     = viaje?.license_plate  || sol.placa_asignada  || cumplido?.placa      || null;
+
+    res.json({
+      // Contrato Solicitud base
+      id:               sol.id,
+      codigo_solicitud: sol.codigo_solicitud,
+      external_ref:     sol.external_ref   || null,
+      canal:            sol.canal          || 'APP',
+      creado_en:        sol.creado_en,
+      solicitante,
+      cliente,
+      agencia,
+      tipo_vehiculo:    sol.tipo_vehiculo  || '',
+      tipo_operacion:   sol.tipo_operacion || '',
+      origen:           sol.origen         || '',
+      destino:          sol.destino        || '',
+      fecha_requerida:  sol.fecha_requerida || null,
+      estado:           sol.estado === 'confirmado' ? 'aprobado' : sol.estado,
+      // Contrato SolicitudDetalle extendido
+      conductor_nombre,
+      conductor_cedula:   null,
+      conductor_telefono,
+      conductor_licencia: null,
+      vehiculo_placa,
+      vehiculo_tipo:      null,
+      vehiculo_capacidad: null,
+      historial:          [],
+      actualizado_en:     sol.fecha_confirmacion || null,
+      fecha_inicio_ruta:  cumplido?.fecha_viaje        || sol.fecha_inicio_real || null,
+      fecha_fin_ruta:     cumplido?.fecha_finalizacion || sol.fecha_fin_real    || null,
+      notas:              sol.observacion_coordinadora || null,
+      distancia_km:       null,
+    });
+  } catch(e) {
+    console.error('❌ GET /api/solicitudes/:id:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // PATCH /api/solicitudes/:id/estado — cambia estado manualmente (interno, sin auth)
-app.patch('/api/solicitudes/:id/estado', async (req, res) => {
+app.patch('/api/solicitudes/:id/estado', requireLegacyOrInternal, async (req, res) => {
   try {
     const { id } = req.params;
     const { estado, conductor_nombre, placa_asignada, conductor_tel } = req.body;
@@ -643,22 +997,24 @@ async function syncCumplidos() {
       if (!v.trip_number) continue;
       const existe = existentes.get(v.trip_number);
       const cliente = (v.company_customer_name || '').split(',')[0].trim();
+      const resolved = resolveCustomer(cliente, customerLookupMap);
 
       if (!existe) {
         const row = {
-          id:              v.trip_number,
-          manifiesto:      v.number_order || '',
-          placa:           v.license_plate || '',
-          conductor:       v.driver_name || '',
-          conductor_tel:   extraerTelefono(v.driver_phone, v.full_driver),
-          cliente:         cliente,
-          estado_controlt: v.state_travel || '',
-          estado_cumplido: 'LIVE',
-          pct:             parseFloat(v.percentage_travel) || 0,
-          fecha_viaje:     v.activated_on || v.created_on || '',
-          origen:          v.origin_city_name || '',
-          destino:         v.destiny_city_name || '',
-          tiene_soporte:   false,
+          id:                  v.trip_number,
+          manifiesto:          v.number_order || '',
+          placa:               v.license_plate || '',
+          conductor:           v.driver_name || '',
+          conductor_tel:       extraerTelefono(v.driver_phone, v.full_driver),
+          cliente:             cliente,
+          empresa_cliente_id:  resolved.empresa_cliente_id,
+          estado_controlt:     v.state_travel || '',
+          estado_cumplido:     'LIVE',
+          pct:                 parseFloat(v.percentage_travel) || 0,
+          fecha_viaje:         v.activated_on || v.created_on || '',
+          origen:              v.origin_city_name || '',
+          destino:             v.destiny_city_name || '',
+          tiene_soporte:       false,
         };
         await sbFetch('/cumplidos', 'POST', row);
         insertados++;
@@ -668,6 +1024,7 @@ async function syncCumplidos() {
           pct:             parseFloat(v.percentage_travel) || 0,
         };
         if (!existe.cliente && cliente) patch.cliente = cliente;
+        if (!existe.empresa_cliente_id && resolved.empresa_cliente_id) patch.empresa_cliente_id = resolved.empresa_cliente_id;
         await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(v.trip_number)}`, 'PATCH', patch);
         actualizados++;
       }
@@ -850,8 +1207,23 @@ async function syncSolicitudes() {
       else console.error(`❌ [syncSolicitudes] Supabase rechazó PATCH para solicitud ${id} — campos: ${Object.keys(fields).join(', ')}`);
     }
     for (let i = 0; i < insertsNotif.length; i += 50) {
-      await sbFetch('/notificaciones_cliente', 'POST', insertsNotif.slice(i, i + 50));
+      const lote = insertsNotif.slice(i, i + 50).map(({ _push, ...fila }) => fila);
+      await sbFetch('/notificaciones_cliente', 'POST', lote);
     }
+
+    // Canal Push (Fase 4A/Sprint 4.4): mismo insertsNotif ya persistido arriba,
+    // no un flujo paralelo. Fire-and-forget vía Promise.allSettled — un fallo
+    // de push nunca debe bloquear ni reintentar el ciclo de syncSolicitudes.
+    await Promise.allSettled(
+      insertsNotif
+        .filter((notif) => notif._push)
+        .map((notif) => enviarPush(notif.usuario_id, {
+          title: notif.titulo,
+          body: notif.mensaje,
+          action: notif._push,
+          tag: notif._push.tag,
+        })),
+    );
 
     console.log(`📋 syncSolicitudes OK: ${updOk}/${updates.length} upd | ${insertsNotif.length} notifs | ${pendVerif.length} verif cumplidos`);
   } catch(e) {
@@ -897,6 +1269,11 @@ function _fields(viaje, nuevoEstado, ahora, esPrimerEnlace) {
   return f;
 }
 
+// `_push` viaja junto al registro pero NUNCA se persiste en notificaciones_cliente
+// (no existe esa columna, ver supabase/migrations 0001) — se extrae y se
+// descarta justo antes del INSERT (syncSolicitudes) y solo se usa para
+// construir el payload del canal Push (mismo action_type/action_payload que
+// consume executeEventAction en el frontend, Blueprint v3.0 §5.2/§5.4).
 function _notifs(sol, nuevoEstado, viaje, estadoAnterior) {
   const cod   = sol.codigo_solicitud;
   const placa = viaje?.license_plate || '';
@@ -904,13 +1281,16 @@ function _notifs(sol, nuevoEstado, viaje, estadoAnterior) {
   const obs   = sol.observacion_coordinadora ? `\n${sol.observacion_coordinadora}` : '';
   const uid   = sol.creado_por;
   const sid   = sol.id;
-  const n = (tipo, titulo, mensaje) => ({ usuario_id: uid, solicitud_id: sid, tipo, titulo, mensaje });
+  const n = (tipo, titulo, mensaje, actionType = 'OPEN_SERVICE') => ({
+    usuario_id: uid, solicitud_id: sid, tipo, titulo, mensaje,
+    _push: { action_type: actionType, action_payload: { servicio_id: sid }, tag: `push-${nuevoEstado}-${sid}` },
+  });
   if (nuevoEstado === 'confirmado' && estadoAnterior === 'pendiente')
     return [n('confirmacion', 'Servicio confirmado', `Tu servicio ${cod} ha sido confirmado. Vehículo: ${placa}. Conductor: ${cond}.${obs}`)];
   if (nuevoEstado === 'en_ruta' && estadoAnterior === 'pendiente')
-    return [n('confirmacion', 'Servicio en camino', `Tu servicio ${cod} fue confirmado y ya está en operación. Vehículo: ${placa}. Conductor: ${cond}.${obs}`)];
+    return [n('confirmacion', 'Servicio en camino', `Tu servicio ${cod} fue confirmado y ya está en operación. Vehículo: ${placa}. Conductor: ${cond}.${obs}`, 'OPEN_TRACKING')];
   if (nuevoEstado === 'en_ruta' && estadoAnterior === 'confirmado')
-    return [n('info', 'Tu servicio está en camino', `El servicio ${cod} inició operación.`)];
+    return [n('info', 'Tu servicio está en camino', `El servicio ${cod} inició operación.`, 'OPEN_TRACKING')];
   if (nuevoEstado === 'completado')
     return [n('info', 'Servicio completado', `El servicio ${cod} fue completado exitosamente.`)];
   if (nuevoEstado === 'cancelado')
@@ -980,7 +1360,7 @@ async function requireClienteAuth(req, res, next) {
   if (!hdr.startsWith('Bearer ')) return res.status(401).json({ error: 'No autenticado' });
   const token = hdr.slice(7);
   try {
-    const r = await fetch(`${SB_AUTH_URL}/user`, {
+    const r = await fetchConTimeout(`${SB_AUTH_URL}/user`, {
       headers: { 'Authorization': `Bearer ${token}`, 'apikey': SB_KEY }
     });
     if (!r.ok) return res.status(401).json({ error: 'Token inválido o expirado' });
@@ -1005,6 +1385,25 @@ function requireAdminCliente(req, res, next) {
   if (!req.userPerfil)                        return res.status(401).json({ error: 'No autenticado' });
   if (req.userPerfil.rol !== 'admin_cliente') return res.status(403).json({ error: 'Se requiere rol admin_cliente' });
   next();
+}
+
+// ─── UNIFIED AUTHORIZATION SCOPE — Sprint 4.7 ──────────────────────────────
+// Resuelve una sola vez por request el Scope (empresa + agencia) del usuario
+// ya autenticado por requireClienteAuth, y lo deja en req.scope para que
+// todos los endpoints de /servicios* lo reutilicen (ver services/authScope.js
+// y CLAUDE.md §5.5). Se monta después de requireClienteAuth, nunca antes —
+// depende de req.userId/req.empresaId/req.userPerfil que esa función coloca.
+async function attachScope(req, res, next) {
+  try {
+    req.scope = await resolverScopeUsuario(
+      { userId: req.userId, empresaId: req.empresaId, perfil: req.userPerfil },
+      { sbFetch }
+    );
+    next();
+  } catch (e) {
+    console.error('❌ attachScope:', e.message);
+    res.status(500).json({ error: 'Error resolviendo permisos' });
+  }
 }
 
 // viaje: objeto de cache.viajes (activo en ControlT) — fuente de verdad para datos en tiempo real
@@ -1046,7 +1445,7 @@ app.post('/auth/login', async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'email y password requeridos' });
   try {
-    const r = await fetch(`${SB_AUTH_URL}/token?grant_type=password`, {
+    const r = await fetchConTimeout(`${SB_AUTH_URL}/token?grant_type=password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': SB_KEY },
       body: JSON.stringify({ email, password })
@@ -1090,7 +1489,7 @@ app.post('/auth/cambiar-password', requireClienteAuth, async (req, res) => {
   if (!passwordNueva) return res.status(400).json({ error: 'passwordNueva requerido' });
   try {
     const token = (req.headers.authorization || '').slice(7);
-    const r = await fetch(`${SB_AUTH_URL}/user`, {
+    const r = await fetchConTimeout(`${SB_AUTH_URL}/user`, {
       method: 'PUT',
       headers: { 'Authorization': `Bearer ${token}`, 'apikey': SB_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: passwordNueva })
@@ -1105,7 +1504,14 @@ app.post('/auth/recuperar', async (req, res) => {
   const { email } = req.body || {};
   if (!email) return res.status(400).json({ error: 'email requerido' });
   try {
-    await fetch(`${SB_AUTH_URL}/recover`, {
+    // redirect_to va como query param (no en el body) — así lo construye el
+    // propio SDK de Supabase (auth-js `resetPasswordForEmail`) contra este
+    // mismo endpoint GoTrue. Sin CLIENT_PORTAL_URL configurada, se omite el
+    // parámetro y GoTrue cae a su comportamiento previo (Site URL del proyecto).
+    const recoverUrl = CLIENT_PORTAL_URL
+      ? `${SB_AUTH_URL}/recover?redirect_to=${encodeURIComponent(`${CLIENT_PORTAL_URL}/recuperar-confirmar`)}`
+      : `${SB_AUTH_URL}/recover`;
+    await fetchConTimeout(recoverUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': SB_KEY },
       body: JSON.stringify({ email })
@@ -1116,8 +1522,81 @@ app.post('/auth/recuperar', async (req, res) => {
 
 // ─── GESTIÓN DE USUARIOS (admin_cliente only) ────────────
 // Requiere SUPABASE_SERVICE_KEY en Railway (service_role key de Supabase).
+// Mismo secreto que SB_KEY (ver sección SUPABASE arriba) — un solo alias.
 
-const SB_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || SB_KEY;
+const SB_SERVICE_KEY = SB_KEY;
+
+// Errores de Supabase Auth (GoTrue) que sabemos traducir a una respuesta
+// clara para el frontend. `status` es el HTTP que devolvemos nosotros
+// (no necesariamente el mismo que Supabase); `message` es el texto que
+// termina mostrándose en un Toast al usuario — nunca el mensaje técnico
+// original de Supabase.
+const SUPABASE_AUTH_ERROR_MAP = {
+  email_exists:            { status: 409, message: 'Ya existe un usuario registrado con este correo.' },
+  weak_password:           { status: 400, message: 'La contraseña es demasiado débil. Usa al menos 8 caracteres, combinando letras y números.' },
+  invalid_email:           { status: 400, message: 'El correo electrónico no es válido.' },
+  email_address_invalid:   { status: 400, message: 'El correo electrónico no es válido.' },
+  validation_failed:       { status: 400, message: 'Los datos ingresados no son válidos. Revisa el formulario.' },
+  signup_disabled:         { status: 403, message: 'La creación de usuarios está deshabilitada temporalmente.' },
+  over_request_rate_limit: { status: 429, message: 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.' },
+};
+
+// Fallback para versiones de GoTrue que no envían `error_code` estructurado
+// y solo devuelven un `msg` en texto libre — mismo mapeo, detectado por patrón.
+const SUPABASE_AUTH_LEGACY_MESSAGE_PATTERNS = [
+  { test: /already registered|already exists/i, code: 'email_exists' },
+  { test: /password.*(weak|short|at least|should be)/i, code: 'weak_password' },
+  { test: /invalid.*email|unable to validate email/i, code: 'invalid_email' },
+];
+
+function resolveSupabaseAuthErrorCode(errorCode, message) {
+  if (errorCode && SUPABASE_AUTH_ERROR_MAP[errorCode]) return errorCode;
+  if (!message) return null;
+  const legacy = SUPABASE_AUTH_LEGACY_MESSAGE_PATTERNS.find(({ test }) => test.test(message));
+  return legacy ? legacy.code : null;
+}
+
+// Error estructurado que preserva el status/código de Supabase Auth, para
+// poder mapearlo en el handler sin perder la información (a diferencia de
+// devolver `null`, que descartaba el motivo real del fallo).
+class SupabaseAuthAdminError extends Error {
+  constructor(httpStatus, rawBody) {
+    let parsed = null;
+    try { parsed = JSON.parse(rawBody); } catch { /* body no era JSON */ }
+    const errorCode = parsed?.error_code || parsed?.code;
+    const supaMessage = parsed?.msg || parsed?.message || parsed?.error_description || rawBody;
+    super(supaMessage || `Supabase Auth Admin API respondió ${httpStatus}`);
+    this.name = 'SupabaseAuthAdminError';
+    this.httpStatus = httpStatus; // status HTTP que devolvió Supabase (ej. 422)
+    this.errorCode = errorCode;   // ej. "email_exists" (puede ser undefined en respuestas legacy)
+  }
+}
+
+// Traduce un SupabaseAuthAdminError a la respuesta que debe recibir el
+// frontend. Reutilizable por cualquier endpoint que escriba en Supabase Auth
+// (hoy solo POST /usuarios). Devuelve `true` si ya respondió, `false` si el
+// error no es un SupabaseAuthAdminError y el caller debe manejarlo distinto.
+function respondSupabaseAuthError(err, res, context) {
+  if (!(err instanceof SupabaseAuthAdminError)) return false;
+
+  const code = resolveSupabaseAuthErrorCode(err.errorCode, err.message);
+  const mapped = code ? SUPABASE_AUTH_ERROR_MAP[code] : null;
+
+  if (mapped) {
+    res.status(mapped.status).json({ error: mapped.message });
+    return true;
+  }
+
+  // Supabase respondió con un error conocido (4xx propio) pero sin mapeo
+  // específico todavía — no es un fallo de nuestro backend, así que no es
+  // un 500. Se registra el código real para poder agregarlo al mapeo, y se
+  // responde con un mensaje genérico pero amigable (nunca el texto técnico
+  // de Supabase ni un stack trace).
+  console.error(`❌ ${context} — error_code de Supabase Auth sin mapear: ${err.errorCode || '(sin código)'} — ${err.message}`);
+  const status = err.httpStatus >= 400 && err.httpStatus < 500 ? err.httpStatus : 400;
+  res.status(status).json({ error: 'No se pudo completar la operación. Verifica los datos ingresados.' });
+  return true;
+}
 
 async function sbAuthAdmin(path, method = 'GET', body = null) {
   const opts = {
@@ -1125,11 +1604,11 @@ async function sbAuthAdmin(path, method = 'GET', body = null) {
     headers: { 'apikey': SB_SERVICE_KEY, 'Authorization': `Bearer ${SB_SERVICE_KEY}`, 'Content-Type': 'application/json' }
   };
   if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(`${SB_AUTH_URL}${path}`, opts);
+  const r = await fetchConTimeout(`${SB_AUTH_URL}${path}`, opts);
   if (!r.ok) {
     const txt = await r.text();
     console.error(`SbAuthAdmin ${method} ${path} → ${r.status}: ${txt}`);
-    return null;
+    throw new SupabaseAuthAdminError(r.status, txt);
   }
   const text = await r.text();
   return text ? JSON.parse(text) : null;
@@ -1230,7 +1709,17 @@ app.post('/usuarios', requireClienteAuth, requireAdminCliente, async (req, res) 
       cargo: p.cargo || '', rol: p.rol, tipo_usuario: p.tipo_usuario,
       agencia_id: p.agencia_id || null, activo: p.activo !== false, agencias: [],
     });
-  } catch(e) { console.error('❌ POST /usuarios:', e.message); res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    // Errores conocidos de Supabase Auth (ej. email_exists) no son un fallo
+    // de nuestro backend — se mapean a un status/mensaje claro, sin 500 y
+    // sin stack trace en la respuesta.
+    if (respondSupabaseAuthError(e, res, 'POST /usuarios')) return;
+
+    // Solo los errores verdaderamente inesperados conservan el stack trace,
+    // y únicamente en los logs del servidor — el cliente nunca lo recibe.
+    console.error('❌ POST /usuarios:', e.stack || e.message);
+    res.status(500).json({ error: 'Ocurrió un error inesperado al crear el usuario. Intenta de nuevo.' });
+  }
 });
 
 // PATCH /usuarios/:id — editar perfil (nombre, cargo, rol, agencia_id, activo)
@@ -1515,14 +2004,27 @@ app.get('/empresa/config', requireClienteAuth, requireAdminCliente, async (req, 
 
 
 // ─── SERVICIOS ───────────────────────────────────────────
-app.get('/servicios', requireClienteAuth, async (req, res) => {
+// Sprint 4.7: todas las rutas de /servicios* comparten un único Router con
+// requireClienteAuth + attachScope montados una sola vez (antes se repetía
+// requireClienteAuth por endpoint y cada uno validaba — o no — empresa/
+// agencia por su cuenta). Todo acceso a `solicitudes` pasa por
+// construirFiltroScope()/obtenerSolicitudEnScope() — ningún endpoint compara
+// empresa_cliente_id/agencia_id manualmente. Recursos fuera del scope
+// devuelven 404 de forma consistente (nunca 403): no se confirma a un
+// usuario sin acceso que el recurso existe en otra empresa/agencia.
+const serviciosRouter = express.Router();
+serviciosRouter.use(requireClienteAuth, attachScope);
+
+serviciosRouter.get('/', async (req, res) => {
   try {
-    const { estado, tipoOperacion, tipoVehiculo, agenciaIds, busqueda, desde, hasta } = req.query;
-    let qs = `/solicitudes?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&order=creado_en.desc&limit=200`;
+    const { estado, tipoOperacion, tipoVehiculo, agenciaId, busqueda, desde, hasta } = req.query;
+    const filtroScope = construirFiltroScope(req.scope, { agenciaId });
+    if (filtroScope === null) return res.json([]);
+
+    let qs = `/solicitudes?${filtroScope}&order=creado_en.desc&limit=200`;
     if (estado)        qs += `&estado=eq.${encodeURIComponent(estado === 'aprobado' ? 'confirmado' : estado)}`;
     if (tipoOperacion) qs += `&tipo_operacion=eq.${encodeURIComponent(tipoOperacion)}`;
     if (tipoVehiculo)  qs += `&tipo_vehiculo=in.(${String(tipoVehiculo).split(',').map(encodeURIComponent).join(',')})`;
-    if (agenciaIds)    qs += `&agencia_id=in.(${String(agenciaIds).split(',').map(encodeURIComponent).join(',')})`;
     if (desde)         qs += `&fecha_requerida=gte.${encodeURIComponent(desde)}`;
     if (hasta)         qs += `&fecha_requerida=lte.${encodeURIComponent(hasta + 'T23:59:59Z')}`;
 
@@ -1565,12 +2067,10 @@ app.get('/servicios', requireClienteAuth, async (req, res) => {
 });
 
 // GET /servicios/:id
-app.get('/servicios/:id', requireClienteAuth, async (req, res) => {
+serviciosRouter.get('/:id', async (req, res) => {
   try {
-    const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&limit=1`) || [];
-    if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
-    const sol = sols[0];
-    if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
+    const sol = await obtenerSolicitudEnScope(req.params.id, req.scope, { sbFetch });
+    if (!sol) return res.status(404).json({ error: 'Servicio no encontrado' });
     let viaje   = null;
     let cumplido = null;
     if (sol.controlt_trip_number) {
@@ -1591,12 +2091,12 @@ app.get('/servicios/:id', requireClienteAuth, async (req, res) => {
 });
 
 // GET /servicios/:id/paradas
-app.get('/servicios/:id/paradas', requireClienteAuth, async (req, res) => {
+serviciosRouter.get('/:id/paradas', async (req, res) => {
   try {
-    const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&select=id,empresa_cliente_id,origen,destino,estado&limit=1`) || [];
-    if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
-    const sol = sols[0];
-    if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
+    const sol = await obtenerSolicitudEnScope(req.params.id, req.scope, {
+      sbFetch, select: 'id,empresa_cliente_id,origen,destino,estado',
+    });
+    if (!sol) return res.status(404).json({ error: 'Servicio no encontrado' });
 
     const estadoOrigen = sol.estado === 'completado' ? 'entregado'
       : sol.estado === 'en_ruta' ? 'en_camino' : 'pendiente';
@@ -1636,10 +2136,17 @@ app.get('/servicios/:id/paradas', requireClienteAuth, async (req, res) => {
 });
 
 // GET /servicios/:id/vehiculo
-app.get('/servicios/:id/vehiculo', requireClienteAuth, async (req, res) => {
+// Hallazgo Bloqueante (Auditoría 4.6): este endpoint no validaba empresa NI
+// agencia — cualquier usuario autenticado, de cualquier empresa, podía leer
+// GPS en vivo + placa de una solicitud ajena conociendo/adivinando su id.
+// Ahora pasa por obtenerSolicitudEnScope como cualquier otro endpoint.
+serviciosRouter.get('/:id/vehiculo', async (req, res) => {
   try {
-    const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&select=controlt_trip_number&limit=1`) || [];
-    const tripNum = sols[0]?.controlt_trip_number;
+    const sol = await obtenerSolicitudEnScope(req.params.id, req.scope, {
+      sbFetch, select: 'controlt_trip_number',
+    });
+    if (!sol) return res.status(404).json({ error: 'Servicio no encontrado' });
+    const tripNum = sol.controlt_trip_number;
     if (!tripNum) return res.status(404).json({ error: 'Sin vehículo asignado' });
     const viaje = cache.viajes.data.find(v => String(v.trip_number) === String(tripNum));
     const lat = parseFloat(viaje?.latitude || viaje?.lat || '');
@@ -1657,11 +2164,18 @@ app.get('/servicios/:id/vehiculo', requireClienteAuth, async (req, res) => {
 });
 
 // POST /servicios
-app.post('/servicios', requireClienteAuth, async (req, res) => {
+serviciosRouter.post('/', async (req, res) => {
   try {
     const { tipo_vehiculo, tipo_operacion, origen, destino, fecha_requerida,
             observaciones, agencia_id, agencia_nombre, external_ref } = req.body || {};
     if (!fecha_requerida) return res.status(400).json({ error: 'fecha_requerida requerido' });
+
+    // La agencia declarada debe pertenecer al scope de quien crea la
+    // solicitud (mismo principio que ya aplicaba PUT /usuarios/:id/agencias,
+    // ausente aquí hasta ahora — Auditoría 4.6, hallazgo Medio #6).
+    if (agencia_id && req.scope.agenciaIds !== null && !req.scope.agenciaIds.includes(agencia_id)) {
+      return res.status(403).json({ error: 'Agencia fuera de tu alcance' });
+    }
 
     const last = await sbFetch('/solicitudes?select=codigo_solicitud&order=creado_en.desc&limit=1') || [];
     const lastCode = last[0]?.codigo_solicitud;
@@ -1696,12 +2210,10 @@ app.post('/servicios', requireClienteAuth, async (req, res) => {
 });
 
 // PATCH /servicios/:id
-app.patch('/servicios/:id', requireClienteAuth, async (req, res) => {
+serviciosRouter.patch('/:id', async (req, res) => {
   try {
-    const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&limit=1`) || [];
-    if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
-    const sol = sols[0];
-    if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
+    const sol = await obtenerSolicitudEnScope(req.params.id, req.scope, { sbFetch });
+    if (!sol) return res.status(404).json({ error: 'Servicio no encontrado' });
     if (sol.estado !== 'pendiente') return res.status(400).json({ error: `No editable en estado: ${sol.estado}` });
 
     const { fecha_requerida, observaciones, origen, destino, tipo_vehiculo, tipo_operacion, external_ref } = req.body || {};
@@ -1731,12 +2243,10 @@ app.patch('/servicios/:id', requireClienteAuth, async (req, res) => {
 });
 
 // POST /servicios/:id/cancelar
-app.post('/servicios/:id/cancelar', requireClienteAuth, async (req, res) => {
+serviciosRouter.post('/:id/cancelar', async (req, res) => {
   try {
-    const sols = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(req.params.id)}&limit=1`) || [];
-    if (!sols.length) return res.status(404).json({ error: 'Servicio no encontrado' });
-    const sol = sols[0];
-    if (sol.empresa_cliente_id !== req.empresaId) return res.status(403).json({ error: 'Acceso denegado' });
+    const sol = await obtenerSolicitudEnScope(req.params.id, req.scope, { sbFetch });
+    if (!sol) return res.status(404).json({ error: 'Servicio no encontrado' });
     if (!['pendiente', 'confirmado'].includes(sol.estado))
       return res.status(400).json({ error: `No cancelable en estado: ${sol.estado}` });
     const fecha_cancelacion = new Date().toISOString();
@@ -1747,6 +2257,8 @@ app.post('/servicios/:id/cancelar', requireClienteAuth, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+app.use('/servicios', serviciosRouter);
 
 // GET /notificaciones
 app.get('/notificaciones', requireClienteAuth, async (req, res) => {
@@ -1806,6 +2318,49 @@ app.delete('/notificaciones', requireClienteAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /push/suscripcion — registra (o actualiza, si el endpoint ya existía)
+// la suscripción Push de este dispositivo/navegador (Fase 4A, Sprint 4.4).
+// Upsert vía Prefer: resolution=merge-duplicates (SB_HEADERS, ya default en
+// sbFetch) sobre la unicidad de `endpoint` (migración 0002_push_subscriptions.sql).
+app.post('/push/suscripcion', requireClienteAuth, async (req, res) => {
+  try {
+    const { endpoint, keys } = req.body || {};
+    if (!endpoint || !keys?.p256dh || !keys?.auth) {
+      return res.status(400).json({ error: 'endpoint y keys.{p256dh,auth} son requeridos' });
+    }
+    const result = await sbFetch('/push_subscriptions?on_conflict=endpoint', 'POST', [{
+      usuario_id: req.userId,
+      endpoint,
+      p256dh: keys.p256dh,
+      auth: keys.auth,
+      user_agent: req.headers['user-agent'] || null,
+      activo: true,
+    }]);
+    if (!result) return res.status(500).json({ error: 'Error al registrar la suscripción' });
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('❌ POST /push/suscripcion:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /push/suscripcion — el usuario desactivó Push desde Perfil, o el
+// navegador canceló la suscripción. Solo borra la propia (usuario_id + endpoint).
+app.delete('/push/suscripcion', requireClienteAuth, async (req, res) => {
+  try {
+    const { endpoint } = req.body || {};
+    if (!endpoint) return res.status(400).json({ error: 'endpoint es requerido' });
+    await sbFetch(
+      `/push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}&usuario_id=eq.${encodeURIComponent(req.userId)}`,
+      'DELETE',
+    );
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('❌ DELETE /push/suscripcion:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /catalogos/agencias
 app.get('/catalogos/agencias', requireClienteAuth, async (req, res) => {
   try {
@@ -1820,7 +2375,7 @@ app.get('/catalogos/vehiculos', (req, res) => {
 });
 
 // Planeados — desde Supabase
-app.get("/api/planeados", async (req, res) => {
+app.get("/api/planeados", requireInternalApiKey, async (req, res) => {
   try {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -1832,6 +2387,214 @@ app.get("/api/planeados", async (req, res) => {
   } catch(e) {
     console.error("❌ /api/planeados:", e.message);
     res.json([]);
+  }
+});
+
+// ─── PROGRAMACIÓN ───────────────────────────────────────────────────────────
+// REQUIERE migración Supabase (ejecutar una vez):
+//   ALTER TABLE planeados
+//     ADD COLUMN IF NOT EXISTS estado_programacion text NOT NULL DEFAULT 'programado',
+//     ADD COLUMN IF NOT EXISTS observaciones        text,
+//     ADD COLUMN IF NOT EXISTS actualizado_en       timestamptz,
+//     ADD COLUMN IF NOT EXISTS empresa_cliente_id   uuid REFERENCES empresas_cliente(id);
+//   ALTER TABLE cumplidos
+//     ADD COLUMN IF NOT EXISTS empresa_cliente_id   uuid REFERENCES empresas_cliente(id);
+
+// GET /api/programacion — bandeja operativa completa del día
+// Enriquece cada fila con nombre_cliente: razon_social oficial cuando existe,
+// company_customer_name como fallback. El original siempre se conserva.
+app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
+  try {
+    const { desde, hasta } = req.query;
+    const hoyInicio = new Date();
+    hoyInicio.setHours(0, 0, 0, 0);
+    const desdeStr = desde || hoyInicio.toISOString().slice(0, 10);
+    const hastaStr = hasta || hoyInicio.toISOString().slice(0, 10);
+
+    const data = await sbFetch(
+      `/planeados?fecha_programada_dia=gte.${desdeStr}&fecha_programada_dia=lte.${hastaStr}&order=schedulate_origin.asc&limit=500`
+    );
+
+    const rows = data || [];
+
+    // Resolver razon_social para filas con empresa_cliente_id
+    const empIds = [...new Set(rows.map(r => r.empresa_cliente_id).filter(Boolean))];
+    let empMap = {};
+    if (empIds.length) {
+      const empresas = await sbFetch(
+        `/empresas_cliente?id=in.(${empIds.map(encodeURIComponent).join(',')})&select=id,razon_social`
+      ) || [];
+      empresas.forEach(e => { empMap[e.id] = e.razon_social; });
+    }
+
+    const enriched = rows.map(r => ({
+      ...r,
+      nombre_cliente: (r.empresa_cliente_id && empMap[r.empresa_cliente_id]) || r.company_customer_name || null,
+    }));
+
+    res.json(enriched);
+  } catch (e) {
+    console.error("❌ GET /api/programacion:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/programacion/:id/solicitud — solicitud origen vinculada al viaje
+// Un viaje sin solicitud asociada es un estado de negocio válido → { vinculada: false }.
+// Solo un error de infraestructura devuelve 500.
+app.get("/api/programacion/:id/solicitud", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const SOL_SELECT = [
+      'id','codigo_solicitud','external_ref','canal','creado_en','creado_por',
+      'empresa_cliente_id','agencia_id','agencia_nombre',
+      'estado','fecha_confirmacion',
+    ].join(',');
+
+    const sols = await sbFetch(
+      `/solicitudes?controlt_trip_number=eq.${encodeURIComponent(id)}&limit=1&select=${SOL_SELECT}`
+    );
+
+    if (sols === null) {
+      return res.status(500).json({ error: "Error consultando solicitudes" });
+    }
+
+    if (sols.length === 0) {
+      return res.json({ vinculada: false });
+    }
+
+    const sol = sols[0];
+
+    const [empresas, agencias, usuarios] = await Promise.all([
+      sol.empresa_cliente_id
+        ? sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(sol.empresa_cliente_id)}&select=id,razon_social`)
+        : Promise.resolve([]),
+      sol.agencia_id
+        ? sbFetch(`/agencias_cliente?id=eq.${encodeURIComponent(sol.agencia_id)}&select=id,nombre`)
+        : Promise.resolve([]),
+      sol.creado_por
+        ? sbFetch(`/usuarios_cliente?id=eq.${encodeURIComponent(sol.creado_por)}&select=id,nombre`)
+        : Promise.resolve([]),
+    ]);
+
+    res.json({
+      vinculada:          true,
+      id:                 sol.id,
+      codigo_solicitud:   sol.codigo_solicitud,
+      external_ref:       sol.external_ref          || null,
+      canal:              sol.canal                 || null,
+      creado_en:          sol.creado_en,
+      fecha_confirmacion: sol.fecha_confirmacion    || null,
+      estado:             sol.estado === 'confirmado' ? 'aprobado' : sol.estado,
+      solicitante:        usuarios?.[0]?.nombre     || null,
+      cliente:            empresas?.[0]?.razon_social || '—',
+      agencia:            agencias?.[0]?.nombre     || sol.agencia_nombre || '—',
+    });
+  } catch (e) {
+    console.error("❌ GET /api/programacion/:id/solicitud:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/programacion/:id — detalle de un viaje planeado por trip_number
+app.get("/api/programacion/:id", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = await sbFetch(
+      `/planeados?trip_number=eq.${encodeURIComponent(id)}&limit=1`
+    );
+    if (!data || data.length === 0) return res.status(404).json({ error: "No encontrado" });
+    res.json(data[0]);
+  } catch (e) {
+    console.error("❌ GET /api/programacion/:id:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/programacion/:id/estado — cambia estado ERP del viaje
+// Solo actualiza estado_programacion. Las observaciones son exclusivas de /observaciones.
+app.patch("/api/programacion/:id/estado", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { estado } = req.body || {};
+    const ESTADOS_VALIDOS = ["programado", "cancelado"];
+    if (!ESTADOS_VALIDOS.includes(estado)) {
+      return res.status(400).json({ error: `Estado inválido: ${estado}` });
+    }
+    await sbFetch(
+      `/planeados?trip_number=eq.${encodeURIComponent(id)}`,
+      "PATCH",
+      { estado_programacion: estado, actualizado_en: new Date().toISOString() }
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("❌ PATCH /api/programacion/:id/estado:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/programacion/:id/observaciones — guarda nota del operador
+// Endpoint exclusivo para observaciones; no toca estado_programacion.
+app.patch("/api/programacion/:id/observaciones", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { observaciones } = req.body || {};
+    if (observaciones === undefined) {
+      return res.status(400).json({ error: "El campo observaciones es requerido" });
+    }
+    await sbFetch(
+      `/planeados?trip_number=eq.${encodeURIComponent(id)}`,
+      "PATCH",
+      { observaciones, actualizado_en: new Date().toISOString() }
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("❌ PATCH /api/programacion/:id/observaciones:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/programacion/:id/sync — reintenta sincronizar un viaje individual con la caché de la plataforma
+app.post("/api/programacion/:id/sync", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const activeIds = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
+    const estaActivo = activeIds.has(id);
+
+    const viajeCache = [...cache.viajes.data, ...(cache.pendientes.data || [])].find(v => v.trip_number === id);
+
+    if (viajeCache) {
+      const f = parseSchedulate(viajeCache.schedulate_origin);
+      await sbFetch(
+        `/planeados?trip_number=eq.${encodeURIComponent(id)}`,
+        'PATCH',
+        {
+          license_plate:         viajeCache.license_plate         || null,
+          driver_name:           viajeCache.driver_name           || null,
+          company_customer_name: viajeCache.company_customer_name || null,
+          city_origin:           viajeCache.city_origin           || null,
+          city_destination:      viajeCache.city_destination      || null,
+          origin_address:        viajeCache.origin_address        || null,
+          schedulate_origin:     viajeCache.schedulate_origin     || null,
+          fecha_programada_dia:  f ? f.toISOString().slice(0, 10) : null,
+          activo_en_resume:      estaActivo,
+          actualizado_en:        new Date().toISOString(),
+        }
+      );
+    } else {
+      await sbFetch(
+        `/planeados?trip_number=eq.${encodeURIComponent(id)}`,
+        'PATCH',
+        { activo_en_resume: estaActivo, actualizado_en: new Date().toISOString() }
+      );
+    }
+
+    res.json({ ok: true, activo_en_resume: estaActivo });
+  } catch (e) {
+    console.error("❌ POST /api/programacion/:id/sync:", e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -1867,6 +2630,7 @@ app.listen(PORT, async () => {
   console.log(`📊 Sync: viajes cada 60s | solicitudes cada 65s | planeados cada 5min`);
 
   try {
+    await refreshCustomerLookup();
     await refreshToken();
     await syncViajes();
     await syncAlarmas();
@@ -1878,10 +2642,11 @@ app.listen(PORT, async () => {
     console.error("❌ Error inicialización:", e.message);
   }
 
-  setInterval(syncViajes,       60 * 1000);
-  setInterval(syncAlarmas,      70 * 1000);
-  setInterval(syncPendientes,    5 * 60 * 1000);
-  setInterval(syncPlaneados,     5 * 60 * 1000);
-  setInterval(syncCumplidos,    60 * 1000);
-  setInterval(syncSolicitudes,  65 * 1000);
+  setInterval(refreshCustomerLookup, 10 * 60 * 1000);
+  setInterval(syncViajes,             60 * 1000);
+  setInterval(syncAlarmas,            70 * 1000);
+  setInterval(syncPendientes,          5 * 60 * 1000);
+  setInterval(syncPlaneados,           5 * 60 * 1000);
+  setInterval(syncCumplidos,          60 * 1000);
+  setInterval(syncSolicitudes,        65 * 1000);
 });

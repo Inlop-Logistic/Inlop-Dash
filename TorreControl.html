@@ -986,6 +986,32 @@ td:first-child{font-family:var(--mono);color:var(--accent);font-size:.73rem;font
 const API = 'https://inlop-dash-production.up.railway.app';
 const REFRESH = 60;
 
+// ─── TOKEN DE ACCESO LEGADO (LEGACY-01) ────────────────────────────────────
+// El token se obtiene del backend en tiempo de ejecución para no almacenarlo
+// directamente en este archivo. Se reintenta hasta 3 veces con backoff si el
+// servidor está arrancando. ELIMINAR junto con el soporte legado en backend.
+let _legacyToken = null;
+
+async function initLegacyToken() {
+  for (let attempt = 0, delay = 1000; attempt < 3; attempt++, delay *= 2) {
+    try {
+      const r = await fetch(`${API}/legacy/tc-init`);
+      if (r.ok) {
+        const d = await r.json();
+        if (d.token) { _legacyToken = d.token; return; }
+      }
+    } catch(_) {}
+    if (attempt < 2) await new Promise(res => setTimeout(res, delay));
+  }
+  console.warn('⚠️ No se pudo obtener token de acceso. Las llamadas a la API fallarán con 401.');
+}
+
+function legacyHeaders(extra) {
+  const h = { 'Content-Type': 'application/json', ...extra };
+  if (_legacyToken) h['x-legacy-token'] = _legacyToken;
+  return h;
+}
+
 // ── USUARIO ACTUAL (desde sessionStorage) ──────────────
 window._inlopUser = (function(){
   try {
@@ -1302,9 +1328,9 @@ async function loadAll(){
   document.getElementById('error-bar').style.display='none';
   try{
     const[r1,r2,r3]=await Promise.allSettled([
-      fetch(`${API}/api/data`).then(r=>r.json()),
-      fetch(`${API}/api/alarmas`).then(r=>r.json()),
-      fetch(`${API}/api/pendientes`).then(r=>r.json())
+      fetch(`${API}/api/data`,      {headers:legacyHeaders()}).then(r=>r.json()),
+      fetch(`${API}/api/alarmas`,   {headers:legacyHeaders()}).then(r=>r.json()),
+      fetch(`${API}/api/pendientes`,{headers:legacyHeaders()}).then(r=>r.json())
     ]);
     if(r1.status==='fulfilled'){
       const raw=r1.value;
@@ -1777,7 +1803,7 @@ async function debugBuscarViaje(placa){
   const q = placa || prompt('Ingresa placa o # viaje a buscar:');
   if(!q) return;
   try {
-    const res = await fetch(`${BACKEND}/api/data`);
+    const res = await fetch(`${API}/api/data`, {headers:legacyHeaders()});
     const data = await res.json();
     const viajes = Array.isArray(data) ? data : data.viajes || data.data || [];
     const found = viajes.filter(v =>
@@ -3214,7 +3240,7 @@ async function loadSolicitudes() {
 
   const { desde, hasta } = solGetRange();
   try {
-    const r    = await fetch(`${API}/api/solicitudes?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
+    const r    = await fetch(`${API}/api/solicitudes?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`, {headers:legacyHeaders()});
     const data = await r.json();
     solData = Array.isArray(data) ? data : [];
   } catch(e) {
@@ -3428,7 +3454,7 @@ async function solCambiarEstado(id, estado, extra = {}) {
   try {
     const r = await fetch(`${API}/api/solicitudes/${encodeURIComponent(id)}/estado`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: legacyHeaders(),
       body: JSON.stringify({ estado, ...extra }),
     });
     if (!r.ok) throw new Error((await r.json()).error || r.status);
@@ -3542,32 +3568,31 @@ function solCerrarPanel() {
 }
 
 
-// INIT
-if(URL_VISTA === 'cumplidos'){
-  // Vista restringida: solo cumplidos, sin navegación ni mapa
-  loadAll();
-  initCumplidos();
-  initVista(); // llama initCumplidosView() que configura todo
-} else if(URL_VISTA === 'planeados'){
-  // Vista restringida: solo planeados, sin navegación ni mapa
-  loadAll();
-  initCumplidos();
-  initVista(); // llama initPlaneadosView()
-} else if(URL_VISTA === 'viajes'){
-  // Vista iframe: viajes con mapa, sin header de TorreControl
-  switchTab('viajes', document.querySelector('.tab-btn'));
-  renderSidebar('viajes');
-  loadAll();
-  initCumplidos();
-  initVista(); // llama initViajesView() que oculta header
-} else {
-  // Vista normal: arrancar en viajes
-  switchTab('viajes', document.querySelector('.tab-btn'));
-  renderSidebar('viajes');
-  loadAll();
-  initCumplidos();
-  initVista();
-}
+// INIT — bootstrap del token antes de la primera carga (LEGACY-01)
+(async function initApp() {
+  await initLegacyToken();
+  if(URL_VISTA === 'cumplidos'){
+    loadAll();
+    initCumplidos();
+    initVista();
+  } else if(URL_VISTA === 'planeados'){
+    loadAll();
+    initCumplidos();
+    initVista();
+  } else if(URL_VISTA === 'viajes'){
+    switchTab('viajes', document.querySelector('.tab-btn'));
+    renderSidebar('viajes');
+    loadAll();
+    initCumplidos();
+    initVista();
+  } else {
+    switchTab('viajes', document.querySelector('.tab-btn'));
+    renderSidebar('viajes');
+    loadAll();
+    initCumplidos();
+    initVista();
+  }
+})();
 
 
 // ═══════════════════════════════════════════════════════════════════
