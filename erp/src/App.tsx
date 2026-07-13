@@ -5,6 +5,7 @@ import type { Vista } from "@/types/navigation";
 import { LoginPage } from "@/pages/LoginPage";
 import { SolicitudesPage } from "@/pages/SolicitudesPage";
 import { ProgramacionPage } from "@/pages/ProgramacionPage";
+import { ViajesPage } from "@/pages/ViajesPage";
 
 function ComingSoon({ titulo }: { titulo: string }) {
   return (
@@ -32,6 +33,7 @@ function AppInner() {
   const renderPage = () => {
     if (vista === "solicitudes")  return <SolicitudesPage />;
     if (vista === "programacion") return <ProgramacionPage />;
+    if (vista === "viajes")       return <ViajesPage />;
     return <ComingSoon titulo={vista.charAt(0).toUpperCase() + vista.slice(1)} />;
   };
 
