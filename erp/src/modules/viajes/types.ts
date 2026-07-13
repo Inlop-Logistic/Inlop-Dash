@@ -11,7 +11,7 @@ export type EstadoViaje =
   | "sin activar"
   | "sin asignar";
 
-/** Objeto de viaje activo recibido de GET /api/data. */
+/** Objeto de viaje recibido de GET /api/viajes. */
 export interface TmsViaje {
   trip_number: string;
   id_monitoring_order: string | null;

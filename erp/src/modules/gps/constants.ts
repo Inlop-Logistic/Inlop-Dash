@@ -2,11 +2,6 @@ import type { EstadoGps } from "./types";
 
 export const REFRESH_INTERVAL_MS = 60_000;
 
-/** Thresholds de freshness GPS en horas. */
-export const GPS_THRESHOLD_DETENIDO    = 2;   // > 2h → detenido
-export const GPS_THRESHOLD_DESCONECTADO = 6;  // > 6h → desconectado
-
-/** Configuración visual + color de marcador por estado GPS. */
 export const ESTADO_GPS_CFG: Record<EstadoGps, {
   label:    string;
   color:    string;
@@ -21,12 +16,6 @@ export const ESTADO_GPS_CFG: Record<EstadoGps, {
   desconectado: { label: "Desconectado", color: "var(--gray-500)", bg: "var(--gray-100)", dot: "var(--gray-400)", mapColor: "#9CA3AF" },
 };
 
-/** Estados de viaje que incluir en el Centro de Monitoreo. */
-export const ESTADOS_MONITOREABLES = new Set([
-  "en transíto", "iniciado", "descargando", "cargando", "pernoctando",
-]);
-
-/** Tabs de la lista de vehículos. */
 export const TABS_GPS = [
   { id: "todos",      label: "Todos"       },
   { id: "activos",    label: "Activos"     },
