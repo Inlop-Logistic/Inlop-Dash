@@ -74,6 +74,21 @@ export interface GpsFreshness {
  *   2–6 h → warn  (amarillo)
  *   > 6 h → stale (rojo)
  */
+/**
+ * Formatea cualquier string de fecha TMS a texto legible para la UI.
+ * Retorna "—" si el string no es parseable.
+ */
+export function fmtTms(
+  str: string | null | undefined,
+  formato: "MDY" | "DMY" = "MDY",
+  opts: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" },
+): string {
+  if (!str) return "—";
+  const d = formato === "MDY" ? parseFechaMDY(str) : parseFechaDMY(str);
+  if (!d) return "—";
+  return d.toLocaleDateString("es-CO", opts);
+}
+
 export function gpsRelativo(reportStr: string | null | undefined): GpsFreshness {
   const ts = parseFechaMDY(reportStr);
   if (!ts) {

@@ -43,6 +43,20 @@ export interface TmsViaje {
   created_on: string | null;
   /** Formato TMS: DD/MM/YYYY HH:MM:SS — usar parseFechaDMY. */
   activated_on: string | null;
+
+  // Campos de alarma — reservados para expansión futura del TMS.
+  alarm_priority?:    string | null;
+  alarm_code?:        string | null;
+  alarm_description?: string | null;
+}
+
+/** Evento derivado o real para el timeline cronológico del viaje. */
+export interface TmsEvent {
+  id:           string;
+  label:        string;
+  description?: string | null;
+  timestamp?:   string | null;
+  status:       "completed" | "active" | "pending" | "cancelled";
 }
 
 /** KPIs calculados del array de viajes activos. */

@@ -1,57 +1,14 @@
-import { Car, User, MapPin, FileText, Activity, Wifi, CalendarClock, ChevronRight, Map, ClipboardList, CheckSquare } from "lucide-react";
+import { Car, User, MapPin, FileText, Activity } from "lucide-react";
 import { SidePanel, PanelSection, InfoRow } from "@/components/ui";
-import { useNavigationContext, navActions } from "@/core/navigation";
+import { fmtTms } from "@/utils/parseFecha";
 import type { TmsViaje } from "../types";
 import { EstadoBadge } from "./EstadoBadge";
 import { ProgressBar } from "./ProgressBar";
-import { GpsStatus } from "./GpsStatus";
-import { parseFechaDMY } from "@/utils/parseFecha";
-
-const LOCALE = "es-CO";
-
-function fmtFechaLarga(str: string | null | undefined): string {
-  if (!str) return "—";
-  const d = parseFechaDMY(str);
-  if (!d) return "—";
-  return d.toLocaleDateString(LOCALE, { weekday: "short", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}
-
-interface NavLinkProps {
-  icon:      React.ReactNode;
-  label:     string;
-  onClick?:  () => void;
-  disabled?: boolean;
-  badge?:    string;
-}
-
-function NavLink({ icon, label, onClick, disabled, badge }: NavLinkProps) {
-  return (
-    <button
-      type="button"
-      onClick={disabled ? undefined : onClick}
-      disabled={disabled}
-      className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-[13px] font-medium transition-colors"
-      style={{
-        background:    disabled ? "var(--gray-50)" : "#fff",
-        color:         disabled ? "var(--gray-300)" : "var(--gray-700)",
-        border:        `1.5px solid ${disabled ? "var(--gray-100)" : "var(--gray-200)"}`,
-        cursor:        disabled ? "not-allowed" : "pointer",
-      }}
-    >
-      <span className="flex items-center gap-2">
-        {icon}
-        {label}
-      </span>
-      {disabled && badge ? (
-        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--gray-100)", color: "var(--gray-300)" }}>
-          {badge}
-        </span>
-      ) : (
-        <ChevronRight className="w-3.5 h-3.5 shrink-0" style={{ color: disabled ? "var(--gray-200)" : "var(--gray-400)" }} />
-      )}
-    </button>
-  );
-}
+import { TimelineViaje } from "./TimelineViaje";
+import { AlarmasPanel } from "./AlarmasPanel";
+import { SeguimientoPanel } from "./SeguimientoPanel";
+import { DocumentosPanel } from "./DocumentosPanel";
+import { AccionesPanel } from "./AccionesPanel";
 
 interface DetalleViajeProps {
   viaje:   TmsViaje;
@@ -59,8 +16,6 @@ interface DetalleViajeProps {
 }
 
 export function DetalleViaje({ viaje, onClose }: DetalleViajeProps) {
-  const { navigateTo } = useNavigationContext();
-
   const clienteNombre = viaje.company_customer_name?.split(",")[0].trim() ?? "—";
 
   return (
@@ -77,12 +32,10 @@ export function DetalleViaje({ viaje, onClose }: DetalleViajeProps) {
         <InfoRow label="Trip number"  value={viaje.trip_number} mono />
         <InfoRow label="Remisión"     value={viaje.number_order ?? "—"} mono />
         <InfoRow label="Operación"    value={viaje.type_operation ?? "—"} />
-        <InfoRow label="Activado"     value={fmtFechaLarga(viaje.activated_on)} />
-      </PanelSection>
-
-      {/* Cliente */}
-      <PanelSection title="Cliente" icon={<FileText className="w-3.5 h-3.5" />}>
-        <InfoRow label="Empresa" value={viaje.company_customer_name ?? "—"} />
+        <InfoRow label="Cliente"      value={viaje.company_customer_name ?? "—"} />
+        <InfoRow label="Activado"     value={fmtTms(viaje.activated_on, "DMY", {
+          weekday: "short", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+        })} />
       </PanelSection>
 
       {/* Vehículo y conductor */}
@@ -118,20 +71,25 @@ export function DetalleViaje({ viaje, onClose }: DetalleViajeProps) {
             Sin conductor asignado
           </div>
         )}
-        {viaje.license_plate && (
+        {viaje.license_plate ? (
           <div
             className="p-3 rounded-xl"
             style={{ background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}
           >
             <div className="flex items-center gap-2">
               <Car className="w-4 h-4 shrink-0" style={{ color: "var(--gray-400)" }} />
-              <div
-                className="text-[18px] font-bold tracking-widest"
-                style={{ color: "var(--navy)", fontFamily: "monospace" }}
-              >
+              <span className="text-[18px] font-bold tracking-widest" style={{ color: "var(--navy)", fontFamily: "monospace" }}>
                 {viaje.license_plate}
-              </div>
+              </span>
             </div>
+          </div>
+        ) : (
+          <div
+            className="flex items-center gap-2 text-[12px] py-2 px-3 rounded-xl"
+            style={{ background: "var(--gray-50)", color: "var(--gray-400)" }}
+          >
+            <Car className="w-3.5 h-3.5 shrink-0" />
+            Sin vehículo asignado
           </div>
         )}
       </PanelSection>
@@ -150,24 +108,15 @@ export function DetalleViaje({ viaje, onClose }: DetalleViajeProps) {
           <div className="flex flex-col gap-3 flex-1 min-w-0">
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>Origen</div>
-              <div className="text-[13px] font-bold truncate" style={{ color: "var(--gray-800)" }}>
-                {viaje.origin_city_name ?? "—"}
-              </div>
+              <div className="text-[13px] font-bold truncate" style={{ color: "var(--gray-800)" }}>{viaje.origin_city_name ?? "—"}</div>
             </div>
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>Destino</div>
-              <div className="text-[13px] font-bold truncate" style={{ color: "var(--gray-800)" }}>
-                {viaje.destiny_city_name ?? "—"}
-              </div>
+              <div className="text-[13px] font-bold truncate" style={{ color: "var(--gray-800)" }}>{viaje.destiny_city_name ?? "—"}</div>
             </div>
           </div>
         </div>
-        {viaje.stops && (
-          <InfoRow label="Paradas" value={viaje.stops} />
-        )}
-        {viaje.current_address_location && (
-          <InfoRow label="Última ubicación" value={viaje.current_address_location} />
-        )}
+        {viaje.stops && <InfoRow label="Paradas" value={viaje.stops} />}
       </PanelSection>
 
       {/* Estado y avance */}
@@ -181,64 +130,30 @@ export function DetalleViaje({ viaje, onClose }: DetalleViajeProps) {
         {viaje.appointment_fulfillment && (
           <InfoRow label="Cumplimiento cita" value={viaje.appointment_fulfillment} />
         )}
-      </PanelSection>
-
-      {/* GPS */}
-      <PanelSection title="GPS" icon={<Wifi className="w-3.5 h-3.5" />}>
-        <div className="mb-2">
-          <GpsStatus report={viaje.latest_gps_report} />
-        </div>
-        <InfoRow label="Último reporte" value={fmtFechaLarga(viaje.latest_gps_report)} />
-      </PanelSection>
-
-      {/* Último evento */}
-      {viaje.last_event && (
-        <PanelSection title="Último evento" icon={<FileText className="w-3.5 h-3.5" />}>
+        {viaje.last_event && (
           <div
-            className="text-[13px] px-3 py-3 rounded-xl"
-            style={{ background: "var(--gray-50)", color: "var(--gray-700)", border: "1px solid var(--gray-100)", lineHeight: 1.5 }}
+            className="mt-3 text-[12px] px-3 py-2.5 rounded-xl"
+            style={{ background: "var(--gray-50)", color: "var(--gray-600)", border: "1px solid var(--gray-100)", lineHeight: 1.5 }}
           >
             {viaje.last_event}
           </div>
-          {viaje.last_alarm_name && (
-            <div
-              className="mt-2 text-[12px] px-3 py-2.5 rounded-xl font-medium"
-              style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A" }}
-            >
-              Novedad: {viaje.last_alarm_name}
-            </div>
-          )}
-        </PanelSection>
-      )}
-
-      {/* Módulos relacionados — navegación contextual */}
-      <PanelSection title="Módulos relacionados" icon={<ChevronRight className="w-3.5 h-3.5" />}>
-        <div className="flex flex-col gap-2">
-          <NavLink
-            icon={<CalendarClock className="w-3.5 h-3.5" />}
-            label="Ver en Programación"
-            onClick={() => navigateTo(navActions.verProgramacion(viaje.trip_number, "viajes"))}
-          />
-          <NavLink
-            icon={<ClipboardList className="w-3.5 h-3.5" />}
-            label="Ver Solicitud"
-            disabled
-            badge="Próximamente"
-          />
-          <NavLink
-            icon={<Map className="w-3.5 h-3.5" />}
-            label="Ver GPS"
-            disabled
-            badge="Próximamente"
-          />
-          <NavLink
-            icon={<CheckSquare className="w-3.5 h-3.5" />}
-            label="Ver Cumplidos"
-            disabled
-            badge="Próximamente"
-          />
-        </div>
+        )}
       </PanelSection>
+
+      {/* Timeline cronológico */}
+      <TimelineViaje viaje={viaje} />
+
+      {/* Alarmas */}
+      <AlarmasPanel viaje={viaje} />
+
+      {/* Seguimiento GPS */}
+      <SeguimientoPanel viaje={viaje} />
+
+      {/* Documentos asociados */}
+      <DocumentosPanel viaje={viaje} />
+
+      {/* Acciones contextuales */}
+      <AccionesPanel viaje={viaje} />
     </SidePanel>
   );
 }
