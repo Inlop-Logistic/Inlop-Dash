@@ -35,11 +35,11 @@ export interface TmsViaje {
   appointment_fulfillment: string | null;
   latitude: string | null;
   longitude: string | null;
-  /** Formato TMS: MM/DD/YYYY HH:MM:SS — usar parseFechaMDY. */
+  /** Formato TMS: MM/DD/YYYY HH:MM:SS */
   latest_gps_report: string | null;
   current_address_location: string | null;
   last_alarm_name: string | null;
-  /** Formato TMS: MM/DD/YYYY HH:MM:SS — usar parseFechaMDY. */
+  /** Formato TMS: MM/DD/YYYY HH:MM:SS */
   created_on: string | null;
   /** Formato TMS: DD/MM/YYYY HH:MM:SS — usar parseFechaDMY. */
   activated_on: string | null;
