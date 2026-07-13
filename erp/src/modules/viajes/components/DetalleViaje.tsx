@@ -1,5 +1,6 @@
-import { Car, User, MapPin, FileText, Activity, Wifi } from "lucide-react";
+import { Car, User, MapPin, FileText, Activity, Wifi, CalendarClock, ChevronRight, Map, ClipboardList, CheckSquare } from "lucide-react";
 import { SidePanel, PanelSection, InfoRow } from "@/components/ui";
+import { useNavigationContext, navActions } from "@/core/navigation";
 import type { TmsViaje } from "../types";
 import { EstadoBadge } from "./EstadoBadge";
 import { ProgressBar } from "./ProgressBar";
@@ -15,12 +16,51 @@ function fmtFechaLarga(str: string | null | undefined): string {
   return d.toLocaleDateString(LOCALE, { weekday: "short", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+interface NavLinkProps {
+  icon:      React.ReactNode;
+  label:     string;
+  onClick?:  () => void;
+  disabled?: boolean;
+  badge?:    string;
+}
+
+function NavLink({ icon, label, onClick, disabled, badge }: NavLinkProps) {
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-[13px] font-medium transition-colors"
+      style={{
+        background:    disabled ? "var(--gray-50)" : "#fff",
+        color:         disabled ? "var(--gray-300)" : "var(--gray-700)",
+        border:        `1.5px solid ${disabled ? "var(--gray-100)" : "var(--gray-200)"}`,
+        cursor:        disabled ? "not-allowed" : "pointer",
+      }}
+    >
+      <span className="flex items-center gap-2">
+        {icon}
+        {label}
+      </span>
+      {disabled && badge ? (
+        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--gray-100)", color: "var(--gray-300)" }}>
+          {badge}
+        </span>
+      ) : (
+        <ChevronRight className="w-3.5 h-3.5 shrink-0" style={{ color: disabled ? "var(--gray-200)" : "var(--gray-400)" }} />
+      )}
+    </button>
+  );
+}
+
 interface DetalleViajeProps {
-  viaje: TmsViaje;
+  viaje:   TmsViaje;
   onClose: () => void;
 }
 
 export function DetalleViaje({ viaje, onClose }: DetalleViajeProps) {
+  const { navigateTo } = useNavigationContext();
+
   const clienteNombre = viaje.company_customer_name?.split(",")[0].trim() ?? "—";
 
   return (
@@ -170,6 +210,35 @@ export function DetalleViaje({ viaje, onClose }: DetalleViajeProps) {
           )}
         </PanelSection>
       )}
+
+      {/* Módulos relacionados — navegación contextual */}
+      <PanelSection title="Módulos relacionados" icon={<ChevronRight className="w-3.5 h-3.5" />}>
+        <div className="flex flex-col gap-2">
+          <NavLink
+            icon={<CalendarClock className="w-3.5 h-3.5" />}
+            label="Ver en Programación"
+            onClick={() => navigateTo(navActions.verProgramacion(viaje.trip_number, "viajes"))}
+          />
+          <NavLink
+            icon={<ClipboardList className="w-3.5 h-3.5" />}
+            label="Ver Solicitud"
+            disabled
+            badge="Próximamente"
+          />
+          <NavLink
+            icon={<Map className="w-3.5 h-3.5" />}
+            label="Ver GPS"
+            disabled
+            badge="Próximamente"
+          />
+          <NavLink
+            icon={<CheckSquare className="w-3.5 h-3.5" />}
+            label="Ver Cumplidos"
+            disabled
+            badge="Próximamente"
+          />
+        </div>
+      </PanelSection>
     </SidePanel>
   );
 }

@@ -1,7 +1,6 @@
-import { useState } from "react";
 import { AuthProvider, useAuth } from "@/state/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
-import type { Vista } from "@/types/navigation";
+import { NavigationProvider, useNavigationContext } from "@/core/navigation";
 import { LoginPage } from "@/pages/LoginPage";
 import { SolicitudesPage } from "@/pages/SolicitudesPage";
 import { ProgramacionPage } from "@/pages/ProgramacionPage";
@@ -18,7 +17,7 @@ function ComingSoon({ titulo }: { titulo: string }) {
 
 function AppInner() {
   const { user, loading } = useAuth();
-  const [vista, setVista] = useState<Vista>("solicitudes");
+  const { vista, setVista } = useNavigationContext();
 
   if (loading) {
     return (
@@ -47,7 +46,9 @@ function AppInner() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppInner />
+      <NavigationProvider>
+        <AppInner />
+      </NavigationProvider>
     </AuthProvider>
   );
 }

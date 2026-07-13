@@ -1,11 +1,15 @@
+import { useEffect, useRef } from "react";
 import { RefreshCw, Search, Truck, Activity, Package, Navigation, PackageCheck, AlertTriangle, AlertCircle } from "lucide-react";
 import { KpiCard, PageHeader, Card, DataTable, Button } from "@/components/ui";
+import { useNavigationContext } from "@/core/navigation";
 import { useViajes } from "./hooks/useViajes";
 import { DetalleViaje } from "./components/DetalleViaje";
 import { COLUMNS } from "./components/ViajesTableColumns";
 import { TABS } from "./constants";
 
 export function ViajesPage() {
+  const { navPayload } = useNavigationContext();
+
   const {
     loading, error,
     busqueda, setBusqueda,
@@ -16,6 +20,20 @@ export function ViajesPage() {
     setPanelId, panelViaje,
     cargar, getTabCount,
   } = useViajes();
+
+  // Auto-abrir panel cuando se navega con contexto (ej. desde Programación)
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!autoOpenedRef.current && navPayload?.tripNumber && filtradas.length > 0) {
+      autoOpenedRef.current = true;
+      setPanelId(navPayload.tripNumber);
+    }
+  }, [navPayload?.tripNumber, filtradas.length, setPanelId]);
+
+  // Resetear ref cuando cambia el tripNumber del payload
+  useEffect(() => {
+    autoOpenedRef.current = false;
+  }, [navPayload?.tripNumber]);
 
   const tabLabels: Record<string, string> = {
     todos:        "Todos",
