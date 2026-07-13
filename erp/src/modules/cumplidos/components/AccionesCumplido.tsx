@@ -1,7 +1,7 @@
-import { CalendarClock, ClipboardList, Map, CheckSquare, Car, User, Building2, ChevronRight } from "lucide-react";
+import { Truck, CalendarClock, ClipboardList, Map, Receipt, Building2, Car, User, ChevronRight } from "lucide-react";
 import { PanelSection } from "@/components/ui";
 import { useNavigationContext, navActions } from "@/core/navigation";
-import type { TmsViaje } from "../types";
+import type { CumplidoRecord } from "../types";
 
 interface AccionProps {
   icon:      React.ReactNode;
@@ -37,33 +37,33 @@ function Accion({ icon, label, onClick, disabled, badge }: AccionProps) {
   );
 }
 
-export function AccionesPanel({ viaje }: { viaje: TmsViaje }) {
+export function AccionesCumplido({ cumplido }: { cumplido: CumplidoRecord }) {
   const { navigateTo } = useNavigationContext();
-  const trip = viaje.trip_number;
+  const trip = cumplido.trip_number;
 
   return (
     <PanelSection title="Acciones" icon={<ChevronRight className="w-3.5 h-3.5" />}>
       <div className="flex flex-col gap-2">
         <Accion
+          icon={<Truck className="w-3.5 h-3.5" />}
+          label="Abrir Viaje"
+          onClick={() => navigateTo(navActions.verViaje(trip, "cumplidos"))}
+        />
+        <Accion
           icon={<CalendarClock className="w-3.5 h-3.5" />}
           label="Abrir Programación"
-          onClick={() => navigateTo(navActions.verProgramacion(trip, "viajes"))}
+          onClick={() => navigateTo(navActions.verProgramacion(trip, "cumplidos"))}
         />
         <Accion
           icon={<ClipboardList className="w-3.5 h-3.5" />}
           label="Abrir Solicitud"
-          onClick={() => navigateTo(navActions.verSolicitud(trip, "viajes"))}
+          onClick={() => navigateTo(navActions.verSolicitud(trip, "cumplidos"))}
         />
         <Accion
           icon={<Map className="w-3.5 h-3.5" />}
           label="Abrir GPS"
           disabled
           badge="Próximamente"
-        />
-        <Accion
-          icon={<CheckSquare className="w-3.5 h-3.5" />}
-          label="Abrir Cumplidos"
-          onClick={() => navigateTo(navActions.verCumplidos(trip, "viajes"))}
         />
         <Accion
           icon={<Building2 className="w-3.5 h-3.5" />}
@@ -80,6 +80,12 @@ export function AccionesPanel({ viaje }: { viaje: TmsViaje }) {
         <Accion
           icon={<User className="w-3.5 h-3.5" />}
           label="Abrir Conductor"
+          disabled
+          badge="Próximamente"
+        />
+        <Accion
+          icon={<Receipt className="w-3.5 h-3.5" />}
+          label="Abrir Facturación"
           disabled
           badge="Próximamente"
         />

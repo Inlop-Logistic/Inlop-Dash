@@ -17,6 +17,7 @@ export const MODULOS_IMPLEMENTADOS: ReadonlySet<ModuloId> = new Set<ModuloId>([
   "solicitudes",
   "programacion",
   "viajes",
+  "cumplidos",
 ]);
 
 /** Contexto operativo que se transporta entre módulos. */

@@ -5,6 +5,7 @@ import { LoginPage } from "@/pages/LoginPage";
 import { SolicitudesPage } from "@/pages/SolicitudesPage";
 import { ProgramacionPage } from "@/pages/ProgramacionPage";
 import { ViajesPage } from "@/pages/ViajesPage";
+import { CumplidosPage } from "@/pages/CumplidosPage";
 
 function ComingSoon({ titulo }: { titulo: string }) {
   return (
@@ -33,6 +34,7 @@ function AppInner() {
     if (vista === "solicitudes")  return <SolicitudesPage />;
     if (vista === "programacion") return <ProgramacionPage />;
     if (vista === "viajes")       return <ViajesPage />;
+    if (vista === "cumplidos")    return <CumplidosPage />;
     return <ComingSoon titulo={vista.charAt(0).toUpperCase() + vista.slice(1)} />;
   };
 
