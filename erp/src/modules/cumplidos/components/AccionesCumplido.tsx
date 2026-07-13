@@ -62,8 +62,7 @@ export function AccionesCumplido({ cumplido }: { cumplido: CumplidoRecord }) {
         <Accion
           icon={<Map className="w-3.5 h-3.5" />}
           label="Abrir GPS"
-          disabled
-          badge="Próximamente"
+          onClick={() => navigateTo(navActions.verGps(cumplido.license_plate ?? "", trip, "cumplidos"))}
         />
         <Accion
           icon={<Building2 className="w-3.5 h-3.5" />}

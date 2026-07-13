@@ -11,7 +11,7 @@ export const navActions = {
   verProgramacion: (tripNumber: string,    from: ModuloId) => to("programacion", { tripNumber },    from),
   verSolicitud:    (solicitudId: string,   from: ModuloId) => to("solicitudes",  { solicitudId },   from),
   verGps:          (licensePlate: string, tripNumber: string, from: ModuloId) =>
-                     to("gps",            { licensePlate, tripNumber },          from),
+                     to("mapa",           { licensePlate, tripNumber },          from),
   verVehiculo:     (licensePlate: string,  from: ModuloId) => to("vehiculos",    { licensePlate },  from),
   verConductor:    (driverId: string,      from: ModuloId) => to("conductores",  { driverId },      from),
   verCliente:      (clienteId: string,     from: ModuloId) => to("clientes",     { clienteId },     from),

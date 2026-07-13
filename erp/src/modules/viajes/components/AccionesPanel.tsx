@@ -57,8 +57,7 @@ export function AccionesPanel({ viaje }: { viaje: TmsViaje }) {
         <Accion
           icon={<Map className="w-3.5 h-3.5" />}
           label="Abrir GPS"
-          disabled
-          badge="Próximamente"
+          onClick={() => navigateTo(navActions.verGps(viaje.license_plate ?? "", trip, "viajes"))}
         />
         <Accion
           icon={<CheckSquare className="w-3.5 h-3.5" />}
