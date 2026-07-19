@@ -1246,7 +1246,7 @@ async function syncSolicitudes() {
               pushPayload:     notif._push,
               prioridad:       'HIGH',
               idempotency_key: tag,
-            }, { sbFetch });
+            }, { sbFetch, sbAuthAdmin });
           })
       );
     }
@@ -2233,6 +2233,27 @@ serviciosRouter.post('/', async (req, res) => {
     const created = await sbFetch('/solicitudes', 'POST', row);
     if (!created) return res.status(500).json({ error: 'Error creando solicitud' });
     const sol = Array.isArray(created) ? created[0] : created;
+
+    // Despachar SOLICITUD_CREADA vía Notification Orchestrator (fire-and-forget
+    // — nunca bloquea la respuesta ni el fallo de notificación afecta al
+    // request). Único canal registrado para este evento: email a INLOP ops
+    // (EVENT_CHANNELS en notificationOrchestrator.js) — no hay push que
+    // esperar aquí, la solicitud aún no tiene destinatario cliente relevante
+    // más allá de quien la creó.
+    if (sol?.id) {
+      publishBusinessEvent({
+        tipo:            'SOLICITUD_CREADA',
+        usuario_id:      req.userId,
+        empresa_id:      req.empresaId,
+        solicitud_id:    sol.id,
+        titulo:          'Nueva solicitud registrada',
+        mensaje:         `Se registró la solicitud ${sol.codigo_solicitud || codigo_solicitud} (${sol.origen || origen || '—'} → ${sol.destino || destino || '—'}), requerida para ${sol.fecha_requerida || fecha_requerida}.`,
+        pushPayload:     null,
+        prioridad:       'HIGH',
+        idempotency_key: `solicitud_creada-${sol.id}`,
+      }, { sbFetch, sbAuthAdmin });
+    }
+
     res.status(201).json(mapSolicitud(sol || row));
   } catch(e) {
     console.error('❌ POST /servicios:', e.message);

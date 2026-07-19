@@ -2,22 +2,35 @@
 // Arquitectura aprobada: BusinessEvent → Orchestrator → Preference Resolver (stub)
 //   → Template Engine (stub) → Delivery Queue → Channel Workers
 //
-// Canal activo en este sprint: Push (web-push).
-// Email / WhatsApp / SMS pendientes de aprobación de sprint futuro.
+// Canales activos: Push (web-push) — Sprint 5.0 — y Email (Resend) — Sprint 5.1.
+// WhatsApp / SMS pendientes de aprobación de sprint futuro.
 // Preferencias y plantillas: stubs listos para extensión sin reescritura.
 //
-// DI pattern idéntico a authScope.js: deps = { sbFetch } inyectado por el llamador.
+// DI pattern idéntico a authScope.js: deps = { sbFetch, sbAuthAdmin } inyectado
+// por el llamador. sbAuthAdmin es requerido por emailChannel (resolución de
+// email de usuario vía Supabase Auth Admin API) — pushChannel lo ignora.
 
 import pushChannel from './channels/pushChannel.js';
+import emailChannel from './channels/emailChannel.js';
 
 const CHANNEL_REGISTRY = {
-  push: pushChannel,
+  push:  pushChannel,
+  email: emailChannel,
 };
 
-// Sprint 5.0 stub: todos los eventos activan push si el usuario tiene suscripción.
+// Canales por tipo de evento de negocio. Único punto donde se decide esto —
+// Sprint 5.1 lo saca del stub fijo (antes: todo evento → solo push).
 // Sprint siguiente: consultar notification_preferences por (usuario_id, tipo_evento, canal).
-async function _resolveChannels(_event, _deps) {
-  return ['push'];
+const EVENT_CHANNELS = {
+  SOLICITUD_CREADA:    ['email'],
+  SERVICIO_CONFIRMADO: ['push', 'email'],
+  SERVICIO_EN_RUTA:    ['push'],
+  SERVICIO_COMPLETADO: ['push', 'email'],
+  SERVICIO_CANCELADO:  ['push'],
+};
+
+async function _resolveChannels(event, _deps) {
+  return EVENT_CHANNELS[event.tipo] || ['push'];
 }
 
 // Sprint 5.0 stub: el contenido viene directo del evento.
@@ -45,9 +58,9 @@ async function _enqueueDelivery(businessEventId, canal, { sbFetch }) {
  * Nunca lanza — un fallo de notificación nunca bloquea syncSolicitudes.
  *
  * @param {object} event
- * @param {{ sbFetch: Function }} deps
+ * @param {{ sbFetch: Function, sbAuthAdmin?: Function }} deps
  */
-export async function publishBusinessEvent(event, { sbFetch }) {
+export async function publishBusinessEvent(event, { sbFetch, sbAuthAdmin }) {
   try {
     // ── 1. IDEMPOTENCIA: consulta primero, nunca duplicar ──────────────────
     const key = event.idempotency_key;
@@ -90,7 +103,7 @@ export async function publishBusinessEvent(event, { sbFetch }) {
       const delivery = await _enqueueDelivery(businessEvent.id, canal, { sbFetch });
       if (!delivery) return;
 
-      await worker.send(delivery, { ...event, ...rendered }, { sbFetch });
+      await worker.send(delivery, { ...event, ...rendered }, { sbFetch, sbAuthAdmin });
     }));
 
     // ── 4. MARCAR PROCESADO ───────────────────────────────────────────────
