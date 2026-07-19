@@ -44,12 +44,21 @@ function _renderTemplate(event, _canal) {
 }
 
 async function _enqueueDelivery(businessEventId, canal, { sbFetch }) {
-  const rows = await sbFetch('/notification_deliveries', 'POST', [{
-    business_event_id: businessEventId,
-    canal,
-    estado:   'pending',
-    intentos: 0,
-  }]);
+  // [DEBUG 2] payload completo hacia Supabase
+  const payload = [{ business_event_id: businessEventId, canal, estado: 'pending', intentos: 0 }];
+  console.log('[orchestrator:debug] _enqueueDelivery payload →', JSON.stringify(payload));
+
+  const rows = await sbFetch('/notification_deliveries', 'POST', payload);
+
+  // [DEBUG 3] respuesta completa de Supabase
+  console.log('[orchestrator:debug] _enqueueDelivery rows →', JSON.stringify(rows));
+
+  // [DEBUG 4] si sbFetch devolvió null el error HTTP ya fue logueado por sbFetch
+  // ("Supabase POST /notification_deliveries → {status}: {body}")
+  if (!rows) {
+    console.warn(`[orchestrator:debug] _enqueueDelivery → sbFetch retornó null para canal='${canal}' — ver error Supabase arriba`);
+  }
+
   return rows?.[0] || null;
 }
 
@@ -100,8 +109,18 @@ export async function publishBusinessEvent(event, { sbFetch, sbAuthAdmin }) {
       if (!worker) return;
 
       const rendered = _renderTemplate(event, canal);
+
+      // [DEBUG 1] antes de _enqueueDelivery
+      console.log(`[orchestrator:debug] antes de _enqueueDelivery → business_event.id=${businessEvent.id} tipo=${event.tipo} canal=${canal}`);
+
       const delivery = await _enqueueDelivery(businessEvent.id, canal, { sbFetch });
       if (!delivery) return;
+
+      // [DEBUG 5] delivery creado correctamente
+      console.log(`[orchestrator:debug] delivery OK → id=${delivery.id} canal=${canal}`);
+
+      // [DEBUG 6] antes de worker.send
+      console.log(`[orchestrator:debug] worker.send → canal=${canal} worker=${typeof worker.send} delivery.id=${delivery.id}`);
 
       await worker.send(delivery, { ...event, ...rendered }, { sbFetch, sbAuthAdmin });
     }));
