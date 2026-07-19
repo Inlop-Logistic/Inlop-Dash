@@ -1,0 +1,21 @@
+/*
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * INLOP ERP — Entry Point CSS
+ *
+ * Punto de entrada único para todos los estilos del ERP.
+ * Los estilos se organizan en capas separadas por responsabilidad:
+ *
+ *   tailwindcss     → utilidades + preflight reset
+ *   typography.css  → variables de familia tipográfica
+ *   tokens.css      → design tokens (colores, radios, sombras, espaciado…)
+ *   globals.css     → estilos base del documento (body, #root)
+ *
+ * REGLA: No agregar CSS directamente en este archivo.
+ *        Todo nuevo estilo va en el archivo de capa correspondiente.
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ */
+
+@import "tailwindcss";
+@import "./styles/typography.css";
+@import "./styles/tokens.css";
+@import "./styles/globals.css";
