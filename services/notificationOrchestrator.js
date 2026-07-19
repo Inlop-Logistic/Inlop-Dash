@@ -1,10 +1,9 @@
-// Notification Orchestrator — Sprint 5.0 (Notification Center Base)
-// Arquitectura aprobada: BusinessEvent → Orchestrator → Preference Resolver (stub)
-//   → Template Engine (stub) → Delivery Queue → Channel Workers
+// Notification Orchestrator — Sprint 5.0+ (Notification Center)
+// Arquitectura: BusinessEvent → Orchestrator → Preference Resolver → Channel Workers
 //
 // Canales activos: Push (web-push) — Sprint 5.0 — y Email (Resend) — Sprint 5.1.
+// Preferencias de canal por usuario: Sprint 6.0 (preferenceResolver.js).
 // WhatsApp / SMS pendientes de aprobación de sprint futuro.
-// Preferencias y plantillas: stubs listos para extensión sin reescritura.
 //
 // DI pattern idéntico a authScope.js: deps = { sbFetch, sbAuthAdmin } inyectado
 // por el llamador. sbAuthAdmin es requerido por emailChannel (resolución de
@@ -12,15 +11,16 @@
 
 import pushChannel from './channels/pushChannel.js';
 import emailChannel from './channels/emailChannel.js';
+import { resolveUserChannels } from './preferenceResolver.js';
 
 const CHANNEL_REGISTRY = {
   push:  pushChannel,
   email: emailChannel,
 };
 
-// Canales por tipo de evento de negocio. Único punto donde se decide esto —
-// Sprint 5.1 lo saca del stub fijo (antes: todo evento → solo push).
-// Sprint siguiente: consultar notification_preferences por (usuario_id, tipo_evento, canal).
+// Canales por tipo de evento de negocio — define qué canales PUEDE usar cada evento.
+// _resolveChannels() intersecta esto con las preferencias del usuario (Sprint 6.0)
+// para producir la lista final de canales a los que se envía.
 const EVENT_CHANNELS = {
   SOLICITUD_CREADA:    ['email'],
   SERVICIO_CONFIRMADO: ['push', 'email'],
@@ -29,8 +29,10 @@ const EVENT_CHANNELS = {
   SERVICIO_CANCELADO:  ['push'],
 };
 
-async function _resolveChannels(event, _deps) {
-  return EVENT_CHANNELS[event.tipo] || ['push'];
+async function _resolveChannels(event, { sbFetch }) {
+  const canalesSistema = EVENT_CHANNELS[event.tipo] || ['push'];
+  const canalesUsuario = await resolveUserChannels(event.usuario_id, { sbFetch });
+  return canalesSistema.filter(c => canalesUsuario.includes(c));
 }
 
 // Sprint 5.0 stub: el contenido viene directo del evento.
@@ -44,21 +46,8 @@ function _renderTemplate(event, _canal) {
 }
 
 async function _enqueueDelivery(businessEventId, canal, { sbFetch }) {
-  // [DEBUG 2] payload completo hacia Supabase
   const payload = [{ business_event_id: businessEventId, canal, estado: 'pending', intentos: 0 }];
-  console.log('[orchestrator:debug] _enqueueDelivery payload →', JSON.stringify(payload));
-
   const rows = await sbFetch('/notification_deliveries', 'POST', payload);
-
-  // [DEBUG 3] respuesta completa de Supabase
-  console.log('[orchestrator:debug] _enqueueDelivery rows →', JSON.stringify(rows));
-
-  // [DEBUG 4] si sbFetch devolvió null el error HTTP ya fue logueado por sbFetch
-  // ("Supabase POST /notification_deliveries → {status}: {body}")
-  if (!rows) {
-    console.warn(`[orchestrator:debug] _enqueueDelivery → sbFetch retornó null para canal='${canal}' — ver error Supabase arriba`);
-  }
-
   return rows?.[0] || null;
 }
 
@@ -100,7 +89,7 @@ export async function publishBusinessEvent(event, { sbFetch, sbAuthAdmin }) {
       return;
     }
 
-    // ── 2. PREFERENCE RESOLVER (stub) ─────────────────────────────────────
+    // ── 2. PREFERENCE RESOLVER ──────────────────────────────────────────────
     const canales = await _resolveChannels(event, { sbFetch });
 
     // ── 3. DELIVERY POR CANAL ─────────────────────────────────────────────
@@ -110,17 +99,8 @@ export async function publishBusinessEvent(event, { sbFetch, sbAuthAdmin }) {
 
       const rendered = _renderTemplate(event, canal);
 
-      // [DEBUG 1] antes de _enqueueDelivery
-      console.log(`[orchestrator:debug] antes de _enqueueDelivery → business_event.id=${businessEvent.id} tipo=${event.tipo} canal=${canal}`);
-
       const delivery = await _enqueueDelivery(businessEvent.id, canal, { sbFetch });
       if (!delivery) return;
-
-      // [DEBUG 5] delivery creado correctamente
-      console.log(`[orchestrator:debug] delivery OK → id=${delivery.id} canal=${canal}`);
-
-      // [DEBUG 6] antes de worker.send
-      console.log(`[orchestrator:debug] worker.send → canal=${canal} worker=${typeof worker.send} delivery.id=${delivery.id}`);
 
       await worker.send(delivery, { ...event, ...rendered }, { sbFetch, sbAuthAdmin });
     }));

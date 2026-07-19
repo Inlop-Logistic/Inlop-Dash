@@ -4,6 +4,7 @@ import cors from "cors";
 import { publishBusinessEvent } from './services/notificationOrchestrator.js';
 import { buildLookupMap, resolveCustomer } from './services/customerResolver.js';
 import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } from './services/authScope.js';
+import { getUserPreferences, updatePreference, KNOWN_CHANNELS } from './services/preferenceResolver.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -2410,6 +2411,38 @@ app.delete('/push/suscripcion', requireClienteAuth, async (req, res) => {
   } catch(e) {
     console.error('❌ DELETE /push/suscripcion:', e.message);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── PREFERENCIAS DE NOTIFICACIÓN (Sprint 6.0) ─────────────────────────
+// GET /preferencias/notificaciones — retorna las preferencias de canal del usuario.
+// Modelo opt-out: canales sin fila se consideran habilitados.
+app.get('/preferencias/notificaciones', requireClienteAuth, async (req, res) => {
+  try {
+    const prefs = await getUserPreferences(req.userId, { sbFetch });
+    res.json(prefs);
+  } catch (e) {
+    console.error('❌ GET /preferencias/notificaciones:', e.message);
+    res.status(500).json({ error: 'Error al obtener preferencias' });
+  }
+});
+
+// PUT /preferencias/notificaciones — actualiza (upsert) la preferencia de un canal.
+app.put('/preferencias/notificaciones', requireClienteAuth, async (req, res) => {
+  try {
+    const { canal, habilitado } = req.body || {};
+    if (!canal || typeof habilitado !== 'boolean') {
+      return res.status(400).json({ error: 'canal (string) y habilitado (boolean) son requeridos' });
+    }
+    if (!KNOWN_CHANNELS.includes(canal)) {
+      return res.status(400).json({ error: `Canal no válido. Canales disponibles: ${KNOWN_CHANNELS.join(', ')}` });
+    }
+    const ok = await updatePreference(req.userId, req.empresaId, canal, habilitado, { sbFetch });
+    if (!ok) return res.status(500).json({ error: 'Error al actualizar preferencia' });
+    res.json({ ok: true, canal, habilitado });
+  } catch (e) {
+    console.error('❌ PUT /preferencias/notificaciones:', e.message);
+    res.status(500).json({ error: 'Error al actualizar preferencia' });
   }
 });
 
