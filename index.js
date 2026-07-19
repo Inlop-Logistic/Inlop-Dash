@@ -1,6 +1,7 @@
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
+import { publishBusinessEvent } from './services/notificationOrchestrator.js';
 
 
 // ─── SUPABASE ───────────────────────────────────────────
@@ -852,6 +853,30 @@ async function syncSolicitudes() {
       await sbFetch('/notificaciones_cliente', 'POST', insertsNotif.slice(i, i + 50));
     }
 
+    // Despachar push vía Notification Orchestrator (fire-and-forget — nunca bloquea el sync)
+    if (insertsNotif.length > 0) {
+      await Promise.allSettled(
+        insertsNotif
+          .filter((notif) => notif._push)
+          .map((notif) => {
+            const tag   = notif._push.tag;             // "push-{estado}-{uuid}"
+            const parts = tag.split('-');               // ['push', 'confirmado'|'en_ruta'|…, ...uuid]
+            const tipo  = `SERVICIO_${parts[1].toUpperCase()}`;
+            return publishBusinessEvent({
+              tipo,
+              usuario_id:      notif.usuario_id,
+              empresa_id:      null,
+              solicitud_id:    notif.solicitud_id,
+              titulo:          notif.titulo,
+              mensaje:         notif.mensaje,
+              pushPayload:     notif._push,
+              prioridad:       'HIGH',
+              idempotency_key: tag,
+            }, { sbFetch });
+          })
+      );
+    }
+
     console.log(`📋 syncSolicitudes OK: ${updOk}/${updates.length} upd | ${insertsNotif.length} notifs | ${pendVerif.length} verif cumplidos`);
   } catch(e) {
     console.error('❌ Error syncSolicitudes:', e.message);
@@ -903,7 +928,15 @@ function _notifs(sol, nuevoEstado, viaje, estadoAnterior) {
   const obs   = sol.observacion_coordinadora ? `\n${sol.observacion_coordinadora}` : '';
   const uid   = sol.creado_por;
   const sid   = sol.id;
-  const n = (tipo, titulo, mensaje) => ({ usuario_id: uid, solicitud_id: sid, tipo, titulo, mensaje });
+  const push  = (estado) => ({
+    action_type:    'OPEN_SERVICE',
+    action_payload: { servicio_id: sid },
+    tag:            `push-${estado}-${sid}`,
+  });
+  const n = (tipo, titulo, mensaje, estado = nuevoEstado) => ({
+    usuario_id: uid, solicitud_id: sid, tipo, titulo, mensaje,
+    _push: push(estado),
+  });
   if (nuevoEstado === 'confirmado' && estadoAnterior === 'pendiente')
     return [n('confirmacion', 'Servicio confirmado', `Tu servicio ${cod} ha sido confirmado. Vehículo: ${placa}. Conductor: ${cond}.${obs}`)];
   if (nuevoEstado === 'en_ruta' && estadoAnterior === 'pendiente')
@@ -1857,6 +1890,45 @@ app.get("/health", (req, res) => {
       }
     }
   });
+});
+
+// ─── PUSH SUBSCRIPTIONS ──────────────────────────────────────────────────────
+
+// POST /push/suscripcion — registrar o actualizar suscripción push del usuario
+app.post('/push/suscripcion', requireClienteAuth, async (req, res) => {
+  const { endpoint, p256dh, auth } = req.body || {};
+  if (!endpoint || !p256dh || !auth)
+    return res.status(400).json({ error: 'endpoint, p256dh y auth son requeridos' });
+  try {
+    await sbFetch('/push_subscriptions', 'POST', [{
+      usuario_id: req.userId,
+      endpoint,
+      p256dh,
+      auth,
+      activo: true,
+    }]);
+    res.status(201).json({ ok: true });
+  } catch (e) {
+    console.error('❌ POST /push/suscripcion:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /push/suscripcion — eliminar suscripción push del usuario
+app.delete('/push/suscripcion', requireClienteAuth, async (req, res) => {
+  const { endpoint } = req.body || {};
+  if (!endpoint)
+    return res.status(400).json({ error: 'endpoint requerido' });
+  try {
+    await sbFetch(
+      `/push_subscriptions?usuario_id=eq.${encodeURIComponent(req.userId)}&endpoint=eq.${encodeURIComponent(endpoint)}`,
+      'DELETE'
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('❌ DELETE /push/suscripcion:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ─── INICIO ─────────────────────────────────────────────
