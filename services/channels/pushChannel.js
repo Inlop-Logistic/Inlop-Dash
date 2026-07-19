@@ -20,7 +20,10 @@ async function send(delivery, event, { sbFetch }) {
     ) || [];
 
     if (!subs.length) {
-      await _updateDelivery(delivery.id, 'delivered', 0, null, { sbFetch });
+      await _registrarIntento(delivery.id, {
+        numIntento: 1, resultado: 'skip', error: 'Sin suscripciones activas', latenciaMs: Date.now() - inicio,
+      }, { sbFetch }).catch(() => {});
+      await _updateDelivery(delivery.id, 'skipped', 0, null, { sbFetch });
       return;
     }
 
