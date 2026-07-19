@@ -1900,12 +1900,13 @@ app.post('/push/suscripcion', requireClienteAuth, async (req, res) => {
   if (!endpoint || !p256dh || !auth)
     return res.status(400).json({ error: 'endpoint, p256dh y auth son requeridos' });
   try {
-    await sbFetch('/push_subscriptions', 'POST', [{
-      usuario_id: req.userId,
+    await sbFetch('/push_subscriptions?on_conflict=endpoint', 'POST', [{
+      usuario_id:  req.userId,
       endpoint,
       p256dh,
       auth,
-      activo: true,
+      user_agent:  req.headers['user-agent'] || null,
+      activo:      true,
     }]);
     res.status(201).json({ ok: true });
   } catch (e) {
