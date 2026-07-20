@@ -19,7 +19,7 @@ export function ClientesListPage({ state, onOpenWorkspace }: ClientesListPagePro
     tabEstado, setTabEstado,
     estadoFiltro, setEstadoFiltro,
     clasificacionFiltro, setClasificacion,
-    panelId, setPanelId, panelCliente,
+    setPanelId, panelCliente,
     cargar, getTabCount,
   } = state;
 

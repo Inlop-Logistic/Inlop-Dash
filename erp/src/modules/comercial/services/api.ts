@@ -1,4 +1,4 @@
-import { req } from "@/lib/api";
+import { req } from "@/services/http";
 import type { ClienteListItem } from "../types";
 
 export function listarClientes(): Promise<ClienteListItem[]> {
