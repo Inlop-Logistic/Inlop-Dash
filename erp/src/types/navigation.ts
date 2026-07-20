@@ -10,7 +10,8 @@ export type Vista =
   | "alarmas"
   | "vehiculos"
   | "programacion"
-  | "cumplidos";
+  | "cumplidos"
+  | "clientes";
 
 export interface NavItem    { id: Vista; label: string; icon: ReactNode; badge?: number }
 export interface NavSection { id: string; label: string; items: NavItem[] }

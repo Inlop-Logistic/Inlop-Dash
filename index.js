@@ -2742,6 +2742,51 @@ app.post("/api/programacion/:id/sync", requireInternalApiKey, async (req, res) =
   }
 });
 
+// ─── MAESTRO DE CLIENTES ────────────────────────────────────────────────────────
+
+function mapEmpresaToCliente(e) {
+  return {
+    id:                  e.id,
+    razon_social:        e.razon_social ?? "",
+    nit:                 e.nit ?? null,
+    nombre_comercial:    e.nombre_controlt ?? null,
+    activa:              e.activa ?? true,
+    estado:              e.activa === false ? "inactivo" : "activo",
+    sector_economico:    null,
+    ciudad_principal:    null,
+    ejecutivo_comercial: null,
+    clasificacion_abc:   null,
+    nivel_estrategico:   null,
+    etiquetas:           [],
+    alertas_count:       0,
+    created_at:          e.created_at ?? null,
+    actualizado_en:      null,
+  };
+}
+
+app.get("/api/clientes", async (req, res) => {
+  try {
+    const data = await sbFetch("/empresas_cliente?order=razon_social.asc&limit=1000");
+    if (!data) return res.status(502).json({ error: "Error al consultar clientes" });
+    res.json(data.map(mapEmpresaToCliente));
+  } catch (e) {
+    console.error("GET /api/clientes error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.get("/api/clientes/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = await sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(id)}&limit=1`);
+    if (!data || data.length === 0) return res.status(404).json({ error: "Cliente no encontrado" });
+    res.json(mapEmpresaToCliente(data[0]));
+  } catch (e) {
+    console.error("GET /api/clientes/:id error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
 // Health check
 app.get("/health", (req, res) => {
   const estados = {};
