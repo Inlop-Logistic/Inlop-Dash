@@ -4,7 +4,19 @@ export type EstadoCliente =
   | "activo"
   | "inactivo"
   | "suspendido"
-  | "prospecto";
+  | "prospecto"
+  | "bloqueado";
+
+export type TipoCliente =
+  | "cargador"
+  | "operador_logistico"
+  | "distribuidor"
+  | "industria"
+  | "comercio"
+  | "servicios"
+  | "otro";
+
+export type TipoEmpresa = "micro" | "pequena" | "mediana" | "grande";
 
 export type TipoPersona = "natural" | "juridica";
 
@@ -77,20 +89,69 @@ export type ClienteWorkspaceTab =
 /** Objeto devuelto por GET /api/clientes */
 export interface ClienteListItem {
   id: string;
+  codigo_cliente: string | null;
   razon_social: string;
   nit: string | null;
+  dv: string | null;
   nombre_comercial: string | null;
   activa: boolean;
   estado: EstadoCliente;
   sector_economico: string | null;
   ciudad_principal: string | null;
+  tipo_cliente: TipoCliente | null;
   ejecutivo_comercial: string | null;
   clasificacion_abc: ClasificacionABC | null;
   nivel_estrategico: NivelEstrategico | null;
   etiquetas: EtiquetaCliente[];
   alertas_count: number;
   created_at: string | null;
+  created_by: string | null;
   actualizado_en: string | null;
+}
+
+/** Payload para cambiar el estado de un cliente */
+export interface CambioEstadoPayload {
+  estado: EstadoCliente;
+  motivo: string;
+  observacion?: string;
+}
+
+/** Datos del formulario de creación / edición de cliente */
+export interface NuevoClienteFormData {
+  // Identidad (empresas_cliente)
+  razon_social: string;
+  nit?: string;
+  dv?: string;
+  nombre_comercial?: string;
+  estado?: EstadoCliente;
+  // Perfil general (clientes_info_general)
+  sector_economico?: string;
+  tipo_empresa?: TipoEmpresa;
+  tipo_cliente?: TipoCliente;
+  ciudad_principal?: string;
+  departamento?: string;
+  pais?: string;
+  direccion?: string;
+  telefono?: string;
+  email_principal?: string;
+  pagina_web?: string;
+  descripcion?: string;
+  // Relaciones comerciales (clientes_relaciones_comerciales)
+  ejecutivo_comercial?: string;
+  director_comercial?: string;
+  coordinador_operativo?: string;
+  canal_comercial?: CanalComercial;
+  clasificacion_abc?: ClasificacionABC;
+  nivel_estrategico?: NivelEstrategico;
+  segmento?: string;
+  etiquetas?: EtiquetaCliente[];
+  // Tributario (clientes_info_tributaria)
+  regimen_tributario?: RegimenTributario;
+  tipo_contribuyente?: TipoPersona;
+  responsable_iva?: boolean;
+  gran_contribuyente?: boolean;
+  autorretenedor?: boolean;
+  actividad_economica?: string;
 }
 
 /** KPIs calculados del array de clientes */
@@ -99,6 +160,7 @@ export interface KpisClientes {
   activos: number;
   inactivos: number;
   suspendidos: number;
+  bloqueados: number;
   con_alertas: number;
 }
 
@@ -216,24 +278,24 @@ export interface EventoHistorial {
   creado_en: string;
 }
 
-// ── Detalle completo (Fase 1B+) ───────────────────────────────────────────────
+// ── Detalle completo (Fase 2) ─────────────────────────────────────────────────
 
 export interface ClienteDetalle extends ClienteListItem {
   tipo_persona: TipoPersona | null;
-  tamano_empresa: TamanoEmpresa | null;
+  tipo_empresa: TipoEmpresa | null;
   regimen_tributario: RegimenTributario | null;
+  tipo_contribuyente: TipoPersona | null;
   responsable_iva: boolean;
   gran_contribuyente: boolean;
   autorretenedor: boolean;
   actividad_economica: string | null;
-  codigo_ciiu: string | null;
-  direccion_principal: string | null;
   departamento: string | null;
+  direccion_principal: string | null;
   telefono_principal: string | null;
   email_principal: string | null;
-  sitio_web: string | null;
+  pagina_web: string | null;
   logo_url: string | null;
-  notas: string | null;
+  descripcion: string | null;
   canal_comercial: CanalComercial | null;
   segmento: string | null;
   director_comercial: string | null;

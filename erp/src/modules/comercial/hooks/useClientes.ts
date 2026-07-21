@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import type { ClienteListItem, KpisClientes } from "../types";
 import { listarClientes } from "../services/api";
 import { TABS_LISTADO } from "../constants";
@@ -13,7 +13,7 @@ export function useClientes() {
   const [clasificacionFiltro, setClasificacion] = useState("");
   const [panelId, setPanelId]                   = useState<string | null>(null);
 
-  const cargar = async () => {
+  const cargar = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -23,9 +23,9 @@ export function useClientes() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { cargar(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { cargar(); }, [cargar]);
 
   const filtrados = useMemo(() => {
     const tabDef = TABS_LISTADO.find(t => t.id === tabEstado);
@@ -52,6 +52,7 @@ export function useClientes() {
     activos:     data.filter(c => c.estado === "activo").length,
     inactivos:   data.filter(c => c.estado === "inactivo").length,
     suspendidos: data.filter(c => c.estado === "suspendido").length,
+    bloqueados:  data.filter(c => c.estado === "bloqueado").length,
     con_alertas: data.filter(c => c.alertas_count > 0).length,
   }), [data]);
 

@@ -4,11 +4,28 @@ import type { ClienteListItem } from "../types";
 import {
   ESTADO_CLIENTE_CFG,
   CLASIFICACION_ABC_CFG,
-  ETIQUETA_CFG,
-  NIVEL_ESTRATEGICO_CFG,
+  TIPO_CLIENTE_CFG,
 } from "../constants";
 
 export const COLUMNS: Column<ClienteListItem>[] = [
+  {
+    key: "codigo_cliente",
+    header: "Código",
+    width: "110px",
+    render: (c) => (
+      <span
+        style={{
+          fontFamily: "monospace",
+          fontSize: "var(--text-xs)",
+          fontWeight: 700,
+          color: "var(--navy)",
+          letterSpacing: "0.04em",
+        }}
+      >
+        {c.codigo_cliente ?? "—"}
+      </span>
+    ),
+  },
   {
     key: "razon_social",
     header: "Razón Social",
@@ -25,7 +42,16 @@ export const COLUMNS: Column<ClienteListItem>[] = [
         {c.etiquetas.length > 0 && (
           <div className="flex items-center gap-1 mt-1 flex-wrap">
             {c.etiquetas.slice(0, 2).map(e => {
-              const cfg = ETIQUETA_CFG[e];
+              const TAG_CFG: Record<string, { color: string; bg: string }> = {
+                estrategico:       { color: "#5B21B6", bg: "#EDE9FE" },
+                cuenta_clave:      { color: "#1D4ED8", bg: "#DBEAFE" },
+                vip:               { color: "#B45309", bg: "#FEF3C7" },
+                proyecto_especial: { color: "#065F46", bg: "#D1FAE5" },
+                alto_riesgo:       { color: "#9F1239", bg: "#FFE4E6" },
+                exclusivo:         { color: "#6D28D9", bg: "#EDE9FE" },
+                prospecto:         { color: "#374151", bg: "#F3F4F6" },
+              };
+              const cfg = TAG_CFG[e] ?? { color: "var(--gray-600)", bg: "var(--gray-100)" };
               return (
                 <span
                   key={e}
@@ -38,7 +64,7 @@ export const COLUMNS: Column<ClienteListItem>[] = [
                     color: cfg.color,
                   }}
                 >
-                  {cfg.label}
+                  {e.replace(/_/g, " ")}
                 </span>
               );
             })}
@@ -53,17 +79,27 @@ export const COLUMNS: Column<ClienteListItem>[] = [
     width: "130px",
     render: (c) => (
       <span style={{ fontFamily: "monospace", fontSize: "var(--text-sm)", color: "var(--gray-600)" }}>
-        {c.nit ?? "—"}
+        {c.nit ? (c.dv ? `${c.nit}-${c.dv}` : c.nit) : "—"}
       </span>
     ),
   },
   {
     key: "ciudad_principal",
     header: "Ciudad",
-    width: "140px",
+    width: "130px",
     render: (c) => (
       <span style={{ fontSize: "var(--text-md)", color: "var(--gray-600)" }}>
         {c.ciudad_principal ?? "—"}
+      </span>
+    ),
+  },
+  {
+    key: "tipo_cliente",
+    header: "Tipo Cliente",
+    width: "150px",
+    render: (c) => (
+      <span style={{ fontSize: "var(--text-sm)", color: "var(--gray-600)" }}>
+        {c.tipo_cliente ? TIPO_CLIENTE_CFG[c.tipo_cliente] : "—"}
       </span>
     ),
   },
@@ -104,32 +140,9 @@ export const COLUMNS: Column<ClienteListItem>[] = [
     },
   },
   {
-    key: "nivel_estrategico",
-    header: "Nivel",
-    width: "120px",
-    render: (c) => {
-      if (!c.nivel_estrategico) return <span style={{ color: "var(--gray-300)" }}>—</span>;
-      const cfg = NIVEL_ESTRATEGICO_CFG[c.nivel_estrategico];
-      return (
-        <span
-          style={{
-            fontSize: "11px",
-            fontWeight: 600,
-            padding: "2px 8px",
-            borderRadius: "8px",
-            background: cfg.bg,
-            color: cfg.color,
-          }}
-        >
-          {cfg.label}
-        </span>
-      );
-    },
-  },
-  {
     key: "estado",
     header: "Estado",
-    width: "110px",
+    width: "120px",
     render: (c) => {
       const cfg = ESTADO_CLIENTE_CFG[c.estado];
       return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
@@ -140,7 +153,7 @@ export const COLUMNS: Column<ClienteListItem>[] = [
     header: "Alertas",
     width: "80px",
     render: (c) => {
-      if (!c.alertas_count) return null;
+      if (!c.alertas_count) return <span style={{ color: "var(--gray-200)" }}>—</span>;
       return (
         <span
           style={{

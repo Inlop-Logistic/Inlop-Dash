@@ -1,5 +1,5 @@
-import { Building2, Users, AlertTriangle, UserCheck, UserX } from "lucide-react";
-import { PageHeader, KpiCard, Card, DataTable } from "@/components/ui";
+import { Building2, ShieldAlert, AlertTriangle, UserCheck, UserX, Plus, Lock } from "lucide-react";
+import { PageHeader, KpiCard, Card, DataTable, Button } from "@/components/ui";
 import { ClienteQuickView } from "./ClienteQuickView";
 import { COLUMNS } from "./ClientesTableColumns";
 import { TABS_LISTADO } from "../constants";
@@ -29,21 +29,31 @@ export function ClientesListPage({ state, onOpenWorkspace }: ClientesListPagePro
         title="Maestro de Clientes"
         subtitle="Gestión centralizada de empresas cliente del ERP INLOP"
         actions={
-          <button
-            onClick={cargar}
-            style={{
-              fontSize: "var(--text-sm)",
-              color: "var(--gray-500)",
-              background: "none",
-              border: "1px solid var(--gray-200)",
-              borderRadius: 8,
-              padding: "6px 14px",
-              cursor: "pointer",
-              fontWeight: 500,
-            }}
-          >
-            Actualizar
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={cargar}
+              style={{
+                fontSize: "var(--text-sm)",
+                color: "var(--gray-500)",
+                background: "none",
+                border: "1px solid var(--gray-200)",
+                borderRadius: 8,
+                padding: "6px 14px",
+                cursor: "pointer",
+                fontWeight: 500,
+              }}
+            >
+              Actualizar
+            </button>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Plus className="w-4 h-4" />}
+              onClick={() => onOpenWorkspace("nuevo")}
+            >
+              Nuevo Cliente
+            </Button>
+          </div>
         }
       />
 
@@ -73,9 +83,16 @@ export function ClientesListPage({ state, onOpenWorkspace }: ClientesListPagePro
         <KpiCard
           label="Suspendidos"
           value={kpis.suspendidos}
-          icon={<Users className="w-5 h-5" />}
+          icon={<ShieldAlert className="w-5 h-5" />}
           color="#D97706"
           bg="#FFFBEB"
+        />
+        <KpiCard
+          label="Bloqueados"
+          value={kpis.bloqueados}
+          icon={<Lock className="w-5 h-5" />}
+          color="#9F1239"
+          bg="#FFF1F2"
         />
         <KpiCard
           label="Con Alertas"

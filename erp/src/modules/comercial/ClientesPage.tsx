@@ -24,7 +24,11 @@ export function ClientesPage() {
     return (
       <ClienteWorkspace
         clienteId={workspaceId}
-        onBack={() => setWorkspaceId(null)}
+        onBack={() => { setWorkspaceId(null); state.cargar(); }}
+        onClienteCreado={(id) => {
+          setWorkspaceId(id);
+          state.cargar();
+        }}
       />
     );
   }

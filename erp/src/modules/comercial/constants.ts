@@ -1,12 +1,52 @@
-import type { ClienteWorkspaceTab, EstadoCliente, ClasificacionABC, NivelEstrategico, EtiquetaCliente, TipoAlerta } from "./types";
+import type { ClienteWorkspaceTab, EstadoCliente, ClasificacionABC, NivelEstrategico, EtiquetaCliente, TipoAlerta, TipoCliente, TipoEmpresa } from "./types";
 
 // ── Estado del cliente ────────────────────────────────────────────────────────
 
-export const ESTADO_CLIENTE_CFG: Record<EstadoCliente, { label: string; variant: "success" | "default" | "danger" | "info" }> = {
+export const ESTADO_CLIENTE_CFG: Record<EstadoCliente, { label: string; variant: "success" | "default" | "danger" | "info" | "warning" }> = {
   activo:     { label: "Activo",     variant: "success" },
   inactivo:   { label: "Inactivo",   variant: "default" },
-  suspendido: { label: "Suspendido", variant: "danger"  },
+  suspendido: { label: "Suspendido", variant: "warning" },
   prospecto:  { label: "Prospecto",  variant: "info"    },
+  bloqueado:  { label: "Bloqueado",  variant: "danger"  },
+};
+
+// Transiciones de estado válidas: qué estados se pueden alcanzar desde cada estado
+export const TRANSICIONES_ESTADO: Record<EstadoCliente, EstadoCliente[]> = {
+  prospecto:  ["activo", "inactivo"],
+  activo:     ["suspendido", "bloqueado", "inactivo"],
+  suspendido: ["activo", "bloqueado", "inactivo"],
+  bloqueado:  ["activo", "inactivo"],
+  inactivo:   ["prospecto", "activo"],
+};
+
+// Motivos disponibles por estado destino
+export const MOTIVOS_CAMBIO_ESTADO: Record<EstadoCliente, string[]> = {
+  prospecto:  ["Reactivación como prospecto", "Error de registro", "Otro"],
+  activo:     ["Aprobación comercial", "Reactivación tras suspensión", "Reactivación tras bloqueo", "Cumplimiento de condiciones", "Otro"],
+  suspendido: ["Deuda vencida", "Incumplimiento contractual", "Solicitud del cliente", "Revisión interna", "Otro"],
+  bloqueado:  ["Fraude confirmado", "Incumplimiento grave", "Orden judicial", "Riesgo de seguridad", "Otro"],
+  inactivo:   ["Cierre de empresa", "Sin actividad prolongada", "Solicitud del cliente", "Decisión comercial", "Otro"],
+};
+
+// ── Tipos de cliente ──────────────────────────────────────────────────────────
+
+export const TIPO_CLIENTE_CFG: Record<TipoCliente, string> = {
+  cargador:           "Cargador",
+  operador_logistico: "Operador Logístico",
+  distribuidor:       "Distribuidor",
+  industria:          "Industria",
+  comercio:           "Comercio",
+  servicios:          "Servicios",
+  otro:               "Otro",
+};
+
+// ── Tamaño de empresa ─────────────────────────────────────────────────────────
+
+export const TIPO_EMPRESA_CFG: Record<TipoEmpresa, string> = {
+  micro:    "Microempresa",
+  pequena:  "Pequeña",
+  mediana:  "Mediana",
+  grande:   "Grande",
 };
 
 // ── Clasificación ABC ─────────────────────────────────────────────────────────
@@ -55,9 +95,10 @@ export const ALERTA_CFG: Record<TipoAlerta, { label: string; severidad: "info" |
 export const TABS_LISTADO = [
   { id: "todos",       label: "Todos",      estadoKey: ""           },
   { id: "activos",     label: "Activos",    estadoKey: "activo"     },
-  { id: "inactivos",   label: "Inactivos",  estadoKey: "inactivo"   },
-  { id: "suspendidos", label: "Suspendidos",estadoKey: "suspendido" },
   { id: "prospectos",  label: "Prospectos", estadoKey: "prospecto"  },
+  { id: "suspendidos", label: "Suspendidos",estadoKey: "suspendido" },
+  { id: "bloqueados",  label: "Bloqueados", estadoKey: "bloqueado"  },
+  { id: "inactivos",   label: "Inactivos",  estadoKey: "inactivo"   },
 ] as const;
 
 // ── Tabs del Workspace ────────────────────────────────────────────────────────

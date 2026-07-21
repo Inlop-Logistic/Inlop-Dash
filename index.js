@@ -2744,31 +2744,49 @@ app.post("/api/programacion/:id/sync", requireInternalApiKey, async (req, res) =
 
 // ─── MAESTRO DE CLIENTES ────────────────────────────────────────────────────────
 
-function mapEmpresaToCliente(e) {
+// Combina empresas_cliente + satélites en el objeto que consume el frontend
+function mapEmpresaToCliente(e, general = null, relaciones = null) {
   return {
     id:                  e.id,
+    codigo_cliente:      e.codigo_cliente ?? null,
     razon_social:        e.razon_social ?? "",
     nit:                 e.nit ?? null,
-    nombre_comercial:    e.nombre_controlt ?? null,
+    dv:                  e.dv ?? null,
+    nombre_comercial:    e.nombre_controlt ?? general?.nombre_comercial ?? null,
     activa:              e.activa ?? true,
-    estado:              e.activa === false ? "inactivo" : "activo",
-    sector_economico:    null,
-    ciudad_principal:    null,
-    ejecutivo_comercial: null,
-    clasificacion_abc:   null,
-    nivel_estrategico:   null,
-    etiquetas:           [],
+    estado:              e.estado ?? (e.activa === false ? "inactivo" : "activo"),
+    sector_economico:    general?.sector_economico ?? null,
+    ciudad_principal:    general?.ciudad_principal ?? null,
+    tipo_cliente:        general?.tipo_cliente ?? null,
+    ejecutivo_comercial: relaciones?.ejecutivo_comercial ?? null,
+    clasificacion_abc:   relaciones?.clasificacion_abc ?? null,
+    nivel_estrategico:   relaciones?.nivel_estrategico ?? null,
+    etiquetas:           relaciones?.etiquetas ?? [],
     alertas_count:       0,
     created_at:          e.created_at ?? null,
-    actualizado_en:      null,
+    created_by:          e.created_by ?? null,
+    actualizado_en:      e.updated_at ?? null,
   };
+}
+
+// Enriquece un array de empresas con sus satélites en 2 queries paralelas
+async function enrichClientes(empresas) {
+  if (!empresas || empresas.length === 0) return [];
+  const ids = empresas.map(e => e.id).join(",");
+  const [generales, relaciones] = await Promise.all([
+    sbFetch(`/clientes_info_general?empresa_id=in.(${ids})`),
+    sbFetch(`/clientes_relaciones_comerciales?empresa_id=in.(${ids})`),
+  ]);
+  const genMap  = Object.fromEntries((generales  ?? []).map(g => [g.empresa_id, g]));
+  const relMap  = Object.fromEntries((relaciones ?? []).map(r => [r.empresa_id, r]));
+  return empresas.map(e => mapEmpresaToCliente(e, genMap[e.id] ?? null, relMap[e.id] ?? null));
 }
 
 app.get("/api/clientes", async (req, res) => {
   try {
     const data = await sbFetch("/empresas_cliente?order=razon_social.asc&limit=1000");
     if (!data) return res.status(502).json({ error: "Error al consultar clientes" });
-    res.json(data.map(mapEmpresaToCliente));
+    res.json(await enrichClientes(data));
   } catch (e) {
     console.error("GET /api/clientes error:", e.message);
     res.status(500).json({ error: "Error interno" });
@@ -2780,9 +2798,254 @@ app.get("/api/clientes/:id", async (req, res) => {
     const { id } = req.params;
     const data = await sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(id)}&limit=1`);
     if (!data || data.length === 0) return res.status(404).json({ error: "Cliente no encontrado" });
-    res.json(mapEmpresaToCliente(data[0]));
+    const [enriched] = await enrichClientes(data);
+    res.json(enriched);
   } catch (e) {
     console.error("GET /api/clientes/:id error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// Obtiene el próximo código CLI-XXXXXX vía RPC de Supabase
+async function generarCodigoCliente() {
+  try {
+    const SB_FUNC_URL = "https://gtyydandwcgoaratmnqh.supabase.co/rest/v1/rpc/next_codigo_cliente";
+    const r = await fetchConTimeout(SB_FUNC_URL, { method: "POST", headers: SB_HEADERS });
+    if (r.ok) {
+      const val = await r.json();
+      return typeof val === "string" ? val : null;
+    }
+  } catch {}
+  // Fallback: MAX actual + 1
+  const rows = await sbFetch("/empresas_cliente?select=codigo_cliente&codigo_cliente=not.is.null&order=codigo_cliente.desc&limit=1");
+  if (rows && rows[0]?.codigo_cliente) {
+    const num = parseInt(rows[0].codigo_cliente.replace("CLI-", ""), 10);
+    return `CLI-${String(num + 1).padStart(6, "0")}`;
+  }
+  return "CLI-000001";
+}
+
+app.post("/api/clientes", async (req, res) => {
+  try {
+    const actor = req.headers["x-user-email"] ?? "sistema";
+    const {
+      razon_social, nit, dv, nombre_comercial, estado = "prospecto",
+      sector_economico, ciudad_principal, departamento, pais, direccion,
+      telefono, email_principal, pagina_web, tipo_empresa, tipo_cliente, descripcion,
+      ejecutivo_comercial, director_comercial, coordinador_operativo,
+      canal_comercial, clasificacion_abc, nivel_estrategico, segmento, etiquetas = [],
+      regimen_tributario, tipo_contribuyente,
+      responsable_iva = false, gran_contribuyente = false, autorretenedor = false,
+      actividad_economica,
+    } = req.body ?? {};
+
+    if (!razon_social?.trim()) {
+      return res.status(400).json({ error: "La razón social es obligatoria" });
+    }
+
+    const codigo_cliente = await generarCodigoCliente();
+    const now = new Date().toISOString();
+
+    // 1. Crear empresa
+    const empresaRows = await sbFetch("/empresas_cliente", "POST", {
+      razon_social:    razon_social.trim(),
+      nit:             nit?.trim() || null,
+      dv:              dv?.trim() || null,
+      nombre_controlt: nombre_comercial?.trim() || null,
+      activa:          estado !== "inactivo",
+      estado,
+      codigo_cliente,
+      created_by:      actor,
+      updated_at:      now,
+      updated_by:      actor,
+    });
+    if (!empresaRows || !empresaRows[0]) {
+      return res.status(502).json({ error: "No se pudo crear el cliente" });
+    }
+    const empresa = empresaRows[0];
+
+    // 2. Crear registros satélite en paralelo
+    await Promise.all([
+      sbFetch("/clientes_info_general", "POST", {
+        empresa_id: empresa.id,
+        nombre_comercial: nombre_comercial?.trim() || null,
+        sector_economico: sector_economico || null,
+        ciudad_principal: ciudad_principal || null,
+        departamento:     departamento || null,
+        pais:             pais || "Colombia",
+        direccion:        direccion || null,
+        telefono:         telefono || null,
+        email_principal:  email_principal || null,
+        pagina_web:       pagina_web || null,
+        tipo_empresa:     tipo_empresa || null,
+        tipo_cliente:     tipo_cliente || null,
+        descripcion:      descripcion || null,
+        updated_by:       actor,
+      }),
+      sbFetch("/clientes_relaciones_comerciales", "POST", {
+        empresa_id:            empresa.id,
+        ejecutivo_comercial:   ejecutivo_comercial || null,
+        director_comercial:    director_comercial || null,
+        coordinador_operativo: coordinador_operativo || null,
+        canal_comercial:       canal_comercial || null,
+        clasificacion_abc:     clasificacion_abc || null,
+        nivel_estrategico:     nivel_estrategico || null,
+        segmento:              segmento || null,
+        etiquetas:             etiquetas,
+        estado_comercial:      estado,
+        updated_by:            actor,
+      }),
+      sbFetch("/clientes_info_tributaria", "POST", {
+        empresa_id:          empresa.id,
+        regimen_tributario:  regimen_tributario || null,
+        tipo_contribuyente:  tipo_contribuyente || null,
+        responsable_iva,
+        gran_contribuyente,
+        autorretenedor,
+        actividad_economica: actividad_economica || null,
+        updated_by:          actor,
+      }),
+      sbFetch("/clientes_historial", "POST", {
+        empresa_id:    empresa.id,
+        tipo:          "creacion",
+        descripcion:   `Cliente creado con código ${codigo_cliente}`,
+        usuario:       actor,
+        usuario_email: actor,
+        metadata:      { estado_inicial: estado, codigo_cliente },
+      }),
+    ]);
+
+    res.status(201).json(mapEmpresaToCliente(empresa));
+  } catch (e) {
+    console.error("POST /api/clientes error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.patch("/api/clientes/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const actor = req.headers["x-user-email"] ?? "sistema";
+    const {
+      razon_social, nit, dv, nombre_comercial,
+      sector_economico, ciudad_principal, departamento, pais, direccion,
+      telefono, email_principal, pagina_web, tipo_empresa, tipo_cliente, descripcion,
+      ejecutivo_comercial, director_comercial, coordinador_operativo,
+      canal_comercial, clasificacion_abc, nivel_estrategico, segmento, etiquetas,
+      regimen_tributario, tipo_contribuyente,
+      responsable_iva, gran_contribuyente, autorretenedor, actividad_economica,
+    } = req.body ?? {};
+
+    const now = new Date().toISOString();
+
+    // Campos de empresas_cliente
+    const empresaPatch = {};
+    if (razon_social    !== undefined) empresaPatch.razon_social    = razon_social.trim();
+    if (nit             !== undefined) empresaPatch.nit             = nit?.trim() || null;
+    if (dv              !== undefined) empresaPatch.dv              = dv?.trim() || null;
+    if (nombre_comercial !== undefined) empresaPatch.nombre_controlt = nombre_comercial?.trim() || null;
+    empresaPatch.updated_at = now;
+    empresaPatch.updated_by = actor;
+
+    // Campos de clientes_info_general
+    const genPatch = {};
+    if (nombre_comercial  !== undefined) genPatch.nombre_comercial  = nombre_comercial?.trim() || null;
+    if (sector_economico  !== undefined) genPatch.sector_economico  = sector_economico || null;
+    if (ciudad_principal  !== undefined) genPatch.ciudad_principal  = ciudad_principal || null;
+    if (departamento      !== undefined) genPatch.departamento      = departamento || null;
+    if (pais              !== undefined) genPatch.pais              = pais || "Colombia";
+    if (direccion         !== undefined) genPatch.direccion         = direccion || null;
+    if (telefono          !== undefined) genPatch.telefono          = telefono || null;
+    if (email_principal   !== undefined) genPatch.email_principal   = email_principal || null;
+    if (pagina_web        !== undefined) genPatch.pagina_web        = pagina_web || null;
+    if (tipo_empresa      !== undefined) genPatch.tipo_empresa      = tipo_empresa || null;
+    if (tipo_cliente      !== undefined) genPatch.tipo_cliente      = tipo_cliente || null;
+    if (descripcion       !== undefined) genPatch.descripcion       = descripcion || null;
+    genPatch.updated_at = now;
+    genPatch.updated_by = actor;
+
+    // Campos de clientes_relaciones_comerciales
+    const relPatch = {};
+    if (ejecutivo_comercial   !== undefined) relPatch.ejecutivo_comercial   = ejecutivo_comercial || null;
+    if (director_comercial    !== undefined) relPatch.director_comercial    = director_comercial || null;
+    if (coordinador_operativo !== undefined) relPatch.coordinador_operativo = coordinador_operativo || null;
+    if (canal_comercial       !== undefined) relPatch.canal_comercial       = canal_comercial || null;
+    if (clasificacion_abc     !== undefined) relPatch.clasificacion_abc     = clasificacion_abc || null;
+    if (nivel_estrategico     !== undefined) relPatch.nivel_estrategico     = nivel_estrategico || null;
+    if (segmento              !== undefined) relPatch.segmento              = segmento || null;
+    if (etiquetas             !== undefined) relPatch.etiquetas             = etiquetas;
+    relPatch.updated_at = now;
+    relPatch.updated_by = actor;
+
+    // Campos de clientes_info_tributaria
+    const tribPatch = {};
+    if (regimen_tributario  !== undefined) tribPatch.regimen_tributario  = regimen_tributario || null;
+    if (tipo_contribuyente  !== undefined) tribPatch.tipo_contribuyente  = tipo_contribuyente || null;
+    if (responsable_iva     !== undefined) tribPatch.responsable_iva     = responsable_iva;
+    if (gran_contribuyente  !== undefined) tribPatch.gran_contribuyente  = gran_contribuyente;
+    if (autorretenedor      !== undefined) tribPatch.autorretenedor      = autorretenedor;
+    if (actividad_economica !== undefined) tribPatch.actividad_economica = actividad_economica || null;
+    tribPatch.updated_at = now;
+    tribPatch.updated_by = actor;
+
+    await Promise.all([
+      sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(id)}`, "PATCH", empresaPatch),
+      sbFetch(`/clientes_info_general?empresa_id=eq.${encodeURIComponent(id)}`, "PATCH", genPatch),
+      sbFetch(`/clientes_relaciones_comerciales?empresa_id=eq.${encodeURIComponent(id)}`, "PATCH", relPatch),
+      sbFetch(`/clientes_info_tributaria?empresa_id=eq.${encodeURIComponent(id)}`, "PATCH", tribPatch),
+    ]);
+
+    const data = await sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(id)}&limit=1`);
+    if (!data || data.length === 0) return res.status(404).json({ error: "Cliente no encontrado" });
+    const [enriched] = await enrichClientes(data);
+    res.json(enriched);
+  } catch (e) {
+    console.error("PATCH /api/clientes/:id error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.patch("/api/clientes/:id/estado", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const actor = req.headers["x-user-email"] ?? "sistema";
+    const { estado, motivo, observacion } = req.body ?? {};
+
+    const ESTADOS_VALIDOS = ["activo", "inactivo", "suspendido", "prospecto", "bloqueado"];
+    if (!ESTADOS_VALIDOS.includes(estado)) {
+      return res.status(400).json({ error: "Estado inválido" });
+    }
+    if (!motivo?.trim()) {
+      return res.status(400).json({ error: "El motivo es obligatorio para cambiar el estado" });
+    }
+
+    const now = new Date().toISOString();
+
+    await Promise.all([
+      sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(id)}`, "PATCH", {
+        estado,
+        activa:     estado === "activo",
+        updated_at: now,
+        updated_by: actor,
+      }),
+      sbFetch(`/clientes_relaciones_comerciales?empresa_id=eq.${encodeURIComponent(id)}`, "PATCH", {
+        estado_comercial: estado,
+        updated_at:       now,
+        updated_by:       actor,
+      }),
+      sbFetch("/clientes_historial", "POST", {
+        empresa_id:    id,
+        tipo:          "cambio_estado",
+        descripcion:   `Estado cambiado a "${estado}". Motivo: ${motivo}`,
+        usuario:       actor,
+        usuario_email: actor,
+        metadata:      { nuevo_estado: estado, motivo, observacion: observacion || null },
+      }),
+    ]);
+
+    res.json({ ok: true, estado });
+  } catch (e) {
+    console.error("PATCH /api/clientes/:id/estado error:", e.message);
     res.status(500).json({ error: "Error interno" });
   }
 });
