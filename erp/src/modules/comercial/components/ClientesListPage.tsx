@@ -1,4 +1,4 @@
-import { Building2, ShieldAlert, AlertTriangle, UserCheck, UserX, Plus, Lock } from "lucide-react";
+import { Building2, ShieldAlert, AlertTriangle, UserCheck, UserX, Plus, Lock, Clock } from "lucide-react";
 import { PageHeader, KpiCard, Card, DataTable, Button } from "@/components/ui";
 import { ClienteQuickView } from "./ClienteQuickView";
 import { COLUMNS } from "./ClientesTableColumns";
@@ -95,6 +95,13 @@ export function ClientesListPage({ state, onOpenWorkspace }: ClientesListPagePro
           bg="#FFF1F2"
         />
         <KpiCard
+          label="Pendientes"
+          value={kpis.pendientes}
+          icon={<Clock className="w-5 h-5" />}
+          color="#B45309"
+          bg="#FEF3C7"
+        />
+        <KpiCard
           label="Con Alertas"
           value={kpis.con_alertas}
           icon={<AlertTriangle className="w-5 h-5" />}
@@ -137,10 +144,12 @@ export function ClientesListPage({ state, onOpenWorkspace }: ClientesListPagePro
           }}
         >
           <option value="">Todos los estados</option>
+          <option value="pendiente">Pendiente</option>
           <option value="activo">Activo</option>
-          <option value="inactivo">Inactivo</option>
-          <option value="suspendido">Suspendido</option>
           <option value="prospecto">Prospecto</option>
+          <option value="suspendido">Suspendido</option>
+          <option value="bloqueado">Bloqueado</option>
+          <option value="inactivo">Inactivo</option>
         </select>
         <select
           value={clasificacionFiltro}

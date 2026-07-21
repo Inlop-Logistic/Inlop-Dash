@@ -53,6 +53,7 @@ export function useClientes() {
     inactivos:   data.filter(c => c.estado === "inactivo").length,
     suspendidos: data.filter(c => c.estado === "suspendido").length,
     bloqueados:  data.filter(c => c.estado === "bloqueado").length,
+    pendientes:  data.filter(c => c.estado === "pendiente").length,
     con_alertas: data.filter(c => c.alertas_count > 0).length,
   }), [data]);
 

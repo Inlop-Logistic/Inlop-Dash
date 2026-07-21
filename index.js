@@ -1,7 +1,7 @@
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
-import { buildLookupMap, resolveCustomer } from './services/customerResolver.js';
+import { buildLookupMap, resolveOrCreateCustomer } from './services/customerResolver.js';
 import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } from './services/authScope.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
@@ -648,14 +648,20 @@ async function syncPlaneados() {
 
     const activeIds = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
 
-    let upsertados = 0;
+    let upsertados = 0, clientesCreados = 0;
     for (const v of viajesFuturos) {
       const f = parseSchedulate(v.schedulate_origin);
       const yaExiste = existMap[v.trip_number];
       const estaActivo = activeIds.has(v.trip_number);
       const viajeResume = cache.viajes.data.find(r => r.trip_number === v.trip_number);
       const cliente = viajeResume?.company_customer_name || v.company_customer_name || null;
-      const resolved = resolveCustomer(cliente, customerLookupMap);
+      const resolved = await resolveOrCreateCustomer(cliente, {
+        lookupMap:     customerLookupMap,
+        sbFetch,
+        generarCodigo: generarCodigoCliente,
+        actor:         'sistema:tms',
+      });
+      if (resolved.created) clientesCreados++;
 
       const row = {
         trip_number:           v.trip_number,
@@ -681,7 +687,7 @@ async function syncPlaneados() {
 
     const hoyStr = hoyInicio.toISOString().slice(0, 10);
     await sbFetch(`/planeados?fecha_programada_dia=lt.${hoyStr}`, 'DELETE');
-    console.log(`📅 Planeados: ${upsertados} upsertados, limpieza de anteriores a ${hoyStr}`);
+    console.log(`📅 Planeados: ${upsertados} upsertados, ${clientesCreados} clientes creados automáticamente, limpieza de anteriores a ${hoyStr}`);
 
     const sinCliente = (existentes || []).filter(e => !e.company_customer_name);
     for (const e of sinCliente) {
@@ -1136,12 +1142,18 @@ async function syncCumplidos() {
     const ESTADOS_ACTIVOS = new Set(['LIVE', 'SOLICITADO', 'CUMPLIDO RECIBIDO']);
     const apiSet = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
 
-    let insertados = 0, actualizados = 0;
+    let insertados = 0, actualizados = 0, clientesCreados = 0;
     for (const v of cache.viajes.data) {
       if (!v.trip_number) continue;
       const existe = existentes.get(v.trip_number);
       const cliente = (v.company_customer_name || '').split(',')[0].trim();
-      const resolved = resolveCustomer(cliente, customerLookupMap);
+      const resolved = await resolveOrCreateCustomer(cliente, {
+        lookupMap:     customerLookupMap,
+        sbFetch,
+        generarCodigo: generarCodigoCliente,
+        actor:         'sistema:tms',
+      });
+      if (resolved.created) clientesCreados++;
 
       if (!existe) {
         const row = {
@@ -1189,7 +1201,7 @@ async function syncCumplidos() {
       }
     }
 
-    console.log(`✅ Cumplidos sync: +${insertados} nuevos, ~${actualizados} actualizados, 🏁${finalizados} finalizados`);
+    console.log(`✅ Cumplidos sync: +${insertados} nuevos, ~${actualizados} actualizados, 🏁${finalizados} finalizados, 👤${clientesCreados} clientes creados`);
   } catch(e) {
     console.error('❌ Error syncCumplidos:', e.message);
   }

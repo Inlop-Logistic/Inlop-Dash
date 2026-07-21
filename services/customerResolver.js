@@ -112,4 +112,123 @@ function resolveCustomer(rawName, lookupMap) {
   }
 }
 
-export { normalizeClient, buildLookupMap, resolveCustomer };
+/**
+ * Resuelve o crea automáticamente un cliente en el Maestro.
+ *
+ * Cuando el TMS envía un viaje cuyo `company_customer_name` no coincide con
+ * ninguna empresa registrada, esta función lo crea al vuelo con estado
+ * `pendiente` para que el flujo de Programación nunca se rompa. El equipo
+ * comercial debe curar posteriormente estos registros desde el Workspace.
+ *
+ * Prevención de duplicados en 3 capas:
+ *   1. Lookup in-memory (protege dentro del mismo ciclo de sync).
+ *   2. SELECT previo por nombre_controlt normalizado (contra races entre syncs).
+ *   3. Actualización in-place del lookupMap tras crear.
+ *
+ * Nunca lanza. Ante cualquier error retorna el resultado de resolveCustomer.
+ *
+ * @param {string|null} rawName — company_customer_name del TMS
+ * @param {object} ctx
+ * @param {Map} ctx.lookupMap — el mismo mapa usado por resolveCustomer; se muta
+ * @param {Function} ctx.sbFetch — cliente Supabase inyectado desde index.js
+ * @param {Function} [ctx.generarCodigo] — función async que retorna 'CLI-XXXXXX'
+ * @param {string} [ctx.actor='sistema:tms'] — identificador del actor para auditoría
+ * @returns {Promise<{ empresa_cliente_id: string|null, razon_social: string|null, resolved: boolean, created: boolean }>}
+ */
+async function resolveOrCreateCustomer(rawName, ctx) {
+  const base = resolveCustomer(rawName, ctx?.lookupMap);
+  if (base.resolved) return { ...base, created: false };
+
+  if (!rawName || !ctx?.sbFetch || !ctx?.lookupMap) {
+    return { ...base, created: false };
+  }
+
+  const nombre = String(rawName).trim();
+  if (!nombre) return { ...base, created: false };
+
+  const normalized = normalizeClient(nombre);
+  const actor = ctx.actor || 'sistema:tms';
+
+  try {
+    // Capa 2: SELECT previo por nombre_controlt/razon_social (red anti-race)
+    const filtroNombre = encodeURIComponent(nombre);
+    const existentes = await ctx.sbFetch(
+      `/empresas_cliente?or=(nombre_controlt.eq.${filtroNombre},razon_social.eq.${filtroNombre})&select=id,razon_social,nombre_controlt&limit=1`
+    );
+    if (existentes && existentes[0]) {
+      const found = existentes[0];
+      // Refrescar lookup para futuras iteraciones
+      ctx.lookupMap.set(normalized, { id: found.id, razon_social: found.razon_social });
+      return {
+        empresa_cliente_id: found.id,
+        razon_social: found.razon_social,
+        resolved: true,
+        created: false,
+      };
+    }
+
+    // Capa 3: crear cliente con estado pendiente
+    const codigo = ctx.generarCodigo ? await ctx.generarCodigo() : null;
+    const ahora = new Date().toISOString();
+
+    const inserted = await ctx.sbFetch('/empresas_cliente', 'POST', {
+      razon_social:    nombre,
+      nombre_controlt: nombre,
+      activa:          false,
+      estado:          'pendiente',
+      codigo_cliente:  codigo,
+      created_by:      actor,
+      updated_at:      ahora,
+      updated_by:      actor,
+    });
+    if (!inserted || !inserted[0]) {
+      return { ...base, created: false };
+    }
+    const nuevo = inserted[0];
+
+    // Satélites mínimos + trazabilidad — todo en paralelo, sin bloquear el flujo
+    await Promise.all([
+      ctx.sbFetch('/clientes_info_general', 'POST', {
+        empresa_id:       nuevo.id,
+        nombre_comercial: nombre,
+        pais:             'Colombia',
+        updated_by:       actor,
+      }),
+      ctx.sbFetch('/clientes_relaciones_comerciales', 'POST', {
+        empresa_id:       nuevo.id,
+        estado_comercial: 'pendiente',
+        updated_by:       actor,
+      }),
+      ctx.sbFetch('/clientes_info_tributaria', 'POST', {
+        empresa_id:       nuevo.id,
+        updated_by:       actor,
+      }),
+      ctx.sbFetch('/clientes_historial', 'POST', {
+        empresa_id:    nuevo.id,
+        tipo:          'creacion_automatica',
+        descripcion:   `Cliente creado automáticamente desde TMS con nombre "${nombre}". Estado inicial: pendiente.`,
+        usuario:       actor,
+        usuario_email: actor,
+        metadata:      { origen: 'tms', nombre_crudo: nombre, codigo_cliente: codigo },
+      }),
+    ]).catch(err => {
+      // Los satélites no deben romper la resolución; el cliente ya existe.
+      console.error('⚠️  resolveOrCreateCustomer satélites:', err.message);
+    });
+
+    // Refrescar lookup in-place para las siguientes iteraciones del ciclo
+    ctx.lookupMap.set(normalized, { id: nuevo.id, razon_social: nuevo.razon_social });
+
+    return {
+      empresa_cliente_id: nuevo.id,
+      razon_social:       nuevo.razon_social,
+      resolved:           true,
+      created:            true,
+    };
+  } catch (e) {
+    console.error('❌ resolveOrCreateCustomer:', e.message);
+    return { ...base, created: false };
+  }
+}
+
+export { normalizeClient, buildLookupMap, resolveCustomer, resolveOrCreateCustomer };

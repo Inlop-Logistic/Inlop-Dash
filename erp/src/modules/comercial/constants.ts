@@ -8,10 +8,14 @@ export const ESTADO_CLIENTE_CFG: Record<EstadoCliente, { label: string; variant:
   suspendido: { label: "Suspendido", variant: "warning" },
   prospecto:  { label: "Prospecto",  variant: "info"    },
   bloqueado:  { label: "Bloqueado",  variant: "danger"  },
+  pendiente:  { label: "Pendiente",  variant: "warning" },
 };
 
-// Transiciones de estado válidas: qué estados se pueden alcanzar desde cada estado
+// Transiciones de estado válidas: qué estados se pueden alcanzar desde cada estado.
+// "pendiente" solo lo genera el sync automático desde el TMS; comercial lo cura
+// aprobándolo (activo), moviéndolo a seguimiento (prospecto) o descartándolo (inactivo).
 export const TRANSICIONES_ESTADO: Record<EstadoCliente, EstadoCliente[]> = {
+  pendiente:  ["activo", "prospecto", "inactivo"],
   prospecto:  ["activo", "inactivo"],
   activo:     ["suspendido", "bloqueado", "inactivo"],
   suspendido: ["activo", "bloqueado", "inactivo"],
@@ -21,11 +25,12 @@ export const TRANSICIONES_ESTADO: Record<EstadoCliente, EstadoCliente[]> = {
 
 // Motivos disponibles por estado destino
 export const MOTIVOS_CAMBIO_ESTADO: Record<EstadoCliente, string[]> = {
-  prospecto:  ["Reactivación como prospecto", "Error de registro", "Otro"],
-  activo:     ["Aprobación comercial", "Reactivación tras suspensión", "Reactivación tras bloqueo", "Cumplimiento de condiciones", "Otro"],
+  pendiente:  ["Detectado automáticamente desde el TMS", "Otro"],
+  prospecto:  ["Reactivación como prospecto", "Error de registro", "Curación desde pendiente", "Otro"],
+  activo:     ["Aprobación comercial", "Reactivación tras suspensión", "Reactivación tras bloqueo", "Cumplimiento de condiciones", "Curación desde pendiente", "Otro"],
   suspendido: ["Deuda vencida", "Incumplimiento contractual", "Solicitud del cliente", "Revisión interna", "Otro"],
   bloqueado:  ["Fraude confirmado", "Incumplimiento grave", "Orden judicial", "Riesgo de seguridad", "Otro"],
-  inactivo:   ["Cierre de empresa", "Sin actividad prolongada", "Solicitud del cliente", "Decisión comercial", "Otro"],
+  inactivo:   ["Cierre de empresa", "Sin actividad prolongada", "Solicitud del cliente", "Decisión comercial", "Duplicado del pendiente", "Otro"],
 };
 
 // ── Tipos de cliente ──────────────────────────────────────────────────────────
@@ -93,12 +98,13 @@ export const ALERTA_CFG: Record<TipoAlerta, { label: string; severidad: "info" |
 // ── Tabs del listado ──────────────────────────────────────────────────────────
 
 export const TABS_LISTADO = [
-  { id: "todos",       label: "Todos",      estadoKey: ""           },
-  { id: "activos",     label: "Activos",    estadoKey: "activo"     },
-  { id: "prospectos",  label: "Prospectos", estadoKey: "prospecto"  },
-  { id: "suspendidos", label: "Suspendidos",estadoKey: "suspendido" },
-  { id: "bloqueados",  label: "Bloqueados", estadoKey: "bloqueado"  },
-  { id: "inactivos",   label: "Inactivos",  estadoKey: "inactivo"   },
+  { id: "todos",       label: "Todos",       estadoKey: ""           },
+  { id: "pendientes",  label: "Pendientes",  estadoKey: "pendiente"  },
+  { id: "activos",     label: "Activos",     estadoKey: "activo"     },
+  { id: "prospectos",  label: "Prospectos",  estadoKey: "prospecto"  },
+  { id: "suspendidos", label: "Suspendidos", estadoKey: "suspendido" },
+  { id: "bloqueados",  label: "Bloqueados",  estadoKey: "bloqueado"  },
+  { id: "inactivos",   label: "Inactivos",   estadoKey: "inactivo"   },
 ] as const;
 
 // ── Tabs del Workspace ────────────────────────────────────────────────────────

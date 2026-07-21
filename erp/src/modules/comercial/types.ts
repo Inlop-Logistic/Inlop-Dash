@@ -5,7 +5,8 @@ export type EstadoCliente =
   | "inactivo"
   | "suspendido"
   | "prospecto"
-  | "bloqueado";
+  | "bloqueado"
+  | "pendiente";
 
 export type TipoCliente =
   | "cargador"
@@ -161,6 +162,7 @@ export interface KpisClientes {
   inactivos: number;
   suspendidos: number;
   bloqueados: number;
+  pendientes: number;
   con_alertas: number;
 }
 
