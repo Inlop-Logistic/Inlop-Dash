@@ -174,11 +174,19 @@ async function resolveOrCreateCustomer(rawName, ctx) {
   const actor = ctx.actor || 'sistema:tms';
 
   try {
-    // Capa 2: SELECT previo por nombre_controlt/razon_social (red anti-race)
+    // Capa 2: SELECT previo por nombre_controlt / razon_social (red anti-race).
+    // Dos GET separados en lugar de or=() para evitar PGRST100: el parser del
+    // or-filter falla cuando el valor contiene comas (separador de condiciones)
+    // o paréntesis, frecuentes en nombres del TMS.
     const filtroNombre = encodeURIComponent(nombre);
-    const existentes = await ctx.sbFetch(
-      `/empresas_cliente?or=(nombre_controlt.eq.${filtroNombre},razon_social.eq.${filtroNombre})&select=id,razon_social,nombre_controlt&limit=1`
+    let existentes = await ctx.sbFetch(
+      `/empresas_cliente?nombre_controlt=eq.${filtroNombre}&select=id,razon_social,nombre_controlt&limit=1`
     );
+    if (!existentes || !existentes[0]) {
+      existentes = await ctx.sbFetch(
+        `/empresas_cliente?razon_social=eq.${filtroNombre}&select=id,razon_social,nombre_controlt&limit=1`
+      );
+    }
     if (existentes && existentes[0]) {
       const found = existentes[0];
       // Refrescar lookup para futuras iteraciones

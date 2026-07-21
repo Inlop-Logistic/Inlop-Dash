@@ -656,7 +656,8 @@ async function syncPlaneados() {
       const yaExiste = existMap[v.trip_number];
       const estaActivo = activeIds.has(v.trip_number);
       const viajeResume = cache.viajes.data.find(r => r.trip_number === v.trip_number);
-      const cliente = viajeResume?.company_customer_name || v.company_customer_name || null;
+      const rawCliente = viajeResume?.company_customer_name || v.company_customer_name || null;
+      const cliente = rawCliente ? rawCliente.split(',')[0].trim() : null;
       const resolved = await resolveOrCreateCustomer(cliente, {
         lookupMap:     customerLookupMap,
         sbFetch,
