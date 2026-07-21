@@ -1,7 +1,7 @@
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
-import { buildLookupMap, resolveOrCreateCustomer } from './services/customerResolver.js';
+import { buildLookupMap, resolveOrCreateCustomer, isPlaceholderTmsCustomer } from './services/customerResolver.js';
 import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } from './services/authScope.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
@@ -648,7 +648,7 @@ async function syncPlaneados() {
 
     const activeIds = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
 
-    let upsertados = 0, clientesCreados = 0;
+    let upsertados = 0, clientesCreados = 0, placeholdersOmitidos = 0;
     for (const v of viajesFuturos) {
       const f = parseSchedulate(v.schedulate_origin);
       const yaExiste = existMap[v.trip_number];
@@ -661,7 +661,8 @@ async function syncPlaneados() {
         generarCodigo: generarCodigoCliente,
         actor:         'sistema:tms',
       });
-      if (resolved.created) clientesCreados++;
+      if (resolved.created)     clientesCreados++;
+      if (resolved.placeholder) placeholdersOmitidos++;
 
       const row = {
         trip_number:           v.trip_number,
@@ -687,7 +688,7 @@ async function syncPlaneados() {
 
     const hoyStr = hoyInicio.toISOString().slice(0, 10);
     await sbFetch(`/planeados?fecha_programada_dia=lt.${hoyStr}`, 'DELETE');
-    console.log(`📅 Planeados: ${upsertados} upsertados, ${clientesCreados} clientes creados automáticamente, limpieza de anteriores a ${hoyStr}`);
+    console.log(`📅 Planeados: ${upsertados} upsertados, ${clientesCreados} clientes creados, ${placeholdersOmitidos} sin Match TMS (esperando), limpieza de anteriores a ${hoyStr}`);
 
     const sinCliente = (existentes || []).filter(e => !e.company_customer_name);
     for (const e of sinCliente) {
@@ -1142,7 +1143,7 @@ async function syncCumplidos() {
     const ESTADOS_ACTIVOS = new Set(['LIVE', 'SOLICITADO', 'CUMPLIDO RECIBIDO']);
     const apiSet = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
 
-    let insertados = 0, actualizados = 0, clientesCreados = 0;
+    let insertados = 0, actualizados = 0, clientesCreados = 0, placeholdersOmitidos = 0;
     for (const v of cache.viajes.data) {
       if (!v.trip_number) continue;
       const existe = existentes.get(v.trip_number);
@@ -1153,7 +1154,8 @@ async function syncCumplidos() {
         generarCodigo: generarCodigoCliente,
         actor:         'sistema:tms',
       });
-      if (resolved.created) clientesCreados++;
+      if (resolved.created)     clientesCreados++;
+      if (resolved.placeholder) placeholdersOmitidos++;
 
       if (!existe) {
         const row = {
@@ -1179,8 +1181,15 @@ async function syncCumplidos() {
           estado_controlt: v.state_travel || '',
           pct:             parseFloat(v.percentage_travel) || 0,
         };
-        if (!existe.cliente && cliente) patch.cliente = cliente;
-        if (!existe.empresa_cliente_id && resolved.empresa_cliente_id) patch.empresa_cliente_id = resolved.empresa_cliente_id;
+        // Sobreescribir cliente cuando: no había, o el existente era placeholder del TMS
+        // y ya llegó el cliente real (post-Match). Nunca sobreescribir un real con placeholder.
+        const existenteEsPlaceholder = isPlaceholderTmsCustomer(existe.cliente);
+        if (cliente && !resolved.placeholder && (!existe.cliente || existenteEsPlaceholder)) {
+          patch.cliente = cliente;
+        }
+        if (resolved.empresa_cliente_id && existe.empresa_cliente_id !== resolved.empresa_cliente_id) {
+          patch.empresa_cliente_id = resolved.empresa_cliente_id;
+        }
         await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(v.trip_number)}`, 'PATCH', patch);
         actualizados++;
       }
@@ -1201,7 +1210,7 @@ async function syncCumplidos() {
       }
     }
 
-    console.log(`✅ Cumplidos sync: +${insertados} nuevos, ~${actualizados} actualizados, 🏁${finalizados} finalizados, 👤${clientesCreados} clientes creados`);
+    console.log(`✅ Cumplidos sync: +${insertados} nuevos, ~${actualizados} actualizados, 🏁${finalizados} finalizados, 👤${clientesCreados} clientes creados, ⏳${placeholdersOmitidos} sin Match TMS`);
   } catch(e) {
     console.error('❌ Error syncCumplidos:', e.message);
   }
@@ -2583,10 +2592,24 @@ app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
       empresas.forEach(e => { empMap[e.id] = e.razon_social; });
     }
 
-    const enriched = rows.map(r => ({
-      ...r,
-      nombre_cliente: (r.empresa_cliente_id && empMap[r.empresa_cliente_id]) || r.company_customer_name || null,
-    }));
+    // Reglas de identidad (Maestro = única fuente de verdad):
+    //  1. Si hay empresa_cliente_id → razon_social del Maestro (autoritativa).
+    //  2. Si el nombre crudo del TMS es el placeholder (viaje sin Match) → null,
+    //     para que Programación NO muestre "Integral Logistics Operations…".
+    //  3. En cualquier otro caso, fallback al nombre crudo.
+    const enriched = rows.map(r => {
+      let nombre_cliente = null;
+      if (r.empresa_cliente_id && empMap[r.empresa_cliente_id]) {
+        nombre_cliente = empMap[r.empresa_cliente_id];
+      } else if (r.company_customer_name && !isPlaceholderTmsCustomer(r.company_customer_name)) {
+        nombre_cliente = r.company_customer_name;
+      }
+      return {
+        ...r,
+        nombre_cliente,
+        match_tms_pendiente: !r.empresa_cliente_id && isPlaceholderTmsCustomer(r.company_customer_name),
+      };
+    });
 
     res.json(enriched);
   } catch (e) {

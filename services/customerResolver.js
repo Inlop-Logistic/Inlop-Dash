@@ -10,6 +10,19 @@
 // del TMS. La UI nunca resuelve clientes — toda la lógica vive aquí.
 // ────────────────────────────────────────────────────────────────────────────
 
+// ─── SENTINELA DEL TMS ──────────────────────────────────────────────────────
+// Cuando el TMS planilla un viaje pero aún NO ha realizado el Match comercial,
+// asigna temporalmente el cliente "Integral Logistics Operations S.A.S." (con
+// variantes de puntuación / SAS). El ERP debe reconocer este placeholder y
+// abstenerse por completo: no resolver, no crear, no asociar. Espera hasta que
+// el TMS realice el Match y comience a devolver el cliente real.
+const TMS_PLACEHOLDER_PREFIX = 'INTEGRAL LOGISTICS OPERATIONS';
+
+function isPlaceholderTmsCustomer(rawName) {
+  if (!rawName) return false;
+  return normalizeClient(rawName).startsWith(TMS_PLACEHOLDER_PREFIX);
+}
+
 // Mapa de variantes confirmadas → nombre canónico.
 // Migrado de operaciones.html (normalización OTIF).
 // Clave: variante normalizada (MAYÚS, sin acentos, sin puntos, espacios simples).
@@ -136,15 +149,26 @@ function resolveCustomer(rawName, lookupMap) {
  * @returns {Promise<{ empresa_cliente_id: string|null, razon_social: string|null, resolved: boolean, created: boolean }>}
  */
 async function resolveOrCreateCustomer(rawName, ctx) {
+  // Placeholder del TMS: viaje sin Match. No resolver, no crear, no asociar.
+  if (isPlaceholderTmsCustomer(rawName)) {
+    return {
+      empresa_cliente_id: null,
+      razon_social:       null,
+      resolved:           false,
+      created:            false,
+      placeholder:        true,
+    };
+  }
+
   const base = resolveCustomer(rawName, ctx?.lookupMap);
-  if (base.resolved) return { ...base, created: false };
+  if (base.resolved) return { ...base, created: false, placeholder: false };
 
   if (!rawName || !ctx?.sbFetch || !ctx?.lookupMap) {
-    return { ...base, created: false };
+    return { ...base, created: false, placeholder: false };
   }
 
   const nombre = String(rawName).trim();
-  if (!nombre) return { ...base, created: false };
+  if (!nombre) return { ...base, created: false, placeholder: false };
 
   const normalized = normalizeClient(nombre);
   const actor = ctx.actor || 'sistema:tms';
@@ -161,9 +185,10 @@ async function resolveOrCreateCustomer(rawName, ctx) {
       ctx.lookupMap.set(normalized, { id: found.id, razon_social: found.razon_social });
       return {
         empresa_cliente_id: found.id,
-        razon_social: found.razon_social,
-        resolved: true,
-        created: false,
+        razon_social:       found.razon_social,
+        resolved:           true,
+        created:            false,
+        placeholder:        false,
       };
     }
 
@@ -182,7 +207,7 @@ async function resolveOrCreateCustomer(rawName, ctx) {
       updated_by:      actor,
     });
     if (!inserted || !inserted[0]) {
-      return { ...base, created: false };
+      return { ...base, created: false, placeholder: false };
     }
     const nuevo = inserted[0];
 
@@ -224,11 +249,18 @@ async function resolveOrCreateCustomer(rawName, ctx) {
       razon_social:       nuevo.razon_social,
       resolved:           true,
       created:            true,
+      placeholder:        false,
     };
   } catch (e) {
     console.error('❌ resolveOrCreateCustomer:', e.message);
-    return { ...base, created: false };
+    return { ...base, created: false, placeholder: false };
   }
 }
 
-export { normalizeClient, buildLookupMap, resolveCustomer, resolveOrCreateCustomer };
+export {
+  normalizeClient,
+  buildLookupMap,
+  resolveCustomer,
+  resolveOrCreateCustomer,
+  isPlaceholderTmsCustomer,
+};
