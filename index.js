@@ -607,9 +607,11 @@ async function syncPendientes() {
 // ─── CUSTOMER LOOKUP ────────────────────────────────────
 // Carga empresas_cliente y reconstruye el mapa de resolución.
 // Se llama al inicio y cada 10 min para capturar nuevas homologaciones.
+// Incluye todos los estados excepto 'inactivo': un cliente pendiente, suspendido
+// o bloqueado sigue siendo un registro válido y no debe duplicarse.
 async function refreshCustomerLookup() {
   try {
-    const empresas = await sbFetch('/empresas_cliente?activa=eq.true&select=id,razon_social,nombre_controlt') || [];
+    const empresas = await sbFetch('/empresas_cliente?estado=neq.inactivo&select=id,razon_social,nombre_controlt') || [];
     customerLookupMap = buildLookupMap(empresas);
     console.log(`🏢 Customer lookup: ${customerLookupMap.size} entradas`);
   } catch (e) {
