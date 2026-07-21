@@ -1,12 +1,12 @@
 import { req } from "@/services/http";
-import type { ClienteListItem, CambioEstadoPayload, NuevoClienteFormData } from "../types";
+import type { ClienteListItem, ClienteDetalle, CambioEstadoPayload, NuevoClienteFormData } from "../types";
 
 export function listarClientes(): Promise<ClienteListItem[]> {
   return req<ClienteListItem[]>("/api/clientes");
 }
 
-export function getClienteById(id: string): Promise<ClienteListItem> {
-  return req<ClienteListItem>(`/api/clientes/${encodeURIComponent(id)}`);
+export function getClienteById(id: string): Promise<ClienteDetalle> {
+  return req<ClienteDetalle>(`/api/clientes/${encodeURIComponent(id)}`);
 }
 
 export function crearCliente(data: NuevoClienteFormData): Promise<ClienteListItem> {
@@ -16,8 +16,8 @@ export function crearCliente(data: NuevoClienteFormData): Promise<ClienteListIte
   });
 }
 
-export function actualizarCliente(id: string, data: Partial<NuevoClienteFormData>): Promise<ClienteListItem> {
-  return req<ClienteListItem>(`/api/clientes/${encodeURIComponent(id)}`, {
+export function actualizarCliente(id: string, data: Partial<NuevoClienteFormData>): Promise<ClienteDetalle> {
+  return req<ClienteDetalle>(`/api/clientes/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });

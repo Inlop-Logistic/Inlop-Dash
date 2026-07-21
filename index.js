@@ -2744,7 +2744,7 @@ app.post("/api/programacion/:id/sync", requireInternalApiKey, async (req, res) =
 
 // ─── MAESTRO DE CLIENTES ────────────────────────────────────────────────────────
 
-// Combina empresas_cliente + satélites en el objeto que consume el frontend
+// Campos base (ClienteListItem) — usado por listar y por creación
 function mapEmpresaToCliente(e, general = null, relaciones = null) {
   return {
     id:                  e.id,
@@ -2767,6 +2767,51 @@ function mapEmpresaToCliente(e, general = null, relaciones = null) {
     created_by:          e.created_by ?? null,
     actualizado_en:      e.updated_at ?? null,
   };
+}
+
+// Campos completos (ClienteDetalle) — incluye todas las tablas satélite para edición
+function mapEmpresaToClienteDetalle(e, general = null, relaciones = null, tributaria = null) {
+  return {
+    ...mapEmpresaToCliente(e, general, relaciones),
+    // clientes_info_general
+    tipo_empresa:          general?.tipo_empresa ?? null,
+    departamento:          general?.departamento ?? null,
+    pais:                  general?.pais ?? null,
+    direccion:             general?.direccion ?? null,
+    telefono:              general?.telefono ?? null,
+    email_principal:       general?.email_principal ?? null,
+    pagina_web:            general?.pagina_web ?? null,
+    descripcion:           general?.descripcion ?? null,
+    // clientes_relaciones_comerciales
+    director_comercial:    relaciones?.director_comercial ?? null,
+    coordinador_operativo: relaciones?.coordinador_operativo ?? null,
+    canal_comercial:       relaciones?.canal_comercial ?? null,
+    segmento:              relaciones?.segmento ?? null,
+    // clientes_info_tributaria
+    regimen_tributario:    tributaria?.regimen_tributario ?? null,
+    tipo_contribuyente:    tributaria?.tipo_contribuyente ?? null,
+    responsable_iva:       tributaria?.responsable_iva ?? false,
+    gran_contribuyente:    tributaria?.gran_contribuyente ?? false,
+    autorretenedor:        tributaria?.autorretenedor ?? false,
+    actividad_economica:   tributaria?.actividad_economica ?? null,
+  };
+}
+
+// Carga un cliente completo (4 tablas en paralelo) — usado por GET/:id y PATCH/:id
+async function fetchClienteDetalle(id) {
+  const [empresaRows, generales, relaciones, tributarias] = await Promise.all([
+    sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(id)}&limit=1`),
+    sbFetch(`/clientes_info_general?empresa_id=eq.${encodeURIComponent(id)}&limit=1`),
+    sbFetch(`/clientes_relaciones_comerciales?empresa_id=eq.${encodeURIComponent(id)}&limit=1`),
+    sbFetch(`/clientes_info_tributaria?empresa_id=eq.${encodeURIComponent(id)}&limit=1`),
+  ]);
+  if (!empresaRows || !empresaRows[0]) return null;
+  return mapEmpresaToClienteDetalle(
+    empresaRows[0],
+    generales?.[0] ?? null,
+    relaciones?.[0] ?? null,
+    tributarias?.[0] ?? null,
+  );
 }
 
 // Enriquece un array de empresas con sus satélites en 2 queries paralelas
@@ -2796,10 +2841,9 @@ app.get("/api/clientes", async (req, res) => {
 app.get("/api/clientes/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const data = await sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(id)}&limit=1`);
-    if (!data || data.length === 0) return res.status(404).json({ error: "Cliente no encontrado" });
-    const [enriched] = await enrichClientes(data);
-    res.json(enriched);
+    const detalle = await fetchClienteDetalle(id);
+    if (!detalle) return res.status(404).json({ error: "Cliente no encontrado" });
+    res.json(detalle);
   } catch (e) {
     console.error("GET /api/clientes/:id error:", e.message);
     res.status(500).json({ error: "Error interno" });
@@ -2988,17 +3032,28 @@ app.patch("/api/clientes/:id", async (req, res) => {
     tribPatch.updated_at = now;
     tribPatch.updated_by = actor;
 
+    // Campos modificados en esta operación (para historial)
+    const camposModificados = Object.keys(req.body ?? {})
+      .filter(k => !["updated_at", "updated_by", "activa"].includes(k));
+
     await Promise.all([
       sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(id)}`, "PATCH", empresaPatch),
       sbFetch(`/clientes_info_general?empresa_id=eq.${encodeURIComponent(id)}`, "PATCH", genPatch),
       sbFetch(`/clientes_relaciones_comerciales?empresa_id=eq.${encodeURIComponent(id)}`, "PATCH", relPatch),
       sbFetch(`/clientes_info_tributaria?empresa_id=eq.${encodeURIComponent(id)}`, "PATCH", tribPatch),
+      sbFetch("/clientes_historial", "POST", {
+        empresa_id:    id,
+        tipo:          "edicion_perfil",
+        descripcion:   `Perfil actualizado. Campos modificados: ${camposModificados.join(", ")}`,
+        usuario:       actor,
+        usuario_email: actor,
+        metadata:      { campos_modificados: camposModificados },
+      }),
     ]);
 
-    const data = await sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(id)}&limit=1`);
-    if (!data || data.length === 0) return res.status(404).json({ error: "Cliente no encontrado" });
-    const [enriched] = await enrichClientes(data);
-    res.json(enriched);
+    const detalle = await fetchClienteDetalle(id);
+    if (!detalle) return res.status(404).json({ error: "Cliente no encontrado" });
+    res.json(detalle);
   } catch (e) {
     console.error("PATCH /api/clientes/:id error:", e.message);
     res.status(500).json({ error: "Error interno" });

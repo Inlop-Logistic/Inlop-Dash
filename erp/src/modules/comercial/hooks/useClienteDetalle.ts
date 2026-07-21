@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import type { ClienteListItem, CambioEstadoPayload, NuevoClienteFormData } from "../types";
+import type { ClienteDetalle, CambioEstadoPayload, NuevoClienteFormData } from "../types";
 import { getClienteById, actualizarCliente, cambiarEstadoCliente } from "../services/api";
 
 export function useClienteDetalle(clienteId: string) {
-  const [cliente, setCliente] = useState<ClienteListItem | null>(null);
+  const [cliente, setCliente] = useState<ClienteDetalle | null>(null);
   const [loading, setLoading] = useState(clienteId !== "nuevo");
   const [error, setError]     = useState<string | null>(null);
   const [saving, setSaving]   = useState(false);
@@ -34,7 +34,7 @@ export function useClienteDetalle(clienteId: string) {
     return () => { active = false; };
   }, [clienteId]);
 
-  const guardar = useCallback(async (data: Partial<NuevoClienteFormData>): Promise<ClienteListItem | null> => {
+  const guardar = useCallback(async (data: Partial<NuevoClienteFormData>): Promise<ClienteDetalle | null> => {
     setSaving(true);
     setErrorGuardar(null);
     try {

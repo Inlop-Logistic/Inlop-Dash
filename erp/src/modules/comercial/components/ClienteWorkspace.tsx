@@ -9,6 +9,8 @@ import { FormCambioEstado } from "./FormCambioEstado";
 import { useClienteDetalle } from "../hooks/useClienteDetalle";
 import { crearCliente } from "../services/api";
 import type { ClienteWorkspaceTab, NuevoClienteFormData, ClienteListItem } from "../types";
+
+const CONFIRM_DIRTY = "Tienes cambios sin guardar en el Perfil. ¿Deseas salir sin guardar?";
 import {
   ESTADO_CLIENTE_CFG,
   CLASIFICACION_ABC_CFG,
@@ -49,12 +51,13 @@ function MiniKpi({ label, value }: { label: string; value: string | number }) {
 export function ClienteWorkspace({ clienteId, onBack, onClienteCreado }: ClienteWorkspaceProps) {
   const esNuevo = clienteId === "nuevo";
 
-  const { cliente, loading, error, saving, errorGuardar, recargar, guardar, cambiarEstado } =
+  const { cliente, loading, error, saving, errorGuardar, guardar, cambiarEstado } =
     useClienteDetalle(clienteId);
 
   const [activeTab, setActiveTab]       = useState<ClienteWorkspaceTab>("perfil");
   const [editMode, setEditMode]         = useState(esNuevo);
   const [cambioEstadoOpen, setCambioEstadoOpen] = useState(false);
+  const [isFormDirty, setIsFormDirty]   = useState(false);
 
   // Maneja la creación de un cliente nuevo desde TabPerfil
   const handleCrear = useCallback(async (data: NuevoClienteFormData): Promise<ClienteListItem | null> => {
@@ -66,6 +69,23 @@ export function ClienteWorkspace({ clienteId, onBack, onClienteCreado }: Cliente
       return null;
     }
   }, [onClienteCreado]);
+
+  // Navegación con protección de cambios sin guardar
+  const handleBack = () => {
+    if (isFormDirty && !window.confirm(CONFIRM_DIRTY)) return;
+    setIsFormDirty(false);
+    onBack();
+  };
+
+  const handleTabChange = (tab: ClienteWorkspaceTab) => {
+    if (tabDeshabilitada(tab)) return;
+    if (activeTab === "perfil" && isFormDirty && tab !== "perfil") {
+      if (!window.confirm(CONFIRM_DIRTY)) return;
+      setIsFormDirty(false);
+      setEditMode(false);
+    }
+    setActiveTab(tab);
+  };
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (!esNuevo && loading) {
@@ -131,7 +151,7 @@ export function ClienteWorkspace({ clienteId, onBack, onClienteCreado }: Cliente
         <div className="flex items-center justify-between gap-4 px-6" style={{ height: 52, minHeight: 52 }}>
           <div className="flex items-center gap-3 min-w-0">
             <button
-              onClick={onBack}
+              onClick={handleBack}
               className="flex items-center gap-1.5 shrink-0 font-medium transition-colors"
               style={{
                 fontSize: "var(--text-sm)",
@@ -317,9 +337,7 @@ export function ClienteWorkspace({ clienteId, onBack, onClienteCreado }: Cliente
       >
         <ClienteTabs
           activeTab={activeTab}
-          onTabChange={(tab) => {
-            if (!tabDeshabilitada(tab)) setActiveTab(tab);
-          }}
+          onTabChange={handleTabChange}
           disabledTabs={esNuevo ? TABS_REQUIEREN_EXISTENCIA : []}
         />
       </div>
@@ -336,6 +354,7 @@ export function ClienteWorkspace({ clienteId, onBack, onClienteCreado }: Cliente
             errorGuardar={errorGuardar}
             onGuardar={guardar}
             onCrear={handleCrear}
+            onDirtyChange={setIsFormDirty}
           />
         )}
         {TABS_REQUIEREN_EXISTENCIA.map(tab => {
@@ -358,9 +377,7 @@ export function ClienteWorkspace({ clienteId, onBack, onClienteCreado }: Cliente
           estadoActual={estadoActual}
           onClose={() => setCambioEstadoOpen(false)}
           onGuardar={async (payload) => {
-            const ok = await cambiarEstado(payload);
-            if (ok) recargar();
-            return ok;
+            return cambiarEstado(payload);
           }}
           saving={saving}
         />

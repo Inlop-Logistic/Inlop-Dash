@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Edit2, Save, X, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui";
-import type { ClienteListItem, NuevoClienteFormData } from "../types";
+import type { ClienteDetalle, NuevoClienteFormData } from "../types";
 import { TIPO_CLIENTE_CFG, TIPO_EMPRESA_CFG, ETIQUETA_CFG } from "../constants";
 import type { EtiquetaCliente, TipoCliente, TipoEmpresa, RegimenTributario, CanalComercial, NivelEstrategico, ClasificacionABC } from "../types";
 
@@ -79,14 +79,15 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
 interface TabPerfilProps {
-  cliente: ClienteListItem | null;
+  cliente: ClienteDetalle | null;
   esNuevo: boolean;
   editMode: boolean;
   onSetEditMode: (v: boolean) => void;
   saving: boolean;
   errorGuardar: string | null;
-  onGuardar: (data: Partial<NuevoClienteFormData>) => Promise<ClienteListItem | null>;
-  onCrear: (data: NuevoClienteFormData) => Promise<ClienteListItem | null>;
+  onGuardar: (data: Partial<NuevoClienteFormData>) => Promise<ClienteDetalle | null>;
+  onCrear: (data: NuevoClienteFormData) => Promise<{ id: string } | null>;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 // Formulario vacío para modo creación
@@ -123,49 +124,100 @@ const EMPTY: NuevoClienteFormData = {
   actividad_economica: "",
 };
 
-function clienteToForm(c: ClienteListItem): NuevoClienteFormData {
+function clienteToForm(c: ClienteDetalle): NuevoClienteFormData {
   return {
     razon_social:          c.razon_social,
     nit:                   c.nit ?? "",
     dv:                    c.dv ?? "",
     nombre_comercial:      c.nombre_comercial ?? "",
     sector_economico:      c.sector_economico ?? "",
+    tipo_empresa:          c.tipo_empresa ?? undefined,
     tipo_cliente:          c.tipo_cliente ?? undefined,
     ciudad_principal:      c.ciudad_principal ?? "",
+    departamento:          c.departamento ?? "",
+    pais:                  c.pais ?? "Colombia",
+    direccion:             c.direccion ?? "",
+    telefono:              c.telefono ?? "",
+    email_principal:       c.email_principal ?? "",
+    pagina_web:            c.pagina_web ?? "",
+    descripcion:           c.descripcion ?? "",
     ejecutivo_comercial:   c.ejecutivo_comercial ?? "",
+    director_comercial:    c.director_comercial ?? "",
+    coordinador_operativo: c.coordinador_operativo ?? "",
+    canal_comercial:       c.canal_comercial ?? undefined,
     clasificacion_abc:     c.clasificacion_abc ?? undefined,
     nivel_estrategico:     c.nivel_estrategico ?? undefined,
+    segmento:              c.segmento ?? "",
     etiquetas:             c.etiquetas ?? [],
+    regimen_tributario:    c.regimen_tributario ?? undefined,
+    tipo_contribuyente:    c.tipo_contribuyente ?? undefined,
+    responsable_iva:       c.responsable_iva ?? false,
+    gran_contribuyente:    c.gran_contribuyente ?? false,
+    autorretenedor:        c.autorretenedor ?? false,
+    actividad_economica:   c.actividad_economica ?? "",
   };
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────
 
 export function TabPerfil({
-  cliente, esNuevo, editMode, onSetEditMode, saving, errorGuardar, onGuardar, onCrear,
+  cliente, esNuevo, editMode, onSetEditMode, saving, errorGuardar, onGuardar, onCrear, onDirtyChange,
 }: TabPerfilProps) {
   const [form, setForm] = useState<NuevoClienteFormData>(() =>
     esNuevo ? EMPTY : (cliente ? clienteToForm(cliente) : EMPTY)
   );
+  const [isDirty, setIsDirty] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const set = <K extends keyof NuevoClienteFormData>(key: K, value: NuevoClienteFormData[K]) =>
+  // Ref para acceder siempre al cliente más reciente sin disparar efectos
+  const clienteRef = useRef(cliente);
+  clienteRef.current = cliente;
+
+  // Re-sincronizar form cuando se entra en modo edición (desde WorkspaceAcciones o botón Editar)
+  useEffect(() => {
+    if (!editMode || esNuevo) return;
+    const c = clienteRef.current;
+    if (c) {
+      setForm(clienteToForm(c));
+      markClean();
+    }
+  // Solo se dispara cuando cambia editMode o esNuevo
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMode, esNuevo]);
+
+  const markDirty = () => {
+    if (!isDirty) {
+      setIsDirty(true);
+      onDirtyChange?.(true);
+    }
+  };
+
+  const markClean = () => {
+    setIsDirty(false);
+    onDirtyChange?.(false);
+  };
+
+  const set = <K extends keyof NuevoClienteFormData>(key: K, value: NuevoClienteFormData[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
+    markDirty();
+  };
 
   const handleGuardar = async () => {
     if (!form.razon_social.trim()) return;
     setSaved(false);
     if (esNuevo) {
       const result = await onCrear(form);
-      if (result) setSaved(true);
+      if (result) { setSaved(true); markClean(); }
     } else {
       const result = await onGuardar(form);
-      if (result) { setSaved(true); onSetEditMode(false); }
+      if (result) { setSaved(true); markClean(); onSetEditMode(false); }
     }
   };
 
   const handleCancelar = () => {
-    setForm(cliente ? clienteToForm(cliente) : EMPTY);
+    const c = clienteRef.current;
+    setForm(c ? clienteToForm(c) : EMPTY);
+    markClean();
     onSetEditMode(false);
     setSaved(false);
   };
@@ -176,7 +228,6 @@ export function TabPerfil({
   };
 
   const edit = editMode || esNuevo;
-
   const selectStyle = INPUT_STYLE;
 
   return (
@@ -189,7 +240,11 @@ export function TabPerfil({
           style={{ background: "#fff", borderBottom: "1px solid var(--gray-100)" }}
         >
           <span style={{ fontSize: "var(--text-sm)", color: "var(--gray-400)" }}>
-            {editMode ? "Editando perfil — los cambios no se guardan solos." : "Vista de solo lectura."}
+            {editMode
+              ? isDirty
+                ? "Editando perfil — hay cambios sin guardar."
+                : "Editando perfil — los cambios no se guardan solos."
+              : "Vista de solo lectura."}
           </span>
           <div className="flex items-center gap-2">
             {editMode ? (
@@ -375,7 +430,6 @@ export function TabPerfil({
           <Field label="Actividad Económica (CIIU)" value={form.actividad_economica} edit={edit}>
             <input type="text" value={form.actividad_economica ?? ""} onChange={e => set("actividad_economica", e.target.value)} placeholder="Código CIIU" style={INPUT_STYLE} />
           </Field>
-          {/* Checkboxes tributarios */}
           {edit ? (
             <div className="flex flex-col gap-2" style={{ gridColumn: "1 / -1" }}>
               {([
@@ -396,9 +450,9 @@ export function TabPerfil({
             </div>
           ) : (
             <div className="flex flex-col gap-1" style={{ gridColumn: "1 / -1" }}>
-              {form.responsable_iva   && <span style={{ fontSize: "var(--text-sm)", color: "var(--gray-600)" }}>✓ Responsable de IVA</span>}
+              {form.responsable_iva    && <span style={{ fontSize: "var(--text-sm)", color: "var(--gray-600)" }}>✓ Responsable de IVA</span>}
               {form.gran_contribuyente && <span style={{ fontSize: "var(--text-sm)", color: "var(--gray-600)" }}>✓ Gran Contribuyente</span>}
-              {form.autorretenedor    && <span style={{ fontSize: "var(--text-sm)", color: "var(--gray-600)" }}>✓ Autorretenedor</span>}
+              {form.autorretenedor     && <span style={{ fontSize: "var(--text-sm)", color: "var(--gray-600)" }}>✓ Autorretenedor</span>}
               {!form.responsable_iva && !form.gran_contribuyente && !form.autorretenedor && (
                 <span style={{ fontSize: "var(--text-sm)", color: "var(--gray-300)" }}>Sin obligaciones especiales registradas</span>
               )}

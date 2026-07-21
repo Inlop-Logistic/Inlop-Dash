@@ -278,26 +278,28 @@ export interface EventoHistorial {
   creado_en: string;
 }
 
-// ── Detalle completo (Fase 2) ─────────────────────────────────────────────────
+// ── Detalle completo — extiende ClienteListItem con datos de tablas satélite ──
 
 export interface ClienteDetalle extends ClienteListItem {
-  tipo_persona: TipoPersona | null;
+  // clientes_info_general (campos no presentes en ClienteListItem)
   tipo_empresa: TipoEmpresa | null;
+  departamento: string | null;
+  pais: string | null;
+  direccion: string | null;
+  telefono: string | null;
+  email_principal: string | null;
+  pagina_web: string | null;
+  descripcion: string | null;
+  // clientes_relaciones_comerciales (campos no presentes en ClienteListItem)
+  director_comercial: string | null;
+  coordinador_operativo: string | null;
+  canal_comercial: CanalComercial | null;
+  segmento: string | null;
+  // clientes_info_tributaria
   regimen_tributario: RegimenTributario | null;
   tipo_contribuyente: TipoPersona | null;
   responsable_iva: boolean;
   gran_contribuyente: boolean;
   autorretenedor: boolean;
   actividad_economica: string | null;
-  departamento: string | null;
-  direccion_principal: string | null;
-  telefono_principal: string | null;
-  email_principal: string | null;
-  pagina_web: string | null;
-  logo_url: string | null;
-  descripcion: string | null;
-  canal_comercial: CanalComercial | null;
-  segmento: string | null;
-  director_comercial: string | null;
-  coordinador_operativo: string | null;
 }
