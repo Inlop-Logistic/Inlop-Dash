@@ -41,7 +41,7 @@ function buildMilestones(viaje: TmsViaje): Milestone[] {
       id: "activado", pos: 2, label: "Activado",
       sublabel: "Servicio iniciado en la plataforma de monitoreo",
       icon: <Truck className="w-3 h-3" />,
-      timestamp: fmtTms(viaje.activated_on, "DMY"),
+      timestamp: fmtTms(viaje.activated_on, "MDY"),
     },
     {
       id: "cargue", pos: 3, label: "En Cargue",

@@ -889,6 +889,7 @@ app.get('/api/viajes', requireInternalApiKey, (req, res) => {
       last_alarm_name:          v.last_alarm_name          || null,
       created_on:               v.created_on               || null,
       activated_on:             v.activated_on             || null,
+      schedulate_origin:        v.schedulate_origin        || null,
     };
   });
   res.json(viajes);

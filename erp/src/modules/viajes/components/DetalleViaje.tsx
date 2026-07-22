@@ -127,8 +127,13 @@ export function DetalleViaje({ viaje, onClose }: DetalleViajeProps) {
         <div className="px-1">
           <ProgressBar value={viaje.percentage_travel} maxWidth="100%" />
         </div>
+        {viaje.schedulate_origin && (
+          <InfoRow label="Fecha programada de la cita" value={fmtTms(viaje.schedulate_origin, "DMY", {
+            weekday: "short", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+          })} />
+        )}
         {viaje.appointment_fulfillment && (
-          <InfoRow label="Cumplimiento cita" value={viaje.appointment_fulfillment} />
+          <InfoRow label="Estado de cumplimiento" value={viaje.appointment_fulfillment} />
         )}
         {viaje.last_event && (
           <div
