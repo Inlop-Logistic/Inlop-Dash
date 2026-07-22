@@ -841,33 +841,38 @@ app.get("/api/pendientes", requireLegacyOrInternal, async (req, res) => {
 // Convierte strings crudos (latitude, longitude, percentage_travel) a tipos seguros
 // y añade campos derivados (lat, lon, pct, cliente, conductor_tel).
 app.get('/api/viajes', requireInternalApiKey, (req, res) => {
-  const viajes = cache.viajes.data.map(v => ({
-    trip_number:              v.trip_number,
-    id_monitoring_order:      v.id_monitoring_order      || null,
-    number_order:             v.number_order             || null,
-    license_plate:            v.license_plate            || null,
-    driver_name:              v.driver_name              || null,
-    driver_phone:             v.driver_phone             || null,
-    conductor_tel:            extraerTelefono(v.driver_phone, v.full_driver) || null,
-    cliente:                  primerNombreCliente(v.company_customer_name),
-    company_customer_name:    v.company_customer_name    || null,
-    origin_city_name:         v.origin_city_name         || null,
-    destiny_city_name:        v.destiny_city_name        || null,
-    type_operation:           v.type_operation           || null,
-    stops:                    v.stops                    || null,
-    state_travel:             v.state_travel,
-    pct:                      v.percentage_travel != null ? (parseFloat(String(v.percentage_travel)) || 0) : null,
-    percentage_travel:        v.percentage_travel,
-    last_event:               v.last_event               || null,
-    appointment_fulfillment:  v.appointment_fulfillment  || null,
-    lat:                      parseLatLon(v.latitude),
-    lon:                      parseLatLon(v.longitude),
-    latest_gps_report:        v.latest_gps_report        || null,
-    current_address_location: v.current_address_location || null,
-    last_alarm_name:          v.last_alarm_name          || null,
-    created_on:               v.created_on               || null,
-    activated_on:             v.activated_on             || null,
-  }));
+  const viajes = cache.viajes.data.map(v => {
+    const cached = tripCustomerCache.get(v.trip_number);
+    return {
+      trip_number:              v.trip_number,
+      id_monitoring_order:      v.id_monitoring_order      || null,
+      number_order:             v.number_order             || null,
+      license_plate:            v.license_plate            || null,
+      driver_name:              v.driver_name              || null,
+      driver_phone:             v.driver_phone             || null,
+      conductor_tel:            extraerTelefono(v.driver_phone, v.full_driver) || null,
+      cliente:                  primerNombreCliente(v.company_customer_name),
+      company_customer_name:    v.company_customer_name    || null,
+      empresa_cliente_id:       cached?.empresa_cliente_id ?? null,
+      razon_social:             cached?.razon_social        ?? null,
+      origin_city_name:         v.origin_city_name         || null,
+      destiny_city_name:        v.destiny_city_name        || null,
+      type_operation:           v.type_operation           || null,
+      stops:                    v.stops                    || null,
+      state_travel:             v.state_travel,
+      pct:                      v.percentage_travel != null ? (parseFloat(String(v.percentage_travel)) || 0) : null,
+      percentage_travel:        v.percentage_travel,
+      last_event:               v.last_event               || null,
+      appointment_fulfillment:  v.appointment_fulfillment  || null,
+      lat:                      parseLatLon(v.latitude),
+      lon:                      parseLatLon(v.longitude),
+      latest_gps_report:        v.latest_gps_report        || null,
+      current_address_location: v.current_address_location || null,
+      last_alarm_name:          v.last_alarm_name          || null,
+      created_on:               v.created_on               || null,
+      activated_on:             v.activated_on             || null,
+    };
+  });
   res.json(viajes);
 });
 

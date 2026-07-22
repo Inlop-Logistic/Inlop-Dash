@@ -24,6 +24,10 @@ export interface TmsViaje {
   full_driver: string | null;
   /** Nombre de empresa tal como llega del TMS — sin normalizar. */
   company_customer_name: string | null;
+  /** ID en el Maestro de Clientes — fuente única de verdad. Null si aún no resuelto. */
+  empresa_cliente_id: string | null;
+  /** Razón social del Maestro de Clientes. Preferir sobre company_customer_name en UI. */
+  razon_social: string | null;
   origin_city_name: string | null;
   destiny_city_name: string | null;
   type_operation: string | null;

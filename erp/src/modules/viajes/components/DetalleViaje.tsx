@@ -16,7 +16,7 @@ interface DetalleViajeProps {
 }
 
 export function DetalleViaje({ viaje, onClose }: DetalleViajeProps) {
-  const clienteNombre = viaje.company_customer_name?.split(",")[0].trim() ?? "—";
+  const clienteNombre = viaje.razon_social ?? viaje.company_customer_name?.split(",")[0].trim() ?? "—";
 
   return (
     <SidePanel
@@ -32,7 +32,7 @@ export function DetalleViaje({ viaje, onClose }: DetalleViajeProps) {
         <InfoRow label="Trip number"  value={viaje.trip_number} mono />
         <InfoRow label="Remisión"     value={viaje.number_order ?? "—"} mono />
         <InfoRow label="Operación"    value={viaje.type_operation ?? "—"} />
-        <InfoRow label="Cliente"      value={viaje.company_customer_name ?? "—"} />
+        <InfoRow label="Cliente"      value={clienteNombre} />
         <InfoRow label="Activado"     value={fmtTms(viaje.activated_on, "DMY", {
           weekday: "short", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
         })} />

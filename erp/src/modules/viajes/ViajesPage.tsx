@@ -5,7 +5,9 @@ import { useNavigationContext } from "@/core/navigation";
 import { useViajes } from "./hooks/useViajes";
 import { DetalleViaje } from "./components/DetalleViaje";
 import { COLUMNS } from "./components/ViajesTableColumns";
-import { TABS } from "./constants";
+import { DateRangePicker } from "./components/DateRangePicker";
+import { TABS, ESTADO_CFG } from "./constants";
+import type { EstadoViaje } from "./types";
 
 export function ViajesPage() {
   const { navPayload } = useNavigationContext();
@@ -16,6 +18,7 @@ export function ViajesPage() {
     tabActivo, setTabActivo,
     estadoFiltro, setEstadoFiltro,
     clienteFiltro, setClienteFiltro,
+    fechaDesde, fechaHasta, setFechaRango,
     filtradas, kpis, clientes,
     setPanelId, panelViaje,
     cargar, getTabCount,
@@ -30,10 +33,7 @@ export function ViajesPage() {
     }
   }, [navPayload?.tripNumber, filtradas.length, setPanelId]);
 
-  // Resetear ref cuando cambia el tripNumber del payload
-  useEffect(() => {
-    autoOpenedRef.current = false;
-  }, [navPayload?.tripNumber]);
+  useEffect(() => { autoOpenedRef.current = false; }, [navPayload?.tripNumber]);
 
   const tabLabels: Record<string, string> = {
     todos:        "Todos",
@@ -112,6 +112,8 @@ export function ViajesPage() {
 
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-3">
+
+        {/* Buscador */}
         <div className="flex-1 min-w-[220px] relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "var(--gray-400)" }} />
           <input
@@ -119,12 +121,13 @@ export function ViajesPage() {
             value={busqueda}
             aria-label="Buscar viajes"
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Trip, conductor, placa, cliente, ciudad…"
+            placeholder="Viaje, remisión, placa, conductor, cliente, ciudad…"
             className="w-full text-[13px] outline-none"
             style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "8px 12px 8px 36px", color: "var(--gray-700)", background: "#fff" }}
           />
         </div>
 
+        {/* Estado — construido desde ESTADO_CFG para consistencia */}
         <select
           value={estadoFiltro}
           onChange={(e) => setEstadoFiltro(e.target.value)}
@@ -133,32 +136,33 @@ export function ViajesPage() {
           style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "8px 12px", color: "var(--gray-700)", background: "#fff", minWidth: 160 }}
         >
           <option value="">Todos los estados</option>
-          <option value="en transíto">En Ruta</option>
-          <option value="iniciado">Iniciado</option>
-          <option value="cargando">Cargando</option>
-          <option value="descargando">Descargando</option>
-          <option value="pernoctando">Pernoctando</option>
-          <option value="completado">Completado</option>
-          <option value="finalizado">Finalizado</option>
-          <option value="cancelado">Cancelado</option>
-          <option value="sin activar">Sin activar</option>
-          <option value="sin asignar">Sin asignar</option>
+          {(Object.entries(ESTADO_CFG) as [EstadoViaje, typeof ESTADO_CFG[string]][]).map(([key, cfg]) => (
+            <option key={key} value={key}>{cfg.label}</option>
+          ))}
         </select>
 
+        {/* Cliente — Maestro de Clientes, sin duplicados */}
         {clientes.length > 0 && (
           <select
             value={clienteFiltro}
             onChange={(e) => setClienteFiltro(e.target.value)}
             aria-label="Filtrar por cliente"
             className="text-[13px] outline-none"
-            style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "8px 12px", color: "var(--gray-700)", background: "#fff", minWidth: 180 }}
+            style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "8px 12px", color: "var(--gray-700)", background: "#fff", minWidth: 190 }}
           >
             <option value="">Todos los clientes</option>
             {clientes.map((c) => (
-              <option key={c} value={c}>{c}</option>
+              <option key={c.id} value={c.id}>{c.label}</option>
             ))}
           </select>
         )}
+
+        {/* Fecha */}
+        <DateRangePicker
+          desde={fechaDesde}
+          hasta={fechaHasta}
+          onChange={setFechaRango}
+        />
       </div>
 
       {/* Tabs */}
@@ -194,7 +198,7 @@ export function ViajesPage() {
             </button>
           );
         })}
-        {busqueda && (
+        {(busqueda || clienteFiltro || estadoFiltro) && (
           <span className="text-[12px]" style={{ color: "var(--gray-400)" }}>
             · {filtradas.length} resultado{filtradas.length !== 1 ? "s" : ""}
           </span>

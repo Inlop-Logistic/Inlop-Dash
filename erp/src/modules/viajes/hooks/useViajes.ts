@@ -3,6 +3,18 @@ import type { TmsViaje, KpisViaje } from "../types";
 import type { TabViajes } from "../constants";
 import { ESTADOS_ACTIVOS, ESTADOS_FINALIZADOS, REFRESH_INTERVAL_MS, tabCount } from "../constants";
 import { listarViajes } from "../services/api";
+import { parseFechaDMY } from "@/utils/parseFecha";
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Extrae YYYY-MM-DD de un activated_on en formato DD/MM/YYYY HH:MM:SS. */
+function toDateISO(activated_on: string | null): string | null {
+  const d = parseFechaDMY(activated_on);
+  if (!d) return null;
+  return d.toISOString().slice(0, 10);
+}
 
 export function useViajes() {
   const [data, setData]       = useState<TmsViaje[]>([]);
@@ -10,10 +22,13 @@ export function useViajes() {
   const [error, setError]     = useState<string | null>(null);
 
   // Filtros
-  const [busqueda, setBusqueda]       = useState("");
-  const [tabActivo, setTabActivo]     = useState<TabViajes>("todos");
+  const [busqueda, setBusqueda]           = useState("");
+  const [tabActivo, setTabActivo]         = useState<TabViajes>("todos");
   const [estadoFiltro, setEstadoFiltro]   = useState("");
-  const [clienteFiltro, setClienteFiltro] = useState("");
+  const [clienteFiltro, setClienteFiltro] = useState("");   // empresa_cliente_id
+  const t = todayISO();
+  const [fechaDesde, setFechaDesde] = useState(t);
+  const [fechaHasta, setFechaHasta] = useState(t);
 
   // Drawer
   const [panelId, setPanelId] = useState<string | null>(null);
@@ -52,10 +67,16 @@ export function useViajes() {
       // Filtro estado select
       if (estadoFiltro && st(v) !== estadoFiltro.toLowerCase()) return false;
 
-      // Filtro cliente select
-      if (clienteFiltro) {
-        const cli = (v.company_customer_name ?? "").toLowerCase();
-        if (!cli.includes(clienteFiltro.toLowerCase())) return false;
+      // Filtro cliente (por empresa_cliente_id — Maestro de Clientes)
+      if (clienteFiltro && v.empresa_cliente_id !== clienteFiltro) return false;
+
+      // Filtro fecha (sobre activated_on)
+      const vFecha = toDateISO(v.activated_on);
+      if (vFecha) {
+        if (vFecha < fechaDesde || vFecha > fechaHasta) return false;
+      } else {
+        // Sin fecha: excluir sólo si el rango no es el default completo
+        if (fechaDesde !== fechaHasta || fechaDesde !== todayISO()) return false;
       }
 
       // Búsqueda texto libre
@@ -65,6 +86,7 @@ export function useViajes() {
           v.number_order,
           v.license_plate,
           v.driver_name,
+          v.razon_social,
           v.company_customer_name,
           v.origin_city_name,
           v.destiny_city_name,
@@ -74,9 +96,9 @@ export function useViajes() {
 
       return true;
     });
-  }, [data, tabActivo, busqueda, estadoFiltro, clienteFiltro]);
+  }, [data, tabActivo, busqueda, estadoFiltro, clienteFiltro, fechaDesde, fechaHasta]);
 
-  // ── KPIs ─────────────────────────────────────────────────────────────────
+  // ── KPIs (sobre todos los datos, sin filtro de fecha/cliente/estado) ──────
   const kpis = useMemo<KpisViaje>(() => {
     const st = (v: TmsViaje) => (v.state_travel ?? "").toLowerCase();
     return {
@@ -90,18 +112,17 @@ export function useViajes() {
     };
   }, [data]);
 
-  // ── Clientes únicos para filtro select ───────────────────────────────────
-  const clientes = useMemo<string[]>(() => {
-    const seen = new Set<string>();
-    const result: string[] = [];
+  // ── Clientes únicos — Maestro de Clientes (empresa_cliente_id + razon_social) ──
+  const clientes = useMemo<{ id: string; label: string }[]>(() => {
+    const seen = new Map<string, string>();
     for (const v of data) {
-      const nombre = (v.company_customer_name ?? "").split(",")[0].trim();
-      if (nombre && !seen.has(nombre)) {
-        seen.add(nombre);
-        result.push(nombre);
+      if (v.empresa_cliente_id && v.razon_social && !seen.has(v.empresa_cliente_id)) {
+        seen.set(v.empresa_cliente_id, v.razon_social);
       }
     }
-    return result.sort((a, b) => a.localeCompare(b, "es"));
+    return [...seen.entries()]
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, "es"));
   }, [data]);
 
   // ── Panel ─────────────────────────────────────────────────────────────────
@@ -112,6 +133,12 @@ export function useViajes() {
 
   // ── Conteo por tab ────────────────────────────────────────────────────────
   const getTabCount = (tabId: string) => tabCount(data, tabId);
+
+  // ── Setter de rango de fechas — mantiene consistencia ─────────────────────
+  function setFechaRango(desde: string, hasta: string) {
+    setFechaDesde(desde);
+    setFechaHasta(hasta);
+  }
 
   return {
     data,
@@ -125,6 +152,7 @@ export function useViajes() {
     tabActivo, setTabActivo,
     estadoFiltro, setEstadoFiltro,
     clienteFiltro, setClienteFiltro,
+    fechaDesde, fechaHasta, setFechaRango,
 
     panelId, setPanelId, panelViaje,
 
