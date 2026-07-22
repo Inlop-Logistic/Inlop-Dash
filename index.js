@@ -625,7 +625,7 @@ async function refreshCustomerLookup() {
     // Cada regla añade una entrada adicional al mapa si aún no existe, permitiendo que
     // "FRONTERA ENERGY COLOMBIA CORP SUCURSAL COLOMBIA" resuelva al cliente oficial
     // sin crear un duplicado.
-    const rules = await sbFetch('/cliente_nombres_externos?select=nombre_normalizado,empresa_cliente_id') || [];
+    const rules = await sbFetch('/cliente_alias?activo=eq.true&select=nombre_normalizado,empresa_cliente_id') || [];
     let rulesAdded = 0;
     for (const r of rules) {
       if (!customerLookupMap.has(r.nombre_normalizado)) {
@@ -3283,12 +3283,12 @@ app.post("/api/clientes/:id/merge", async (req, res) => {
     for (const nombre of namesToRegister) {
       const nombre_normalizado = normalizeClient(nombre);
       if (!nombre_normalizado) continue;
-      await sbFetch('/cliente_nombres_externos', 'POST', {
+      await sbFetch('/cliente_alias', 'POST', {
         empresa_cliente_id: oficialId,
         nombre_normalizado,
         nombre_raw:         nombre,
-        fuente:             'controlt',
-        origen:             'merge',
+        integracion:        'controlt',
+        creado_via:         'merge',
         creado_por:         actor,
       }).catch(() => {}); // el índice único ya impide duplicados; silenciar error
     }
@@ -3340,6 +3340,83 @@ app.post("/api/clientes/:id/merge", async (req, res) => {
     });
   } catch (e) {
     console.error("POST /api/clientes/:id/merge error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// ─── ALIAS CRUD ─────────────────────────────────────────────────────────────
+
+// Listar todos los alias de un cliente (activos e inactivos)
+app.get("/api/clientes/:id/alias", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rows = await sbFetch(
+      `/cliente_alias?empresa_cliente_id=eq.${encodeURIComponent(id)}&order=creado_en.desc`
+    );
+    res.json(rows ?? []);
+  } catch (e) {
+    console.error("GET /api/clientes/:id/alias error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// Crear un alias manualmente para un cliente
+app.post("/api/clientes/:id/alias", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id: empresa_cliente_id } = req.params;
+    const actor = req.headers["x-user-email"] ?? "sistema";
+    const { nombre_raw, integracion = 'controlt', observacion } = req.body ?? {};
+
+    if (!nombre_raw?.trim()) return res.status(400).json({ error: "nombre_raw es requerido" });
+
+    const nombre_normalizado = normalizeClient(nombre_raw);
+    if (!nombre_normalizado) return res.status(400).json({ error: "El nombre no es válido" });
+
+    const inserted = await sbFetch('/cliente_alias', 'POST', {
+      empresa_cliente_id,
+      nombre_raw:         nombre_raw.trim(),
+      nombre_normalizado,
+      integracion:        String(integracion || 'controlt'),
+      creado_via:         'manual',
+      creado_por:         actor,
+      ...(observacion ? { observacion: String(observacion) } : {}),
+    });
+
+    if (!inserted?.[0]) return res.status(500).json({ error: "No se pudo crear el alias" });
+
+    // Refrescar lookup para que las próximas syncs lo consideren de inmediato
+    refreshCustomerLookup().catch(() => {});
+
+    res.status(201).json(inserted[0]);
+  } catch (e) {
+    console.error("POST /api/clientes/:id/alias error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// Activar / desactivar un alias (nunca se elimina físicamente)
+app.patch("/api/clientes/:id/alias/:aliasId", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id: empresa_cliente_id, aliasId } = req.params;
+    const { activo, observacion } = req.body ?? {};
+
+    if (typeof activo !== 'boolean') return res.status(400).json({ error: "activo (boolean) es requerido" });
+
+    const patch = { activo };
+    if (observacion !== undefined) patch.observacion = String(observacion);
+
+    await sbFetch(
+      `/cliente_alias?id=eq.${encodeURIComponent(aliasId)}&empresa_cliente_id=eq.${encodeURIComponent(empresa_cliente_id)}`,
+      'PATCH',
+      patch
+    );
+
+    // Refrescar lookup para que el cambio de activo se refleje en syncs
+    refreshCustomerLookup().catch(() => {});
+
+    res.json({ ok: true, activo });
+  } catch (e) {
+    console.error("PATCH /api/clientes/:id/alias/:aliasId error:", e.message);
     res.status(500).json({ error: "Error interno" });
   }
 });

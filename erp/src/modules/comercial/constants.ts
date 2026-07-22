@@ -109,12 +109,14 @@ export const TABS_LISTADO = [
   { id: "bloqueados",  label: "Bloqueados",  estadoKey: "bloqueado"  },
   { id: "inactivos",   label: "Inactivos",   estadoKey: "inactivo"   },
   { id: "fusionados",  label: "Fusionados",  estadoKey: "fusionado"  },
+  { id: "duplicados",  label: "Duplicados",  estadoKey: ""           },
 ] as const;
 
 // ── Tabs del Workspace ────────────────────────────────────────────────────────
 
 export const WORKSPACE_TABS: Array<{ id: ClienteWorkspaceTab; label: string }> = [
   { id: "perfil",                  label: "Perfil"                 },
+  { id: "identidades",             label: "Identidades"            },
   { id: "relaciones",              label: "Relaciones Comerciales" },
   { id: "contactos",               label: "Contactos"              },
   { id: "sedes",                   label: "Sedes"                  },

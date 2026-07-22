@@ -200,11 +200,11 @@ async function resolveOrCreateCustomer(rawName, ctx) {
       };
     }
 
-    // Capa 2.5: Identity Rules — nombres externos registrados por merges anteriores.
+    // Capa 2.5: Identity Rules — aliases registrados por merges anteriores.
     // Permite que "FRONTERA ENERGY COLOMBIA CORP SUCURSAL COLOMBIA" resuelva
     // al cliente oficial "FRONTERA ENERGY COLOMBIA" sin crear un duplicado.
     const ruleRows = await ctx.sbFetch(
-      `/cliente_nombres_externos?nombre_normalizado=eq.${encodeURIComponent(normalized)}&select=empresa_cliente_id&limit=1`
+      `/cliente_alias?nombre_normalizado=eq.${encodeURIComponent(normalized)}&activo=eq.true&select=empresa_cliente_id&limit=1`
     ).catch(() => null);
     if (ruleRows && ruleRows[0]) {
       const empId = ruleRows[0].empresa_cliente_id;

@@ -1,6 +1,7 @@
 import { Building2, ShieldAlert, AlertTriangle, UserCheck, UserX, Plus, Lock, Clock } from "lucide-react";
 import { PageHeader, KpiCard, Card, DataTable, Button } from "@/components/ui";
 import { ClienteQuickView } from "./ClienteQuickView";
+import { TabDuplicados } from "./TabDuplicados";
 import { COLUMNS } from "./ClientesTableColumns";
 import { TABS_LISTADO } from "../constants";
 import type { useClientes } from "../hooks/useClientes";
@@ -228,17 +229,28 @@ export function ClientesListPage({ state, onOpenWorkspace }: ClientesListPagePro
         </div>
       )}
 
-      {/* Table */}
-      <Card>
-        <DataTable
-          columns={COLUMNS}
-          rows={filtrados}
-          rowKey={r => r.id}
-          loading={loading}
-          emptyMessage="No se encontraron clientes con los filtros seleccionados"
-          onRowClick={r => setPanelId(r.id)}
+      {/* Duplicados detector (tab especial) */}
+      {tabEstado === "duplicados" && (
+        <TabDuplicados
+          clientes={state.data}
+          onOpenWorkspace={id => { setPanelId(null); onOpenWorkspace(id); }}
+          onRefresh={cargar}
         />
-      </Card>
+      )}
+
+      {/* Table (todos los tabs menos duplicados) */}
+      {tabEstado !== "duplicados" && (
+        <Card>
+          <DataTable
+            columns={COLUMNS}
+            rows={filtrados}
+            rowKey={r => r.id}
+            loading={loading}
+            emptyMessage="No se encontraron clientes con los filtros seleccionados"
+            onRowClick={r => setPanelId(r.id)}
+          />
+        </Card>
+      )}
 
       {/* Quick View Panel */}
       {panelCliente && (

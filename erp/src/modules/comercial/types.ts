@@ -9,6 +9,20 @@ export type EstadoCliente =
   | "pendiente"
   | "fusionado";
 
+/** Alias de integración registrado en cliente_alias */
+export interface ClienteAlias {
+  id: string;
+  empresa_cliente_id: string;
+  nombre_raw: string;
+  nombre_normalizado: string;
+  integracion: string;
+  creado_via: "merge" | "manual";
+  activo: boolean;
+  observacion: string | null;
+  creado_en: string;
+  creado_por: string | null;
+}
+
 /** Resultado del preview de fusión */
 export interface MergePreview {
   oficial:   { id: string; razon_social: string; codigo_cliente: string | null };
@@ -80,6 +94,7 @@ export type EtiquetaCliente =
 
 export type ClienteWorkspaceTab =
   | "perfil"
+  | "identidades"
   | "relaciones"
   | "contactos"
   | "sedes"

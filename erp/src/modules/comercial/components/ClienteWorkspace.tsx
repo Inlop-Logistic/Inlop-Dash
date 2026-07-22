@@ -3,6 +3,7 @@ import { ArrowLeft, Building2, MapPin, User, Briefcase } from "lucide-react";
 import { Badge } from "@/components/ui";
 import { ClienteTabs } from "./ClienteTabs";
 import { TabPerfil } from "./TabPerfil";
+import { TabIdentidades } from "./TabIdentidades";
 import { TabDeshabilitada } from "./TabDeshabilitada";
 import { WorkspaceAcciones } from "./WorkspaceAcciones";
 import { FormCambioEstado } from "./FormCambioEstado";
@@ -21,6 +22,7 @@ import {
 
 // Tabs que requieren que el cliente exista físicamente en DB
 const TABS_REQUIEREN_EXISTENCIA: ClienteWorkspaceTab[] = [
+  "identidades",
   "relaciones", "contactos", "sedes", "documentos",
   "condiciones_comerciales", "condiciones_operativas",
   "tarifas", "solicitudes", "viajes",
@@ -363,6 +365,7 @@ export function ClienteWorkspace({ clienteId, onBack, onClienteCreado }: Cliente
         {TABS_REQUIEREN_EXISTENCIA.map(tab => {
           if (activeTab !== tab) return null;
           if (tabDeshabilitada(tab)) return <TabDeshabilitada key={tab} tab={tab} />;
+          if (tab === "identidades") return <TabIdentidades key={tab} clienteId={cliente!.id} />;
           return (
             <div key={tab} className="flex flex-col items-center justify-center py-20 gap-3" style={{ color: "var(--gray-400)" }}>
               <div style={{ fontSize: 40 }}>🚧</div>

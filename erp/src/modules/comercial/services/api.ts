@@ -1,5 +1,5 @@
 import { req } from "@/services/http";
-import type { ClienteListItem, ClienteDetalle, CambioEstadoPayload, NuevoClienteFormData, MergePreview } from "../types";
+import type { ClienteListItem, ClienteDetalle, CambioEstadoPayload, NuevoClienteFormData, MergePreview, ClienteAlias } from "../types";
 
 export function listarClientes(): Promise<ClienteListItem[]> {
   return req<ClienteListItem[]>("/api/clientes");
@@ -45,4 +45,31 @@ export function mergeCliente(
     method: "POST",
     body: JSON.stringify({ duplicado_id: duplicadoId, motivo }),
   });
+}
+
+// ── Alias (Identity Rules) ────────────────────────────────────────────────────
+
+export function getAliases(clienteId: string): Promise<ClienteAlias[]> {
+  return req<ClienteAlias[]>(`/api/clientes/${encodeURIComponent(clienteId)}/alias`);
+}
+
+export function crearAlias(
+  clienteId: string,
+  data: { nombre_raw: string; integracion?: string; observacion?: string }
+): Promise<ClienteAlias> {
+  return req<ClienteAlias>(`/api/clientes/${encodeURIComponent(clienteId)}/alias`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function toggleAlias(
+  clienteId: string,
+  aliasId: string,
+  activo: boolean
+): Promise<{ ok: boolean; activo: boolean }> {
+  return req<{ ok: boolean; activo: boolean }>(
+    `/api/clientes/${encodeURIComponent(clienteId)}/alias/${encodeURIComponent(aliasId)}`,
+    { method: "PATCH", body: JSON.stringify({ activo }) }
+  );
 }
