@@ -147,7 +147,7 @@ export function GpsInfoPanel({ vehiculo, vehiculos, loading, onSelect, onClose }
   }
 
   const trip    = vehiculo.trip_number;
-  const cliente = vehiculo.company_customer_name?.split(",")[0].trim() ?? "—";
+  const cliente = vehiculo.razon_social ?? vehiculo.company_customer_name?.split(",")[0].trim() ?? "—";
 
   return (
     <div className="flex flex-col h-full rounded-xl overflow-hidden"

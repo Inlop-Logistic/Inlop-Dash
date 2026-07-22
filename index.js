@@ -1,7 +1,7 @@
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
-import { buildLookupMap, resolveOrCreateCustomer, isPlaceholderTmsCustomer } from './services/customerResolver.js';
+import { buildLookupMap, resolveTrip, isPlaceholderTmsCustomer } from './services/customerResolver.js';
 import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } from './services/authScope.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
@@ -23,6 +23,11 @@ async function fetchConTimeout(url, opts = {}, timeoutMs = DEFAULT_FETCH_TIMEOUT
 
 // Mapa de resolución de clientes — reconstruido cada 10 min desde empresas_cliente
 let customerLookupMap = new Map();
+// Lookup inverso: id → razon_social (para resolveTrip sin queries extra)
+let customerLookupById = new Map();
+// Cache de identidad por viaje: trip_number → { empresa_cliente_id, razon_social }
+// Alimentado por syncCumplidos. El endpoint /api/gps lo usa para mostrar razon_social.
+let tripCustomerCache = new Map();
 
 
 // ─── SUPABASE ───────────────────────────────────────────
@@ -612,7 +617,8 @@ async function syncPendientes() {
 async function refreshCustomerLookup() {
   try {
     const empresas = await sbFetch('/empresas_cliente?estado=neq.inactivo&select=id,razon_social,nombre_controlt') || [];
-    customerLookupMap = buildLookupMap(empresas);
+    customerLookupMap  = buildLookupMap(empresas);
+    customerLookupById = new Map(empresas.filter(e => e.id).map(e => [e.id, e.razon_social]));
     console.log(`🏢 Customer lookup: ${customerLookupMap.size} entradas`);
   } catch (e) {
     console.error('❌ refreshCustomerLookup:', e.message);
@@ -644,7 +650,7 @@ async function syncPlaneados() {
     console.log(`📅 Planeados: ${arr.length} en Travel/search → ${viajesFuturos.length} hoy o futuros`);
     if (!viajesFuturos.length) return;
 
-    const existentes = await sbFetch('/planeados?select=trip_number,fecha_detectado,company_customer_name,activo_en_resume');
+    const existentes = await sbFetch('/planeados?select=trip_number,fecha_detectado,company_customer_name,activo_en_resume,empresa_cliente_id');
     const existMap = {};
     (existentes || []).forEach(e => { existMap[e.trip_number] = e; });
 
@@ -658,14 +664,18 @@ async function syncPlaneados() {
       const viajeResume = cache.viajes.data.find(r => r.trip_number === v.trip_number);
       const rawCliente = viajeResume?.company_customer_name || v.company_customer_name || null;
       const cliente = rawCliente ? rawCliente.split(',')[0].trim() : null;
-      const resolved = await resolveOrCreateCustomer(cliente, {
-        lookupMap:     customerLookupMap,
-        sbFetch,
-        generarCodigo: generarCodigoCliente,
-        actor:         'sistema:tms',
-      });
+      const resolved = await resolveTrip(
+        { rawName: cliente, existingEmpresaId: existMap[v.trip_number]?.empresa_cliente_id ?? null },
+        { lookupMap: customerLookupMap, empresaById: customerLookupById, sbFetch, generarCodigo: generarCodigoCliente, actor: 'sistema:tms' }
+      );
       if (resolved.created)     clientesCreados++;
       if (resolved.placeholder) placeholdersOmitidos++;
+      if (resolved.empresa_cliente_id) {
+        tripCustomerCache.set(v.trip_number, {
+          empresa_cliente_id: resolved.empresa_cliente_id,
+          razon_social:       resolved.razon_social,
+        });
+      }
 
       const row = {
         trip_number:           v.trip_number,
@@ -899,23 +909,28 @@ app.get('/api/cumplidos', requireInternalApiKey, (req, res) => {
 app.get('/api/gps', requireInternalApiKey, (req, res) => {
   const vehiculos = cache.viajes.data
     .filter(v => ESTADOS_MONITOREABLES.has((v.state_travel ?? '').toLowerCase()))
-    .map(v => ({
-      id:                       v.trip_number,
-      trip_number:              v.trip_number,
-      number_order:             v.number_order             || null,
-      license_plate:            v.license_plate            || null,
-      driver_name:              v.driver_name              || null,
-      company_customer_name:    v.company_customer_name    || null,
-      origin_city_name:         v.origin_city_name         || null,
-      destiny_city_name:        v.destiny_city_name        || null,
-      state_travel:             v.state_travel,
-      lat:                      parseLatLon(v.latitude),
-      lon:                      parseLatLon(v.longitude),
-      latest_gps_report:        v.latest_gps_report        || null,
-      current_address_location: v.current_address_location || null,
-      last_alarm_name:          v.last_alarm_name          || null,
-      estadoGps:                derivarEstadoGps(v),
-    }));
+    .map(v => {
+      const cached = tripCustomerCache.get(v.trip_number);
+      return {
+        id:                       v.trip_number,
+        trip_number:              v.trip_number,
+        number_order:             v.number_order             || null,
+        license_plate:            v.license_plate            || null,
+        driver_name:              v.driver_name              || null,
+        company_customer_name:    v.company_customer_name    || null,
+        empresa_cliente_id:       cached?.empresa_cliente_id ?? null,
+        razon_social:             cached?.razon_social        ?? null,
+        origin_city_name:         v.origin_city_name         || null,
+        destiny_city_name:        v.destiny_city_name        || null,
+        state_travel:             v.state_travel,
+        lat:                      parseLatLon(v.latitude),
+        lon:                      parseLatLon(v.longitude),
+        latest_gps_report:        v.latest_gps_report        || null,
+        current_address_location: v.current_address_location || null,
+        last_alarm_name:          v.last_alarm_name          || null,
+        estadoGps:                derivarEstadoGps(v),
+      };
+    });
   res.json(vehiculos);
 });
 
@@ -1140,7 +1155,7 @@ async function syncCumplidos() {
   try {
     if (!cache.viajes.data.length) return;
 
-    const existentesRaw = await sbFetch('/cumplidos?select=id,estado_cumplido,tiene_soporte,cliente&limit=1000');
+    const existentesRaw = await sbFetch('/cumplidos?select=id,estado_cumplido,tiene_soporte,cliente,empresa_cliente_id&limit=1000');
     const existentes = new Map((existentesRaw || []).map(c => [c.id, c]));
 
     const ESTADOS_ACTIVOS = new Set(['LIVE', 'SOLICITADO', 'CUMPLIDO RECIBIDO']);
@@ -1151,14 +1166,18 @@ async function syncCumplidos() {
       if (!v.trip_number) continue;
       const existe = existentes.get(v.trip_number);
       const cliente = (v.company_customer_name || '').split(',')[0].trim();
-      const resolved = await resolveOrCreateCustomer(cliente, {
-        lookupMap:     customerLookupMap,
-        sbFetch,
-        generarCodigo: generarCodigoCliente,
-        actor:         'sistema:tms',
-      });
+      const resolved = await resolveTrip(
+        { rawName: cliente, existingEmpresaId: existe?.empresa_cliente_id ?? null },
+        { lookupMap: customerLookupMap, empresaById: customerLookupById, sbFetch, generarCodigo: generarCodigoCliente, actor: 'sistema:tms' }
+      );
       if (resolved.created)     clientesCreados++;
       if (resolved.placeholder) placeholdersOmitidos++;
+      if (resolved.empresa_cliente_id) {
+        tripCustomerCache.set(v.trip_number, {
+          empresa_cliente_id: resolved.empresa_cliente_id,
+          razon_social:       resolved.razon_social,
+        });
+      }
 
       if (!existe) {
         const row = {
@@ -1259,7 +1278,7 @@ async function syncSolicitudes() {
 
     for (const sol of solicitudes) {
       const { id, codigo_solicitud, external_ref, estado, controlt_trip_number,
-              creado_por, fecha_requerida, observacion_coordinadora } = sol;
+              creado_por, fecha_requerida, observacion_coordinadora, empresa_cliente_id: solEmpresaId } = sol;
 
       // Clave de match: external_ref si está puesto (pruebas con remisión real), sino codigo_solicitud
       // Normalizar espacios dobles igual que _splitRem para que "NHR-IB-2185" == "NHR-  IB-2185"
@@ -1294,6 +1313,7 @@ async function syncSolicitudes() {
           console.log(`✅ [MATCH] ${codigo_solicitud} → trip ${vR.trip_number} (${vR.license_plate || '—'}) | pendiente → ${ne}`);
           updates.push({ id, fields: _fields(vR, ne, ahora, true) });
           insertsNotif.push(..._notifs(sol, ne, vR, 'pendiente'));
+          if (solEmpresaId) await propagarEmpresaId(vR.trip_number, solEmpresaId);
           continue;
         }
         const vP = pendientesByRemission.get(matchKey);
@@ -1303,6 +1323,7 @@ async function syncSolicitudes() {
           console.log(`✅ [MATCH] ${codigo_solicitud} → trip ${vP.trip_number} (pendientes) | pendiente → ${ne}`);
           updates.push({ id, fields: _fields(vP, ne, ahora, true) });
           insertsNotif.push(..._notifs(sol, ne, vP, 'pendiente'));
+          if (solEmpresaId) await propagarEmpresaId(vP.trip_number, solEmpresaId);
         }
 
       } else if (estado === 'confirmado') {
@@ -1310,6 +1331,7 @@ async function syncSolicitudes() {
           ? resumeByTripNumber.get(controlt_trip_number)
           : resumeByRemission.get(matchKey);
         if (vR) {
+          if (solEmpresaId) await propagarEmpresaId(vR.trip_number, solEmpresaId);
           const g = _grupo(vR.state_travel);
           if (g === 'en_ruta' || g === 'completado' || g === 'cancelado') {
             console.log(`🔄 [ESTADO] ${codigo_solicitud}: confirmado → ${g}`);
@@ -1327,6 +1349,7 @@ async function syncSolicitudes() {
       } else if (estado === 'en_ruta') {
         const vR = controlt_trip_number ? resumeByTripNumber.get(controlt_trip_number) : null;
         if (vR) {
+          if (solEmpresaId) await propagarEmpresaId(vR.trip_number, solEmpresaId);
           const g = _grupo(vR.state_travel);
           if (g === 'completado' || g === 'cancelado') {
             console.log(`🔄 [ESTADO] ${codigo_solicitud}: en_ruta → ${g}`);
@@ -1397,6 +1420,19 @@ async function syncSolicitudes() {
   } catch(e) {
     console.error('❌ Error syncSolicitudes:', e.message);
   }
+}
+
+// Propaga empresa_cliente_id desde la solicitud hacia planeados/cumplidos y tripCustomerCache.
+// Se llama cuando syncSolicitudes confirma un match entre solicitud y viaje del TMS.
+async function propagarEmpresaId(tripNumber, empresaId) {
+  if (!tripNumber || !empresaId) return;
+  const razon_social = customerLookupById.get(empresaId) ?? null;
+  tripCustomerCache.set(tripNumber, { empresa_cliente_id: empresaId, razon_social });
+  const tn = encodeURIComponent(tripNumber);
+  await Promise.all([
+    sbFetch(`/planeados?trip_number=eq.${tn}`, 'PATCH', { empresa_cliente_id: empresaId }),
+    sbFetch(`/cumplidos?id=eq.${tn}`, 'PATCH', { empresa_cliente_id: empresaId }),
+  ]).catch(err => console.error('⚠️  propagarEmpresaId:', err.message));
 }
 
 function _splitRem(remission) {

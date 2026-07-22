@@ -20,6 +20,8 @@ export interface GpsRecord {
   license_plate:         string | null;
   driver_name:           string | null;
   company_customer_name: string | null;
+  empresa_cliente_id:    string | null;
+  razon_social:          string | null;
   origin_city_name:      string | null;
   destiny_city_name:     string | null;
   state_travel:          string;

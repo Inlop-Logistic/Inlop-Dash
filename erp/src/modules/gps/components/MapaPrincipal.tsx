@@ -39,7 +39,7 @@ function makeIcon(estado: EstadoGps, selected: boolean, hasSelection: boolean): 
 function makePopup(v: GpsRecord): string {
   const placa     = v.license_plate ?? "—";
   const conductor = v.driver_name ?? "Sin conductor";
-  const cliente   = v.company_customer_name?.split(",")[0].trim() ?? "—";
+  const cliente   = v.razon_social ?? v.company_customer_name?.split(",")[0].trim() ?? "—";
   return `<div style="font-family:system-ui;min-width:140px;font-size:13px;line-height:1.4">
     <div style="font-weight:700;font-size:14px;letter-spacing:0.06em;margin-bottom:2px">${placa}</div>
     <div style="color:#374151">${conductor}</div>

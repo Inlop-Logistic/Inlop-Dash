@@ -265,10 +265,43 @@ async function resolveOrCreateCustomer(rawName, ctx) {
   }
 }
 
+/**
+ * Único punto de resolución de identidad para las funciones de sync.
+ *
+ * Prioridad:
+ *   1. existingEmpresaId ya en BD → autoritativo, no re-resolver ni tocar BD.
+ *   2. Nombre crudo del TMS → resolveOrCreateCustomer().
+ *
+ * Garantiza que ningún ciclo de sync sobreescriba una identidad ya confirmada.
+ * Toda lógica de resolución sale de syncPlaneados/syncCumplidos hacia aquí.
+ *
+ * @param {{ rawName: string|null, existingEmpresaId: string|null }} params
+ * @param {object} ctx — { lookupMap, empresaById?, sbFetch, generarCodigo, actor }
+ *   ctx.empresaById: Map<id, razon_social> para lookup inverso sin BD extra
+ * @returns {Promise<{ empresa_cliente_id, razon_social, resolved, created, placeholder, source }>}
+ */
+async function resolveTrip({ rawName, existingEmpresaId }, ctx) {
+  if (existingEmpresaId) {
+    const razon_social = ctx?.empresaById?.get(existingEmpresaId) ?? null;
+    return {
+      empresa_cliente_id: existingEmpresaId,
+      razon_social,
+      resolved:           true,
+      created:            false,
+      placeholder:        false,
+      source:             'existente',
+    };
+  }
+  const result = await resolveOrCreateCustomer(rawName, ctx);
+  const source = result.placeholder ? 'placeholder' : result.created ? 'creado' : 'tms';
+  return { ...result, source };
+}
+
 export {
   normalizeClient,
   buildLookupMap,
   resolveCustomer,
   resolveOrCreateCustomer,
+  resolveTrip,
   isPlaceholderTmsCustomer,
 };
