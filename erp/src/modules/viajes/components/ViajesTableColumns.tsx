@@ -63,10 +63,10 @@ const RENDERERS: Record<string, (v: TmsViaje) => React.ReactNode> = {
   ),
 
   _ruta: (v) => (
-    <div className="flex flex-col leading-snug">
-      <span className="text-[12px]" style={{ color: "var(--gray-700)" }}>{v.origin_city_name ?? "—"}</span>
-      <span className="text-[10px]" style={{ color: "var(--gray-300)" }}>↓</span>
-      <span className="text-[12px]" style={{ color: "var(--gray-500)" }}>{v.destiny_city_name ?? "—"}</span>
+    <div className="flex items-center gap-1 min-w-0">
+      <span className="text-[12px] truncate" style={{ color: "var(--gray-700)" }}>{v.origin_city_name ?? "—"}</span>
+      <span className="text-[10px] shrink-0" style={{ color: "var(--gray-300)" }}>→</span>
+      <span className="text-[12px] truncate" style={{ color: "var(--gray-500)" }}>{v.destiny_city_name ?? "—"}</span>
     </div>
   ),
 
