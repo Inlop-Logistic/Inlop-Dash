@@ -1,40 +1,49 @@
-import { ChevronRight } from "lucide-react";
-import { fmtFecha } from "@/utils/date";
-import { fmtTms } from "@/utils/parseFecha";
+import { ArrowRight } from "lucide-react";
+import { fmtDDMMYYYYHm } from "@/utils/date";
+import { parseFechaDMY } from "@/utils/parseFecha";
 import type { Column } from "@/components/ui";
 import type { ViajeResumen } from "../types";
 import { EstadoBadge } from "./EstadoBadge";
 import { estadoVisual } from "../constants";
 
+/** DD/MM/YYYY HH:mm desde string TMS en formato DD/MM/YYYY HH:MM:SS. */
+function fmtSchedulate(raw: string | null | undefined): string {
+  if (!raw) return "—";
+  const d = parseFechaDMY(raw);
+  if (!d) return "—";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 export const COLUMNS: Column<ViajeResumen>[] = [
   {
     key: "fecha_detectado",
-    header: "Fecha/Hora Despacho",
-    width: "140px",
+    header: "Creado",
+    width: "130px",
     render: (v) => (
       <div className="text-[12px] tabular-nums leading-tight" style={{ color: "var(--gray-700)" }}>
-        {fmtFecha(v.fecha_detectado)}
+        {fmtDDMMYYYYHm(v.fecha_detectado)}
       </div>
     ),
   },
   {
     key: "schedulate_origin",
-    header: "Fecha/Hora Programación",
-    width: "150px",
+    header: "Programado",
+    width: "130px",
     render: (v) => (
       <div className="text-[12px] tabular-nums leading-tight" style={{ color: "var(--gray-700)" }}>
-        {fmtTms(v.schedulate_origin, "DMY", {
-          day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
-        })}
+        {fmtSchedulate(v.schedulate_origin)}
       </div>
     ),
   },
   {
-    key: "linea_negocio",
-    header: "Línea de Negocio",
-    width: "100px",
-    render: () => (
-      <span className="text-[12px]" style={{ color: "var(--gray-300)" }}>—</span>
+    key: "trip_number",
+    header: "Viaje",
+    width: "110px",
+    render: (v) => (
+      <span className="text-[12px] font-mono" style={{ color: "var(--navy)" }}>
+        {v.trip_number}
+      </span>
     ),
   },
   {
@@ -53,17 +62,14 @@ export const COLUMNS: Column<ViajeResumen>[] = [
   {
     key: "tipo_servicio",
     header: "Tipo de Servicio",
-    width: "110px",
-    render: () => (
-      <span className="text-[12px]" style={{ color: "var(--gray-300)" }}>—</span>
-    ),
-  },
-  {
-    key: "tipologia_vehiculo",
-    header: "Tipología de Vehículo",
-    width: "130px",
-    render: () => (
-      <span className="text-[12px]" style={{ color: "var(--gray-300)" }}>—</span>
+    width: "120px",
+    render: (v) => (
+      <span
+        className="text-[12px]"
+        style={{ color: v.type_operation ? "var(--gray-700)" : "var(--gray-300)" }}
+      >
+        {v.type_operation ?? "—"}
+      </span>
     ),
   },
   {
@@ -80,23 +86,14 @@ export const COLUMNS: Column<ViajeResumen>[] = [
     ),
   },
   {
-    key: "city_origin",
-    header: "Origen",
-    width: "110px",
+    key: "ruta",
+    header: "Origen - Destino",
     render: (v) => (
-      <span className="text-[12px]" style={{ color: v.city_origin ? "var(--gray-700)" : "var(--gray-300)" }}>
-        {v.city_origin ?? "—"}
-      </span>
-    ),
-  },
-  {
-    key: "city_destination",
-    header: "Destino",
-    width: "110px",
-    render: (v) => (
-      <span className="text-[12px]" style={{ color: v.city_destination ? "var(--gray-700)" : "var(--gray-300)" }}>
-        {v.city_destination ?? "—"}
-      </span>
+      <div className="flex items-center gap-1 text-[12px]" style={{ color: "var(--gray-600)" }}>
+        <span className="font-medium">{v.city_origin ?? "—"}</span>
+        <ArrowRight className="w-3 h-3 shrink-0" style={{ color: "var(--gray-300)" }} />
+        <span>{v.city_destination ?? "—"}</span>
+      </div>
     ),
   },
   {
@@ -116,9 +113,14 @@ export const COLUMNS: Column<ViajeResumen>[] = [
   {
     key: "conductor_tel",
     header: "Teléfono",
-    width: "110px",
-    render: () => (
-      <span className="text-[12px]" style={{ color: "var(--gray-300)" }}>—</span>
+    width: "120px",
+    render: (v) => (
+      <span
+        className="text-[12px] font-mono"
+        style={{ color: v.conductor_tel ? "var(--gray-700)" : "var(--gray-300)" }}
+      >
+        {v.conductor_tel ?? "—"}
+      </span>
     ),
   },
   {
@@ -126,11 +128,5 @@ export const COLUMNS: Column<ViajeResumen>[] = [
     header: "Estado",
     width: "130px",
     render: (v) => <EstadoBadge estado={estadoVisual(v)} />,
-  },
-  {
-    key: "arrow",
-    header: "",
-    width: "28px",
-    render: () => <ChevronRight className="w-4 h-4" style={{ color: "var(--gray-300)" }} />,
   },
 ];

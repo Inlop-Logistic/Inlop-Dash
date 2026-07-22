@@ -2660,6 +2660,9 @@ app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
     //  2. Si el nombre crudo del TMS es el placeholder (viaje sin Match) → null,
     //     para que Programación NO muestre "Integral Logistics Operations…".
     //  3. En cualquier otro caso, fallback al nombre crudo.
+    // Índice de cache.viajes por trip_number para enriquecer con datos del TMS en vivo.
+    const viajesIdx = new Map(cache.viajes.data.map(v => [v.trip_number, v]));
+
     const enriched = rows.map(r => {
       let nombre_cliente = null;
       if (r.empresa_cliente_id && empMap[r.empresa_cliente_id]) {
@@ -2667,10 +2670,13 @@ app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
       } else if (r.company_customer_name && !isPlaceholderTmsCustomer(r.company_customer_name)) {
         nombre_cliente = r.company_customer_name;
       }
+      const vivo = viajesIdx.get(r.trip_number) || null;
       return {
         ...r,
         nombre_cliente,
         match_tms_pendiente: !r.empresa_cliente_id && isPlaceholderTmsCustomer(r.company_customer_name),
+        type_operation: vivo?.type_operation || null,
+        conductor_tel:  vivo ? (extraerTelefono(vivo.driver_phone, vivo.full_driver) || null) : null,
       };
     });
 
