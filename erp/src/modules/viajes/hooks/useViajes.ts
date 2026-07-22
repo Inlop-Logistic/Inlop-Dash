@@ -5,10 +5,6 @@ import { ESTADOS_ACTIVOS, ESTADOS_FINALIZADOS, REFRESH_INTERVAL_MS, tabCount } f
 import { listarViajes } from "../services/api";
 import { parseFechaDMY } from "@/utils/parseFecha";
 
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 /** Extrae YYYY-MM-DD de un activated_on en formato DD/MM/YYYY HH:MM:SS. */
 function toDateISO(activated_on: string | null): string | null {
   const d = parseFechaDMY(activated_on);
@@ -26,9 +22,9 @@ export function useViajes() {
   const [tabActivo, setTabActivo]         = useState<TabViajes>("todos");
   const [estadoFiltro, setEstadoFiltro]   = useState("");
   const [clienteFiltro, setClienteFiltro] = useState("");   // empresa_cliente_id
-  const t = todayISO();
-  const [fechaDesde, setFechaDesde] = useState(t);
-  const [fechaHasta, setFechaHasta] = useState(t);
+  // Cadena vacía = sin filtro activo. El filtro solo se activa cuando el usuario presiona Aplicar.
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
 
   // Drawer
   const [panelId, setPanelId] = useState<string | null>(null);
@@ -70,13 +66,10 @@ export function useViajes() {
       // Filtro cliente (por empresa_cliente_id — Maestro de Clientes)
       if (clienteFiltro && v.empresa_cliente_id !== clienteFiltro) return false;
 
-      // Filtro fecha (sobre activated_on)
-      const vFecha = toDateISO(v.activated_on);
-      if (vFecha) {
-        if (vFecha < fechaDesde || vFecha > fechaHasta) return false;
-      } else {
-        // Sin fecha: excluir sólo si el rango no es el default completo
-        if (fechaDesde !== fechaHasta || fechaDesde !== todayISO()) return false;
+      // Filtro fecha — solo activo cuando el usuario ha aplicado un rango.
+      if (fechaDesde && fechaHasta) {
+        const vFecha = toDateISO(v.activated_on);
+        if (vFecha && (vFecha < fechaDesde || vFecha > fechaHasta)) return false;
       }
 
       // Búsqueda texto libre
