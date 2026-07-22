@@ -127,22 +127,30 @@ export function DetalleViaje({ viaje, onClose }: DetalleViajeProps) {
         <div className="px-1">
           <ProgressBar value={viaje.percentage_travel} maxWidth="100%" />
         </div>
-        {viaje.schedulate_origin && (
-          <InfoRow label="Fecha programada de la cita" value={fmtTms(viaje.schedulate_origin, "DMY", {
-            weekday: "short", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
-          })} />
-        )}
-        {viaje.appointment_fulfillment && (
-          <InfoRow label="Estado de cumplimiento" value={viaje.appointment_fulfillment} />
-        )}
-        {viaje.last_event && (
-          <div
-            className="mt-3 text-[12px] px-3 py-2.5 rounded-xl"
-            style={{ background: "var(--gray-50)", color: "var(--gray-600)", border: "1px solid var(--gray-100)", lineHeight: 1.5 }}
-          >
-            {viaje.last_event}
-          </div>
-        )}
+        {viaje.last_event && (() => {
+          // Extraer ETA de frases como "La fecha aproximada de llegada al Destino es DD/MM/YYYY HH:MM y..."
+          const m = viaje.last_event!.match(
+            /fecha aproximada.*?es\s+(\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2})/i,
+          );
+          const eta = m ? m[1].trim() : null;
+          return eta ? (
+            <div style={{ marginTop: 12, padding: "10px 4px 4px" }}>
+              <div style={{ fontSize: "var(--text-xs)", color: "var(--gray-400)", fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                Llegada aproximada al destino
+              </div>
+              <div style={{ fontSize: "var(--text-lg)", fontWeight: 700, color: "var(--navy)", fontVariantNumeric: "tabular-nums" }}>
+                {eta}
+              </div>
+            </div>
+          ) : (
+            <div
+              className="mt-3 text-[12px] px-3 py-2.5 rounded-xl"
+              style={{ background: "var(--gray-50)", color: "var(--gray-600)", border: "1px solid var(--gray-100)", lineHeight: 1.5 }}
+            >
+              {viaje.last_event}
+            </div>
+          );
+        })()}
       </PanelSection>
 
       {/* Timeline cronológico */}
