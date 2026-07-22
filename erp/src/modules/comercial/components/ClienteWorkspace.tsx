@@ -394,7 +394,7 @@ export function ClienteWorkspace({ clienteId, onBack, onClienteCreado }: Cliente
         <ModalFusionarCliente
           clienteOficial={cliente}
           onClose={() => setFusionarOpen(false)}
-          onSuccess={(id) => { setFusionarOpen(false); onBack(); }}
+          onSuccess={() => { setFusionarOpen(false); onBack(); }}
         />
       )}
     </div>
