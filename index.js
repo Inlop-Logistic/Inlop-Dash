@@ -1,7 +1,7 @@
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
-import { buildLookupMap, resolveTrip, isPlaceholderTmsCustomer } from './services/customerResolver.js';
+import { buildLookupMap, normalizeClient, resolveTrip, isPlaceholderTmsCustomer } from './services/customerResolver.js';
 import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } from './services/authScope.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
@@ -616,10 +616,28 @@ async function syncPendientes() {
 // o bloqueado sigue siendo un registro válido y no debe duplicarse.
 async function refreshCustomerLookup() {
   try {
-    const empresas = await sbFetch('/empresas_cliente?estado=neq.inactivo&select=id,razon_social,nombre_controlt') || [];
+    // Excluir inactivos y fusionados — ambos no participan en resolución de nombres
+    const empresas = await sbFetch('/empresas_cliente?estado=not.in.(inactivo,fusionado)&select=id,razon_social,nombre_controlt') || [];
     customerLookupMap  = buildLookupMap(empresas);
     customerLookupById = new Map(empresas.filter(e => e.id).map(e => [e.id, e.razon_social]));
-    console.log(`🏢 Customer lookup: ${customerLookupMap.size} entradas`);
+
+    // Enriquecer con Identity Rules: nombres externos registrados por merges anteriores.
+    // Cada regla añade una entrada adicional al mapa si aún no existe, permitiendo que
+    // "FRONTERA ENERGY COLOMBIA CORP SUCURSAL COLOMBIA" resuelva al cliente oficial
+    // sin crear un duplicado.
+    const rules = await sbFetch('/cliente_nombres_externos?select=nombre_normalizado,empresa_cliente_id') || [];
+    let rulesAdded = 0;
+    for (const r of rules) {
+      if (!customerLookupMap.has(r.nombre_normalizado)) {
+        const razon_social = customerLookupById.get(r.empresa_cliente_id) ?? null;
+        if (razon_social) {
+          customerLookupMap.set(r.nombre_normalizado, { id: r.empresa_cliente_id, razon_social });
+          rulesAdded++;
+        }
+      }
+    }
+
+    console.log(`🏢 Customer lookup: ${customerLookupMap.size} entradas (${rulesAdded} identity rules)`);
   } catch (e) {
     console.error('❌ refreshCustomerLookup:', e.message);
   }
@@ -3180,6 +3198,148 @@ app.patch("/api/clientes/:id/estado", async (req, res) => {
     res.json({ ok: true, estado });
   } catch (e) {
     console.error("PATCH /api/clientes/:id/estado error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// ─── CUSTOMER MERGE ─────────────────────────────────────────────────────────
+
+// Preview: cuántos registros se reasignarán al fusionar duplicado_id en :id.
+app.get("/api/clientes/:id/merge-preview", async (req, res) => {
+  try {
+    const { id: oficialId } = req.params;
+    const { duplicado_id } = req.query;
+
+    if (!duplicado_id) return res.status(400).json({ error: "duplicado_id es requerido" });
+    if (oficialId === duplicado_id) return res.status(400).json({ error: "No se puede fusionar un cliente consigo mismo" });
+
+    const dup = encodeURIComponent(duplicado_id);
+    const [oficialRows, duplicadoRows, planeados, cumplidos, solicitudes] = await Promise.all([
+      sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(oficialId)}&select=id,razon_social,codigo_cliente&limit=1`),
+      sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(duplicado_id)}&select=id,razon_social,codigo_cliente,nombre_controlt&limit=1`),
+      sbFetch(`/planeados?empresa_cliente_id=eq.${dup}&select=trip_number&limit=500`),
+      sbFetch(`/cumplidos?empresa_cliente_id=eq.${dup}&select=id&limit=2000`),
+      sbFetch(`/solicitudes?empresa_cliente_id=eq.${dup}&select=id&limit=500`),
+    ]);
+
+    if (!oficialRows?.[0]) return res.status(404).json({ error: "Cliente oficial no encontrado" });
+    if (!duplicadoRows?.[0]) return res.status(404).json({ error: "Cliente duplicado no encontrado" });
+
+    const oficial   = oficialRows[0];
+    const duplicado = duplicadoRows[0];
+
+    res.json({
+      oficial:   { id: oficialId,    razon_social: oficial.razon_social,   codigo_cliente: oficial.codigo_cliente   },
+      duplicado: { id: duplicado_id, razon_social: duplicado.razon_social, codigo_cliente: duplicado.codigo_cliente },
+      referencias: {
+        planeados:   (planeados   ?? []).length,
+        cumplidos:   (cumplidos   ?? []).length,
+        solicitudes: (solicitudes ?? []).length,
+      },
+      identity_rules: [duplicado.razon_social, duplicado.nombre_controlt].filter(Boolean),
+    });
+  } catch (e) {
+    console.error("GET /api/clientes/:id/merge-preview error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// Merge: fusiona duplicado_id en :id (cliente oficial).
+// Operaciones atómicas (secuenciales donde importa el orden):
+//   1. Crear Identity Rules para los nombres del duplicado.
+//   2. Reasignar FKs en planeados, cumplidos, solicitudes.
+//   3. Marcar duplicado como fusionado.
+//   4. Registrar historial en ambos clientes.
+//   5. Refrescar lookup in-memory.
+app.post("/api/clientes/:id/merge", async (req, res) => {
+  try {
+    const { id: oficialId } = req.params;
+    const actor = req.headers["x-user-email"] ?? "sistema";
+    const { duplicado_id, motivo = "Fusión de clientes duplicados" } = req.body ?? {};
+
+    if (!duplicado_id) return res.status(400).json({ error: "duplicado_id es requerido" });
+    if (oficialId === duplicado_id) return res.status(400).json({ error: "No se puede fusionar un cliente consigo mismo" });
+
+    const [oficialRows, duplicadoRows] = await Promise.all([
+      sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(oficialId)}&select=id,razon_social,codigo_cliente,estado&limit=1`),
+      sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(duplicado_id)}&select=id,razon_social,codigo_cliente,estado,nombre_controlt&limit=1`),
+    ]);
+
+    const oficial   = oficialRows?.[0];
+    const duplicado = duplicadoRows?.[0];
+    if (!oficial)   return res.status(404).json({ error: "Cliente oficial no encontrado" });
+    if (!duplicado) return res.status(404).json({ error: "Cliente duplicado no encontrado" });
+    if (oficial.estado   === 'fusionado') return res.status(400).json({ error: "El cliente oficial ya está fusionado" });
+    if (duplicado.estado === 'fusionado') return res.status(400).json({ error: "El cliente duplicado ya está fusionado" });
+
+    const now = new Date().toISOString();
+    const dup = encodeURIComponent(duplicado_id);
+
+    // 1. Crear Identity Rules para todos los nombres conocidos del duplicado.
+    //    Si ya existe una regla para ese nombre, el índice único la ignora (no falla).
+    const namesToRegister = [...new Set(
+      [duplicado.razon_social, duplicado.nombre_controlt].filter(Boolean)
+    )];
+    for (const nombre of namesToRegister) {
+      const nombre_normalizado = normalizeClient(nombre);
+      if (!nombre_normalizado) continue;
+      await sbFetch('/cliente_nombres_externos', 'POST', {
+        empresa_cliente_id: oficialId,
+        nombre_normalizado,
+        nombre_raw:         nombre,
+        fuente:             'controlt',
+        origen:             'merge',
+        creado_por:         actor,
+      }).catch(() => {}); // el índice único ya impide duplicados; silenciar error
+    }
+
+    // 2. Reasignar todas las FK de duplicado_id → oficialId
+    await Promise.all([
+      sbFetch(`/planeados?empresa_cliente_id=eq.${dup}`,   'PATCH', { empresa_cliente_id: oficialId }),
+      sbFetch(`/cumplidos?empresa_cliente_id=eq.${dup}`,   'PATCH', { empresa_cliente_id: oficialId }),
+      sbFetch(`/solicitudes?empresa_cliente_id=eq.${dup}`, 'PATCH', { empresa_cliente_id: oficialId }),
+    ]);
+
+    // 3. Marcar duplicado como fusionado (estado terminal — nunca eliminar el registro)
+    await sbFetch(`/empresas_cliente?id=eq.${dup}`, 'PATCH', {
+      estado:     'fusionado',
+      activa:     false,
+      updated_at: now,
+      updated_by: actor,
+    });
+
+    // 4. Historial en ambos registros
+    await Promise.all([
+      sbFetch('/clientes_historial', 'POST', {
+        empresa_id:    oficialId,
+        tipo:          'fusion_recibida',
+        descripcion:   `Cliente "${duplicado.razon_social}" (${duplicado.codigo_cliente ?? duplicado_id}) fusionado en este registro. Motivo: ${motivo}`,
+        usuario:       actor,
+        usuario_email: actor,
+        metadata:      { duplicado_id, duplicado_razon_social: duplicado.razon_social, motivo, identity_rules: namesToRegister },
+      }),
+      sbFetch('/clientes_historial', 'POST', {
+        empresa_id:    duplicado_id,
+        tipo:          'fusion_ejecutada',
+        descripcion:   `Este registro fue fusionado en "${oficial.razon_social}" (${oficial.codigo_cliente ?? oficialId}). Motivo: ${motivo}`,
+        usuario:       actor,
+        usuario_email: actor,
+        metadata:      { oficial_id: oficialId, oficial_razon_social: oficial.razon_social, motivo },
+      }),
+    ]).catch(err => console.error('⚠️  merge historial:', err.message));
+
+    // 5. Refrescar lookup in-memory para que las próximas syncs usen las nuevas reglas
+    await refreshCustomerLookup();
+
+    console.log(`🔀 Merge: "${duplicado.razon_social}" → "${oficial.razon_social}" por ${actor}. Rules: ${namesToRegister.join(', ')}`);
+    res.json({
+      ok:                     true,
+      oficial_id:             oficialId,
+      duplicado_id,
+      identity_rules_created: namesToRegister.length,
+    });
+  } catch (e) {
+    console.error("POST /api/clientes/:id/merge error:", e.message);
     res.status(500).json({ error: "Error interno" });
   }
 });

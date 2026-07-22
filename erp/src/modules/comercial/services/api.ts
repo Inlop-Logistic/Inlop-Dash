@@ -1,5 +1,5 @@
 import { req } from "@/services/http";
-import type { ClienteListItem, ClienteDetalle, CambioEstadoPayload, NuevoClienteFormData } from "../types";
+import type { ClienteListItem, ClienteDetalle, CambioEstadoPayload, NuevoClienteFormData, MergePreview } from "../types";
 
 export function listarClientes(): Promise<ClienteListItem[]> {
   return req<ClienteListItem[]>("/api/clientes");
@@ -27,5 +27,22 @@ export function cambiarEstadoCliente(id: string, payload: CambioEstadoPayload): 
   return req<{ ok: boolean; estado: string }>(`/api/clientes/${encodeURIComponent(id)}/estado`, {
     method: "PATCH",
     body: JSON.stringify(payload),
+  });
+}
+
+export function getMergePreview(oficialId: string, duplicadoId: string): Promise<MergePreview> {
+  return req<MergePreview>(
+    `/api/clientes/${encodeURIComponent(oficialId)}/merge-preview?duplicado_id=${encodeURIComponent(duplicadoId)}`
+  );
+}
+
+export function mergeCliente(
+  oficialId: string,
+  duplicadoId: string,
+  motivo?: string
+): Promise<{ ok: boolean; oficial_id: string; duplicado_id: string; identity_rules_created: number }> {
+  return req(`/api/clientes/${encodeURIComponent(oficialId)}/merge`, {
+    method: "POST",
+    body: JSON.stringify({ duplicado_id: duplicadoId, motivo }),
   });
 }

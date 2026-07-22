@@ -6,6 +6,7 @@ import { TabPerfil } from "./TabPerfil";
 import { TabDeshabilitada } from "./TabDeshabilitada";
 import { WorkspaceAcciones } from "./WorkspaceAcciones";
 import { FormCambioEstado } from "./FormCambioEstado";
+import { ModalFusionarCliente } from "./ModalFusionarCliente";
 import { useClienteDetalle } from "../hooks/useClienteDetalle";
 import { crearCliente } from "../services/api";
 import type { ClienteWorkspaceTab, NuevoClienteFormData, ClienteListItem } from "../types";
@@ -57,6 +58,7 @@ export function ClienteWorkspace({ clienteId, onBack, onClienteCreado }: Cliente
   const [activeTab, setActiveTab]       = useState<ClienteWorkspaceTab>("perfil");
   const [editMode, setEditMode]         = useState(esNuevo);
   const [cambioEstadoOpen, setCambioEstadoOpen] = useState(false);
+  const [fusionarOpen, setFusionarOpen] = useState(false);
   const [isFormDirty, setIsFormDirty]   = useState(false);
 
   // Maneja la creación de un cliente nuevo desde TabPerfil
@@ -210,6 +212,7 @@ export function ClienteWorkspace({ clienteId, onBack, onClienteCreado }: Cliente
               onNuevoContacto={() => { setActiveTab("contactos"); }}
               onNuevaTarifa={() => {}}
               onSubirDocumento={() => { setActiveTab("documentos"); }}
+              onFusionar={() => setFusionarOpen(true)}
             />
           </div>
         )}
@@ -380,6 +383,15 @@ export function ClienteWorkspace({ clienteId, onBack, onClienteCreado }: Cliente
             return cambiarEstado(payload);
           }}
           saving={saving}
+        />
+      )}
+
+      {/* ── Modal Fusionar Cliente ── */}
+      {!esNuevo && fusionarOpen && cliente && (
+        <ModalFusionarCliente
+          clienteOficial={cliente}
+          onClose={() => setFusionarOpen(false)}
+          onSuccess={(id) => { setFusionarOpen(false); onBack(); }}
         />
       )}
     </div>

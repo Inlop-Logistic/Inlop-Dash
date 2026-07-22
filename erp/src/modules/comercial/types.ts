@@ -6,7 +6,16 @@ export type EstadoCliente =
   | "suspendido"
   | "prospecto"
   | "bloqueado"
-  | "pendiente";
+  | "pendiente"
+  | "fusionado";
+
+/** Resultado del preview de fusión */
+export interface MergePreview {
+  oficial:   { id: string; razon_social: string; codigo_cliente: string | null };
+  duplicado: { id: string; razon_social: string; codigo_cliente: string | null };
+  referencias: { planeados: number; cumplidos: number; solicitudes: number };
+  identity_rules: string[];
+}
 
 export type TipoCliente =
   | "cargador"

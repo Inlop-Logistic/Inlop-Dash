@@ -9,6 +9,7 @@ export const ESTADO_CLIENTE_CFG: Record<EstadoCliente, { label: string; variant:
   prospecto:  { label: "Prospecto",  variant: "info"    },
   bloqueado:  { label: "Bloqueado",  variant: "danger"  },
   pendiente:  { label: "Pendiente",  variant: "warning" },
+  fusionado:  { label: "Fusionado",  variant: "default" },
 };
 
 // Transiciones de estado válidas: qué estados se pueden alcanzar desde cada estado.
@@ -21,6 +22,7 @@ export const TRANSICIONES_ESTADO: Record<EstadoCliente, EstadoCliente[]> = {
   suspendido: ["activo", "bloqueado", "inactivo"],
   bloqueado:  ["activo", "inactivo"],
   inactivo:   ["prospecto", "activo"],
+  fusionado:  [], // estado terminal — solo el merge puede asignarlo
 };
 
 // Motivos disponibles por estado destino
@@ -31,6 +33,7 @@ export const MOTIVOS_CAMBIO_ESTADO: Record<EstadoCliente, string[]> = {
   suspendido: ["Deuda vencida", "Incumplimiento contractual", "Solicitud del cliente", "Revisión interna", "Otro"],
   bloqueado:  ["Fraude confirmado", "Incumplimiento grave", "Orden judicial", "Riesgo de seguridad", "Otro"],
   inactivo:   ["Cierre de empresa", "Sin actividad prolongada", "Solicitud del cliente", "Decisión comercial", "Duplicado del pendiente", "Otro"],
+  fusionado:  [], // no modificable manualmente
 };
 
 // ── Tipos de cliente ──────────────────────────────────────────────────────────
@@ -105,6 +108,7 @@ export const TABS_LISTADO = [
   { id: "suspendidos", label: "Suspendidos", estadoKey: "suspendido" },
   { id: "bloqueados",  label: "Bloqueados",  estadoKey: "bloqueado"  },
   { id: "inactivos",   label: "Inactivos",   estadoKey: "inactivo"   },
+  { id: "fusionados",  label: "Fusionados",  estadoKey: "fusionado"  },
 ] as const;
 
 // ── Tabs del Workspace ────────────────────────────────────────────────────────

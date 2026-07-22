@@ -1,4 +1,4 @@
-import { Edit2, RefreshCw, ClipboardPlus, UserPlus, DollarSign, UploadCloud } from "lucide-react";
+import { Edit2, RefreshCw, ClipboardPlus, UserPlus, DollarSign, UploadCloud, GitMerge } from "lucide-react";
 
 interface WorkspaceAccionesProps {
   onEditar:          () => void;
@@ -7,6 +7,7 @@ interface WorkspaceAccionesProps {
   onNuevoContacto:   () => void;
   onNuevaTarifa:     () => void;
   onSubirDocumento:  () => void;
+  onFusionar:        () => void;
   esNuevo?: boolean;
 }
 
@@ -54,7 +55,7 @@ function AccionButton({ icon, label, onClick, disabled = false, variant = "defau
 }
 
 export function WorkspaceAcciones({
-  onEditar, onCambiarEstado, onNuevaSolicitud, onNuevoContacto, onNuevaTarifa, onSubirDocumento,
+  onEditar, onCambiarEstado, onNuevaSolicitud, onNuevoContacto, onNuevaTarifa, onSubirDocumento, onFusionar,
   esNuevo = false,
 }: WorkspaceAccionesProps) {
   return (
@@ -93,6 +94,12 @@ export function WorkspaceAcciones({
         icon={<UploadCloud className="w-3.5 h-3.5" />}
         label="Subir Documento"
         onClick={onSubirDocumento}
+        disabled={esNuevo}
+      />
+      <AccionButton
+        icon={<GitMerge className="w-3.5 h-3.5" />}
+        label="Fusionar"
+        onClick={onFusionar}
         disabled={esNuevo}
       />
     </div>

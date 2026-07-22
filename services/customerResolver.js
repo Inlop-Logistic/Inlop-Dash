@@ -200,6 +200,29 @@ async function resolveOrCreateCustomer(rawName, ctx) {
       };
     }
 
+    // Capa 2.5: Identity Rules — nombres externos registrados por merges anteriores.
+    // Permite que "FRONTERA ENERGY COLOMBIA CORP SUCURSAL COLOMBIA" resuelva
+    // al cliente oficial "FRONTERA ENERGY COLOMBIA" sin crear un duplicado.
+    const ruleRows = await ctx.sbFetch(
+      `/cliente_nombres_externos?nombre_normalizado=eq.${encodeURIComponent(normalized)}&select=empresa_cliente_id&limit=1`
+    ).catch(() => null);
+    if (ruleRows && ruleRows[0]) {
+      const empId = ruleRows[0].empresa_cliente_id;
+      const razon_social = ctx.empresaById?.get(empId) ?? null;
+      if (razon_social) {
+        ctx.lookupMap.set(normalized, { id: empId, razon_social });
+        return { empresa_cliente_id: empId, razon_social, resolved: true, created: false, placeholder: false };
+      }
+      // empresaById no tiene la empresa (raro): buscamos directo en BD
+      const empRows = await ctx.sbFetch(
+        `/empresas_cliente?id=eq.${encodeURIComponent(empId)}&select=id,razon_social&limit=1`
+      ).catch(() => null);
+      if (empRows && empRows[0]) {
+        ctx.lookupMap.set(normalized, { id: empRows[0].id, razon_social: empRows[0].razon_social });
+        return { empresa_cliente_id: empRows[0].id, razon_social: empRows[0].razon_social, resolved: true, created: false, placeholder: false };
+      }
+    }
+
     // Capa 3: crear cliente con estado pendiente
     const codigo = ctx.generarCodigo ? await ctx.generarCodigo() : null;
     const ahora = new Date().toISOString();
