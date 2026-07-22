@@ -18,8 +18,8 @@ export interface ViajeResumen {
   fecha_detectado: string;
   estado_programacion: EstadoProgramacion;
   observaciones: string | null;
-  /** type_operation del TMS — disponible cuando el viaje está activo en Resume. */
-  type_operation: string | null;
+  /** Tipo de servicio derivado: 'Urbano' si Origen == Destino, 'Nacional' si difieren. */
+  tipo_servicio: string | null;
   /** Teléfono normalizado del conductor — disponible cuando el viaje está activo en Resume. */
   conductor_tel: string | null;
 }

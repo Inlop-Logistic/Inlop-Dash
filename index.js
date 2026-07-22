@@ -2671,12 +2671,19 @@ app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
         nombre_cliente = r.company_customer_name;
       }
       const vivo = viajesIdx.get(r.trip_number) || null;
+      // tipo_servicio: no existe campo oficial en el JSON de ControlT para esto.
+      // Regla de negocio: Origen == Destino → Urbano, Origen ≠ Destino → Nacional.
+      const origen  = (r.city_origin  || '').trim().toLowerCase();
+      const destino = (r.city_destination || '').trim().toLowerCase();
+      const tipo_servicio = (origen && destino)
+        ? (origen === destino ? 'Urbano' : 'Nacional')
+        : null;
       return {
         ...r,
         nombre_cliente,
         match_tms_pendiente: !r.empresa_cliente_id && isPlaceholderTmsCustomer(r.company_customer_name),
-        type_operation: vivo?.type_operation || null,
-        conductor_tel:  vivo ? (extraerTelefono(vivo.driver_phone, vivo.full_driver) || null) : null,
+        tipo_servicio,
+        conductor_tel: vivo ? (extraerTelefono(vivo.driver_phone, vivo.full_driver) || null) : null,
       };
     });
 

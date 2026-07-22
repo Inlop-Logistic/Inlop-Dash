@@ -66,9 +66,9 @@ export const COLUMNS: Column<ViajeResumen>[] = [
     render: (v) => (
       <span
         className="text-[12px]"
-        style={{ color: v.type_operation ? "var(--gray-700)" : "var(--gray-300)" }}
+        style={{ color: v.tipo_servicio ? "var(--gray-700)" : "var(--gray-300)" }}
       >
-        {v.type_operation ?? "—"}
+        {v.tipo_servicio ?? "—"}
       </span>
     ),
   },
