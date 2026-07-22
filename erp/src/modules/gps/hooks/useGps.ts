@@ -17,11 +17,14 @@ export function useGps() {
   // Selección
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+
   const cargar = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       setData(await listarVehiculosGps());
+      setLastRefresh(new Date());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al cargar datos GPS");
     } finally {
@@ -92,5 +95,6 @@ export function useGps() {
     filtrados, kpis,
     selectedId, setSelectedId, selectedVehiculo,
     selectByPlate, cargar,
+    lastRefresh,
   };
 }

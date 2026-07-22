@@ -1,14 +1,20 @@
-import { useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { RefreshCw, Search, Satellite, AlertCircle } from "lucide-react";
-import { PageHeader, Card, Button } from "@/components/ui";
+import { PageHeader, Button } from "@/components/ui";
 import { useNavigationContext } from "@/core/navigation";
 import { useGps } from "./hooks/useGps";
 import { GpsKPIs } from "./components/GpsKPIs";
 import { MapaPrincipal } from "./components/MapaPrincipal";
-import { VehiculosTable } from "./components/VehiculosTable";
-import { VehiculoDrawer } from "./components/VehiculoDrawer";
+import { GpsInfoPanel } from "./components/GpsInfoPanel";
 import { TABS_GPS, ESTADO_GPS_CFG } from "./constants";
 import type { EstadoGps } from "./types";
+
+function formatAge(from: Date, now: Date): string {
+  const s = Math.floor((now.getTime() - from.getTime()) / 1000);
+  if (s < 5)  return "ahora";
+  if (s < 60) return `hace ${s}s`;
+  return `hace ${Math.floor(s / 60)}m`;
+}
 
 export function GpsPage() {
   const { navPayload } = useNavigationContext();
@@ -21,7 +27,15 @@ export function GpsPage() {
     filtrados, kpis,
     selectedId, setSelectedId, selectedVehiculo,
     selectByPlate, cargar,
+    lastRefresh,
   } = useGps();
+
+  // Ticker for "updated X ago" display
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 5000);
+    return () => clearInterval(id);
+  }, []);
 
   // Auto-seleccionar desde navPayload (navegación contextual desde otro módulo)
   const autoOpenedRef = useRef(false);
@@ -39,32 +53,39 @@ export function GpsPage() {
   useEffect(() => { autoOpenedRef.current = false; }, [navPayload?.licensePlate, navPayload?.tripNumber]);
 
   return (
-    <div className="flex flex-col" style={{ minHeight: "calc(100vh - 60px)" }}>
+    <div className="flex flex-col" style={{ height: "calc(100vh - 60px)" }}>
 
       {/* Header + KPIs */}
-      <div className="px-5 pt-5 pb-4 shrink-0 flex flex-col gap-4">
+      <div className="px-5 pt-4 pb-3 shrink-0 flex flex-col gap-3">
         <PageHeader
           title="Centro de Monitoreo"
           subtitle="Seguimiento GPS en tiempo real de toda la flota"
           icon={<Satellite className="w-5 h-5" />}
           actions={
-            <Button
-              variant="outline" size="sm"
-              icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />}
-              loading={loading}
-              onClick={cargar}
-            >
-              Actualizar
-            </Button>
+            <div className="flex items-center gap-2">
+              {lastRefresh && (
+                <span className="text-[11px]" style={{ color: "var(--gray-400)" }}>
+                  Actualizado {formatAge(lastRefresh, now)}
+                </span>
+              )}
+              <Button
+                variant="outline" size="sm"
+                icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />}
+                loading={loading}
+                onClick={cargar}
+              >
+                Actualizar
+              </Button>
+            </div>
           }
         />
         <GpsKPIs kpis={kpis} onTabClick={setTabActivo} />
       </div>
 
       {/* Filtros + Tabs */}
-      <div className="px-5 pb-3 flex flex-wrap items-center gap-3 shrink-0">
-        <div className="flex-1 min-w-[180px] relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "var(--gray-400)" }} />
+      <div className="px-5 pb-3 shrink-0 flex flex-wrap items-center gap-2.5">
+        <div className="flex-1 min-w-[160px] relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: "var(--gray-400)" }} />
           <input
             type="text"
             value={busqueda}
@@ -72,7 +93,7 @@ export function GpsPage() {
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Placa, conductor, cliente, viaje…"
             className="w-full text-[13px] outline-none"
-            style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "7px 12px 7px 36px", color: "var(--gray-700)", background: "#fff" }}
+            style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "6px 12px 6px 34px", color: "var(--gray-700)", background: "#fff" }}
           />
         </div>
 
@@ -81,7 +102,7 @@ export function GpsPage() {
           onChange={(e) => setEstadoFiltro(e.target.value)}
           aria-label="Filtrar por estado"
           className="text-[13px] outline-none"
-          style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "7px 12px", color: "var(--gray-700)", background: "#fff", minWidth: 150 }}
+          style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "6px 12px", color: "var(--gray-700)", background: "#fff", minWidth: 140 }}
         >
           <option value="">Todos los estados</option>
           {(Object.keys(ESTADO_GPS_CFG) as EstadoGps[]).map((k) => (
@@ -89,7 +110,7 @@ export function GpsPage() {
           ))}
         </select>
 
-        <div className="flex items-center gap-1.5 flex-wrap" role="tablist">
+        <div className="flex items-center gap-1 flex-wrap" role="tablist">
           {TABS_GPS.map((t) => {
             const active = tabActivo === t.id;
             return (
@@ -112,10 +133,10 @@ export function GpsPage() {
         </div>
       </div>
 
-      {/* Mapa + Tabla */}
-      <div className="flex gap-4 px-5 pb-5" style={{ height: "calc(100vh - 330px)", minHeight: 500 }}>
+      {/* Main workspace — 70/30 permanent split */}
+      <div className="flex flex-1 min-h-0 px-5 pb-5 gap-4">
 
-        {/* Mapa */}
+        {/* Mapa (flex-1) */}
         <div className="flex-1 min-w-0">
           {error ? (
             <div
@@ -137,30 +158,18 @@ export function GpsPage() {
           )}
         </div>
 
-        {/* Lista de vehículos */}
-        <div className="w-[280px] shrink-0 flex flex-col gap-2">
-          <div className="text-[11px] font-semibold shrink-0" style={{ color: "var(--gray-500)" }}>
-            {filtrados.length} vehículo{filtrados.length !== 1 ? "s" : ""}
-            {busqueda && ` · "${busqueda}"`}
-          </div>
-          <Card style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
-            <VehiculosTable
-              vehiculos={filtrados}
-              loading={loading}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-            />
-          </Card>
+        {/* Panel de información (360px fijo — siempre visible) */}
+        <div style={{ width: 360, flexShrink: 0 }}>
+          <GpsInfoPanel
+            vehiculo={selectedVehiculo}
+            vehiculos={filtrados}
+            loading={loading}
+            onSelect={setSelectedId}
+            onClose={() => setSelectedId(null)}
+          />
         </div>
       </div>
 
-      {/* Drawer de detalle */}
-      {selectedVehiculo && (
-        <VehiculoDrawer
-          vehiculo={selectedVehiculo}
-          onClose={() => setSelectedId(null)}
-        />
-      )}
     </div>
   );
 }
