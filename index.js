@@ -2683,6 +2683,7 @@ app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
         nombre_cliente,
         match_tms_pendiente: !r.empresa_cliente_id && isPlaceholderTmsCustomer(r.company_customer_name),
         tipo_servicio,
+        type_operation: vivo?.type_operation || null,
         conductor_tel: vivo ? (extraerTelefono(vivo.driver_phone, vivo.full_driver) || null) : null,
       };
     });
