@@ -3,11 +3,11 @@ import type { TmsViaje, KpisViaje } from "../types";
 import type { TabViajes } from "../constants";
 import { ESTADOS_ACTIVOS, ESTADOS_FINALIZADOS, REFRESH_INTERVAL_MS, tabCount } from "../constants";
 import { listarViajes } from "../services/api";
-import { parseFechaDMY } from "@/utils/parseFecha";
+import { parseFechaMDY } from "@/utils/parseFecha";
 
-/** Extrae YYYY-MM-DD de un activated_on en formato DD/MM/YYYY HH:MM:SS. */
+/** Extrae YYYY-MM-DD de un activated_on en formato MM/DD/YYYY HH:MM:SS. */
 function toDateISO(activated_on: string | null): string | null {
-  const d = parseFechaDMY(activated_on);
+  const d = parseFechaMDY(activated_on);
   if (!d) return null;
   return d.toISOString().slice(0, 10);
 }

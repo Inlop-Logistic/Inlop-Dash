@@ -45,7 +45,7 @@ export interface TmsViaje {
   last_alarm_name: string | null;
   /** Formato TMS: MM/DD/YYYY HH:MM:SS */
   created_on: string | null;
-  /** Formato TMS: DD/MM/YYYY HH:MM:SS — usar parseFechaDMY. */
+  /** Formato TMS: MM/DD/YYYY HH:MM:SS — usar parseFechaMDY. */
   activated_on: string | null;
 
   // Campos de alarma — reservados para expansión futura del TMS.

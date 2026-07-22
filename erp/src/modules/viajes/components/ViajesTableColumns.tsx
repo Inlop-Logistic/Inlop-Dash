@@ -4,16 +4,20 @@ import type { TmsViaje } from "../types";
 import { VIAJES_COLUMNS_DEF } from "../viajes.definition";
 import { EstadoBadge } from "./EstadoBadge";
 import { GpsStatus } from "./GpsStatus";
-import { parseFechaDMY } from "@/utils/parseFecha";
+import { parseFechaMDY } from "@/utils/parseFecha";
 import { esPanico } from "../constants";
 
 const LOCALE = "es-CO";
 
 function fmtActivado(str: string | null | undefined): string {
   if (!str) return "—";
-  const d = parseFechaDMY(str);
+  const d = parseFechaMDY(str);
   if (!d) return "—";
-  return d.toLocaleDateString(LOCALE, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  const day   = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year  = d.getFullYear();
+  const time  = d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", hour12: true });
+  return `${day}/${month}/${year} ${time}`;
 }
 
 /** Razón social del Maestro, con fallback al primer nombre TMS. */

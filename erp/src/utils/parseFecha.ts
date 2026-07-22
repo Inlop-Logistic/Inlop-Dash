@@ -3,8 +3,8 @@
  * Centralizar aquí evita parseos distribuidos y facilita tests.
  *
  * Formatos detectados en auditoría funcional:
- *   - parseFechaMDY → MM/DD/YYYY HH:MM:SS [AM|PM]  (created_on, latest_gps_report)
- *   - parseFechaDMY → DD/MM/YYYY HH:MM:SS           (activated_on, schedulate_origin)
+ *   - parseFechaMDY → MM/DD/YYYY HH:MM:SS [AM|PM]  (activated_on, created_on, latest_gps_report)
+ *   - parseFechaDMY → DD/MM/YYYY HH:MM:SS           (schedulate_origin)
  */
 
 /**
