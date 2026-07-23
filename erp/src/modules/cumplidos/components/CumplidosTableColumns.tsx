@@ -1,78 +1,162 @@
-import { ChevronRight } from "lucide-react";
+import { parseFechaMDY } from "@/utils/parseFecha";
 import type { Column } from "@/components/ui";
 import type { CumplidoRecord } from "../types";
-import { CUMPLIDOS_COLUMNS_DEF } from "../cumplidos.definition";
-import { EstadoDocumental } from "./EstadoDocumental";
-import { fmtTms } from "@/utils/parseFecha";
+import { estadoViajeVisual, ESTADO_VIAJE_CFG } from "../constants";
 
-function clienteCorto(raw: string | null | undefined): string {
-  if (!raw) return "—";
-  return raw.split(",")[0].trim().slice(0, 28) || "—";
+/** Extrae fecha y hora de un string MM/DD/YYYY HH:MM:SS. */
+function splitActivatedOn(raw: string | null | undefined): { fecha: string; hora: string } {
+  if (!raw) return { fecha: "—", hora: "" };
+  const d = parseFechaMDY(raw);
+  if (!d) return { fecha: "—", hora: "" };
+  const p = (n: number) => String(n).padStart(2, "0");
+  return {
+    fecha: `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`,
+    hora:  `${p(d.getHours())}:${p(d.getMinutes())}`,
+  };
 }
 
-function fmtFecha(str: string | null | undefined): string {
-  return fmtTms(str, "DMY", {
-    day: "2-digit", month: "short", year: "numeric",
-    timeZone: "America/Bogota",
-  });
+function lineaNegocio(raw: string | null | undefined): string {
+  if (!raw) return "Carga Seca";
+  return raw.trim().toLowerCase() === "granel liquido" ? "Carga Líquida" : "Carga Seca";
 }
 
-const RENDERERS: Record<string, (c: CumplidoRecord) => React.ReactNode> = {
-  trip_number: (c) => (
-    <span className="text-[13px] font-bold font-mono tabular-nums" style={{ color: "var(--navy)" }}>
-      {c.trip_number}
-    </span>
-  ),
-  number_order: (c) => (
-    <span className="text-[12px] font-mono" style={{ color: c.number_order ? "var(--gray-600)" : "var(--gray-300)" }}>
-      {c.number_order ?? "—"}
-    </span>
-  ),
-  company_customer_name: (c) => (
-    <span className="text-[13px] truncate block" style={{ color: "var(--gray-700)" }}>
-      {clienteCorto(c.company_customer_name)}
-    </span>
-  ),
-  license_plate: (c) => c.license_plate ? (
-    <span
-      className="text-[11px] font-bold font-mono tracking-widest px-1.5 py-0.5 rounded"
-      style={{ background: "var(--gray-100)", color: "var(--navy)", border: "1px solid var(--gray-200)" }}
-    >
-      {c.license_plate}
-    </span>
-  ) : <span style={{ color: "var(--gray-300)" }}>—</span>,
-  driver_name: (c) => (
-    <span className="text-[13px]" style={{ color: c.driver_name ? "var(--gray-700)" : "var(--gray-300)" }}>
-      {c.driver_name ?? "Sin asignar"}
-    </span>
-  ),
-  fecha_cumplido: (c) => (
-    <span className="text-[11px] font-mono" style={{ color: "var(--gray-500)" }}>
-      {fmtFecha(c.fecha_cumplido)}
-    </span>
-  ),
-  estado_documental: (c) => <EstadoDocumental estado={c.estado_documental} />,
-  observaciones: (c) => c.observaciones ? (
-    <span
-      className="text-[11px] truncate block max-w-[200px]"
-      style={{ color: "var(--gray-500)" }}
-      title={c.observaciones}
-    >
-      {c.observaciones}
-    </span>
-  ) : <span style={{ color: "var(--gray-300)", fontSize: 11 }}>—</span>,
-  responsable: (c) => (
-    <span className="text-[12px]" style={{ color: c.responsable ? "var(--gray-600)" : "var(--gray-300)" }}>
-      {c.responsable ?? "—"}
-    </span>
-  ),
-  _actions: () => <ChevronRight className="w-4 h-4" style={{ color: "var(--gray-300)" }} />,
-};
-
-export const COLUMNS: Column<CumplidoRecord>[] = CUMPLIDOS_COLUMNS_DEF.map((def) => ({
-  key:    def.key,
-  header: def.header,
-  width:  def.width,
-  render: RENDERERS[def.key] ?? (() => null),
-}));
-
+export const COLUMNS: Column<CumplidoRecord>[] = [
+  {
+    key: "activated_on",
+    header: "Programado",
+    width: "110px",
+    render: (c) => {
+      const { fecha, hora } = splitActivatedOn(c.activated_on);
+      return (
+        <div className="tabular-nums leading-none">
+          <div className="text-[11px]" style={{ color: "var(--gray-500)" }}>{fecha}</div>
+          {hora && hora !== "00:00" && (
+            <div className="text-[14px] font-bold mt-0.5" style={{ color: "var(--navy)" }}>{hora}</div>
+          )}
+        </div>
+      );
+    },
+  },
+  {
+    key: "trip_number",
+    header: "Viaje",
+    width: "110px",
+    render: (c) => (
+      <span className="text-[12px] font-mono" style={{ color: "var(--navy)" }}>
+        {c.trip_number}
+      </span>
+    ),
+  },
+  {
+    key: "license_plate",
+    header: "Placa",
+    width: "88px",
+    render: (c) => (
+      <span
+        className="text-[13px] font-bold tracking-widest font-mono"
+        style={{ color: c.license_plate ? "var(--navy)" : "var(--gray-300)" }}
+      >
+        {c.license_plate ?? "—"}
+      </span>
+    ),
+  },
+  {
+    key: "tipo_servicio",
+    header: "Tipo Servicio",
+    width: "110px",
+    render: (_c) => (
+      <span className="text-[11px]" style={{ color: "var(--gray-300)" }}>—</span>
+    ),
+  },
+  {
+    key: "linea_negocio",
+    header: "Línea Negocio",
+    width: "120px",
+    render: (_c) => (
+      <span className="text-[12px]" style={{ color: "var(--gray-700)" }}>
+        {lineaNegocio(null)}
+      </span>
+    ),
+  },
+  {
+    key: "company_customer_name",
+    header: "Cliente",
+    render: (c) => (
+      <div
+        className="text-[13px] font-medium truncate max-w-[160px]"
+        style={{ color: c.company_customer_name ? "var(--gray-800)" : "var(--gray-300)" }}
+        title={c.company_customer_name ?? undefined}
+      >
+        {c.company_customer_name ? c.company_customer_name.split(",")[0].trim() : "—"}
+      </div>
+    ),
+  },
+  {
+    key: "origin_city_name",
+    header: "Origen",
+    width: "110px",
+    render: (c) => (
+      <div
+        className="text-[12px] truncate"
+        style={{ color: c.origin_city_name ? "var(--gray-700)" : "var(--gray-300)" }}
+        title={c.origin_city_name ?? undefined}
+      >
+        {c.origin_city_name ?? "—"}
+      </div>
+    ),
+  },
+  {
+    key: "destiny_city_name",
+    header: "Destino",
+    width: "110px",
+    render: (c) => (
+      <div
+        className="text-[12px] truncate"
+        style={{ color: c.destiny_city_name ? "var(--gray-700)" : "var(--gray-300)" }}
+        title={c.destiny_city_name ?? undefined}
+      >
+        {c.destiny_city_name ?? "—"}
+      </div>
+    ),
+  },
+  {
+    key: "driver_name",
+    header: "Conductor",
+    width: "130px",
+    render: (c) => (
+      <div
+        className="text-[12px] truncate"
+        style={{ color: c.driver_name ? "var(--gray-700)" : "var(--gray-300)" }}
+        title={c.driver_name ?? undefined}
+      >
+        {c.driver_name ?? "—"}
+      </div>
+    ),
+  },
+  {
+    key: "conductor_tel",
+    header: "Teléfono",
+    width: "110px",
+    render: (_c) => (
+      <span className="text-[12px] font-mono" style={{ color: "var(--gray-300)" }}>—</span>
+    ),
+  },
+  {
+    key: "estado_viaje",
+    header: "Estado",
+    width: "120px",
+    render: (c) => {
+      const key = estadoViajeVisual(c);
+      const cfg = ESTADO_VIAJE_CFG[key];
+      return (
+        <span
+          className="inline-flex items-center gap-1.5 font-semibold text-[var(--text-sm)] px-2.5 py-1 rounded-[var(--radius-full)]"
+          style={{ background: cfg.bg, color: cfg.color }}
+        >
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: cfg.dot }} />
+          {cfg.label}
+        </span>
+      );
+    },
+  },
+];

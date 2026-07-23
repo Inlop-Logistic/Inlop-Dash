@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import {
   RefreshCw, Search, ClipboardCheck, Clock, AlertCircle,
   CheckCircle2, XCircle, FileStack, Eye,
+  ChevronFirst, ChevronLast, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { KpiCard, PageHeader, Card, DataTable, Button } from "@/components/ui";
 import { useNavigationContext } from "@/core/navigation";
@@ -19,7 +20,12 @@ export function CumplidosPage() {
     tabActivo, setTabActivo,
     estadoFiltro, setEstadoFiltro,
     clienteFiltro, setClienteFiltro,
-    filtradas, kpis, clientes,
+    desde, setDesde,
+    hasta, setHasta,
+    filtradas, paginadas, kpis, clientes,
+    pagina, setPagina,
+    tamPagina, setTamPagina,
+    totalPaginas,
     setPanelId, panelCumplido,
     cargar, getTabCount,
   } = useCumplidos();
@@ -36,6 +42,9 @@ export function CumplidosPage() {
   useEffect(() => {
     autoOpenedRef.current = false;
   }, [navPayload?.tripNumber]);
+
+  const start = filtradas.length === 0 ? 0 : (pagina - 1) * tamPagina + 1;
+  const end   = Math.min(pagina * tamPagina, filtradas.length);
 
   return (
     <div className="p-6 flex flex-col gap-5">
@@ -112,6 +121,33 @@ export function CumplidosPage() {
 
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-3">
+        {/* Fecha Desde */}
+        <div className="flex items-center gap-2">
+          <label htmlFor="cumplidos-filtro-desde" className="text-[12px] font-medium whitespace-nowrap" style={{ color: "var(--gray-500)" }}>Desde</label>
+          <input
+            id="cumplidos-filtro-desde"
+            type="date"
+            value={desde}
+            onChange={(e) => setDesde(e.target.value)}
+            className="text-[13px] outline-none"
+            style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "7px 12px", color: "var(--gray-700)", background: "#fff" }}
+          />
+        </div>
+
+        {/* Fecha Hasta */}
+        <div className="flex items-center gap-2">
+          <label htmlFor="cumplidos-filtro-hasta" className="text-[12px] font-medium whitespace-nowrap" style={{ color: "var(--gray-500)" }}>Hasta</label>
+          <input
+            id="cumplidos-filtro-hasta"
+            type="date"
+            value={hasta}
+            onChange={(e) => setHasta(e.target.value)}
+            className="text-[13px] outline-none"
+            style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "7px 12px", color: "var(--gray-700)", background: "#fff" }}
+          />
+        </div>
+
+        {/* Búsqueda */}
         <div className="flex-1 min-w-[220px] relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "var(--gray-400)" }} />
           <input
@@ -205,14 +241,59 @@ export function CumplidosPage() {
             </button>
           </div>
         ) : (
-          <DataTable
-            columns={COLUMNS}
-            rows={filtradas}
-            rowKey={(c) => c.trip_number}
-            onRowClick={(c) => setPanelId(c.trip_number)}
-            loading={loading}
-            emptyMessage="No hay viajes finalizados para los filtros seleccionados."
-          />
+          <>
+            <DataTable
+              columns={COLUMNS}
+              rows={paginadas}
+              rowKey={(c) => c.trip_number}
+              onRowClick={(c) => setPanelId(c.trip_number)}
+              loading={loading}
+              emptyMessage="No hay viajes finalizados para los filtros seleccionados."
+            />
+
+            {/* Controles de paginación */}
+            {!loading && filtradas.length > 0 && (
+              <div
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                style={{ borderTop: "1px solid var(--gray-100)" }}
+              >
+                {/* Contador */}
+                <span className="text-[12px]" style={{ color: "var(--gray-500)" }}>
+                  Mostrando {start}–{end} de {filtradas.length} viaje{filtradas.length !== 1 ? "s" : ""}
+                </span>
+
+                <div className="flex items-center gap-3">
+                  {/* Selector de registros por página */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[12px]" style={{ color: "var(--gray-500)" }}>Por página</span>
+                    <select
+                      value={tamPagina}
+                      onChange={(e) => { setTamPagina(Number(e.target.value)); setPagina(1); }}
+                      className="text-[12px] outline-none"
+                      style={{ border: "1.5px solid var(--gray-200)", borderRadius: 8, padding: "4px 8px", color: "var(--gray-700)", background: "#fff" }}
+                    >
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+
+                  {/* Página X de Y */}
+                  <span className="text-[12px]" style={{ color: "var(--gray-500)" }}>
+                    Página {pagina} de {totalPaginas}
+                  </span>
+
+                  {/* Navegación */}
+                  <div className="flex items-center gap-1">
+                    <PaginaBtn icon={<ChevronFirst className="w-3.5 h-3.5" />} onClick={() => setPagina(1)}          disabled={pagina === 1}           label="Primera página" />
+                    <PaginaBtn icon={<ChevronLeft  className="w-3.5 h-3.5" />} onClick={() => setPagina(p => p - 1)} disabled={pagina === 1}           label="Página anterior" />
+                    <PaginaBtn icon={<ChevronRight className="w-3.5 h-3.5" />} onClick={() => setPagina(p => p + 1)} disabled={pagina === totalPaginas} label="Página siguiente" />
+                    <PaginaBtn icon={<ChevronLast  className="w-3.5 h-3.5" />} onClick={() => setPagina(totalPaginas)} disabled={pagina === totalPaginas} label="Última página" />
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </Card>
 
@@ -224,6 +305,28 @@ export function CumplidosPage() {
         />
       )}
     </div>
+  );
+}
+
+function PaginaBtn({ icon, onClick, disabled, label }: {
+  icon: React.ReactNode; onClick: () => void; disabled: boolean; label: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className="flex items-center justify-center w-7 h-7 rounded-lg transition-colors"
+      style={{
+        border:     `1.5px solid ${disabled ? "var(--gray-100)" : "var(--gray-200)"}`,
+        color:      disabled ? "var(--gray-300)" : "var(--gray-600)",
+        background: disabled ? "var(--gray-50)"  : "#fff",
+        cursor:     disabled ? "not-allowed" : "pointer",
+      }}
+    >
+      {icon}
+    </button>
   );
 }
 

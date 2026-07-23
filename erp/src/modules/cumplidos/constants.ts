@@ -1,5 +1,14 @@
 import type { EstadoDocumental, CumplidoRecord } from "./types";
 
+export const ESTADO_VIAJE_CFG = {
+  pendiente:  { label: "Pendiente",  color: "#92400E", bg: "#FEF3C7", dot: "#D97706" },
+  finalizado: { label: "Finalizado", color: "#065F46", bg: "#D1FAE5", dot: "#059669" },
+} as const;
+
+export function estadoViajeVisual(c: CumplidoRecord): "pendiente" | "finalizado" {
+  return c.fecha_cumplido ? "finalizado" : "pendiente";
+}
+
 export const REFRESH_INTERVAL_MS = 120_000;
 
 export const ESTADO_DOC_CFG: Record<EstadoDocumental, {

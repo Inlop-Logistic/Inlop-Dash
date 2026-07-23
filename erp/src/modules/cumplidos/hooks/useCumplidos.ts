@@ -1,8 +1,17 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { parseFechaMDY } from "@/utils/parseFecha";
 import type { CumplidoRecord, KpisCumplidos } from "../types";
 import type { TabCumplidos } from "../constants";
 import { REFRESH_INTERVAL_MS, tabCount } from "../constants";
 import { listarCumplidos } from "../services/api";
+
+/** Convierte activated_on (MM/DD/YYYY HH:MM:SS) a YYYY-MM-DD para comparar contra date inputs. */
+function activatedOnISO(c: CumplidoRecord): string | null {
+  const d = parseFechaMDY(c.activated_on);
+  if (!d) return null;
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 
 export function useCumplidos() {
   const [data,    setData]    = useState<CumplidoRecord[]>([]);
@@ -14,6 +23,12 @@ export function useCumplidos() {
   const [tabActivo,     setTabActivo]     = useState<TabCumplidos>("todos");
   const [estadoFiltro,  setEstadoFiltro]  = useState("");
   const [clienteFiltro, setClienteFiltro] = useState("");
+  const [desde,         setDesde]         = useState("");
+  const [hasta,         setHasta]         = useState("");
+
+  // Paginación
+  const [pagina,    setPagina]    = useState(1);
+  const [tamPagina, setTamPagina] = useState(50);
 
   // Panel
   const [panelId, setPanelId] = useState<string | null>(null);
@@ -56,6 +71,13 @@ export function useCumplidos() {
         if (!cli.includes(clienteFiltro.toLowerCase())) return false;
       }
 
+      if (desde || hasta) {
+        const iso = activatedOnISO(c);
+        if (!iso) return false;
+        if (desde && iso < desde) return false;
+        if (hasta && iso > hasta) return false;
+      }
+
       if (term) {
         const hay = [
           c.trip_number, c.number_order, c.license_plate,
@@ -67,7 +89,17 @@ export function useCumplidos() {
 
       return true;
     });
-  }, [data, tabActivo, busqueda, estadoFiltro, clienteFiltro]);
+  }, [data, tabActivo, busqueda, estadoFiltro, clienteFiltro, desde, hasta]);
+
+  // Resetear página cuando cambian los filtros
+  useEffect(() => { setPagina(1); }, [filtradas]);
+
+  // ── Paginación ────────────────────────────────────────────────────────────
+  const totalPaginas = Math.max(1, Math.ceil(filtradas.length / tamPagina));
+  const paginadas    = useMemo(
+    () => filtradas.slice((pagina - 1) * tamPagina, pagina * tamPagina),
+    [filtradas, pagina, tamPagina],
+  );
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = useMemo<KpisCumplidos>(() => ({
@@ -101,11 +133,16 @@ export function useCumplidos() {
 
   return {
     data, loading, error,
-    filtradas, kpis, clientes,
+    filtradas, paginadas, kpis, clientes,
     busqueda, setBusqueda,
     tabActivo, setTabActivo,
     estadoFiltro, setEstadoFiltro,
     clienteFiltro, setClienteFiltro,
+    desde, setDesde,
+    hasta, setHasta,
+    pagina, setPagina,
+    tamPagina, setTamPagina,
+    totalPaginas,
     panelId, setPanelId, panelCumplido,
     cargar, getTabCount,
   };
