@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { parseFechaMDY } from "@/utils/parseFecha";
+import { lineaNegocio } from "@/utils/lineaNegocio";
 import type { CumplidoRecord, KpisCumplidos } from "../types";
 import type { TabCumplidos } from "../constants";
 import { REFRESH_INTERVAL_MS, tabCount } from "../constants";
@@ -13,14 +14,6 @@ function activatedOnISO(c: CumplidoRecord): string | null {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-/**
- * Deriva la línea de negocio de un cumplido.
- * El campo type_operation no se almacena en la tabla cumplidos — siempre devuelve "Carga Seca"
- * hasta que la Evolución 02 añada ese campo al modelo de datos.
- */
-function lineaNegocioCumplido(_c: CumplidoRecord): string {
-  return "Carga Seca";
-}
 
 export function useCumplidos() {
   const [data,    setData]    = useState<CumplidoRecord[]>([]);
@@ -76,7 +69,7 @@ export function useCumplidos() {
 
       // Filtro por línea de negocio
       if (lineaNegocioFiltro) {
-        if (lineaNegocioCumplido(c) !== lineaNegocioFiltro) return false;
+        if (lineaNegocio(c.type_operation) !== lineaNegocioFiltro) return false;
       }
 
       // Filtro por cliente

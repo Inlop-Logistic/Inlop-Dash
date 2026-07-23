@@ -919,7 +919,7 @@ app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
     const allRows = [];
     while (true) {
       const page = await sbFetch(
-        `/cumplidos?select=id,manifiesto,placa,conductor,conductor_tel,cliente,origen,destino,estado_controlt,pct,fecha_viaje,fecha_finalizacion&order=fecha_viaje.desc&limit=${SB_PAGE}&offset=${sbOffset}`
+        `/cumplidos?select=id,manifiesto,placa,conductor,conductor_tel,cliente,origen,destino,estado_controlt,pct,fecha_viaje,fecha_finalizacion,tipo_negocio&order=fecha_viaje.desc&limit=${SB_PAGE}&offset=${sbOffset}`
       );
       if (!page || page.length === 0) break;
       allRows.push(...page);
@@ -946,6 +946,7 @@ app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
         ...d,
         presente: d.id === 'remision' ? !!r.manifiesto : false,
       })),
+      type_operation:   r.tipo_negocio || null,
       observaciones:    null,
       responsable:      null,
       fecha_validacion: null,
@@ -1268,6 +1269,7 @@ async function syncCumplidos() {
           fecha_viaje:         v.activated_on || v.created_on || '',
           origen:              v.origin_city_name || '',
           destino:             v.destiny_city_name || '',
+          tipo_negocio:        v.type_operation || '',
           tiene_soporte:       false,
         };
         // Solo contar inserción cuando Supabase confirma éxito.
@@ -1277,6 +1279,7 @@ async function syncCumplidos() {
         const patch = {
           estado_controlt: v.state_travel || '',
           pct:             parseFloat(v.percentage_travel) || 0,
+          tipo_negocio:    v.type_operation || '',
         };
         const existenteEsPlaceholder = isPlaceholderTmsCustomer(existe.cliente);
         if (cliente && !resolved.placeholder && (!existe.cliente || existenteEsPlaceholder)) {

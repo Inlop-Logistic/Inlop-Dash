@@ -1,4 +1,5 @@
 import { parseFechaMDY } from "@/utils/parseFecha";
+import { lineaNegocio } from "@/utils/lineaNegocio";
 import type { Column } from "@/components/ui";
 import type { CumplidoRecord } from "../types";
 import { estadoViajeVisual, ESTADO_VIAJE_CFG } from "../constants";
@@ -15,10 +16,6 @@ function splitActivatedOn(raw: string | null | undefined): { fecha: string; hora
   };
 }
 
-function lineaNegocio(raw: string | null | undefined): string {
-  if (!raw) return "Carga Seca";
-  return raw.trim().toLowerCase() === "granel liquido" ? "Carga Líquida" : "Carga Seca";
-}
 
 export const COLUMNS: Column<CumplidoRecord>[] = [
   {
@@ -82,9 +79,9 @@ export const COLUMNS: Column<CumplidoRecord>[] = [
     key: "linea_negocio",
     header: "Línea Negocio",
     width: "120px",
-    render: (_c) => (
+    render: (c) => (
       <span className="text-[12px]" style={{ color: "var(--gray-700)" }}>
-        {lineaNegocio(null)}
+        {lineaNegocio(c.type_operation)}
       </span>
     ),
   },

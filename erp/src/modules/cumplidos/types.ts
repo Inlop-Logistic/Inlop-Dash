@@ -25,6 +25,8 @@ export interface CumplidoRecord {
   license_plate:         string | null;
   driver_name:           string | null;
   conductor_tel:         string | null;
+  /** Valor original de type_operation del TMS — determina la línea de negocio. */
+  type_operation:        string | null;
   origin_city_name:      string | null;
   destiny_city_name:     string | null;
   state_travel:          string;
