@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import {
-  User, Truck, MapPin, Calendar, FileText, AlertCircle,
+  User, Truck, MapPin, Calendar, FileText, AlertCircle, ChevronRight, CalendarClock,
 } from "lucide-react";
 import { fmtFecha } from "@/utils/date";
 import { SidePanel, PanelSection, InfoRow, Button } from "@/components/ui";
+import { useNavigationContext, navActions } from "@/core/navigation";
 import type { Solicitud, SolicitudDetalle as SolicitudDetalleType } from "../types";
 import { getSolicitudDetalle } from "../services/api";
 import { EstadoBadge } from "./EstadoBadge";
@@ -17,6 +18,7 @@ interface DetalleSolicitudProps {
 }
 
 export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolicitudProps) {
+  const { navigateTo } = useNavigationContext();
   const [detalle, setDetalle]               = useState<SolicitudDetalleType | null>(null);
   const [loadingDetalle, setLoadingDetalle] = useState(true);
   const [accionLoading, setAccionLoading]   = useState(false);
@@ -284,6 +286,38 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
             style={{ background: "var(--gray-50)", color: "var(--gray-600)", border: "1px solid var(--gray-100)" }}
           >
             {d.notas}
+          </div>
+        </PanelSection>
+      )}
+
+      {/* Módulos relacionados — navegación contextual */}
+      {solicitud.external_ref && (
+        <PanelSection title="Módulos relacionados" icon={<ChevronRight className="w-3.5 h-3.5" />}>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => navigateTo(navActions.verProgramacion(solicitud.external_ref!, "solicitudes"))}
+              className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-[13px] font-medium transition-colors"
+              style={{ background: "#fff", color: "var(--gray-700)", border: "1.5px solid var(--gray-200)", cursor: "pointer" }}
+            >
+              <span className="flex items-center gap-2">
+                <CalendarClock className="w-3.5 h-3.5" />
+                Ver en Programación
+              </span>
+              <ChevronRight className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--gray-400)" }} />
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateTo(navActions.verViaje(solicitud.external_ref!, "solicitudes"))}
+              className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-[13px] font-medium transition-colors"
+              style={{ background: "#fff", color: "var(--gray-700)", border: "1.5px solid var(--gray-200)", cursor: "pointer" }}
+            >
+              <span className="flex items-center gap-2">
+                <Truck className="w-3.5 h-3.5" />
+                Ver en Viajes
+              </span>
+              <ChevronRight className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--gray-400)" }} />
+            </button>
           </div>
         </PanelSection>
       )}

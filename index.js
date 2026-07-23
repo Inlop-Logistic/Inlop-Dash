@@ -2,7 +2,7 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 import { publishBusinessEvent } from './services/notificationOrchestrator.js';
-import { buildLookupMap, resolveCustomer } from './services/customerResolver.js';
+import { buildLookupMap, normalizeClient, resolveCustomer, resolveTrip, isPlaceholderTmsCustomer } from './services/customerResolver.js';
 import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } from './services/authScope.js';
 import { getUserPreferences, updatePreference, KNOWN_CHANNELS } from './services/preferenceResolver.js';
 
@@ -25,6 +25,11 @@ async function fetchConTimeout(url, opts = {}, timeoutMs = DEFAULT_FETCH_TIMEOUT
 
 // Mapa de resolución de clientes — reconstruido cada 10 min desde empresas_cliente
 let customerLookupMap = new Map();
+// Lookup inverso: id → razon_social (para resolveTrip sin queries extra)
+let customerLookupById = new Map();
+// Cache de identidad por viaje: trip_number → { empresa_cliente_id, razon_social }
+// Alimentado por syncCumplidos. El endpoint /api/gps lo usa para mostrar razon_social.
+let tripCustomerCache = new Map();
 
 
 // ─── SUPABASE ───────────────────────────────────────────
@@ -313,10 +318,12 @@ let lastLogin    = null;
 
 // ─── CACHÉ EN MEMORIA ───────────────────────────────────
 const cache = {
-  viajes:    { data: [], ts: 0 },
+  viajes:    { data: [], ts: 0, completo: false },
   alarmas:   { data: [], ts: 0 },
   pendientes:{ data: [], ts: 0 },
 };
+
+let syncCumplidosRunning = false;
 
 function cacheVigente(key) {
   return (Date.now() - cache[key].ts) < CACHE_TTL && cache[key].data.length > 0;
@@ -539,6 +546,57 @@ function parseCreated(str) {
   return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:00`);
 }
 
+// Parsea "MM/DD/YYYY HH:MM[:SS]" (formato de latest_gps_report del TMS). Devuelve null si inválido.
+function parseFechaMDY(str) {
+  if (!str) return null;
+  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const [, mm, dd, yyyy, hh, min] = m;
+  const d = new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:00`);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+const GPS_THRESHOLD_DETENIDO     = 2;   // horas — coincide con frontend
+const GPS_THRESHOLD_DESCONECTADO = 6;   // horas — coincide con frontend
+
+const ESTADOS_MONITOREABLES = new Set([
+  'en transíto', 'iniciado', 'descargando', 'cargando', 'pernoctando',
+]);
+
+const ESTADOS_CUMPLIBLES = new Set(['completado', 'finalizado']);
+
+function derivarEstadoGps(v) {
+  const alarm = (v.last_alarm_name ?? '').toLowerCase();
+  if (alarm.includes('pánico') || alarm.includes('panico')) return 'panico';
+  if (v.last_alarm_name) return 'con_alarma';
+  const ts = parseFechaMDY(v.latest_gps_report);
+  if (!ts) return 'desconectado';
+  const horas = (Date.now() - ts.getTime()) / 3_600_000;
+  if (horas > GPS_THRESHOLD_DESCONECTADO) return 'desconectado';
+  if (horas > GPS_THRESHOLD_DETENIDO)     return 'detenido';
+  return 'activo';
+}
+
+function parseLatLon(str) {
+  if (!str) return null;
+  const n = parseFloat(str);
+  return isNaN(n) ? null : n;
+}
+
+function primerNombreCliente(str) {
+  return (str ?? '').split(',')[0].trim() || null;
+}
+
+const DOCUMENTOS_BASE = [
+  { id: 'remision',        label: 'Remisión',              requerido: true  },
+  { id: 'manifiesto',      label: 'Manifiesto de carga',   requerido: true  },
+  { id: 'soporte_entrega', label: 'Soporte de entrega',    requerido: true  },
+  { id: 'fotos',           label: 'Registro fotográfico',  requerido: false },
+  { id: 'firma',           label: 'Firma del receptor',    requerido: true  },
+  { id: 'novedades',       label: 'Registro de novedades', requerido: false },
+  { id: 'observaciones',   label: 'Observaciones',         requerido: false },
+];
+
 async function syncPendientes() {
   try {
     const ahora   = new Date();
@@ -566,11 +624,32 @@ async function syncPendientes() {
 // ─── CUSTOMER LOOKUP ────────────────────────────────────
 // Carga empresas_cliente y reconstruye el mapa de resolución.
 // Se llama al inicio y cada 10 min para capturar nuevas homologaciones.
+// Incluye todos los estados excepto 'inactivo': un cliente pendiente, suspendido
+// o bloqueado sigue siendo un registro válido y no debe duplicarse.
 async function refreshCustomerLookup() {
   try {
-    const empresas = await sbFetch('/empresas_cliente?activa=eq.true&select=id,razon_social,nombre_controlt') || [];
-    customerLookupMap = buildLookupMap(empresas);
-    console.log(`🏢 Customer lookup: ${customerLookupMap.size} entradas`);
+    // Excluir inactivos y fusionados — ambos no participan en resolución de nombres
+    const empresas = await sbFetch('/empresas_cliente?estado=not.in.(inactivo,fusionado)&select=id,razon_social,nombre_controlt') || [];
+    customerLookupMap  = buildLookupMap(empresas);
+    customerLookupById = new Map(empresas.filter(e => e.id).map(e => [e.id, e.razon_social]));
+
+    // Enriquecer con Identity Rules: nombres externos registrados por merges anteriores.
+    // Cada regla añade una entrada adicional al mapa si aún no existe, permitiendo que
+    // "FRONTERA ENERGY COLOMBIA CORP SUCURSAL COLOMBIA" resuelva al cliente oficial
+    // sin crear un duplicado.
+    const rules = await sbFetch('/cliente_alias?activo=eq.true&select=nombre_normalizado,empresa_cliente_id') || [];
+    let rulesAdded = 0;
+    for (const r of rules) {
+      if (!customerLookupMap.has(r.nombre_normalizado)) {
+        const razon_social = customerLookupById.get(r.empresa_cliente_id) ?? null;
+        if (razon_social) {
+          customerLookupMap.set(r.nombre_normalizado, { id: r.empresa_cliente_id, razon_social });
+          rulesAdded++;
+        }
+      }
+    }
+
+    console.log(`🏢 Customer lookup: ${customerLookupMap.size} entradas (${rulesAdded} identity rules)`);
   } catch (e) {
     console.error('❌ refreshCustomerLookup:', e.message);
   }
@@ -601,20 +680,32 @@ async function syncPlaneados() {
     console.log(`📅 Planeados: ${arr.length} en Travel/search → ${viajesFuturos.length} hoy o futuros`);
     if (!viajesFuturos.length) return;
 
-    const existentes = await sbFetch('/planeados?select=trip_number,fecha_detectado,company_customer_name,activo_en_resume');
+    const existentes = await sbFetch('/planeados?select=trip_number,fecha_detectado,company_customer_name,activo_en_resume,empresa_cliente_id');
     const existMap = {};
     (existentes || []).forEach(e => { existMap[e.trip_number] = e; });
 
     const activeIds = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
 
-    let upsertados = 0;
+    let upsertados = 0, clientesCreados = 0, placeholdersOmitidos = 0;
     for (const v of viajesFuturos) {
       const f = parseSchedulate(v.schedulate_origin);
       const yaExiste = existMap[v.trip_number];
       const estaActivo = activeIds.has(v.trip_number);
       const viajeResume = cache.viajes.data.find(r => r.trip_number === v.trip_number);
-      const cliente = viajeResume?.company_customer_name || v.company_customer_name || null;
-      const resolved = resolveCustomer(cliente, customerLookupMap);
+      const rawCliente = viajeResume?.company_customer_name || v.company_customer_name || null;
+      const cliente = rawCliente ? rawCliente.split(',')[0].trim() : null;
+      const resolved = await resolveTrip(
+        { rawName: cliente, existingEmpresaId: existMap[v.trip_number]?.empresa_cliente_id ?? null },
+        { lookupMap: customerLookupMap, empresaById: customerLookupById, sbFetch, generarCodigo: generarCodigoCliente, actor: 'sistema:tms' }
+      );
+      if (resolved.created)     clientesCreados++;
+      if (resolved.placeholder) placeholdersOmitidos++;
+      if (resolved.empresa_cliente_id) {
+        tripCustomerCache.set(v.trip_number, {
+          empresa_cliente_id: resolved.empresa_cliente_id,
+          razon_social:       resolved.razon_social,
+        });
+      }
 
       const row = {
         trip_number:           v.trip_number,
@@ -640,7 +731,7 @@ async function syncPlaneados() {
 
     const hoyStr = hoyInicio.toISOString().slice(0, 10);
     await sbFetch(`/planeados?fecha_programada_dia=lt.${hoyStr}`, 'DELETE');
-    console.log(`📅 Planeados: ${upsertados} upsertados, limpieza de anteriores a ${hoyStr}`);
+    console.log(`📅 Planeados: ${upsertados} upsertados, ${clientesCreados} clientes creados, ${placeholdersOmitidos} sin Match TMS (esperando), limpieza de anteriores a ${hoyStr}`);
 
     const sinCliente = (existentes || []).filter(e => !e.company_customer_name);
     for (const e of sinCliente) {
@@ -669,6 +760,7 @@ async function syncViajes() {
     }
 
     let todos = [...arr1];
+    let completo = true;
 
     if (arr1.length >= 100) {
       try {
@@ -685,10 +777,16 @@ async function syncViajes() {
                 todos = [...todos, ...arr3];
                 console.log(`📄 Página 3 cargada: ${arr3.length} viajes adicionales`);
               }
-            } catch(e) { console.warn("⚠️  Página 3 no disponible:", e.message); }
+            } catch(e) {
+              console.warn("⚠️  Página 3 no disponible — snapshot parcial:", e.message);
+              completo = false;
+            }
           }
         }
-      } catch(e) { console.warn("⚠️  Página 2 no disponible:", e.message); }
+      } catch(e) {
+        console.warn("⚠️  Página 2 no disponible — snapshot parcial:", e.message);
+        completo = false;
+      }
     }
 
     const seen = new Set();
@@ -699,8 +797,13 @@ async function syncViajes() {
       return true;
     });
 
-    cache.viajes.data = sortViajes(dedup);
-    cache.viajes.ts   = Date.now();
+    cache.viajes.data    = sortViajes(dedup);
+    cache.viajes.ts      = Date.now();
+    cache.viajes.completo = completo;
+
+    if (!completo) {
+      console.warn(`⚠️  syncViajes: snapshot PARCIAL (${dedup.length} viajes). Lógica de finalización suspendida en próximo ciclo.`);
+    }
     console.log(`📦 Caché: ${dedup.length} viajes totales (p1:${arr1.length} + extras)`);
   } catch(e) {
     console.error("❌ Error sync viajes:", e.message);
@@ -774,6 +877,129 @@ app.get("/api/pendientes", requireLegacyOrInternal, async (req, res) => {
   }
 });
 
+// ─── ENDPOINTS DEDICADOS — ERP (requireInternalApiKey) ──────────────────────
+
+// GET /api/viajes — datos del TMS normalizados para el módulo Viajes del ERP.
+// Convierte strings crudos (latitude, longitude, percentage_travel) a tipos seguros
+// y añade campos derivados (lat, lon, pct, cliente, conductor_tel).
+app.get('/api/viajes', requireInternalApiKey, (req, res) => {
+  const viajes = cache.viajes.data.map(v => {
+    const cached = tripCustomerCache.get(v.trip_number);
+    return {
+      trip_number:              v.trip_number,
+      id_monitoring_order:      v.id_monitoring_order      || null,
+      number_order:             v.number_order             || null,
+      license_plate:            v.license_plate            || null,
+      driver_name:              v.driver_name              || null,
+      driver_phone:             v.driver_phone             || null,
+      conductor_tel:            extraerTelefono(v.driver_phone, v.full_driver) || null,
+      cliente:                  primerNombreCliente(v.company_customer_name),
+      company_customer_name:    v.company_customer_name    || null,
+      empresa_cliente_id:       cached?.empresa_cliente_id ?? null,
+      razon_social:             cached?.razon_social        ?? null,
+      origin_city_name:         v.origin_city_name         || null,
+      destiny_city_name:        v.destiny_city_name        || null,
+      type_operation:           v.type_operation           || null,
+      stops:                    v.stops                    || null,
+      state_travel:             v.state_travel,
+      pct:                      v.percentage_travel != null ? (parseFloat(String(v.percentage_travel)) || 0) : null,
+      percentage_travel:        v.percentage_travel,
+      last_event:               v.last_event               || null,
+      appointment_fulfillment:  v.appointment_fulfillment  || null,
+      lat:                      parseLatLon(v.latitude),
+      lon:                      parseLatLon(v.longitude),
+      latest_gps_report:        v.latest_gps_report        || null,
+      current_address_location: v.current_address_location || null,
+      last_alarm_name:          v.last_alarm_name          || null,
+      created_on:               v.created_on               || null,
+      activated_on:             v.activated_on             || null,
+      schedulate_origin:        v.schedulate_origin        || null,
+    };
+  });
+  res.json(viajes);
+});
+
+// GET /api/cumplidos — viajes finalizados desde Supabase (tabla cumplidos).
+// Fuente: Supabase, nunca desde cache en memoria.
+// Paginación interna para soportar crecimiento indefinido de la tabla.
+app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
+  try {
+    const SB_PAGE = 500;
+    let sbOffset = 0;
+    const allRows = [];
+    while (true) {
+      const page = await sbFetch(
+        `/cumplidos?select=id,manifiesto,placa,conductor,conductor_tel,cliente,origen,destino,estado_controlt,pct,fecha_viaje,fecha_finalizacion,tipo_negocio&order=fecha_viaje.desc&limit=${SB_PAGE}&offset=${sbOffset}`
+      );
+      if (!page || page.length === 0) break;
+      allRows.push(...page);
+      if (page.length < SB_PAGE) break;
+      sbOffset += SB_PAGE;
+    }
+
+    const cumplidos = allRows.map(r => ({
+      id:                    r.id,
+      trip_number:           r.id,
+      number_order:          r.manifiesto  || null,
+      company_customer_name: r.cliente     || null,
+      license_plate:         r.placa       || null,
+      driver_name:           r.conductor     || null,
+      conductor_tel:         r.conductor_tel || null,
+      origin_city_name:      r.origen      || null,
+      destiny_city_name:     r.destino     || null,
+      state_travel:          r.estado_controlt || '',
+      activated_on:          r.fecha_viaje || null,
+      created_on:            null,
+      fecha_cumplido:        r.fecha_finalizacion || null,
+      estado_documental:     'pendiente',
+      documentos:            DOCUMENTOS_BASE.map(d => ({
+        ...d,
+        presente: d.id === 'remision' ? !!r.manifiesto : false,
+      })),
+      type_operation:   r.tipo_negocio || null,
+      observaciones:    null,
+      responsable:      null,
+      fecha_validacion: null,
+      aprobado_por:     null,
+    }));
+
+    res.json(cumplidos);
+  } catch(e) {
+    console.error('❌ Error GET /api/cumplidos:', e.message);
+    res.status(500).json({ error: 'Error interno al obtener viajes finalizados' });
+  }
+});
+
+// GET /api/gps — vehículos activos con estado GPS derivado y coordenadas como números.
+// Mueve al backend derivarEstadoGps(), parseLatLon() y el filtrado por ESTADOS_MONITOREABLES
+// que antes hacía erp/src/modules/gps/services/api.ts.
+app.get('/api/gps', requireInternalApiKey, (req, res) => {
+  const vehiculos = cache.viajes.data
+    .filter(v => ESTADOS_MONITOREABLES.has((v.state_travel ?? '').toLowerCase()))
+    .map(v => {
+      const cached = tripCustomerCache.get(v.trip_number);
+      return {
+        id:                       v.trip_number,
+        trip_number:              v.trip_number,
+        number_order:             v.number_order             || null,
+        license_plate:            v.license_plate            || null,
+        driver_name:              v.driver_name              || null,
+        company_customer_name:    v.company_customer_name    || null,
+        empresa_cliente_id:       cached?.empresa_cliente_id ?? null,
+        razon_social:             cached?.razon_social        ?? null,
+        origin_city_name:         v.origin_city_name         || null,
+        destiny_city_name:        v.destiny_city_name        || null,
+        state_travel:             v.state_travel,
+        lat:                      parseLatLon(v.latitude),
+        lon:                      parseLatLon(v.longitude),
+        latest_gps_report:        v.latest_gps_report        || null,
+        current_address_location: v.current_address_location || null,
+        last_alarm_name:          v.last_alarm_name          || null,
+        estadoGps:                derivarEstadoGps(v),
+      };
+    });
+  res.json(vehiculos);
+});
 
 // ─── SOLICITUDES (Módulo de Demanda) ─────────────────────────────────────────
 app.get('/api/solicitudes', requireLegacyOrInternal, async (req, res) => {
@@ -993,21 +1219,50 @@ function extraerTelefono(driver_phone, full_driver) {
 }
 
 async function syncCumplidos() {
+  // Mutex: evitar ejecuciones concurrentes si un ciclo tarda más de 60 s.
+  if (syncCumplidosRunning) {
+    console.warn('⚠️  syncCumplidos: ciclo anterior aún activo — omitiendo.');
+    return;
+  }
+  syncCumplidosRunning = true;
   try {
     if (!cache.viajes.data.length) return;
 
-    const existentesRaw = await sbFetch('/cumplidos?select=id,estado_cumplido,tiene_soporte,cliente&limit=1000');
-    const existentes = new Map((existentesRaw || []).map(c => [c.id, c]));
+    // Cargar todas las filas existentes en lotes para evitar el límite de 1.000 registros.
+    const SB_PAGE = 500;
+    let sbOffset = 0;
+    const allExistentes = [];
+    while (true) {
+      const page = await sbFetch(
+        `/cumplidos?select=id,estado_cumplido,tiene_soporte,cliente,empresa_cliente_id&limit=${SB_PAGE}&offset=${sbOffset}`
+      );
+      if (!page || page.length === 0) break;
+      allExistentes.push(...page);
+      if (page.length < SB_PAGE) break;
+      sbOffset += SB_PAGE;
+    }
+    const existentes = new Map(allExistentes.map(c => [c.id, c]));
 
     const ESTADOS_ACTIVOS = new Set(['LIVE', 'SOLICITADO', 'CUMPLIDO RECIBIDO']);
     const apiSet = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
 
-    let insertados = 0, actualizados = 0;
+    let insertados = 0, actualizados = 0, clientesCreados = 0, placeholdersOmitidos = 0;
     for (const v of cache.viajes.data) {
       if (!v.trip_number) continue;
       const existe = existentes.get(v.trip_number);
       const cliente = (v.company_customer_name || '').split(',')[0].trim();
-      const resolved = resolveCustomer(cliente, customerLookupMap);
+      const resolved = await resolveTrip(
+        { rawName: cliente, existingEmpresaId: existe?.empresa_cliente_id ?? null },
+        { lookupMap: customerLookupMap, empresaById: customerLookupById, sbFetch, generarCodigo: generarCodigoCliente, actor: 'sistema:tms' }
+      );
+      if (resolved.created)     clientesCreados++;
+      if (resolved.placeholder) placeholdersOmitidos++;
+      if (resolved.empresa_cliente_id) {
+        tripCustomerCache.set(v.trip_number, {
+          empresa_cliente_id: resolved.empresa_cliente_id,
+          razon_social:       resolved.razon_social,
+        });
+      }
 
       if (!existe) {
         const row = {
@@ -1024,40 +1279,56 @@ async function syncCumplidos() {
           fecha_viaje:         v.activated_on || v.created_on || '',
           origen:              v.origin_city_name || '',
           destino:             v.destiny_city_name || '',
+          tipo_negocio:        v.type_operation || '',
           tiene_soporte:       false,
         };
-        await sbFetch('/cumplidos', 'POST', row);
-        insertados++;
+        // Solo contar inserción cuando Supabase confirma éxito.
+        const resultado = await sbFetch('/cumplidos', 'POST', row);
+        if (resultado !== null) insertados++;
       } else {
         const patch = {
           estado_controlt: v.state_travel || '',
           pct:             parseFloat(v.percentage_travel) || 0,
+          tipo_negocio:    v.type_operation || '',
         };
-        if (!existe.cliente && cliente) patch.cliente = cliente;
-        if (!existe.empresa_cliente_id && resolved.empresa_cliente_id) patch.empresa_cliente_id = resolved.empresa_cliente_id;
+        const existenteEsPlaceholder = isPlaceholderTmsCustomer(existe.cliente);
+        if (cliente && !resolved.placeholder && (!existe.cliente || existenteEsPlaceholder)) {
+          patch.cliente = cliente;
+        }
+        if (resolved.empresa_cliente_id && existe.empresa_cliente_id !== resolved.empresa_cliente_id) {
+          patch.empresa_cliente_id = resolved.empresa_cliente_id;
+        }
         await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(v.trip_number)}`, 'PATCH', patch);
         actualizados++;
       }
     }
 
+    // Detección de finalizados: solo ejecutar si el snapshot de ControlT fue completo.
+    // Un snapshot parcial (fallo de página 2 o 3) generaría falsas finalizaciones.
     let finalizados = 0;
-    for (const [id, c] of existentes) {
-      const estadoActivo = ESTADOS_ACTIVOS.has((c.estado_cumplido || '').toUpperCase());
-      if (estadoActivo && !apiSet.has(id)) {
-        const nuevoEstado = c.tiene_soporte ? 'PENDIENTE LIQUIDACION' : 'FINALIZADO CONTROLT';
-        await sbFetch(
-          `/cumplidos?id=eq.${encodeURIComponent(id)}`,
-          'PATCH',
-          { estado_cumplido: nuevoEstado, fecha_finalizacion: new Date().toISOString() }
-        );
-        finalizados++;
-        console.log(`🏁 Cumplido ${id} → ${nuevoEstado}`);
+    if (!cache.viajes.completo) {
+      console.warn('⚠️  syncCumplidos: snapshot parcial — lógica de finalización suspendida en este ciclo.');
+    } else {
+      for (const [id, c] of existentes) {
+        const estadoActivo = ESTADOS_ACTIVOS.has((c.estado_cumplido || '').toUpperCase());
+        if (estadoActivo && !apiSet.has(id)) {
+          const nuevoEstado = c.tiene_soporte ? 'PENDIENTE LIQUIDACION' : 'FINALIZADO CONTROLT';
+          await sbFetch(
+            `/cumplidos?id=eq.${encodeURIComponent(id)}`,
+            'PATCH',
+            { estado_cumplido: nuevoEstado, fecha_finalizacion: new Date().toISOString() }
+          );
+          finalizados++;
+          console.log(`🏁 Cumplido ${id} → ${nuevoEstado}`);
+        }
       }
     }
 
-    console.log(`✅ Cumplidos sync: +${insertados} nuevos, ~${actualizados} actualizados, 🏁${finalizados} finalizados`);
+    console.log(`✅ Cumplidos sync: +${insertados} nuevos, ~${actualizados} actualizados, 🏁${finalizados} finalizados, 👤${clientesCreados} clientes creados, ⏳${placeholdersOmitidos} sin Match TMS`);
   } catch(e) {
     console.error('❌ Error syncCumplidos:', e.message);
+  } finally {
+    syncCumplidosRunning = false;
   }
 }
 
@@ -1101,7 +1372,7 @@ async function syncSolicitudes() {
 
     for (const sol of solicitudes) {
       const { id, codigo_solicitud, external_ref, estado, controlt_trip_number,
-              creado_por, fecha_requerida, observacion_coordinadora } = sol;
+              creado_por, fecha_requerida, observacion_coordinadora, empresa_cliente_id: solEmpresaId } = sol;
 
       // Clave de match: external_ref si está puesto (pruebas con remisión real), sino codigo_solicitud
       // Normalizar espacios dobles igual que _splitRem para que "NHR-IB-2185" == "NHR-  IB-2185"
@@ -1136,6 +1407,7 @@ async function syncSolicitudes() {
           console.log(`✅ [MATCH] ${codigo_solicitud} → trip ${vR.trip_number} (${vR.license_plate || '—'}) | pendiente → ${ne}`);
           updates.push({ id, fields: _fields(vR, ne, ahora, true) });
           insertsNotif.push(..._notifs(sol, ne, vR, 'pendiente'));
+          if (solEmpresaId) await propagarEmpresaId(vR.trip_number, solEmpresaId);
           continue;
         }
         const vP = pendientesByRemission.get(matchKey);
@@ -1145,6 +1417,7 @@ async function syncSolicitudes() {
           console.log(`✅ [MATCH] ${codigo_solicitud} → trip ${vP.trip_number} (pendientes) | pendiente → ${ne}`);
           updates.push({ id, fields: _fields(vP, ne, ahora, true) });
           insertsNotif.push(..._notifs(sol, ne, vP, 'pendiente'));
+          if (solEmpresaId) await propagarEmpresaId(vP.trip_number, solEmpresaId);
         }
 
       } else if (estado === 'confirmado') {
@@ -1152,6 +1425,7 @@ async function syncSolicitudes() {
           ? resumeByTripNumber.get(controlt_trip_number)
           : resumeByRemission.get(matchKey);
         if (vR) {
+          if (solEmpresaId) await propagarEmpresaId(vR.trip_number, solEmpresaId);
           const g = _grupo(vR.state_travel);
           if (g === 'en_ruta' || g === 'completado' || g === 'cancelado') {
             console.log(`🔄 [ESTADO] ${codigo_solicitud}: confirmado → ${g}`);
@@ -1169,6 +1443,7 @@ async function syncSolicitudes() {
       } else if (estado === 'en_ruta') {
         const vR = controlt_trip_number ? resumeByTripNumber.get(controlt_trip_number) : null;
         if (vR) {
+          if (solEmpresaId) await propagarEmpresaId(vR.trip_number, solEmpresaId);
           const g = _grupo(vR.state_travel);
           if (g === 'completado' || g === 'cancelado') {
             console.log(`🔄 [ESTADO] ${codigo_solicitud}: en_ruta → ${g}`);
@@ -1256,6 +1531,19 @@ async function syncSolicitudes() {
   } catch(e) {
     console.error('❌ Error syncSolicitudes:', e.message);
   }
+}
+
+// Propaga empresa_cliente_id desde la solicitud hacia planeados/cumplidos y tripCustomerCache.
+// Se llama cuando syncSolicitudes confirma un match entre solicitud y viaje del TMS.
+async function propagarEmpresaId(tripNumber, empresaId) {
+  if (!tripNumber || !empresaId) return;
+  const razon_social = customerLookupById.get(empresaId) ?? null;
+  tripCustomerCache.set(tripNumber, { empresa_cliente_id: empresaId, razon_social });
+  const tn = encodeURIComponent(tripNumber);
+  await Promise.all([
+    sbFetch(`/planeados?trip_number=eq.${tn}`, 'PATCH', { empresa_cliente_id: empresaId }),
+    sbFetch(`/cumplidos?id=eq.${tn}`, 'PATCH', { empresa_cliente_id: empresaId }),
+  ]).catch(err => console.error('⚠️  propagarEmpresaId:', err.message));
 }
 
 function _splitRem(remission) {
@@ -2512,10 +2800,38 @@ app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
       empresas.forEach(e => { empMap[e.id] = e.razon_social; });
     }
 
-    const enriched = rows.map(r => ({
-      ...r,
-      nombre_cliente: (r.empresa_cliente_id && empMap[r.empresa_cliente_id]) || r.company_customer_name || null,
-    }));
+    // Reglas de identidad (Maestro = única fuente de verdad):
+    //  1. Si hay empresa_cliente_id → razon_social del Maestro (autoritativa).
+    //  2. Si el nombre crudo del TMS es el placeholder (viaje sin Match) → null,
+    //     para que Programación NO muestre "Integral Logistics Operations…".
+    //  3. En cualquier otro caso, fallback al nombre crudo.
+    // Índice de cache.viajes por trip_number para enriquecer con datos del TMS en vivo.
+    const viajesIdx = new Map(cache.viajes.data.map(v => [v.trip_number, v]));
+
+    const enriched = rows.map(r => {
+      let nombre_cliente = null;
+      if (r.empresa_cliente_id && empMap[r.empresa_cliente_id]) {
+        nombre_cliente = empMap[r.empresa_cliente_id];
+      } else if (r.company_customer_name && !isPlaceholderTmsCustomer(r.company_customer_name)) {
+        nombre_cliente = r.company_customer_name;
+      }
+      const vivo = viajesIdx.get(r.trip_number) || null;
+      // tipo_servicio: no existe campo oficial en el JSON de ControlT para esto.
+      // Regla de negocio: Origen == Destino → Urbano, Origen ≠ Destino → Nacional.
+      const origen  = (r.city_origin  || '').trim().toLowerCase();
+      const destino = (r.city_destination || '').trim().toLowerCase();
+      const tipo_servicio = (origen && destino)
+        ? (origen === destino ? 'Urbano' : 'Nacional')
+        : null;
+      return {
+        ...r,
+        nombre_cliente,
+        match_tms_pendiente: !r.empresa_cliente_id && isPlaceholderTmsCustomer(r.company_customer_name),
+        tipo_servicio,
+        type_operation: vivo?.type_operation || null,
+        conductor_tel: vivo ? (extraerTelefono(vivo.driver_phone, vivo.full_driver) || null) : null,
+      };
+    });
 
     res.json(enriched);
   } catch (e) {
@@ -2680,6 +2996,588 @@ app.post("/api/programacion/:id/sync", requireInternalApiKey, async (req, res) =
   } catch (e) {
     console.error("❌ POST /api/programacion/:id/sync:", e.message);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── MAESTRO DE CLIENTES ────────────────────────────────────────────────────────
+
+// Campos base (ClienteListItem) — usado por listar y por creación
+function mapEmpresaToCliente(e, general = null, relaciones = null) {
+  return {
+    id:                  e.id,
+    codigo_cliente:      e.codigo_cliente ?? null,
+    razon_social:        e.razon_social ?? "",
+    nit:                 e.nit ?? null,
+    dv:                  e.dv ?? null,
+    nombre_comercial:    e.nombre_controlt ?? general?.nombre_comercial ?? null,
+    activa:              e.activa ?? true,
+    estado:              e.estado ?? (e.activa === false ? "inactivo" : "activo"),
+    sector_economico:    general?.sector_economico ?? null,
+    ciudad_principal:    general?.ciudad_principal ?? null,
+    tipo_cliente:        general?.tipo_cliente ?? null,
+    ejecutivo_comercial: relaciones?.ejecutivo_comercial ?? null,
+    clasificacion_abc:   relaciones?.clasificacion_abc ?? null,
+    nivel_estrategico:   relaciones?.nivel_estrategico ?? null,
+    etiquetas:           relaciones?.etiquetas ?? [],
+    alertas_count:       0,
+    created_at:          e.created_at ?? null,
+    created_by:          e.created_by ?? null,
+    actualizado_en:      e.updated_at ?? null,
+  };
+}
+
+// Campos completos (ClienteDetalle) — incluye todas las tablas satélite para edición
+function mapEmpresaToClienteDetalle(e, general = null, relaciones = null, tributaria = null) {
+  return {
+    ...mapEmpresaToCliente(e, general, relaciones),
+    // clientes_info_general
+    tipo_empresa:          general?.tipo_empresa ?? null,
+    departamento:          general?.departamento ?? null,
+    pais:                  general?.pais ?? null,
+    direccion:             general?.direccion ?? null,
+    telefono:              general?.telefono ?? null,
+    email_principal:       general?.email_principal ?? null,
+    pagina_web:            general?.pagina_web ?? null,
+    descripcion:           general?.descripcion ?? null,
+    // clientes_relaciones_comerciales
+    director_comercial:    relaciones?.director_comercial ?? null,
+    coordinador_operativo: relaciones?.coordinador_operativo ?? null,
+    canal_comercial:       relaciones?.canal_comercial ?? null,
+    segmento:              relaciones?.segmento ?? null,
+    // clientes_info_tributaria
+    regimen_tributario:    tributaria?.regimen_tributario ?? null,
+    tipo_contribuyente:    tributaria?.tipo_contribuyente ?? null,
+    responsable_iva:       tributaria?.responsable_iva ?? false,
+    gran_contribuyente:    tributaria?.gran_contribuyente ?? false,
+    autorretenedor:        tributaria?.autorretenedor ?? false,
+    actividad_economica:   tributaria?.actividad_economica ?? null,
+  };
+}
+
+// Carga un cliente completo (4 tablas en paralelo) — usado por GET/:id y PATCH/:id
+async function fetchClienteDetalle(id) {
+  const [empresaRows, generales, relaciones, tributarias] = await Promise.all([
+    sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(id)}&limit=1`),
+    sbFetch(`/clientes_info_general?empresa_id=eq.${encodeURIComponent(id)}&limit=1`),
+    sbFetch(`/clientes_relaciones_comerciales?empresa_id=eq.${encodeURIComponent(id)}&limit=1`),
+    sbFetch(`/clientes_info_tributaria?empresa_id=eq.${encodeURIComponent(id)}&limit=1`),
+  ]);
+  if (!empresaRows || !empresaRows[0]) return null;
+  return mapEmpresaToClienteDetalle(
+    empresaRows[0],
+    generales?.[0] ?? null,
+    relaciones?.[0] ?? null,
+    tributarias?.[0] ?? null,
+  );
+}
+
+// Enriquece un array de empresas con sus satélites en 2 queries paralelas
+async function enrichClientes(empresas) {
+  if (!empresas || empresas.length === 0) return [];
+  const ids = empresas.map(e => e.id).join(",");
+  const [generales, relaciones] = await Promise.all([
+    sbFetch(`/clientes_info_general?empresa_id=in.(${ids})`),
+    sbFetch(`/clientes_relaciones_comerciales?empresa_id=in.(${ids})`),
+  ]);
+  const genMap  = Object.fromEntries((generales  ?? []).map(g => [g.empresa_id, g]));
+  const relMap  = Object.fromEntries((relaciones ?? []).map(r => [r.empresa_id, r]));
+  return empresas.map(e => mapEmpresaToCliente(e, genMap[e.id] ?? null, relMap[e.id] ?? null));
+}
+
+app.get("/api/clientes", async (req, res) => {
+  try {
+    const data = await sbFetch("/empresas_cliente?order=razon_social.asc&limit=1000");
+    if (!data) return res.status(502).json({ error: "Error al consultar clientes" });
+    res.json(await enrichClientes(data));
+  } catch (e) {
+    console.error("GET /api/clientes error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.get("/api/clientes/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const detalle = await fetchClienteDetalle(id);
+    if (!detalle) return res.status(404).json({ error: "Cliente no encontrado" });
+    res.json(detalle);
+  } catch (e) {
+    console.error("GET /api/clientes/:id error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// Obtiene el próximo código CLI-XXXXXX vía RPC de Supabase
+async function generarCodigoCliente() {
+  try {
+    const SB_FUNC_URL = "https://gtyydandwcgoaratmnqh.supabase.co/rest/v1/rpc/next_codigo_cliente";
+    const r = await fetchConTimeout(SB_FUNC_URL, { method: "POST", headers: SB_HEADERS });
+    if (r.ok) {
+      const val = await r.json();
+      return typeof val === "string" ? val : null;
+    }
+  } catch {}
+  // Fallback: MAX actual + 1
+  const rows = await sbFetch("/empresas_cliente?select=codigo_cliente&codigo_cliente=not.is.null&order=codigo_cliente.desc&limit=1");
+  if (rows && rows[0]?.codigo_cliente) {
+    const num = parseInt(rows[0].codigo_cliente.replace("CLI-", ""), 10);
+    return `CLI-${String(num + 1).padStart(6, "0")}`;
+  }
+  return "CLI-000001";
+}
+
+app.post("/api/clientes", async (req, res) => {
+  try {
+    const actor = req.headers["x-user-email"] ?? "sistema";
+    const {
+      razon_social, nit, dv, nombre_comercial, estado = "prospecto",
+      sector_economico, ciudad_principal, departamento, pais, direccion,
+      telefono, email_principal, pagina_web, tipo_empresa, tipo_cliente, descripcion,
+      ejecutivo_comercial, director_comercial, coordinador_operativo,
+      canal_comercial, clasificacion_abc, nivel_estrategico, segmento, etiquetas = [],
+      regimen_tributario, tipo_contribuyente,
+      responsable_iva = false, gran_contribuyente = false, autorretenedor = false,
+      actividad_economica,
+    } = req.body ?? {};
+
+    if (!razon_social?.trim()) {
+      return res.status(400).json({ error: "La razón social es obligatoria" });
+    }
+
+    const codigo_cliente = await generarCodigoCliente();
+    const now = new Date().toISOString();
+
+    // 1. Crear empresa
+    const empresaRows = await sbFetch("/empresas_cliente", "POST", {
+      razon_social:    razon_social.trim(),
+      nit:             nit?.trim() || null,
+      dv:              dv?.trim() || null,
+      nombre_controlt: nombre_comercial?.trim() || null,
+      activa:          estado !== "inactivo",
+      estado,
+      codigo_cliente,
+      created_by:      actor,
+      updated_at:      now,
+      updated_by:      actor,
+    });
+    if (!empresaRows || !empresaRows[0]) {
+      return res.status(502).json({ error: "No se pudo crear el cliente" });
+    }
+    const empresa = empresaRows[0];
+
+    // 2. Crear registros satélite en paralelo
+    await Promise.all([
+      sbFetch("/clientes_info_general", "POST", {
+        empresa_id: empresa.id,
+        nombre_comercial: nombre_comercial?.trim() || null,
+        sector_economico: sector_economico || null,
+        ciudad_principal: ciudad_principal || null,
+        departamento:     departamento || null,
+        pais:             pais || "Colombia",
+        direccion:        direccion || null,
+        telefono:         telefono || null,
+        email_principal:  email_principal || null,
+        pagina_web:       pagina_web || null,
+        tipo_empresa:     tipo_empresa || null,
+        tipo_cliente:     tipo_cliente || null,
+        descripcion:      descripcion || null,
+        updated_by:       actor,
+      }),
+      sbFetch("/clientes_relaciones_comerciales", "POST", {
+        empresa_id:            empresa.id,
+        ejecutivo_comercial:   ejecutivo_comercial || null,
+        director_comercial:    director_comercial || null,
+        coordinador_operativo: coordinador_operativo || null,
+        canal_comercial:       canal_comercial || null,
+        clasificacion_abc:     clasificacion_abc || null,
+        nivel_estrategico:     nivel_estrategico || null,
+        segmento:              segmento || null,
+        etiquetas:             etiquetas,
+        estado_comercial:      estado,
+        updated_by:            actor,
+      }),
+      sbFetch("/clientes_info_tributaria", "POST", {
+        empresa_id:          empresa.id,
+        regimen_tributario:  regimen_tributario || null,
+        tipo_contribuyente:  tipo_contribuyente || null,
+        responsable_iva,
+        gran_contribuyente,
+        autorretenedor,
+        actividad_economica: actividad_economica || null,
+        updated_by:          actor,
+      }),
+      sbFetch("/clientes_historial", "POST", {
+        empresa_id:    empresa.id,
+        tipo:          "creacion",
+        descripcion:   `Cliente creado con código ${codigo_cliente}`,
+        usuario:       actor,
+        usuario_email: actor,
+        metadata:      { estado_inicial: estado, codigo_cliente },
+      }),
+    ]);
+
+    res.status(201).json(mapEmpresaToCliente(empresa));
+  } catch (e) {
+    console.error("POST /api/clientes error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.patch("/api/clientes/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const actor = req.headers["x-user-email"] ?? "sistema";
+    const {
+      razon_social, nit, dv, nombre_comercial,
+      sector_economico, ciudad_principal, departamento, pais, direccion,
+      telefono, email_principal, pagina_web, tipo_empresa, tipo_cliente, descripcion,
+      ejecutivo_comercial, director_comercial, coordinador_operativo,
+      canal_comercial, clasificacion_abc, nivel_estrategico, segmento, etiquetas,
+      regimen_tributario, tipo_contribuyente,
+      responsable_iva, gran_contribuyente, autorretenedor, actividad_economica,
+    } = req.body ?? {};
+
+    const now = new Date().toISOString();
+
+    // Campos de empresas_cliente
+    const empresaPatch = {};
+    if (razon_social    !== undefined) empresaPatch.razon_social    = razon_social.trim();
+    if (nit             !== undefined) empresaPatch.nit             = nit?.trim() || null;
+    if (dv              !== undefined) empresaPatch.dv              = dv?.trim() || null;
+    if (nombre_comercial !== undefined) empresaPatch.nombre_controlt = nombre_comercial?.trim() || null;
+    empresaPatch.updated_at = now;
+    empresaPatch.updated_by = actor;
+
+    // Campos de clientes_info_general
+    const genPatch = {};
+    if (nombre_comercial  !== undefined) genPatch.nombre_comercial  = nombre_comercial?.trim() || null;
+    if (sector_economico  !== undefined) genPatch.sector_economico  = sector_economico || null;
+    if (ciudad_principal  !== undefined) genPatch.ciudad_principal  = ciudad_principal || null;
+    if (departamento      !== undefined) genPatch.departamento      = departamento || null;
+    if (pais              !== undefined) genPatch.pais              = pais || "Colombia";
+    if (direccion         !== undefined) genPatch.direccion         = direccion || null;
+    if (telefono          !== undefined) genPatch.telefono          = telefono || null;
+    if (email_principal   !== undefined) genPatch.email_principal   = email_principal || null;
+    if (pagina_web        !== undefined) genPatch.pagina_web        = pagina_web || null;
+    if (tipo_empresa      !== undefined) genPatch.tipo_empresa      = tipo_empresa || null;
+    if (tipo_cliente      !== undefined) genPatch.tipo_cliente      = tipo_cliente || null;
+    if (descripcion       !== undefined) genPatch.descripcion       = descripcion || null;
+    genPatch.updated_at = now;
+    genPatch.updated_by = actor;
+
+    // Campos de clientes_relaciones_comerciales
+    const relPatch = {};
+    if (ejecutivo_comercial   !== undefined) relPatch.ejecutivo_comercial   = ejecutivo_comercial || null;
+    if (director_comercial    !== undefined) relPatch.director_comercial    = director_comercial || null;
+    if (coordinador_operativo !== undefined) relPatch.coordinador_operativo = coordinador_operativo || null;
+    if (canal_comercial       !== undefined) relPatch.canal_comercial       = canal_comercial || null;
+    if (clasificacion_abc     !== undefined) relPatch.clasificacion_abc     = clasificacion_abc || null;
+    if (nivel_estrategico     !== undefined) relPatch.nivel_estrategico     = nivel_estrategico || null;
+    if (segmento              !== undefined) relPatch.segmento              = segmento || null;
+    if (etiquetas             !== undefined) relPatch.etiquetas             = etiquetas;
+    relPatch.updated_at = now;
+    relPatch.updated_by = actor;
+
+    // Campos de clientes_info_tributaria
+    const tribPatch = {};
+    if (regimen_tributario  !== undefined) tribPatch.regimen_tributario  = regimen_tributario || null;
+    if (tipo_contribuyente  !== undefined) tribPatch.tipo_contribuyente  = tipo_contribuyente || null;
+    if (responsable_iva     !== undefined) tribPatch.responsable_iva     = responsable_iva;
+    if (gran_contribuyente  !== undefined) tribPatch.gran_contribuyente  = gran_contribuyente;
+    if (autorretenedor      !== undefined) tribPatch.autorretenedor      = autorretenedor;
+    if (actividad_economica !== undefined) tribPatch.actividad_economica = actividad_economica || null;
+    tribPatch.updated_at = now;
+    tribPatch.updated_by = actor;
+
+    // Campos modificados en esta operación (para historial)
+    const camposModificados = Object.keys(req.body ?? {})
+      .filter(k => !["updated_at", "updated_by", "activa"].includes(k));
+
+    await Promise.all([
+      sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(id)}`, "PATCH", empresaPatch),
+      sbFetch(`/clientes_info_general?empresa_id=eq.${encodeURIComponent(id)}`, "PATCH", genPatch),
+      sbFetch(`/clientes_relaciones_comerciales?empresa_id=eq.${encodeURIComponent(id)}`, "PATCH", relPatch),
+      sbFetch(`/clientes_info_tributaria?empresa_id=eq.${encodeURIComponent(id)}`, "PATCH", tribPatch),
+      sbFetch("/clientes_historial", "POST", {
+        empresa_id:    id,
+        tipo:          "edicion_perfil",
+        descripcion:   `Perfil actualizado. Campos modificados: ${camposModificados.join(", ")}`,
+        usuario:       actor,
+        usuario_email: actor,
+        metadata:      { campos_modificados: camposModificados },
+      }),
+    ]);
+
+    const detalle = await fetchClienteDetalle(id);
+    if (!detalle) return res.status(404).json({ error: "Cliente no encontrado" });
+    res.json(detalle);
+  } catch (e) {
+    console.error("PATCH /api/clientes/:id error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.patch("/api/clientes/:id/estado", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const actor = req.headers["x-user-email"] ?? "sistema";
+    const { estado, motivo, observacion } = req.body ?? {};
+
+    const ESTADOS_VALIDOS = ["activo", "inactivo", "suspendido", "prospecto", "bloqueado"];
+    if (!ESTADOS_VALIDOS.includes(estado)) {
+      return res.status(400).json({ error: "Estado inválido" });
+    }
+    if (!motivo?.trim()) {
+      return res.status(400).json({ error: "El motivo es obligatorio para cambiar el estado" });
+    }
+
+    const now = new Date().toISOString();
+
+    await Promise.all([
+      sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(id)}`, "PATCH", {
+        estado,
+        activa:     estado === "activo",
+        updated_at: now,
+        updated_by: actor,
+      }),
+      sbFetch(`/clientes_relaciones_comerciales?empresa_id=eq.${encodeURIComponent(id)}`, "PATCH", {
+        estado_comercial: estado,
+        updated_at:       now,
+        updated_by:       actor,
+      }),
+      sbFetch("/clientes_historial", "POST", {
+        empresa_id:    id,
+        tipo:          "cambio_estado",
+        descripcion:   `Estado cambiado a "${estado}". Motivo: ${motivo}`,
+        usuario:       actor,
+        usuario_email: actor,
+        metadata:      { nuevo_estado: estado, motivo, observacion: observacion || null },
+      }),
+    ]);
+
+    res.json({ ok: true, estado });
+  } catch (e) {
+    console.error("PATCH /api/clientes/:id/estado error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// ─── CUSTOMER MERGE ─────────────────────────────────────────────────────────
+
+// Preview: cuántos registros se reasignarán al fusionar duplicado_id en :id.
+app.get("/api/clientes/:id/merge-preview", async (req, res) => {
+  try {
+    const { id: oficialId } = req.params;
+    const { duplicado_id } = req.query;
+
+    if (!duplicado_id) return res.status(400).json({ error: "duplicado_id es requerido" });
+    if (oficialId === duplicado_id) return res.status(400).json({ error: "No se puede fusionar un cliente consigo mismo" });
+
+    const dup = encodeURIComponent(duplicado_id);
+    const [oficialRows, duplicadoRows, planeados, cumplidos, solicitudes] = await Promise.all([
+      sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(oficialId)}&select=id,razon_social,codigo_cliente&limit=1`),
+      sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(duplicado_id)}&select=id,razon_social,codigo_cliente,nombre_controlt&limit=1`),
+      sbFetch(`/planeados?empresa_cliente_id=eq.${dup}&select=trip_number&limit=500`),
+      sbFetch(`/cumplidos?empresa_cliente_id=eq.${dup}&select=id&limit=2000`),
+      sbFetch(`/solicitudes?empresa_cliente_id=eq.${dup}&select=id&limit=500`),
+    ]);
+
+    if (!oficialRows?.[0]) return res.status(404).json({ error: "Cliente oficial no encontrado" });
+    if (!duplicadoRows?.[0]) return res.status(404).json({ error: "Cliente duplicado no encontrado" });
+
+    const oficial   = oficialRows[0];
+    const duplicado = duplicadoRows[0];
+
+    res.json({
+      oficial:   { id: oficialId,    razon_social: oficial.razon_social,   codigo_cliente: oficial.codigo_cliente   },
+      duplicado: { id: duplicado_id, razon_social: duplicado.razon_social, codigo_cliente: duplicado.codigo_cliente },
+      referencias: {
+        planeados:   (planeados   ?? []).length,
+        cumplidos:   (cumplidos   ?? []).length,
+        solicitudes: (solicitudes ?? []).length,
+      },
+      identity_rules: [duplicado.razon_social, duplicado.nombre_controlt].filter(Boolean),
+    });
+  } catch (e) {
+    console.error("GET /api/clientes/:id/merge-preview error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// Merge: fusiona duplicado_id en :id (cliente oficial).
+// Operaciones atómicas (secuenciales donde importa el orden):
+//   1. Crear Identity Rules para los nombres del duplicado.
+//   2. Reasignar FKs en planeados, cumplidos, solicitudes.
+//   3. Marcar duplicado como fusionado.
+//   4. Registrar historial en ambos clientes.
+//   5. Refrescar lookup in-memory.
+app.post("/api/clientes/:id/merge", async (req, res) => {
+  try {
+    const { id: oficialId } = req.params;
+    const actor = req.headers["x-user-email"] ?? "sistema";
+    const { duplicado_id, motivo = "Fusión de clientes duplicados" } = req.body ?? {};
+
+    if (!duplicado_id) return res.status(400).json({ error: "duplicado_id es requerido" });
+    if (oficialId === duplicado_id) return res.status(400).json({ error: "No se puede fusionar un cliente consigo mismo" });
+
+    const [oficialRows, duplicadoRows] = await Promise.all([
+      sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(oficialId)}&select=id,razon_social,codigo_cliente,estado&limit=1`),
+      sbFetch(`/empresas_cliente?id=eq.${encodeURIComponent(duplicado_id)}&select=id,razon_social,codigo_cliente,estado,nombre_controlt&limit=1`),
+    ]);
+
+    const oficial   = oficialRows?.[0];
+    const duplicado = duplicadoRows?.[0];
+    if (!oficial)   return res.status(404).json({ error: "Cliente oficial no encontrado" });
+    if (!duplicado) return res.status(404).json({ error: "Cliente duplicado no encontrado" });
+    if (oficial.estado   === 'fusionado') return res.status(400).json({ error: "El cliente oficial ya está fusionado" });
+    if (duplicado.estado === 'fusionado') return res.status(400).json({ error: "El cliente duplicado ya está fusionado" });
+
+    const now = new Date().toISOString();
+    const dup = encodeURIComponent(duplicado_id);
+
+    // 1. Crear Identity Rules para todos los nombres conocidos del duplicado.
+    //    Si ya existe una regla para ese nombre, el índice único la ignora (no falla).
+    const namesToRegister = [...new Set(
+      [duplicado.razon_social, duplicado.nombre_controlt].filter(Boolean)
+    )];
+    for (const nombre of namesToRegister) {
+      const nombre_normalizado = normalizeClient(nombre);
+      if (!nombre_normalizado) continue;
+      await sbFetch('/cliente_alias', 'POST', {
+        empresa_cliente_id: oficialId,
+        nombre_normalizado,
+        nombre_raw:         nombre,
+        integracion:        'controlt',
+        creado_via:         'merge',
+        creado_por:         actor,
+      }).catch(() => {}); // el índice único ya impide duplicados; silenciar error
+    }
+
+    // 2. Reasignar todas las FK de duplicado_id → oficialId
+    await Promise.all([
+      sbFetch(`/planeados?empresa_cliente_id=eq.${dup}`,   'PATCH', { empresa_cliente_id: oficialId }),
+      sbFetch(`/cumplidos?empresa_cliente_id=eq.${dup}`,   'PATCH', { empresa_cliente_id: oficialId }),
+      sbFetch(`/solicitudes?empresa_cliente_id=eq.${dup}`, 'PATCH', { empresa_cliente_id: oficialId }),
+    ]);
+
+    // 3. Marcar duplicado como fusionado (estado terminal — nunca eliminar el registro)
+    await sbFetch(`/empresas_cliente?id=eq.${dup}`, 'PATCH', {
+      estado:     'fusionado',
+      activa:     false,
+      updated_at: now,
+      updated_by: actor,
+    });
+
+    // 4. Historial en ambos registros
+    await Promise.all([
+      sbFetch('/clientes_historial', 'POST', {
+        empresa_id:    oficialId,
+        tipo:          'fusion_recibida',
+        descripcion:   `Cliente "${duplicado.razon_social}" (${duplicado.codigo_cliente ?? duplicado_id}) fusionado en este registro. Motivo: ${motivo}`,
+        usuario:       actor,
+        usuario_email: actor,
+        metadata:      { duplicado_id, duplicado_razon_social: duplicado.razon_social, motivo, identity_rules: namesToRegister },
+      }),
+      sbFetch('/clientes_historial', 'POST', {
+        empresa_id:    duplicado_id,
+        tipo:          'fusion_ejecutada',
+        descripcion:   `Este registro fue fusionado en "${oficial.razon_social}" (${oficial.codigo_cliente ?? oficialId}). Motivo: ${motivo}`,
+        usuario:       actor,
+        usuario_email: actor,
+        metadata:      { oficial_id: oficialId, oficial_razon_social: oficial.razon_social, motivo },
+      }),
+    ]).catch(err => console.error('⚠️  merge historial:', err.message));
+
+    // 5. Refrescar lookup in-memory para que las próximas syncs usen las nuevas reglas
+    await refreshCustomerLookup();
+
+    console.log(`🔀 Merge: "${duplicado.razon_social}" → "${oficial.razon_social}" por ${actor}. Rules: ${namesToRegister.join(', ')}`);
+    res.json({
+      ok:                     true,
+      oficial_id:             oficialId,
+      duplicado_id,
+      identity_rules_created: namesToRegister.length,
+    });
+  } catch (e) {
+    console.error("POST /api/clientes/:id/merge error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// ─── ALIAS CRUD ─────────────────────────────────────────────────────────────
+
+// Listar todos los alias de un cliente (activos e inactivos)
+app.get("/api/clientes/:id/alias", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rows = await sbFetch(
+      `/cliente_alias?empresa_cliente_id=eq.${encodeURIComponent(id)}&order=creado_en.desc`
+    );
+    res.json(rows ?? []);
+  } catch (e) {
+    console.error("GET /api/clientes/:id/alias error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// Crear un alias manualmente para un cliente
+app.post("/api/clientes/:id/alias", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id: empresa_cliente_id } = req.params;
+    const actor = req.headers["x-user-email"] ?? "sistema";
+    const { nombre_raw, integracion = 'controlt', observacion } = req.body ?? {};
+
+    if (!nombre_raw?.trim()) return res.status(400).json({ error: "nombre_raw es requerido" });
+
+    const nombre_normalizado = normalizeClient(nombre_raw);
+    if (!nombre_normalizado) return res.status(400).json({ error: "El nombre no es válido" });
+
+    const inserted = await sbFetch('/cliente_alias', 'POST', {
+      empresa_cliente_id,
+      nombre_raw:         nombre_raw.trim(),
+      nombre_normalizado,
+      integracion:        String(integracion || 'controlt'),
+      creado_via:         'manual',
+      creado_por:         actor,
+      ...(observacion ? { observacion: String(observacion) } : {}),
+    });
+
+    if (!inserted?.[0]) return res.status(500).json({ error: "No se pudo crear el alias" });
+
+    // Refrescar lookup para que las próximas syncs lo consideren de inmediato
+    refreshCustomerLookup().catch(() => {});
+
+    res.status(201).json(inserted[0]);
+  } catch (e) {
+    console.error("POST /api/clientes/:id/alias error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// Activar / desactivar un alias (nunca se elimina físicamente)
+app.patch("/api/clientes/:id/alias/:aliasId", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id: empresa_cliente_id, aliasId } = req.params;
+    const { activo, observacion } = req.body ?? {};
+
+    if (typeof activo !== 'boolean') return res.status(400).json({ error: "activo (boolean) es requerido" });
+
+    const patch = { activo };
+    if (observacion !== undefined) patch.observacion = String(observacion);
+
+    await sbFetch(
+      `/cliente_alias?id=eq.${encodeURIComponent(aliasId)}&empresa_cliente_id=eq.${encodeURIComponent(empresa_cliente_id)}`,
+      'PATCH',
+      patch
+    );
+
+    // Refrescar lookup para que el cambio de activo se refleje en syncs
+    refreshCustomerLookup().catch(() => {});
+
+    res.json({ ok: true, activo });
+  } catch (e) {
+    console.error("PATCH /api/clientes/:id/alias/:aliasId error:", e.message);
+    res.status(500).json({ error: "Error interno" });
   }
 });
 

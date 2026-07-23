@@ -1,11 +1,15 @@
+import { useEffect, useRef } from "react";
 import { RefreshCw, Search, CalendarClock, Clock, Activity, XCircle, AlertCircle } from "lucide-react";
 import { KpiCard, PageHeader, Card, DataTable, Button } from "@/components/ui";
+import { useNavigationContext } from "@/core/navigation";
 import { useProgramacion } from "./hooks/useProgramacion";
 import { CentroOperativo } from "./components/CentroOperativo";
 import { COLUMNS } from "./components/ProgramacionTableColumns";
 import { TABS, tabCount } from "./constants";
 
 export function ProgramacionPage() {
+  const { navPayload } = useNavigationContext();
+
   const {
     data, loading, error,
     desde, setDesde,
@@ -17,6 +21,19 @@ export function ProgramacionPage() {
     filtradas, kpis,
     cargar, handleEstado, handleSync,
   } = useProgramacion();
+
+  // Auto-abrir panel cuando se navega con contexto (ej. desde Viajes)
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!autoOpenedRef.current && navPayload?.tripNumber && data.length > 0) {
+      autoOpenedRef.current = true;
+      setPanelId(navPayload.tripNumber);
+    }
+  }, [navPayload?.tripNumber, data.length, setPanelId]);
+
+  useEffect(() => {
+    autoOpenedRef.current = false;
+  }, [navPayload?.tripNumber]);
 
   return (
     <div className="p-6 flex flex-col gap-5">

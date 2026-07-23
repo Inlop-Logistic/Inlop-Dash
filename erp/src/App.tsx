@@ -1,10 +1,13 @@
-import { useState } from "react";
 import { AuthProvider, useAuth } from "@/state/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
-import type { Vista } from "@/types/navigation";
+import { NavigationProvider, useNavigationContext } from "@/core/navigation";
 import { LoginPage } from "@/pages/LoginPage";
 import { SolicitudesPage } from "@/pages/SolicitudesPage";
 import { ProgramacionPage } from "@/pages/ProgramacionPage";
+import { ViajesPage } from "@/pages/ViajesPage";
+import { CumplidosPage } from "@/pages/CumplidosPage";
+import { GpsPage } from "@/pages/GpsPage";
+import { ClientesPage } from "@/pages/ClientesPage";
 
 function ComingSoon({ titulo }: { titulo: string }) {
   return (
@@ -17,7 +20,7 @@ function ComingSoon({ titulo }: { titulo: string }) {
 
 function AppInner() {
   const { user, loading } = useAuth();
-  const [vista, setVista] = useState<Vista>("solicitudes");
+  const { vista, setVista } = useNavigationContext();
 
   if (loading) {
     return (
@@ -32,6 +35,10 @@ function AppInner() {
   const renderPage = () => {
     if (vista === "solicitudes")  return <SolicitudesPage />;
     if (vista === "programacion") return <ProgramacionPage />;
+    if (vista === "viajes")       return <ViajesPage />;
+    if (vista === "cumplidos")    return <CumplidosPage />;
+    if (vista === "mapa")         return <GpsPage />;
+    if (vista === "clientes")     return <ClientesPage />;
     return <ComingSoon titulo={vista.charAt(0).toUpperCase() + vista.slice(1)} />;
   };
 
@@ -45,7 +52,9 @@ function AppInner() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppInner />
+      <NavigationProvider>
+        <AppInner />
+      </NavigationProvider>
     </AuthProvider>
   );
 }

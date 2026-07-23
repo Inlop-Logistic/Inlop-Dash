@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import {
-  User, Car, MapPin, FileText, AlertCircle, Link2, CheckCircle2, RefreshCw, AlertTriangle,
+  User, Car, MapPin, FileText, AlertCircle, Link2, CheckCircle2, RefreshCw, AlertTriangle, Truck, ChevronRight,
 } from "lucide-react";
 import { fmtFecha, fmtFechaCort, fmtHora } from "@/utils/date";
 import { SidePanel, PanelSection, InfoRow, Button } from "@/components/ui";
+import { useNavigationContext, navActions } from "@/core/navigation";
 import type { ViajeResumen, EstadoProgramacion, SolicitudVinculadaResult } from "../types";
 import { guardarObservacion, obtenerSolicitudVinculada } from "../services/api";
 import { EstadoBadge } from "./EstadoBadge";
@@ -18,6 +19,7 @@ interface CentroOperativoProps {
 }
 
 export function CentroOperativo({ viaje, onClose, onEstado, onSync, accionLoading }: CentroOperativoProps) {
+  const { navigateTo } = useNavigationContext();
   const [obs, setObs]             = useState(viaje.observaciones ?? "");
   const [savingObs, setSavingObs] = useState(false);
   const [obsSaved, setObsSaved]   = useState(false);
@@ -105,8 +107,24 @@ export function CentroOperativo({ viaje, onClose, onEstado, onSync, accionLoadin
         </div>
       )}
 
+      {/* Módulos relacionados — navegación contextual */}
+      <PanelSection title="Módulos relacionados" icon={<ChevronRight className="w-3.5 h-3.5" />} first>
+        <button
+          type="button"
+          onClick={() => navigateTo(navActions.verViaje(viaje.trip_number, "programacion"))}
+          className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-[13px] font-medium transition-colors"
+          style={{ background: "#fff", color: "var(--gray-700)", border: "1.5px solid var(--gray-200)", cursor: "pointer" }}
+        >
+          <span className="flex items-center gap-2">
+            <Truck className="w-3.5 h-3.5" />
+            Ver en Viajes
+          </span>
+          <ChevronRight className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--gray-400)" }} />
+        </button>
+      </PanelSection>
+
       {/* Identificación */}
-      <PanelSection title="Identificación" icon={<FileText className="w-3.5 h-3.5" />} first>
+      <PanelSection title="Identificación" icon={<FileText className="w-3.5 h-3.5" />}>
         <InfoRow label="Trip number"      value={viaje.trip_number} mono />
         <InfoRow label="Cliente"          value={viaje.nombre_cliente} />
         <InfoRow label="Fecha programada" value={fmtFechaCort(viaje.fecha_programada_dia)} />
