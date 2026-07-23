@@ -308,10 +308,12 @@ let lastLogin    = null;
 
 // ─── CACHÉ EN MEMORIA ───────────────────────────────────
 const cache = {
-  viajes:    { data: [], ts: 0 },
+  viajes:    { data: [], ts: 0, completo: false },
   alarmas:   { data: [], ts: 0 },
   pendientes:{ data: [], ts: 0 },
 };
+
+let syncCumplidosRunning = false;
 
 function cacheVigente(key) {
   return (Date.now() - cache[key].ts) < CACHE_TTL && cache[key].data.length > 0;
@@ -748,6 +750,7 @@ async function syncViajes() {
     }
 
     let todos = [...arr1];
+    let completo = true;
 
     if (arr1.length >= 100) {
       try {
@@ -764,10 +767,16 @@ async function syncViajes() {
                 todos = [...todos, ...arr3];
                 console.log(`📄 Página 3 cargada: ${arr3.length} viajes adicionales`);
               }
-            } catch(e) { console.warn("⚠️  Página 3 no disponible:", e.message); }
+            } catch(e) {
+              console.warn("⚠️  Página 3 no disponible — snapshot parcial:", e.message);
+              completo = false;
+            }
           }
         }
-      } catch(e) { console.warn("⚠️  Página 2 no disponible:", e.message); }
+      } catch(e) {
+        console.warn("⚠️  Página 2 no disponible — snapshot parcial:", e.message);
+        completo = false;
+      }
     }
 
     const seen = new Set();
@@ -778,8 +787,13 @@ async function syncViajes() {
       return true;
     });
 
-    cache.viajes.data = sortViajes(dedup);
-    cache.viajes.ts   = Date.now();
+    cache.viajes.data    = sortViajes(dedup);
+    cache.viajes.ts      = Date.now();
+    cache.viajes.completo = completo;
+
+    if (!completo) {
+      console.warn(`⚠️  syncViajes: snapshot PARCIAL (${dedup.length} viajes). Lógica de finalización suspendida en próximo ciclo.`);
+    }
     console.log(`📦 Caché: ${dedup.length} viajes totales (p1:${arr1.length} + extras)`);
   } catch(e) {
     console.error("❌ Error sync viajes:", e.message);
@@ -895,36 +909,53 @@ app.get('/api/viajes', requireInternalApiKey, (req, res) => {
   res.json(viajes);
 });
 
-// GET /api/cumplidos — viajes en estado cumplible con expediente documental inicializado.
-// Mueve al backend el filtrado por ESTADOS_CUMPLIBLES y la derivación del CumplidoRecord
-// que antes hacía el frontend en listarCumplidos().
-app.get('/api/cumplidos', requireInternalApiKey, (req, res) => {
-  const cumplidos = cache.viajes.data
-    .filter(v => ESTADOS_CUMPLIBLES.has((v.state_travel ?? '').toLowerCase()))
-    .map(v => ({
-      id:                    v.trip_number,
-      trip_number:           v.trip_number,
-      number_order:          v.number_order          || null,
-      company_customer_name: v.company_customer_name || null,
-      license_plate:         v.license_plate         || null,
-      driver_name:           v.driver_name           || null,
-      origin_city_name:      v.origin_city_name      || null,
-      destiny_city_name:     v.destiny_city_name     || null,
-      state_travel:          v.state_travel,
-      activated_on:          v.activated_on          || null,
-      created_on:            v.created_on            || null,
-      fecha_cumplido:        v.activated_on          || null,
+// GET /api/cumplidos — viajes finalizados desde Supabase (tabla cumplidos).
+// Fuente: Supabase, nunca desde cache en memoria.
+// Paginación interna para soportar crecimiento indefinido de la tabla.
+app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
+  try {
+    const SB_PAGE = 500;
+    let sbOffset = 0;
+    const allRows = [];
+    while (true) {
+      const page = await sbFetch(
+        `/cumplidos?select=id,manifiesto,placa,conductor,cliente,origen,destino,estado_controlt,pct,fecha_viaje,fecha_finalizacion&order=fecha_viaje.desc&limit=${SB_PAGE}&offset=${sbOffset}`
+      );
+      if (!page || page.length === 0) break;
+      allRows.push(...page);
+      if (page.length < SB_PAGE) break;
+      sbOffset += SB_PAGE;
+    }
+
+    const cumplidos = allRows.map(r => ({
+      id:                    r.id,
+      trip_number:           r.id,
+      number_order:          r.manifiesto  || null,
+      company_customer_name: r.cliente     || null,
+      license_plate:         r.placa       || null,
+      driver_name:           r.conductor   || null,
+      origin_city_name:      r.origen      || null,
+      destiny_city_name:     r.destino     || null,
+      state_travel:          r.estado_controlt || '',
+      activated_on:          r.fecha_viaje || null,
+      created_on:            null,
+      fecha_cumplido:        r.fecha_finalizacion || null,
       estado_documental:     'pendiente',
       documentos:            DOCUMENTOS_BASE.map(d => ({
         ...d,
-        presente: d.id === 'remision' ? !!v.number_order : false,
+        presente: d.id === 'remision' ? !!r.manifiesto : false,
       })),
       observaciones:    null,
       responsable:      null,
       fecha_validacion: null,
       aprobado_por:     null,
     }));
-  res.json(cumplidos);
+
+    res.json(cumplidos);
+  } catch(e) {
+    console.error('❌ Error GET /api/cumplidos:', e.message);
+    res.status(500).json({ error: 'Error interno al obtener viajes finalizados' });
+  }
 });
 
 // GET /api/gps — vehículos activos con estado GPS derivado y coordenadas como números.
@@ -1176,11 +1207,29 @@ function extraerTelefono(driver_phone, full_driver) {
 }
 
 async function syncCumplidos() {
+  // Mutex: evitar ejecuciones concurrentes si un ciclo tarda más de 60 s.
+  if (syncCumplidosRunning) {
+    console.warn('⚠️  syncCumplidos: ciclo anterior aún activo — omitiendo.');
+    return;
+  }
+  syncCumplidosRunning = true;
   try {
     if (!cache.viajes.data.length) return;
 
-    const existentesRaw = await sbFetch('/cumplidos?select=id,estado_cumplido,tiene_soporte,cliente,empresa_cliente_id&limit=1000');
-    const existentes = new Map((existentesRaw || []).map(c => [c.id, c]));
+    // Cargar todas las filas existentes en lotes para evitar el límite de 1.000 registros.
+    const SB_PAGE = 500;
+    let sbOffset = 0;
+    const allExistentes = [];
+    while (true) {
+      const page = await sbFetch(
+        `/cumplidos?select=id,estado_cumplido,tiene_soporte,cliente,empresa_cliente_id&limit=${SB_PAGE}&offset=${sbOffset}`
+      );
+      if (!page || page.length === 0) break;
+      allExistentes.push(...page);
+      if (page.length < SB_PAGE) break;
+      sbOffset += SB_PAGE;
+    }
+    const existentes = new Map(allExistentes.map(c => [c.id, c]));
 
     const ESTADOS_ACTIVOS = new Set(['LIVE', 'SOLICITADO', 'CUMPLIDO RECIBIDO']);
     const apiSet = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
@@ -1220,15 +1269,14 @@ async function syncCumplidos() {
           destino:             v.destiny_city_name || '',
           tiene_soporte:       false,
         };
-        await sbFetch('/cumplidos', 'POST', row);
-        insertados++;
+        // Solo contar inserción cuando Supabase confirma éxito.
+        const resultado = await sbFetch('/cumplidos', 'POST', row);
+        if (resultado !== null) insertados++;
       } else {
         const patch = {
           estado_controlt: v.state_travel || '',
           pct:             parseFloat(v.percentage_travel) || 0,
         };
-        // Sobreescribir cliente cuando: no había, o el existente era placeholder del TMS
-        // y ya llegó el cliente real (post-Match). Nunca sobreescribir un real con placeholder.
         const existenteEsPlaceholder = isPlaceholderTmsCustomer(existe.cliente);
         if (cliente && !resolved.placeholder && (!existe.cliente || existenteEsPlaceholder)) {
           patch.cliente = cliente;
@@ -1241,24 +1289,32 @@ async function syncCumplidos() {
       }
     }
 
+    // Detección de finalizados: solo ejecutar si el snapshot de ControlT fue completo.
+    // Un snapshot parcial (fallo de página 2 o 3) generaría falsas finalizaciones.
     let finalizados = 0;
-    for (const [id, c] of existentes) {
-      const estadoActivo = ESTADOS_ACTIVOS.has((c.estado_cumplido || '').toUpperCase());
-      if (estadoActivo && !apiSet.has(id)) {
-        const nuevoEstado = c.tiene_soporte ? 'PENDIENTE LIQUIDACION' : 'FINALIZADO CONTROLT';
-        await sbFetch(
-          `/cumplidos?id=eq.${encodeURIComponent(id)}`,
-          'PATCH',
-          { estado_cumplido: nuevoEstado, fecha_finalizacion: new Date().toISOString() }
-        );
-        finalizados++;
-        console.log(`🏁 Cumplido ${id} → ${nuevoEstado}`);
+    if (!cache.viajes.completo) {
+      console.warn('⚠️  syncCumplidos: snapshot parcial — lógica de finalización suspendida en este ciclo.');
+    } else {
+      for (const [id, c] of existentes) {
+        const estadoActivo = ESTADOS_ACTIVOS.has((c.estado_cumplido || '').toUpperCase());
+        if (estadoActivo && !apiSet.has(id)) {
+          const nuevoEstado = c.tiene_soporte ? 'PENDIENTE LIQUIDACION' : 'FINALIZADO CONTROLT';
+          await sbFetch(
+            `/cumplidos?id=eq.${encodeURIComponent(id)}`,
+            'PATCH',
+            { estado_cumplido: nuevoEstado, fecha_finalizacion: new Date().toISOString() }
+          );
+          finalizados++;
+          console.log(`🏁 Cumplido ${id} → ${nuevoEstado}`);
+        }
       }
     }
 
     console.log(`✅ Cumplidos sync: +${insertados} nuevos, ~${actualizados} actualizados, 🏁${finalizados} finalizados, 👤${clientesCreados} clientes creados, ⏳${placeholdersOmitidos} sin Match TMS`);
   } catch(e) {
     console.error('❌ Error syncCumplidos:', e.message);
+  } finally {
+    syncCumplidosRunning = false;
   }
 }
 

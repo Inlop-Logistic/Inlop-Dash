@@ -25,7 +25,7 @@ const NAV_SECTIONS: NavSection[] = [
       { id: "alarmas",      label: "Alarmas",      icon: <AlertTriangle   className="w-4 h-4" /> },
       { id: "vehiculos",    label: "Vehículos",    icon: <Car             className="w-4 h-4" /> },
       { id: "programacion", label: "Programación", icon: <CalendarClock   className="w-4 h-4" /> },
-      { id: "cumplidos",    label: "Cumplidos",    icon: <CheckSquare     className="w-4 h-4" /> },
+      { id: "cumplidos",    label: "Viajes Finalizados", icon: <CheckSquare className="w-4 h-4" /> },
     ],
   },
   {

@@ -220,7 +220,7 @@ export function ModalFusionarCliente({ clienteOficial, onClose, onSuccess }: Mod
                     <div style={{ display: "flex", gap: 10 }}>
                       {[
                         { label: "Planeados",   val: preview.referencias.planeados   },
-                        { label: "Cumplidos",   val: preview.referencias.cumplidos   },
+                        { label: "Finalizados",  val: preview.referencias.cumplidos   },
                         { label: "Solicitudes", val: preview.referencias.solicitudes },
                       ].map(({ label, val }) => (
                         <div

@@ -42,7 +42,7 @@ export function CumplidosPage() {
 
       {/* Header */}
       <PageHeader
-        title="Cumplidos"
+        title="Viajes Finalizados"
         subtitle="Cierre documental de servicios finalizados"
         icon={<ClipboardCheck className="w-5 h-5" />}
         actions={
@@ -61,7 +61,7 @@ export function CumplidosPage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <KpiCard
-          label="Total cumplidos"
+          label="Total finalizados"
           value={kpis.total}
           icon={<FileStack className="w-4.5 h-4.5" />}
           color={CUMPLIDOS_KPI_COLORS.total.color}
@@ -117,7 +117,7 @@ export function CumplidosPage() {
           <input
             type="text"
             value={busqueda}
-            aria-label="Buscar cumplidos"
+            aria-label="Buscar viajes finalizados"
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Viaje, remisión, conductor, cliente…"
             className="w-full text-[13px] outline-none"
@@ -211,7 +211,7 @@ export function CumplidosPage() {
             rowKey={(c) => c.trip_number}
             onRowClick={(c) => setPanelId(c.trip_number)}
             loading={loading}
-            emptyMessage="No hay cumplidos para los filtros seleccionados."
+            emptyMessage="No hay viajes finalizados para los filtros seleccionados."
           />
         )}
       </Card>

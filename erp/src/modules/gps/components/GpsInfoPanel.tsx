@@ -287,7 +287,7 @@ export function GpsInfoPanel({ vehiculo, vehiculos, loading, onSelect, onClose }
             <NavBtn icon={<Truck        className="w-3 h-3" />} label="Viaje"         onClick={() => navigateTo(navActions.verViaje(trip, "mapa"))} />
             <NavBtn icon={<CalendarClock className="w-3 h-3" />} label="Programación" onClick={() => navigateTo(navActions.verProgramacion(trip, "mapa"))} />
             <NavBtn icon={<ClipboardList className="w-3 h-3" />} label="Solicitud"    onClick={() => navigateTo(navActions.verSolicitud(trip, "mapa"))} />
-            <NavBtn icon={<CheckSquare  className="w-3 h-3" />} label="Cumplido"     onClick={() => navigateTo(navActions.verCumplidos(trip, "mapa"))} />
+            <NavBtn icon={<CheckSquare  className="w-3 h-3" />} label="Finalizado"   onClick={() => navigateTo(navActions.verCumplidos(trip, "mapa"))} />
           </div>
         </div>
 

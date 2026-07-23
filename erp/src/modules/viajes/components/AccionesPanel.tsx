@@ -61,7 +61,7 @@ export function AccionesPanel({ viaje }: { viaje: TmsViaje }) {
         />
         <Accion
           icon={<CheckSquare className="w-3.5 h-3.5" />}
-          label="Abrir Cumplidos"
+          label="Abrir Viajes Finalizados"
           onClick={() => navigateTo(navActions.verCumplidos(trip, "viajes"))}
         />
         <Accion
