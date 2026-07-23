@@ -1,8 +1,10 @@
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
-import { buildLookupMap, normalizeClient, resolveTrip, isPlaceholderTmsCustomer } from './services/customerResolver.js';
+import { publishBusinessEvent } from './services/notificationOrchestrator.js';
+import { buildLookupMap, normalizeClient, resolveCustomer, resolveTrip, isPlaceholderTmsCustomer } from './services/customerResolver.js';
 import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } from './services/authScope.js';
+import { getUserPreferences, updatePreference, KNOWN_CHANNELS } from './services/preferenceResolver.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -102,6 +104,14 @@ async function sbFetch(path, method="GET", body=null) {
   return text ? JSON.parse(text) : null;
 }
 
+// ⚠️ DEPRECATED (Sprint 5.0 — Notification Orchestrator, ver merge 2026-07-19):
+// enviarPush() ya no tiene ningún call site. syncSolicitudes despacha push
+// vía publishBusinessEvent() → services/channels/pushChannel.js, que cubre
+// exactamente el mismo envío (mismas suscripciones activas, mismo
+// webpush.sendNotification, misma desactivación en 404/410) con idempotencia
+// y estados de entrega además. Se conserva este bloque sin eliminar en este
+// PR — pendiente de retiro en un PR de limpieza separado.
+//
 // ─── PUSH NOTIFICATIONS (INLOP Event Engine, Fase 4A — Sprint 4.4) ────
 // Canal Push: reutiliza exactamente el mismo insertsNotif que ya escribe
 // notificaciones_cliente (ver syncSolicitudes/_notifs más abajo) — no existe
@@ -1486,19 +1496,36 @@ async function syncSolicitudes() {
       await sbFetch('/notificaciones_cliente', 'POST', lote);
     }
 
-    // Canal Push (Fase 4A/Sprint 4.4): mismo insertsNotif ya persistido arriba,
-    // no un flujo paralelo. Fire-and-forget vía Promise.allSettled — un fallo
-    // de push nunca debe bloquear ni reintentar el ciclo de syncSolicitudes.
-    await Promise.allSettled(
-      insertsNotif
-        .filter((notif) => notif._push)
-        .map((notif) => enviarPush(notif.usuario_id, {
-          title: notif.titulo,
-          body: notif.mensaje,
-          action: notif._push,
-          tag: notif._push.tag,
-        })),
-    );
+    // Despachar push vía Notification Orchestrator (fire-and-forget — nunca bloquea el sync)
+    // Reemplaza el enviarPush() directo de Sprint 4.4/Fase 4A (ver nota junto a
+    // su definición, más arriba): el Orchestrator ya cubre exactamente el mismo
+    // envío (mismas suscripciones, mismo webpush.sendNotification, misma
+    // desactivación en 404/410 — ver services/channels/pushChannel.js) más
+    // idempotencia (business_events.idempotency_key) y estados de entrega
+    // (delivered/failed/skipped/suppressed). Mantener ambas rutas activas
+    // enviaría dos notificaciones push duplicadas por cada cambio de estado.
+    if (insertsNotif.length > 0) {
+      await Promise.allSettled(
+        insertsNotif
+          .filter((notif) => notif._push)
+          .map((notif) => {
+            const tag   = notif._push.tag;             // "push-{estado}-{uuid}"
+            const parts = tag.split('-');               // ['push', 'confirmado'|'en_ruta'|…, ...uuid]
+            const tipo  = `SERVICIO_${parts[1].toUpperCase()}`;
+            return publishBusinessEvent({
+              tipo,
+              usuario_id:      notif.usuario_id,
+              empresa_id:      null,
+              solicitud_id:    notif.solicitud_id,
+              titulo:          notif.titulo,
+              mensaje:         notif.mensaje,
+              pushPayload:     notif._push,
+              prioridad:       'HIGH',
+              idempotency_key: tag,
+            }, { sbFetch, sbAuthAdmin });
+          })
+      );
+    }
 
     console.log(`📋 syncSolicitudes OK: ${updOk}/${updates.length} upd | ${insertsNotif.length} notifs | ${pendVerif.length} verif cumplidos`);
   } catch(e) {
@@ -1569,9 +1596,14 @@ function _notifs(sol, nuevoEstado, viaje, estadoAnterior) {
   const obs   = sol.observacion_coordinadora ? `\n${sol.observacion_coordinadora}` : '';
   const uid   = sol.creado_por;
   const sid   = sol.id;
+  const push  = (actionType) => ({
+    action_type:    actionType,
+    action_payload: { servicio_id: sid },
+    tag:            `push-${nuevoEstado}-${sid}`,
+  });
   const n = (tipo, titulo, mensaje, actionType = 'OPEN_SERVICE') => ({
     usuario_id: uid, solicitud_id: sid, tipo, titulo, mensaje,
-    _push: { action_type: actionType, action_payload: { servicio_id: sid }, tag: `push-${nuevoEstado}-${sid}` },
+    _push: push(actionType),
   });
   if (nuevoEstado === 'confirmado' && estadoAnterior === 'pendiente')
     return [n('confirmacion', 'Servicio confirmado', `Tu servicio ${cod} ha sido confirmado. Vehículo: ${placa}. Conductor: ${cond}.${obs}`)];
@@ -2490,6 +2522,27 @@ serviciosRouter.post('/', async (req, res) => {
     const created = await sbFetch('/solicitudes', 'POST', row);
     if (!created) return res.status(500).json({ error: 'Error creando solicitud' });
     const sol = Array.isArray(created) ? created[0] : created;
+
+    // Despachar SOLICITUD_CREADA vía Notification Orchestrator (fire-and-forget
+    // — nunca bloquea la respuesta ni el fallo de notificación afecta al
+    // request). Único canal registrado para este evento: email a INLOP ops
+    // (EVENT_CHANNELS en notificationOrchestrator.js) — no hay push que
+    // esperar aquí, la solicitud aún no tiene destinatario cliente relevante
+    // más allá de quien la creó.
+    if (sol?.id) {
+      publishBusinessEvent({
+        tipo:            'SOLICITUD_CREADA',
+        usuario_id:      req.userId,
+        empresa_id:      req.empresaId,
+        solicitud_id:    sol.id,
+        titulo:          'Nueva solicitud registrada',
+        mensaje:         `Se registró la solicitud ${sol.codigo_solicitud || codigo_solicitud} (${sol.origen || origen || '—'} → ${sol.destino || destino || '—'}), requerida para ${sol.fecha_requerida || fecha_requerida}.`,
+        pushPayload:     null,
+        prioridad:       'HIGH',
+        idempotency_key: `solicitud_creada-${sol.id}`,
+      }, { sbFetch, sbAuthAdmin });
+    }
+
     res.status(201).json(mapSolicitud(sol || row));
   } catch(e) {
     console.error('❌ POST /servicios:', e.message);
@@ -2646,6 +2699,38 @@ app.delete('/push/suscripcion', requireClienteAuth, async (req, res) => {
   } catch(e) {
     console.error('❌ DELETE /push/suscripcion:', e.message);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── PREFERENCIAS DE NOTIFICACIÓN (Sprint 6.0) ─────────────────────────
+// GET /preferencias/notificaciones — retorna las preferencias de canal del usuario.
+// Modelo opt-out: canales sin fila se consideran habilitados.
+app.get('/preferencias/notificaciones', requireClienteAuth, async (req, res) => {
+  try {
+    const prefs = await getUserPreferences(req.userId, { sbFetch });
+    res.json(prefs);
+  } catch (e) {
+    console.error('❌ GET /preferencias/notificaciones:', e.message);
+    res.status(500).json({ error: 'Error al obtener preferencias' });
+  }
+});
+
+// PUT /preferencias/notificaciones — actualiza (upsert) la preferencia de un canal.
+app.put('/preferencias/notificaciones', requireClienteAuth, async (req, res) => {
+  try {
+    const { canal, habilitado } = req.body || {};
+    if (!canal || typeof habilitado !== 'boolean') {
+      return res.status(400).json({ error: 'canal (string) y habilitado (boolean) son requeridos' });
+    }
+    if (!KNOWN_CHANNELS.includes(canal)) {
+      return res.status(400).json({ error: `Canal no válido. Canales disponibles: ${KNOWN_CHANNELS.join(', ')}` });
+    }
+    const ok = await updatePreference(req.userId, req.empresaId, canal, habilitado, { sbFetch });
+    if (!ok) return res.status(500).json({ error: 'Error al actualizar preferencia' });
+    res.json({ ok: true, canal, habilitado });
+  } catch (e) {
+    console.error('❌ PUT /preferencias/notificaciones:', e.message);
+    res.status(500).json({ error: 'Error al actualizar preferencia' });
   }
 });
 
@@ -3519,6 +3604,46 @@ app.get("/health", (req, res) => {
       }
     }
   });
+});
+
+// ─── PUSH SUBSCRIPTIONS ──────────────────────────────────────────────────────
+
+// POST /push/suscripcion — registrar o actualizar suscripción push del usuario
+app.post('/push/suscripcion', requireClienteAuth, async (req, res) => {
+  const { endpoint, p256dh, auth } = req.body || {};
+  if (!endpoint || !p256dh || !auth)
+    return res.status(400).json({ error: 'endpoint, p256dh y auth son requeridos' });
+  try {
+    await sbFetch('/push_subscriptions?on_conflict=endpoint', 'POST', [{
+      usuario_id:  req.userId,
+      endpoint,
+      p256dh,
+      auth,
+      user_agent:  req.headers['user-agent'] || null,
+      activo:      true,
+    }]);
+    res.status(201).json({ ok: true });
+  } catch (e) {
+    console.error('❌ POST /push/suscripcion:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /push/suscripcion — eliminar suscripción push del usuario
+app.delete('/push/suscripcion', requireClienteAuth, async (req, res) => {
+  const { endpoint } = req.body || {};
+  if (!endpoint)
+    return res.status(400).json({ error: 'endpoint requerido' });
+  try {
+    await sbFetch(
+      `/push_subscriptions?usuario_id=eq.${encodeURIComponent(req.userId)}&endpoint=eq.${encodeURIComponent(endpoint)}`,
+      'DELETE'
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('❌ DELETE /push/suscripcion:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ─── INICIO ─────────────────────────────────────────────
