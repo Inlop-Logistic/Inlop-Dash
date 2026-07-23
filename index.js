@@ -919,7 +919,7 @@ app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
     const allRows = [];
     while (true) {
       const page = await sbFetch(
-        `/cumplidos?select=id,manifiesto,placa,conductor,cliente,origen,destino,estado_controlt,pct,fecha_viaje,fecha_finalizacion&order=fecha_viaje.desc&limit=${SB_PAGE}&offset=${sbOffset}`
+        `/cumplidos?select=id,manifiesto,placa,conductor,conductor_tel,cliente,origen,destino,estado_controlt,pct,fecha_viaje,fecha_finalizacion&order=fecha_viaje.desc&limit=${SB_PAGE}&offset=${sbOffset}`
       );
       if (!page || page.length === 0) break;
       allRows.push(...page);
@@ -933,7 +933,8 @@ app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
       number_order:          r.manifiesto  || null,
       company_customer_name: r.cliente     || null,
       license_plate:         r.placa       || null,
-      driver_name:           r.conductor   || null,
+      driver_name:           r.conductor     || null,
+      conductor_tel:         r.conductor_tel || null,
       origin_city_name:      r.origen      || null,
       destiny_city_name:     r.destino     || null,
       state_travel:          r.estado_controlt || '',

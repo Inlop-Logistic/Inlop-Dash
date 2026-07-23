@@ -13,18 +13,27 @@ function activatedOnISO(c: CumplidoRecord): string | null {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/**
+ * Deriva la línea de negocio de un cumplido.
+ * El campo type_operation no se almacena en la tabla cumplidos — siempre devuelve "Carga Seca"
+ * hasta que la Evolución 02 añada ese campo al modelo de datos.
+ */
+function lineaNegocioCumplido(_c: CumplidoRecord): string {
+  return "Carga Seca";
+}
+
 export function useCumplidos() {
   const [data,    setData]    = useState<CumplidoRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
 
   // Filtros
-  const [busqueda,      setBusqueda]      = useState("");
-  const [tabActivo,     setTabActivo]     = useState<TabCumplidos>("todos");
-  const [estadoFiltro,  setEstadoFiltro]  = useState("");
-  const [clienteFiltro, setClienteFiltro] = useState("");
-  const [desde,         setDesde]         = useState("");
-  const [hasta,         setHasta]         = useState("");
+  const [busqueda,           setBusqueda]           = useState("");
+  const [tabActivo,          setTabActivo]           = useState<TabCumplidos>("todos");
+  const [lineaNegocioFiltro, setLineaNegocioFiltro] = useState("");
+  const [clienteFiltro,      setClienteFiltro]      = useState("");
+  const [desde,              setDesde]              = useState("");
+  const [hasta,              setHasta]              = useState("");
 
   // Paginación
   const [pagina,    setPagina]    = useState(1);
@@ -57,6 +66,7 @@ export function useCumplidos() {
     const doc  = (c: CumplidoRecord) => c.estado_documental;
 
     return data.filter((c) => {
+      // Filtro por tab (estado documental)
       if (tabActivo === "pendientes")        { if (doc(c) !== "pendiente")          return false; }
       if (tabActivo === "enRevision")        { if (doc(c) !== "en_revision")        return false; }
       if (tabActivo === "conObservaciones")  { if (doc(c) !== "con_observaciones")  return false; }
@@ -64,13 +74,18 @@ export function useCumplidos() {
       if (tabActivo === "listosFacturacion") { if (doc(c) !== "listo_facturacion")  return false; }
       if (tabActivo === "rechazados")        { if (doc(c) !== "rechazado")          return false; }
 
-      if (estadoFiltro && doc(c) !== estadoFiltro) return false;
+      // Filtro por línea de negocio
+      if (lineaNegocioFiltro) {
+        if (lineaNegocioCumplido(c) !== lineaNegocioFiltro) return false;
+      }
 
+      // Filtro por cliente
       if (clienteFiltro) {
         const cli = (c.company_customer_name ?? "").toLowerCase();
         if (!cli.includes(clienteFiltro.toLowerCase())) return false;
       }
 
+      // Filtro por fecha (sobre activated_on)
       if (desde || hasta) {
         const iso = activatedOnISO(c);
         if (!iso) return false;
@@ -78,10 +93,11 @@ export function useCumplidos() {
         if (hasta && iso > hasta) return false;
       }
 
+      // Buscador
       if (term) {
         const hay = [
           c.trip_number, c.number_order, c.license_plate,
-          c.driver_name, c.company_customer_name,
+          c.driver_name, c.conductor_tel, c.company_customer_name,
           c.origin_city_name, c.destiny_city_name,
         ].join(" ").toLowerCase();
         if (!hay.includes(term)) return false;
@@ -89,7 +105,7 @@ export function useCumplidos() {
 
       return true;
     });
-  }, [data, tabActivo, busqueda, estadoFiltro, clienteFiltro, desde, hasta]);
+  }, [data, tabActivo, busqueda, lineaNegocioFiltro, clienteFiltro, desde, hasta]);
 
   // Resetear página cuando cambian los filtros
   useEffect(() => { setPagina(1); }, [filtradas]);
@@ -101,16 +117,22 @@ export function useCumplidos() {
     [filtradas, pagina, tamPagina],
   );
 
-  // ── KPIs ─────────────────────────────────────────────────────────────────
+  // ── KPIs — calculados sobre el conjunto filtrado activo ───────────────────
+  // KPIs de estado viaje (derivado de fecha_cumplido):
+  //   Pendientes  → viaje aún activo en Viajes (fecha_cumplido null)
+  //   Finalizados → viaje con fecha de finalización confirmada
+  // KPIs de estado documental:
+  //   Cumplidos  → estado_documental === "aprobado"  (expediente aprobado)
+  //   Liquidados → estado_documental === "listo_facturacion"
+  //   Facturados → no existe campo en el modelo actual (siempre 0 — ver informe técnico)
   const kpis = useMemo<KpisCumplidos>(() => ({
-    total:              data.length,
-    pendientes:         data.filter(c => c.estado_documental === "pendiente").length,
-    enRevision:         data.filter(c => c.estado_documental === "en_revision").length,
-    conObservaciones:   data.filter(c => c.estado_documental === "con_observaciones").length,
-    validados:          data.filter(c => c.estado_documental === "aprobado").length,
-    listosFacturacion:  data.filter(c => c.estado_documental === "listo_facturacion").length,
-    rechazados:         data.filter(c => c.estado_documental === "rechazado").length,
-  }), [data]);
+    total:       filtradas.length,
+    pendientes:  filtradas.filter(c => !c.fecha_cumplido).length,
+    finalizados: filtradas.filter(c => !!c.fecha_cumplido).length,
+    cumplidos:   filtradas.filter(c => c.estado_documental === "aprobado").length,
+    liquidados:  filtradas.filter(c => c.estado_documental === "listo_facturacion").length,
+    facturados:  0, // Sin campo en tabla cumplidos — pendiente Evolución 02
+  }), [filtradas]);
 
   // ── Clientes únicos ───────────────────────────────────────────────────────
   const clientes = useMemo<string[]>(() => {
@@ -122,6 +144,21 @@ export function useCumplidos() {
     }
     return result.sort((a, b) => a.localeCompare(b, "es"));
   }, [data]);
+
+  // ── Limpiar todos los filtros ─────────────────────────────────────────────
+  const hayFiltros =
+    busqueda !== "" || desde !== "" || hasta !== "" ||
+    lineaNegocioFiltro !== "" || clienteFiltro !== "" || tabActivo !== "todos";
+
+  const limpiarFiltros = useCallback(() => {
+    setBusqueda("");
+    setDesde("");
+    setHasta("");
+    setLineaNegocioFiltro("");
+    setClienteFiltro("");
+    setTabActivo("todos");
+    setPagina(1);
+  }, []);
 
   // ── Panel ─────────────────────────────────────────────────────────────────
   const panelCumplido = useMemo(
@@ -136,13 +173,14 @@ export function useCumplidos() {
     filtradas, paginadas, kpis, clientes,
     busqueda, setBusqueda,
     tabActivo, setTabActivo,
-    estadoFiltro, setEstadoFiltro,
+    lineaNegocioFiltro, setLineaNegocioFiltro,
     clienteFiltro, setClienteFiltro,
     desde, setDesde,
     hasta, setHasta,
     pagina, setPagina,
     tamPagina, setTamPagina,
     totalPaginas,
+    hayFiltros, limpiarFiltros,
     panelId, setPanelId, panelCumplido,
     cargar, getTabCount,
   };

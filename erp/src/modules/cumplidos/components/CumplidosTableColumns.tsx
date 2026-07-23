@@ -64,9 +64,19 @@ export const COLUMNS: Column<CumplidoRecord>[] = [
     key: "tipo_servicio",
     header: "Tipo Servicio",
     width: "110px",
-    render: (_c) => (
-      <span className="text-[11px]" style={{ color: "var(--gray-300)" }}>—</span>
-    ),
+    render: (c) => {
+      const o = (c.origin_city_name  ?? "").trim().toLowerCase();
+      const d = (c.destiny_city_name ?? "").trim().toLowerCase();
+      const tipo = o && d && o === d ? "URBANO" : o && d ? "NACIONAL" : null;
+      return (
+        <span
+          className="text-[11px] font-semibold tracking-wide uppercase"
+          style={{ color: tipo ? "var(--gray-700)" : "var(--gray-300)" }}
+        >
+          {tipo ?? "—"}
+        </span>
+      );
+    },
   },
   {
     key: "linea_negocio",
@@ -137,8 +147,13 @@ export const COLUMNS: Column<CumplidoRecord>[] = [
     key: "conductor_tel",
     header: "Teléfono",
     width: "110px",
-    render: (_c) => (
-      <span className="text-[12px] font-mono" style={{ color: "var(--gray-300)" }}>—</span>
+    render: (c) => (
+      <span
+        className="text-[12px] font-mono"
+        style={{ color: c.conductor_tel ? "var(--gray-700)" : "var(--gray-300)" }}
+      >
+        {c.conductor_tel ?? "—"}
+      </span>
     ),
   },
   {

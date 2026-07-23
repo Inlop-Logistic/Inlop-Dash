@@ -24,6 +24,7 @@ export interface CumplidoRecord {
   company_customer_name: string | null;
   license_plate:         string | null;
   driver_name:           string | null;
+  conductor_tel:         string | null;
   origin_city_name:      string | null;
   destiny_city_name:     string | null;
   state_travel:          string;
@@ -42,13 +43,12 @@ export interface CumplidoRecord {
   aprobado_por:       string | null;
 }
 
-/** KPIs calculados del array de cumplidos. */
+/** KPIs calculados del conjunto filtrado activo. */
 export interface KpisCumplidos {
-  total:              number;
-  pendientes:         number;
-  enRevision:         number;
-  conObservaciones:   number;
-  validados:          number;
-  listosFacturacion:  number;
-  rechazados:         number;
+  total:       number;
+  pendientes:  number;
+  finalizados: number;
+  cumplidos:   number;
+  liquidados:  number;
+  facturados:  number;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import {
   RefreshCw, Search, ClipboardCheck, Clock, AlertCircle,
-  CheckCircle2, XCircle, FileStack, Eye,
+  CheckCircle2, FileStack, Truck, Receipt, Banknote, Trash2,
   ChevronFirst, ChevronLast, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { KpiCard, PageHeader, Card, DataTable, Button } from "@/components/ui";
@@ -9,7 +9,7 @@ import { useNavigationContext } from "@/core/navigation";
 import { useCumplidos } from "./hooks/useCumplidos";
 import { DetalleCumplido } from "./components/DetalleCumplido";
 import { COLUMNS } from "./components/CumplidosTableColumns";
-import { TABS, ESTADO_DOC_CFG } from "./constants";
+import { TABS } from "./constants";
 
 export function CumplidosPage() {
   const { navPayload } = useNavigationContext();
@@ -18,7 +18,7 @@ export function CumplidosPage() {
     loading, error,
     busqueda, setBusqueda,
     tabActivo, setTabActivo,
-    estadoFiltro, setEstadoFiltro,
+    lineaNegocioFiltro, setLineaNegocioFiltro,
     clienteFiltro, setClienteFiltro,
     desde, setDesde,
     hasta, setHasta,
@@ -26,6 +26,7 @@ export function CumplidosPage() {
     pagina, setPagina,
     tamPagina, setTamPagina,
     totalPaginas,
+    hayFiltros, limpiarFiltros,
     setPanelId, panelCumplido,
     cargar, getTabCount,
   } = useCumplidos();
@@ -67,55 +68,52 @@ export function CumplidosPage() {
         }
       />
 
-      {/* KPIs */}
+      {/* KPIs — calculados sobre el conjunto filtrado activo */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <KpiCard
-          label="Total finalizados"
+          label="Total Servicios"
           value={kpis.total}
           icon={<FileStack className="w-4.5 h-4.5" />}
-          color={CUMPLIDOS_KPI_COLORS.total.color}
-          bg={CUMPLIDOS_KPI_COLORS.total.bg}
+          color={KPI_COLORS.total.color}
+          bg={KPI_COLORS.total.bg}
           onClick={() => setTabActivo("todos")}
         />
         <KpiCard
           label="Pendientes"
           value={kpis.pendientes}
           icon={<Clock className="w-4.5 h-4.5" />}
-          color={CUMPLIDOS_KPI_COLORS.pendientes.color}
-          bg={CUMPLIDOS_KPI_COLORS.pendientes.bg}
-          onClick={() => setTabActivo("pendientes")}
+          color={KPI_COLORS.pendientes.color}
+          bg={KPI_COLORS.pendientes.bg}
         />
         <KpiCard
-          label="Con observaciones"
-          value={kpis.conObservaciones}
-          icon={<AlertCircle className="w-4.5 h-4.5" />}
-          color={CUMPLIDOS_KPI_COLORS.conObservaciones.color}
-          bg={CUMPLIDOS_KPI_COLORS.conObservaciones.bg}
-          onClick={() => setTabActivo("conObservaciones")}
-        />
-        <KpiCard
-          label="Validados"
-          value={kpis.validados}
+          label="Finalizados"
+          value={kpis.finalizados}
           icon={<CheckCircle2 className="w-4.5 h-4.5" />}
-          color={CUMPLIDOS_KPI_COLORS.validados.color}
-          bg={CUMPLIDOS_KPI_COLORS.validados.bg}
+          color={KPI_COLORS.finalizados.color}
+          bg={KPI_COLORS.finalizados.bg}
+        />
+        <KpiCard
+          label="Cumplidos"
+          value={kpis.cumplidos}
+          icon={<Truck className="w-4.5 h-4.5" />}
+          color={KPI_COLORS.cumplidos.color}
+          bg={KPI_COLORS.cumplidos.bg}
           onClick={() => setTabActivo("validados")}
         />
         <KpiCard
-          label="Listos p/facturar"
-          value={kpis.listosFacturacion}
-          icon={<Eye className="w-4.5 h-4.5" />}
-          color={CUMPLIDOS_KPI_COLORS.listosFacturacion.color}
-          bg={CUMPLIDOS_KPI_COLORS.listosFacturacion.bg}
+          label="Liquidados"
+          value={kpis.liquidados}
+          icon={<Receipt className="w-4.5 h-4.5" />}
+          color={KPI_COLORS.liquidados.color}
+          bg={KPI_COLORS.liquidados.bg}
           onClick={() => setTabActivo("listosFacturacion")}
         />
         <KpiCard
-          label="Rechazados"
-          value={kpis.rechazados}
-          icon={<XCircle className="w-4.5 h-4.5" />}
-          color={CUMPLIDOS_KPI_COLORS.rechazados.color}
-          bg={CUMPLIDOS_KPI_COLORS.rechazados.bg}
-          onClick={() => setTabActivo("rechazados")}
+          label="Facturados"
+          value={kpis.facturados}
+          icon={<Banknote className="w-4.5 h-4.5" />}
+          color={KPI_COLORS.facturados.color}
+          bg={KPI_COLORS.facturados.bg}
         />
       </div>
 
@@ -155,25 +153,26 @@ export function CumplidosPage() {
             value={busqueda}
             aria-label="Buscar viajes finalizados"
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Viaje, remisión, conductor, cliente…"
+            placeholder="Viaje, conductor, cliente…"
             className="w-full text-[13px] outline-none"
             style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "8px 12px 8px 36px", color: "var(--gray-700)", background: "#fff" }}
           />
         </div>
 
+        {/* Filtro Línea de Negocio */}
         <select
-          value={estadoFiltro}
-          onChange={(e) => setEstadoFiltro(e.target.value)}
-          aria-label="Filtrar por estado documental"
+          value={lineaNegocioFiltro}
+          onChange={(e) => setLineaNegocioFiltro(e.target.value)}
+          aria-label="Filtrar por línea de negocio"
           className="text-[13px] outline-none"
-          style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "8px 12px", color: "var(--gray-700)", background: "#fff", minWidth: 180 }}
+          style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "8px 12px", color: "var(--gray-700)", background: "#fff", minWidth: 160 }}
         >
-          <option value="">Todos los estados</option>
-          {(Object.keys(ESTADO_DOC_CFG) as Array<keyof typeof ESTADO_DOC_CFG>).map((k) => (
-            <option key={k} value={k}>{ESTADO_DOC_CFG[k].label}</option>
-          ))}
+          <option value="">Todas las líneas</option>
+          <option value="Carga Líquida">Carga Líquida</option>
+          <option value="Carga Seca">Carga Seca</option>
         </select>
 
+        {/* Filtro Cliente */}
         {clientes.length > 0 && (
           <select
             value={clienteFiltro}
@@ -188,6 +187,25 @@ export function CumplidosPage() {
             ))}
           </select>
         )}
+
+        {/* Botón Limpiar Filtros */}
+        <button
+          type="button"
+          onClick={limpiarFiltros}
+          disabled={!hayFiltros}
+          aria-label="Limpiar todos los filtros"
+          title="Limpiar filtros"
+          className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-2 rounded-xl transition-colors"
+          style={{
+            border:     `1.5px solid ${hayFiltros ? "var(--inlop-red)" : "var(--gray-100)"}`,
+            color:      hayFiltros ? "var(--inlop-red)" : "var(--gray-300)",
+            background: hayFiltros ? "#FFF1F2"           : "var(--gray-50)",
+            cursor:     hayFiltros ? "pointer"           : "not-allowed",
+          }}
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          Limpiar
+        </button>
       </div>
 
       {/* Tabs */}
@@ -257,13 +275,11 @@ export function CumplidosPage() {
                 className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
                 style={{ borderTop: "1px solid var(--gray-100)" }}
               >
-                {/* Contador */}
                 <span className="text-[12px]" style={{ color: "var(--gray-500)" }}>
                   Mostrando {start}–{end} de {filtradas.length} viaje{filtradas.length !== 1 ? "s" : ""}
                 </span>
 
                 <div className="flex items-center gap-3">
-                  {/* Selector de registros por página */}
                   <div className="flex items-center gap-2">
                     <span className="text-[12px]" style={{ color: "var(--gray-500)" }}>Por página</span>
                     <select
@@ -278,17 +294,15 @@ export function CumplidosPage() {
                     </select>
                   </div>
 
-                  {/* Página X de Y */}
                   <span className="text-[12px]" style={{ color: "var(--gray-500)" }}>
                     Página {pagina} de {totalPaginas}
                   </span>
 
-                  {/* Navegación */}
                   <div className="flex items-center gap-1">
-                    <PaginaBtn icon={<ChevronFirst className="w-3.5 h-3.5" />} onClick={() => setPagina(1)}          disabled={pagina === 1}           label="Primera página" />
-                    <PaginaBtn icon={<ChevronLeft  className="w-3.5 h-3.5" />} onClick={() => setPagina(p => p - 1)} disabled={pagina === 1}           label="Página anterior" />
-                    <PaginaBtn icon={<ChevronRight className="w-3.5 h-3.5" />} onClick={() => setPagina(p => p + 1)} disabled={pagina === totalPaginas} label="Página siguiente" />
-                    <PaginaBtn icon={<ChevronLast  className="w-3.5 h-3.5" />} onClick={() => setPagina(totalPaginas)} disabled={pagina === totalPaginas} label="Última página" />
+                    <PaginaBtn icon={<ChevronFirst className="w-3.5 h-3.5" />} onClick={() => setPagina(1)}              disabled={pagina === 1}           label="Primera página"   />
+                    <PaginaBtn icon={<ChevronLeft  className="w-3.5 h-3.5" />} onClick={() => setPagina(p => p - 1)}    disabled={pagina === 1}           label="Página anterior"  />
+                    <PaginaBtn icon={<ChevronRight className="w-3.5 h-3.5" />} onClick={() => setPagina(p => p + 1)}    disabled={pagina === totalPaginas} label="Página siguiente" />
+                    <PaginaBtn icon={<ChevronLast  className="w-3.5 h-3.5" />} onClick={() => setPagina(totalPaginas)}  disabled={pagina === totalPaginas} label="Última página"    />
                   </div>
                 </div>
               </div>
@@ -330,11 +344,11 @@ function PaginaBtn({ icon, onClick, disabled, label }: {
   );
 }
 
-const CUMPLIDOS_KPI_COLORS = {
-  total:             { color: "var(--navy)",  bg: "#DBEAFE" },
-  pendientes:        { color: "#92400E",      bg: "#FEF3C7" },
-  conObservaciones:  { color: "#7C3AED",      bg: "#EDE9FE" },
-  validados:         { color: "#065F46",      bg: "#D1FAE5" },
-  listosFacturacion: { color: "#0F4C75",      bg: "#DBEAFE" },
-  rechazados:        { color: "#9F1239",      bg: "#FFE4E6" },
+const KPI_COLORS = {
+  total:       { color: "var(--navy)", bg: "#DBEAFE" },
+  pendientes:  { color: "#92400E",     bg: "#FEF3C7" },
+  finalizados: { color: "#065F46",     bg: "#D1FAE5" },
+  cumplidos:   { color: "#1D4ED8",     bg: "#EFF6FF" },
+  liquidados:  { color: "#0F4C75",     bg: "#DBEAFE" },
+  facturados:  { color: "#374151",     bg: "var(--gray-100)" },
 } as const;
