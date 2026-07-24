@@ -1368,7 +1368,6 @@ async function syncSolicitudes() {
     const orphanCutoff = new Date(Date.now() - ORPHAN_HOURS * 3600 * 1000).toISOString();
     const updates      = [];
     const insertsNotif = [];
-    const pendVerif    = [];
 
     for (const sol of solicitudes) {
       const { id, codigo_solicitud, external_ref, estado, controlt_trip_number,
@@ -1435,7 +1434,7 @@ async function syncSolicitudes() {
             updates.push({ id, fields: { estado_controlt: (vR.state_travel||'').toLowerCase().trim(), ultima_actualizacion_controlt: ahora } });
           }
         } else if (controlt_trip_number) {
-          pendVerif.push({ trip_number: controlt_trip_number, solicitud_id: id, estado_actual: estado, sol });
+          console.log(`⏸ [syncSolicitudes] ${codigo_solicitud}: trip ${controlt_trip_number} ausente de /Resume — estado mantenido: ${estado}`);
         } else {
           console.warn(`⚠️ [syncSolicitudes] ${codigo_solicitud}: confirmado sin controlt_trip_number`);
         }
@@ -1463,24 +1462,7 @@ async function syncSolicitudes() {
             updates.push({ id, fields: keepFresh });
           }
         } else if (controlt_trip_number) {
-          pendVerif.push({ trip_number: controlt_trip_number, solicitud_id: id, estado_actual: estado, sol });
-        }
-      }
-    }
-
-    if (pendVerif.length > 0) {
-      const tripIds = [...new Set(pendVerif.map(t => t.trip_number))];
-      const idsStr  = tripIds.map(encodeURIComponent).join(',');
-      const cumplidos = await sbFetch(`/cumplidos?id=in.(${idsStr})&select=id,estado_cumplido`) || [];
-      const cumplMap  = new Map(cumplidos.map(c => [c.id, c]));
-      for (const { trip_number, solicitud_id, estado_actual, sol } of pendVerif) {
-        const cumpl = cumplMap.get(trip_number);
-        if (cumpl) {
-          updates.push({ id: solicitud_id, fields: { estado: 'completado', estado_controlt: cumpl.estado_cumplido, ultima_actualizacion_controlt: ahora } });
-          insertsNotif.push(..._notifs(sol, 'completado', null, estado_actual));
-        } else {
-          console.warn(`⚠️ [syncSolicitudes] ANOMALÍA: trip ${trip_number} (${sol.codigo_solicitud}) desapareció de Resume sin registrarse en cumplidos. Estado mantenido: ${estado_actual}`);
-          updates.push({ id: solicitud_id, fields: { ultima_actualizacion_controlt: ahora } });
+          console.log(`⏸ [syncSolicitudes] ${codigo_solicitud}: trip ${controlt_trip_number} ausente de /Resume — estado mantenido: ${estado}`);
         }
       }
     }
