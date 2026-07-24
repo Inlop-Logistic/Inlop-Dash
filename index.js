@@ -1509,7 +1509,7 @@ async function syncSolicitudes() {
       );
     }
 
-    console.log(`📋 syncSolicitudes OK: ${updOk}/${updates.length} upd | ${insertsNotif.length} notifs | ${pendVerif.length} verif cumplidos`);
+    console.log(`📋 syncSolicitudes OK: ${updOk}/${updates.length} upd | ${insertsNotif.length} notifs`);
   } catch(e) {
     console.error('❌ Error syncSolicitudes:', e.message);
   }
