@@ -2131,6 +2131,7 @@ app.delete('/usuarios/:id', requireClienteAuth, requireAdminCliente, async (req,
     }
 
     await sbFetch(`/usuarios_cliente?id=eq.${encodeURIComponent(req.params.id)}`, 'PATCH', { activo: false });
+    await sbFetch(`/usuario_agencias?usuario_id=eq.${encodeURIComponent(req.params.id)}`, 'DELETE');
     res.json({ ok: true });
   } catch(e) { console.error('❌ DELETE /usuarios/:id:', e.message); res.status(500).json({ error: e.message }); }
 });
@@ -2145,16 +2146,23 @@ app.get('/agencias', requireClienteAuth, requireAdminCliente, async (req, res) =
     ) || [];
 
     const ids = rows.map(a => encodeURIComponent(a.id)).join(',');
-    let asignaciones = [];
-    if (ids.length) {
-      asignaciones = await sbFetch(
-        `/usuario_agencias?agencia_id=in.(${ids})&select=agencia_id`
-      ).catch(() => []) || [];
-    }
-
     const conteoMap = {};
-    for (const a of asignaciones) {
-      conteoMap[a.agencia_id] = (conteoMap[a.agencia_id] || 0) + 1;
+    if (ids.length) {
+      const pivotRows = await sbFetch(
+        `/usuario_agencias?agencia_id=in.(${ids})&select=usuario_id,agencia_id`
+      ).catch(() => []) || [];
+      if (pivotRows.length > 0) {
+        const uids = [...new Set(pivotRows.map(r => encodeURIComponent(r.usuario_id)))].join(',');
+        const activosRows = await sbFetch(
+          `/usuarios_cliente?id=in.(${uids})&activo=eq.true&select=id`
+        ).catch(() => []) || [];
+        const activoSet = new Set(activosRows.map(u => u.id));
+        for (const r of pivotRows) {
+          if (activoSet.has(r.usuario_id)) {
+            conteoMap[r.agencia_id] = (conteoMap[r.agencia_id] || 0) + 1;
+          }
+        }
+      }
     }
 
     res.json(rows.map(a => ({
@@ -2277,7 +2285,7 @@ app.get('/agencias/:id/usuarios', requireClienteAuth, requireAdminCliente, async
 
     const uids = asignaciones.map(a => encodeURIComponent(a.usuario_id)).join(',');
     const perfiles = await sbFetch(
-      `/usuarios_cliente?id=in.(${uids})&empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&order=nombre.asc`
+      `/usuarios_cliente?id=in.(${uids})&empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&activo=eq.true&order=nombre.asc`
     ) || [];
 
     const authData = await sbAuthAdmin('/admin/users?per_page=1000').catch(() => null);
