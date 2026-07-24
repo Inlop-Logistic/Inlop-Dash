@@ -1184,15 +1184,17 @@ app.patch('/api/solicitudes/:id/estado', requireLegacyOrInternal, async (req, re
   try {
     const { id } = req.params;
     const { estado, conductor_nombre, placa_asignada, conductor_tel } = req.body;
-    const permitidos = ['pendiente', 'confirmado', 'en_ruta', 'completado', 'cancelado'];
+    // 'aprobado' es el nombre frontend; Supabase almacena 'confirmado' — igual que en GET.
+    const permitidos = ['pendiente', 'aprobado', 'confirmado', 'en_ruta', 'completado', 'cancelado'];
     if (!estado || !permitidos.includes(estado)) {
       return res.status(400).json({ error: `estado inválido: ${estado}` });
     }
+    const estadoDB = estado === 'aprobado' ? 'confirmado' : estado;
     const ahora = new Date().toISOString();
-    const patch = { estado };
-    if (estado === 'confirmado') patch.fecha_confirmacion = ahora;
-    if (estado === 'en_ruta')    patch.fecha_inicio_real  = ahora;
-    if (estado === 'cancelado')  patch.fecha_cancelacion  = ahora;
+    const patch = { estado: estadoDB };
+    if (estadoDB === 'confirmado') patch.fecha_confirmacion = ahora;
+    if (estadoDB === 'en_ruta')    patch.fecha_inicio_real  = ahora;
+    if (estadoDB === 'cancelado')  patch.fecha_cancelacion  = ahora;
     if (conductor_nombre) patch.conductor_nombre = conductor_nombre;
     if (placa_asignada)   patch.placa_asignada   = placa_asignada;
     if (conductor_tel)    patch.conductor_tel     = conductor_tel;
