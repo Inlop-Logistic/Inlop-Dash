@@ -1467,6 +1467,36 @@ async function syncSolicitudes() {
       }
     }
 
+    // Reconciliación: solicitudes en 'completado' cuyo viaje reaparece en /Resume
+    // con estado operativo. Pase secundario acotado — solo consulta los trip_numbers
+    // activos y operativos del ciclo actual.
+    const operationalTrips = [];
+    for (const [tripNum, v] of resumeByTripNumber) {
+      const g = _grupo(v.state_travel);
+      if (g === 'confirmado' || g === 'en_ruta') operationalTrips.push(tripNum);
+    }
+    if (operationalTrips.length > 0) {
+      const idsStr = operationalTrips.map(encodeURIComponent).join(',');
+      const completadas = await sbFetch(
+        `/solicitudes?controlt_trip_number=in.(${idsStr})&estado=eq.completado` +
+        `&select=id,codigo_solicitud,controlt_trip_number`
+      ) || [];
+      for (const sol of completadas) {
+        const vR = resumeByTripNumber.get(sol.controlt_trip_number);
+        if (!vR) continue;
+        const g = _grupo(vR.state_travel);
+        if (g === 'confirmado' || g === 'en_ruta') {
+          console.log(`♻️ [RECONCILIAR] ${sol.codigo_solicitud}: completado → en_ruta (trip ${sol.controlt_trip_number}, state_travel=${vR.state_travel})`);
+          updates.push({ id: sol.id, fields: {
+            estado:                        'en_ruta',
+            estado_controlt:               (vR.state_travel || '').toLowerCase().trim(),
+            fecha_fin_real:                null,
+            ultima_actualizacion_controlt: ahora,
+          }});
+        }
+      }
+    }
+
     let updOk = 0;
     for (const { id, fields } of updates) {
       const r = await sbFetch(`/solicitudes?id=eq.${encodeURIComponent(id)}`, 'PATCH', fields);
