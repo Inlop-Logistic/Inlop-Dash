@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   RefreshCw,
   Clock, CheckCircle, Truck, XCircle, ClipboardList, AlertCircle,
@@ -13,7 +14,7 @@ export function SolicitudesPage() {
   const {
     data, loading, error,
     busqueda, setBusqueda,
-    fechaDesde, fechaHasta, setFechaRango,
+    setFechaRango,
     tabEstado, setTabEstado,
     estadoFiltro, setEstadoFiltro,
     clienteFiltro, setClienteFiltro,
@@ -23,6 +24,22 @@ export function SolicitudesPage() {
     hayFiltros, limpiarFiltros,
     cargar, handleEstado,
   } = useSolicitudes();
+
+  // Estado visual de fechas — empieza vacío; la lógica interna del hook usa sus propios defaults.
+  const [visualDesde, setVisualDesde] = useState("");
+  const [visualHasta, setVisualHasta] = useState("");
+
+  function handleFechaRango(desde: string, hasta: string) {
+    setFechaRango(desde, hasta);
+    setVisualDesde(desde);
+    setVisualHasta(hasta);
+  }
+
+  function handleLimpiarFiltros() {
+    limpiarFiltros();
+    setVisualDesde("");
+    setVisualHasta("");
+  }
 
   const selects: SelectFilter[] = [
     {
@@ -80,11 +97,11 @@ export function SolicitudesPage() {
         onBusqueda={setBusqueda}
         searchPlaceholder="SOL, cliente, agencia, ruta…"
         selects={selects}
-        fechaDesde={fechaDesde}
-        fechaHasta={fechaHasta}
-        onFechaRango={setFechaRango}
+        fechaDesde={visualDesde}
+        fechaHasta={visualHasta}
+        onFechaRango={handleFechaRango}
         hayFiltros={hayFiltros}
-        onLimpiar={limpiarFiltros}
+        onLimpiar={handleLimpiarFiltros}
       />
 
       {/* Tabs */}

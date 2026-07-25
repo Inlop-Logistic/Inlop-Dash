@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { RefreshCw, CalendarClock, Clock, Activity, XCircle, AlertCircle } from "lucide-react";
 import { KpiCard, PageHeader, Card, DataTable, Button, FilterBar } from "@/components/ui";
 import type { SelectFilter } from "@/components/ui";
@@ -14,7 +14,7 @@ export function ProgramacionPage() {
   const {
     data, loading, error,
     busqueda, setBusqueda,
-    fechaDesde, fechaHasta, setFechaRango,
+    setFechaRango,
     tabEstado, setTabEstado,
     estadoFiltro, setEstadoFiltro,
     setPanelId, panelViaje,
@@ -23,6 +23,22 @@ export function ProgramacionPage() {
     hayFiltros, limpiarFiltros,
     cargar, handleEstado, handleSync,
   } = useProgramacion();
+
+  // Estado visual de fechas — empieza vacío; la lógica interna del hook usa sus propios defaults.
+  const [visualDesde, setVisualDesde] = useState("");
+  const [visualHasta, setVisualHasta] = useState("");
+
+  function handleFechaRango(desde: string, hasta: string) {
+    setFechaRango(desde, hasta);
+    setVisualDesde(desde);
+    setVisualHasta(hasta);
+  }
+
+  function handleLimpiarFiltros() {
+    limpiarFiltros();
+    setVisualDesde("");
+    setVisualHasta("");
+  }
 
   // Auto-abrir panel cuando se navega con contexto (ej. desde Viajes)
   const autoOpenedRef = useRef(false);
@@ -83,11 +99,11 @@ export function ProgramacionPage() {
         onBusqueda={setBusqueda}
         searchPlaceholder="Trip, conductor, placa, cliente, ciudad…"
         selects={selects}
-        fechaDesde={fechaDesde}
-        fechaHasta={fechaHasta}
-        onFechaRango={setFechaRango}
+        fechaDesde={visualDesde}
+        fechaHasta={visualHasta}
+        onFechaRango={handleFechaRango}
         hayFiltros={hayFiltros}
-        onLimpiar={limpiarFiltros}
+        onLimpiar={handleLimpiarFiltros}
       />
 
       {/* Tabs */}
