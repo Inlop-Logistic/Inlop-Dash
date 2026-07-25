@@ -2,22 +2,25 @@ import { useState, useEffect, useMemo } from "react";
 import { hoy, hace7dias } from "@/utils/date";
 import type { Solicitud, ActorAccion } from "../types";
 import { getSolicitudes, cambiarEstadoSolicitud } from "../services/api";
+import { useFiltrosComunes } from "@/hooks/useFiltrosComunes";
 
 export function useSolicitudes() {
-  const [data, setData]           = useState<Solicitud[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
-  const [desde, setDesde]         = useState(hace7dias());
-  const [hasta, setHasta]         = useState(hoy());
-  const [busqueda, setBusqueda]   = useState("");
+  const [data, setData]       = useState<Solicitud[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState<string | null>(null);
   const [tabEstado, setTabEstado] = useState("todos");
   const [panelId, setPanelId]     = useState<string | null>(null);
+
+  // Filtros comunes — fechas inicializadas al rango últimos 7 días
+  const { busqueda, setBusqueda, fechaDesde, fechaHasta, setFechaRango, limpiarBase } =
+    useFiltrosComunes({ defaultDesde: hace7dias(), defaultHasta: hoy() });
 
   const cargar = async () => {
     setLoading(true);
     setError(null);
     try {
-      setData(await getSolicitudes(desde, hasta));
+      // Si el usuario limpia las fechas del picker, se mantiene un fallback seguro hacia la API.
+      setData(await getSolicitudes(fechaDesde || hace7dias(), fechaHasta || hoy()));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al cargar solicitudes");
     } finally {
@@ -25,10 +28,10 @@ export function useSolicitudes() {
     }
   };
 
-  useEffect(() => { cargar(); }, [desde, hasta]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Las fechas disparan una nueva carga al servidor (filtro server-side).
+  useEffect(() => { cargar(); }, [fechaDesde, fechaHasta]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEstado = async (id: string, estado: string) => {
-    // actor: incorporar desde AuthContext cuando esté disponible
     const actor: ActorAccion | null = null;
     await cambiarEstadoSolicitud(id, estado, actor ? { actor } : {});
     setData((prev) =>
@@ -62,14 +65,22 @@ export function useSolicitudes() {
 
   const panelSol = panelId ? data.find((s) => s.id === panelId) ?? null : null;
 
+  const hayFiltros = busqueda !== "" || tabEstado !== "todos" ||
+    fechaDesde !== hace7dias() || fechaHasta !== hoy();
+
+  function limpiarFiltros() {
+    limpiarBase(); // busqueda + fechas → defaults
+    setTabEstado("todos");
+  }
+
   return {
     data, loading, error,
-    desde, setDesde,
-    hasta, setHasta,
     busqueda, setBusqueda,
+    fechaDesde, fechaHasta, setFechaRango,
     tabEstado, setTabEstado,
     panelId, setPanelId, panelSol,
     filtradas, kpis,
+    hayFiltros, limpiarFiltros,
     cargar, handleEstado,
   };
 }

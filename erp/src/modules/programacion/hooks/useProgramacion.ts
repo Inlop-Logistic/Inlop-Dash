@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { hoy } from "@/utils/date";
 import type { ViajeResumen, EstadoProgramacion } from "../types";
 import { listarProgramacion, cambiarEstadoProgramacion, sincronizarViaje } from "../services/api";
+import { useFiltrosComunes } from "@/hooks/useFiltrosComunes";
 
 type TabEstado = "todos" | "programado" | "asignado" | "cancelado";
 
@@ -9,18 +10,19 @@ export function useProgramacion() {
   const [data, setData]           = useState<ViajeResumen[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
-  const [desde, setDesde]         = useState(hoy());
-  const [hasta, setHasta]         = useState(hoy());
-  const [busqueda, setBusqueda]   = useState("");
   const [tabEstado, setTabEstado] = useState<TabEstado>("todos");
   const [panelId, setPanelId]     = useState<string | null>(null);
   const [accionLoading, setAccionLoading] = useState(false);
+
+  // Filtros comunes — fechas inicializadas a hoy (bandeja diaria)
+  const { busqueda, setBusqueda, fechaDesde, fechaHasta, setFechaRango, limpiarBase } =
+    useFiltrosComunes({ defaultDesde: hoy(), defaultHasta: hoy() });
 
   const cargar = async () => {
     setLoading(true);
     setError(null);
     try {
-      setData(await listarProgramacion(desde, hasta));
+      setData(await listarProgramacion(fechaDesde || hoy(), fechaHasta || hoy()));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al cargar programación");
     } finally {
@@ -28,7 +30,8 @@ export function useProgramacion() {
     }
   };
 
-  useEffect(() => { cargar(); }, [desde, hasta]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Las fechas disparan una nueva carga al servidor (filtro server-side).
+  useEffect(() => { cargar(); }, [fechaDesde, fechaHasta]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEstado = async (id: string, estado: EstadoProgramacion) => {
     setAccionLoading(true);
@@ -82,15 +85,23 @@ export function useProgramacion() {
 
   const panelViaje = panelId ? data.find((v) => v.trip_number === panelId) ?? null : null;
 
+  const hayFiltros = busqueda !== "" || tabEstado !== "todos" ||
+    fechaDesde !== hoy() || fechaHasta !== hoy();
+
+  function limpiarFiltros() {
+    limpiarBase(); // busqueda + fechas → defaults (hoy)
+    setTabEstado("todos");
+  }
+
   return {
     data, loading, error,
-    desde, setDesde,
-    hasta, setHasta,
     busqueda, setBusqueda,
+    fechaDesde, fechaHasta, setFechaRango,
     tabEstado, setTabEstado,
     panelId, setPanelId, panelViaje,
     accionLoading,
     filtradas, kpis,
+    hayFiltros, limpiarFiltros,
     cargar, handleEstado, handleSync,
   };
 }

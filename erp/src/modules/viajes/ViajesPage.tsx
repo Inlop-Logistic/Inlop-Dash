@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
-import { RefreshCw, Search, Truck, Activity, Package, Navigation, PackageCheck, AlertTriangle, AlertCircle } from "lucide-react";
-import { KpiCard, PageHeader, Card, DataTable, Button } from "@/components/ui";
+import { RefreshCw, Truck, Activity, Package, Navigation, PackageCheck, AlertTriangle, AlertCircle } from "lucide-react";
+import { KpiCard, PageHeader, Card, DataTable, Button, FilterBar } from "@/components/ui";
+import type { SelectFilter } from "@/components/ui";
 import { useNavigationContext } from "@/core/navigation";
 import { useViajes } from "./hooks/useViajes";
 import { DetalleViaje } from "./components/DetalleViaje";
 import { COLUMNS } from "./components/ViajesTableColumns";
-import { DateRangePicker } from "./components/DateRangePicker";
 import { TABS, ESTADO_CFG } from "./constants";
 import type { EstadoViaje } from "./types";
 
@@ -19,6 +19,7 @@ export function ViajesPage() {
     estadoFiltro, setEstadoFiltro,
     clienteFiltro, setClienteFiltro,
     fechaDesde, fechaHasta, setFechaRango,
+    hayFiltros, limpiarFiltros,
     filtradas, kpis, clientes,
     setPanelId, panelViaje,
     cargar, getTabCount,
@@ -43,6 +44,28 @@ export function ViajesPage() {
     conNovedad:   "Con Novedad",
   };
 
+  const selects: SelectFilter[] = [
+    {
+      value:       estadoFiltro,
+      onChange:    setEstadoFiltro,
+      placeholder: "Todos los estados",
+      ariaLabel:   "Filtrar por estado",
+      minWidth:    160,
+      options:     (Object.entries(ESTADO_CFG) as [EstadoViaje, typeof ESTADO_CFG[string]][]).map(
+        ([key, cfg]) => ({ value: key, label: cfg.label }),
+      ),
+    },
+    {
+      value:       clienteFiltro,
+      onChange:    setClienteFiltro,
+      placeholder: "Todos los clientes",
+      ariaLabel:   "Filtrar por cliente",
+      minWidth:    190,
+      show:        clientes.length > 0,
+      options:     clientes.map((c) => ({ value: c.id, label: c.label })),
+    },
+  ];
+
   return (
     <div className="p-6 flex flex-col gap-5">
 
@@ -66,104 +89,26 @@ export function ViajesPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KpiCard
-          label="Activos"
-          value={kpis.activos}
-          icon={<Activity className="w-4.5 h-4.5" />}
-          color="#1D4ED8" bg="#DBEAFE"
-          onClick={() => setTabActivo("activos")}
-        />
-        <KpiCard
-          label="En Cargue"
-          value={kpis.enCargue}
-          icon={<Package className="w-4.5 h-4.5" />}
-          color="#D97706" bg="#FEF3C7"
-          onClick={() => setTabActivo("activos")}
-        />
-        <KpiCard
-          label="En Ruta"
-          value={kpis.enRuta}
-          icon={<Navigation className="w-4.5 h-4.5" />}
-          color="#2563EB" bg="#DBEAFE"
-          onClick={() => setTabActivo("enRuta")}
-        />
-        <KpiCard
-          label="En Descargue"
-          value={kpis.enDescargue}
-          icon={<PackageCheck className="w-4.5 h-4.5" />}
-          color="#7C3AED" bg="#EDE9FE"
-          onClick={() => setTabActivo("activos")}
-        />
-        <KpiCard
-          label="Finalizados"
-          value={kpis.finalizados}
-          icon={<PackageCheck className="w-4.5 h-4.5" />}
-          color="#059669" bg="#D1FAE5"
-          onClick={() => setTabActivo("finalizados")}
-        />
-        <KpiCard
-          label="Con Novedad"
-          value={kpis.conNovedad}
-          icon={<AlertTriangle className="w-4.5 h-4.5" />}
-          color="#DC2626" bg="#FEE2E2"
-          onClick={() => setTabActivo("conNovedad")}
-        />
+        <KpiCard label="Activos"      value={kpis.activos}     icon={<Activity      className="w-4.5 h-4.5" />} color="#1D4ED8" bg="#DBEAFE" onClick={() => setTabActivo("activos")}     />
+        <KpiCard label="En Cargue"    value={kpis.enCargue}    icon={<Package       className="w-4.5 h-4.5" />} color="#D97706" bg="#FEF3C7" onClick={() => setTabActivo("activos")}     />
+        <KpiCard label="En Ruta"      value={kpis.enRuta}      icon={<Navigation    className="w-4.5 h-4.5" />} color="#2563EB" bg="#DBEAFE" onClick={() => setTabActivo("enRuta")}      />
+        <KpiCard label="En Descargue" value={kpis.enDescargue} icon={<PackageCheck  className="w-4.5 h-4.5" />} color="#7C3AED" bg="#EDE9FE" onClick={() => setTabActivo("activos")}     />
+        <KpiCard label="Finalizados"  value={kpis.finalizados} icon={<PackageCheck  className="w-4.5 h-4.5" />} color="#059669" bg="#D1FAE5" onClick={() => setTabActivo("finalizados")} />
+        <KpiCard label="Con Novedad"  value={kpis.conNovedad}  icon={<AlertTriangle className="w-4.5 h-4.5" />} color="#DC2626" bg="#FEE2E2" onClick={() => setTabActivo("conNovedad")}  />
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-3">
-
-        {/* Buscador */}
-        <div className="flex-1 min-w-[220px] relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "var(--gray-400)" }} />
-          <input
-            type="text"
-            value={busqueda}
-            aria-label="Buscar viajes"
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Viaje, remisión, placa, conductor, cliente, ciudad…"
-            className="w-full text-[13px] outline-none"
-            style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "8px 12px 8px 36px", color: "var(--gray-700)", background: "#fff" }}
-          />
-        </div>
-
-        {/* Estado — construido desde ESTADO_CFG para consistencia */}
-        <select
-          value={estadoFiltro}
-          onChange={(e) => setEstadoFiltro(e.target.value)}
-          aria-label="Filtrar por estado"
-          className="text-[13px] outline-none"
-          style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "8px 12px", color: "var(--gray-700)", background: "#fff", minWidth: 160 }}
-        >
-          <option value="">Todos los estados</option>
-          {(Object.entries(ESTADO_CFG) as [EstadoViaje, typeof ESTADO_CFG[string]][]).map(([key, cfg]) => (
-            <option key={key} value={key}>{cfg.label}</option>
-          ))}
-        </select>
-
-        {/* Cliente — Maestro de Clientes, sin duplicados */}
-        {clientes.length > 0 && (
-          <select
-            value={clienteFiltro}
-            onChange={(e) => setClienteFiltro(e.target.value)}
-            aria-label="Filtrar por cliente"
-            className="text-[13px] outline-none"
-            style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "8px 12px", color: "var(--gray-700)", background: "#fff", minWidth: 190 }}
-          >
-            <option value="">Todos los clientes</option>
-            {clientes.map((c) => (
-              <option key={c.id} value={c.id}>{c.label}</option>
-            ))}
-          </select>
-        )}
-
-        {/* Fecha */}
-        <DateRangePicker
-          desde={fechaDesde}
-          hasta={fechaHasta}
-          onChange={setFechaRango}
-        />
-      </div>
+      <FilterBar
+        busqueda={busqueda}
+        onBusqueda={setBusqueda}
+        searchPlaceholder="Viaje, remisión, placa, conductor, cliente, ciudad…"
+        selects={selects}
+        fechaDesde={fechaDesde}
+        fechaHasta={fechaHasta}
+        onFechaRango={setFechaRango}
+        hayFiltros={hayFiltros}
+        onLimpiar={limpiarFiltros}
+      />
 
       {/* Tabs */}
       <div className="flex items-center gap-1.5 flex-wrap" role="tablist">

@@ -4,6 +4,7 @@ import type { TabViajes } from "../constants";
 import { ESTADOS_ACTIVOS, ESTADOS_FINALIZADOS, REFRESH_INTERVAL_MS, tabCount } from "../constants";
 import { listarViajes } from "../services/api";
 import { parseFechaMDY } from "@/utils/parseFecha";
+import { useFiltrosComunes } from "@/hooks/useFiltrosComunes";
 
 /** Extrae YYYY-MM-DD de un activated_on en formato MM/DD/YYYY HH:MM:SS. */
 function toDateISO(activated_on: string | null): string | null {
@@ -17,14 +18,14 @@ export function useViajes() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
 
-  // Filtros
-  const [busqueda, setBusqueda]           = useState("");
-  const [tabActivo, setTabActivo]         = useState<TabViajes>("todos");
-  const [estadoFiltro, setEstadoFiltro]   = useState("");
+  // Filtros comunes (búsqueda + fechas)
+  const { busqueda, setBusqueda, fechaDesde, fechaHasta, setFechaRango, limpiarBase } =
+    useFiltrosComunes();
+
+  // Filtros específicos de Viajes
+  const [tabActivo,     setTabActivo]     = useState<TabViajes>("todos");
+  const [estadoFiltro,  setEstadoFiltro]  = useState("");
   const [clienteFiltro, setClienteFiltro] = useState("");   // empresa_cliente_id
-  // Cadena vacía = sin filtro activo. El filtro solo se activa cuando el usuario presiona Aplicar.
-  const [fechaDesde, setFechaDesde] = useState("");
-  const [fechaHasta, setFechaHasta] = useState("");
 
   // Drawer
   const [panelId, setPanelId] = useState<string | null>(null);
@@ -127,10 +128,14 @@ export function useViajes() {
   // ── Conteo por tab ────────────────────────────────────────────────────────
   const getTabCount = (tabId: string) => tabCount(data, tabId);
 
-  // ── Setter de rango de fechas — mantiene consistencia ─────────────────────
-  function setFechaRango(desde: string, hasta: string) {
-    setFechaDesde(desde);
-    setFechaHasta(hasta);
+  // ── Limpiar todos los filtros ─────────────────────────────────────────────
+  const hayFiltros =
+    busqueda !== "" || estadoFiltro !== "" || clienteFiltro !== "" || fechaDesde !== "";
+
+  function limpiarFiltros() {
+    limpiarBase();
+    setEstadoFiltro("");
+    setClienteFiltro("");
   }
 
   return {
@@ -146,6 +151,7 @@ export function useViajes() {
     estadoFiltro, setEstadoFiltro,
     clienteFiltro, setClienteFiltro,
     fechaDesde, fechaHasta, setFechaRango,
+    hayFiltros, limpiarFiltros,
 
     panelId, setPanelId, panelViaje,
 

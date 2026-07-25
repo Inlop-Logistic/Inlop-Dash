@@ -5,6 +5,7 @@ import type { CumplidoRecord, KpisCumplidos } from "../types";
 import type { TabCumplidos } from "../constants";
 import { REFRESH_INTERVAL_MS, tabCount } from "../constants";
 import { listarCumplidos } from "../services/api";
+import { useFiltrosComunes } from "@/hooks/useFiltrosComunes";
 
 /** Convierte activated_on (MM/DD/YYYY HH:MM:SS) a YYYY-MM-DD para comparar contra date inputs. */
 function activatedOnISO(c: CumplidoRecord): string | null {
@@ -14,19 +15,19 @@ function activatedOnISO(c: CumplidoRecord): string | null {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-
 export function useCumplidos() {
   const [data,    setData]    = useState<CumplidoRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
 
-  // Filtros
-  const [busqueda,           setBusqueda]           = useState("");
-  const [tabActivo,          setTabActivo]           = useState<TabCumplidos>("todos");
+  // Filtros comunes — sin fechas por defecto (cliente elige el rango)
+  const { busqueda, setBusqueda, fechaDesde, fechaHasta, setFechaRango, limpiarBase } =
+    useFiltrosComunes();
+
+  // Filtros específicos de Cumplidos
+  const [tabActivo,          setTabActivo]          = useState<TabCumplidos>("todos");
   const [lineaNegocioFiltro, setLineaNegocioFiltro] = useState("");
   const [clienteFiltro,      setClienteFiltro]      = useState("");
-  const [desde,              setDesde]              = useState("");
-  const [hasta,              setHasta]              = useState("");
 
   // Paginación
   const [pagina,    setPagina]    = useState(1);
@@ -79,11 +80,11 @@ export function useCumplidos() {
       }
 
       // Filtro por fecha (sobre activated_on)
-      if (desde || hasta) {
+      if (fechaDesde || fechaHasta) {
         const iso = activatedOnISO(c);
         if (!iso) return false;
-        if (desde && iso < desde) return false;
-        if (hasta && iso > hasta) return false;
+        if (fechaDesde && iso < fechaDesde) return false;
+        if (fechaHasta && iso > fechaHasta) return false;
       }
 
       // Buscador
@@ -98,7 +99,7 @@ export function useCumplidos() {
 
       return true;
     });
-  }, [data, tabActivo, busqueda, lineaNegocioFiltro, clienteFiltro, desde, hasta]);
+  }, [data, tabActivo, busqueda, lineaNegocioFiltro, clienteFiltro, fechaDesde, fechaHasta]);
 
   // Resetear página cuando cambian los filtros
   useEffect(() => { setPagina(1); }, [filtradas]);
@@ -110,21 +111,14 @@ export function useCumplidos() {
     [filtradas, pagina, tamPagina],
   );
 
-  // ── KPIs — calculados sobre el conjunto filtrado activo ───────────────────
-  // KPIs de estado viaje (derivado de fecha_cumplido):
-  //   Pendientes  → viaje aún activo en Viajes (fecha_cumplido null)
-  //   Finalizados → viaje con fecha de finalización confirmada
-  // KPIs de estado documental:
-  //   Cumplidos  → estado_documental === "aprobado"  (expediente aprobado)
-  //   Liquidados → estado_documental === "listo_facturacion"
-  //   Facturados → no existe campo en el modelo actual (siempre 0 — ver informe técnico)
+  // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = useMemo<KpisCumplidos>(() => ({
     total:       filtradas.length,
     pendientes:  filtradas.filter(c => !c.fecha_cumplido).length,
     finalizados: filtradas.filter(c => !!c.fecha_cumplido).length,
     cumplidos:   filtradas.filter(c => c.estado_documental === "aprobado").length,
     liquidados:  filtradas.filter(c => c.estado_documental === "listo_facturacion").length,
-    facturados:  0, // Sin campo en tabla cumplidos — pendiente Evolución 02
+    facturados:  0,
   }), [filtradas]);
 
   // ── Clientes únicos ───────────────────────────────────────────────────────
@@ -140,18 +134,16 @@ export function useCumplidos() {
 
   // ── Limpiar todos los filtros ─────────────────────────────────────────────
   const hayFiltros =
-    busqueda !== "" || desde !== "" || hasta !== "" ||
+    busqueda !== "" || fechaDesde !== "" || fechaHasta !== "" ||
     lineaNegocioFiltro !== "" || clienteFiltro !== "" || tabActivo !== "todos";
 
   const limpiarFiltros = useCallback(() => {
-    setBusqueda("");
-    setDesde("");
-    setHasta("");
+    limpiarBase();
     setLineaNegocioFiltro("");
     setClienteFiltro("");
     setTabActivo("todos");
     setPagina(1);
-  }, []);
+  }, [limpiarBase]);
 
   // ── Panel ─────────────────────────────────────────────────────────────────
   const panelCumplido = useMemo(
@@ -168,8 +160,7 @@ export function useCumplidos() {
     tabActivo, setTabActivo,
     lineaNegocioFiltro, setLineaNegocioFiltro,
     clienteFiltro, setClienteFiltro,
-    desde, setDesde,
-    hasta, setHasta,
+    fechaDesde, fechaHasta, setFechaRango,
     pagina, setPagina,
     tamPagina, setTamPagina,
     totalPaginas,
