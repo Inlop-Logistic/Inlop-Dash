@@ -215,14 +215,8 @@ export const COLUMNS: Column<Solicitud>[] = [
     key: "conductor_nombre",
     header: "Responsable",
     width: "100px",
-    render: (s) => (
-      <div
-        className="text-[12px] truncate"
-        style={{ color: s.conductor_nombre ? "var(--gray-700)" : "var(--gray-300)", maxWidth: 68 }}
-        title={s.conductor_nombre ?? undefined}
-      >
-        {s.conductor_nombre ?? "—"}
-      </div>
+    render: (_s) => (
+      <span className="text-[12px]" style={{ color: "var(--gray-300)" }}>—</span>
     ),
   },
 ];
