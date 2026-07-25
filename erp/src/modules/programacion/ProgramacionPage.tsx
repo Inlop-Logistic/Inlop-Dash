@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
 import { RefreshCw, CalendarClock, Clock, Activity, XCircle, AlertCircle } from "lucide-react";
 import { KpiCard, PageHeader, Card, DataTable, Button, FilterBar } from "@/components/ui";
+import type { SelectFilter } from "@/components/ui";
 import { useNavigationContext } from "@/core/navigation";
 import { useProgramacion } from "./hooks/useProgramacion";
 import { CentroOperativo } from "./components/CentroOperativo";
 import { COLUMNS } from "./components/ProgramacionTableColumns";
-import { TABS, tabCount } from "./constants";
+import { TABS, tabCount, ESTADO_CFG } from "./constants";
 
 export function ProgramacionPage() {
   const { navPayload } = useNavigationContext();
@@ -15,6 +16,7 @@ export function ProgramacionPage() {
     busqueda, setBusqueda,
     fechaDesde, fechaHasta, setFechaRango,
     tabEstado, setTabEstado,
+    estadoFiltro, setEstadoFiltro,
     setPanelId, panelViaje,
     accionLoading,
     filtradas, kpis,
@@ -34,6 +36,17 @@ export function ProgramacionPage() {
   useEffect(() => {
     autoOpenedRef.current = false;
   }, [navPayload?.tripNumber]);
+
+  const selects: SelectFilter[] = [
+    {
+      value:       estadoFiltro,
+      onChange:    setEstadoFiltro,
+      placeholder: "Todos los estados",
+      ariaLabel:   "Filtrar por estado",
+      minWidth:    160,
+      options:     Object.entries(ESTADO_CFG).map(([key, cfg]) => ({ value: key, label: cfg.label })),
+    },
+  ];
 
   return (
     <div className="p-6 flex flex-col gap-5">
@@ -69,6 +82,7 @@ export function ProgramacionPage() {
         busqueda={busqueda}
         onBusqueda={setBusqueda}
         searchPlaceholder="Trip, conductor, placa, cliente, ciudad…"
+        selects={selects}
         fechaDesde={fechaDesde}
         fechaHasta={fechaHasta}
         onFechaRango={setFechaRango}
@@ -109,7 +123,7 @@ export function ProgramacionPage() {
             </button>
           );
         })}
-        {busqueda && (
+        {(busqueda || estadoFiltro) && (
           <span className="text-[12px]" style={{ color: "var(--gray-400)" }}>
             · {filtradas.length} resultado{filtradas.length !== 1 ? "s" : ""}
           </span>

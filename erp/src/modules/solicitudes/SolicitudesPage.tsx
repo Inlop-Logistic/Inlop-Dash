@@ -3,10 +3,11 @@ import {
   Clock, CheckCircle, Truck, XCircle, ClipboardList, AlertCircle,
 } from "lucide-react";
 import { KpiCard, PageHeader, Card, DataTable, Button, FilterBar } from "@/components/ui";
+import type { SelectFilter } from "@/components/ui";
 import { useSolicitudes } from "./hooks/useSolicitudes";
 import { DetalleSolicitud } from "./components/DetalleSolicitud";
 import { COLUMNS } from "./components/SolicitudesTableColumns";
-import { TABS } from "./constants";
+import { TABS, ESTADO_CFG } from "./constants";
 
 export function SolicitudesPage() {
   const {
@@ -14,11 +15,34 @@ export function SolicitudesPage() {
     busqueda, setBusqueda,
     fechaDesde, fechaHasta, setFechaRango,
     tabEstado, setTabEstado,
+    estadoFiltro, setEstadoFiltro,
+    clienteFiltro, setClienteFiltro,
+    clientes,
     setPanelId, panelSol,
     filtradas, kpis,
     hayFiltros, limpiarFiltros,
     cargar, handleEstado,
   } = useSolicitudes();
+
+  const selects: SelectFilter[] = [
+    {
+      value:       estadoFiltro,
+      onChange:    setEstadoFiltro,
+      placeholder: "Todos los estados",
+      ariaLabel:   "Filtrar por estado",
+      minWidth:    160,
+      options:     Object.entries(ESTADO_CFG).map(([key, cfg]) => ({ value: key, label: cfg.label })),
+    },
+    {
+      value:       clienteFiltro,
+      onChange:    setClienteFiltro,
+      placeholder: "Todos los clientes",
+      ariaLabel:   "Filtrar por cliente",
+      minWidth:    190,
+      show:        clientes.length > 0,
+      options:     clientes.map((c) => ({ value: c, label: c })),
+    },
+  ];
 
   return (
     <div className="p-6 flex flex-col gap-5">
@@ -55,6 +79,7 @@ export function SolicitudesPage() {
         busqueda={busqueda}
         onBusqueda={setBusqueda}
         searchPlaceholder="SOL, cliente, agencia, ruta…"
+        selects={selects}
         fechaDesde={fechaDesde}
         fechaHasta={fechaHasta}
         onFechaRango={setFechaRango}
@@ -97,7 +122,7 @@ export function SolicitudesPage() {
             </button>
           );
         })}
-        {busqueda && (
+        {(busqueda || estadoFiltro || clienteFiltro) && (
           <span className="text-[12px]" style={{ color: "var(--gray-400)" }}>
             · {filtradas.length} resultado{filtradas.length !== 1 ? "s" : ""}
           </span>
