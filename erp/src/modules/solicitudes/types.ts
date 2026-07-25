@@ -20,6 +20,8 @@ export interface Solicitud {
   destino: string;
   fecha_requerida: string;
   estado: EstadoSolicitud;
+  /** Conductor/responsable asignado cuando hay viaje vinculado en ControlT. */
+  conductor_nombre: string | null;
 }
 
 export interface HistorialEstado {
