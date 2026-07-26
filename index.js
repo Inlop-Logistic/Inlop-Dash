@@ -1393,6 +1393,7 @@ async function syncSolicitudes() {
     const orphanCutoff = new Date(Date.now() - ORPHAN_HOURS * 3600 * 1000).toISOString();
     const updates      = [];
     const insertsNotif = [];
+    const pendVerif    = []; // trip_numbers ausentes de /Resume — se verifican contra cumplidos
 
     for (const sol of solicitudes) {
       const { id, codigo_solicitud, external_ref, estado, controlt_trip_number,
@@ -1459,7 +1460,7 @@ async function syncSolicitudes() {
             updates.push({ id, fields: { estado_controlt: (vR.state_travel||'').toLowerCase().trim(), ultima_actualizacion_controlt: ahora } });
           }
         } else if (controlt_trip_number) {
-          console.log(`⏸ [syncSolicitudes] ${codigo_solicitud}: trip ${controlt_trip_number} ausente de /Resume — estado mantenido: ${estado}`);
+          pendVerif.push({ sol, controlt_trip_number });
         } else {
           console.warn(`⚠️ [syncSolicitudes] ${codigo_solicitud}: confirmado sin controlt_trip_number`);
         }
@@ -1487,38 +1488,33 @@ async function syncSolicitudes() {
             updates.push({ id, fields: keepFresh });
           }
         } else if (controlt_trip_number) {
-          // Trip ausente de /Resume. Consulta directa a la API pública de ControlT
-          // para obtener el estado real — nunca completar por mera ausencia.
-          try {
-            const ctToken = await getCtPublicToken();
-            const rDirect = await fetchConTimeout(
-              `${CT_PUBLIC_URL}/Travel/${encodeURIComponent(controlt_trip_number)}`,
-              { headers: { Authorization: `Bearer ${ctToken}`, Accept: 'application/json' } }
-            );
-            if (rDirect.ok) {
-              const detalle  = await rDirect.json();
-              const stateRaw = (detalle?.state_travel || '').toString();
-              const g        = _grupo(stateRaw);
-              if (g === 'completado' || g === 'cancelado') {
-                console.log(`🔄 [ESTADO] ${codigo_solicitud}: en_ruta → ${g} vía API directa (trip ${controlt_trip_number} ausente de Resume, state_travel=${stateRaw})`);
-                updates.push({ id, fields: {
-                  estado:                        g,
-                  estado_controlt:               stateRaw.toLowerCase().trim(),
-                  ultima_actualizacion_controlt: ahora,
-                  pct:                           100,
-                  ...(g === 'completado' ? { fecha_fin_real:    ahora } : {}),
-                  ...(g === 'cancelado'  ? { fecha_cancelacion: ahora } : {}),
-                }});
-                insertsNotif.push(..._notifs(sol, g, detalle, 'en_ruta'));
-              } else {
-                console.log(`⏸ [syncSolicitudes] ${codigo_solicitud}: trip ${controlt_trip_number} ausente de /Resume, API directa="${stateRaw}" — estado mantenido: ${estado}`);
-              }
-            } else {
-              console.log(`⏸ [syncSolicitudes] ${codigo_solicitud}: trip ${controlt_trip_number} ausente de /Resume, API directa HTTP ${rDirect.status} — estado mantenido: ${estado}`);
-            }
-          } catch (e) {
-            console.log(`⏸ [syncSolicitudes] ${codigo_solicitud}: trip ${controlt_trip_number} ausente de /Resume, API directa error (${e.message}) — estado mantenido: ${estado}`);
-          }
+          pendVerif.push({ sol, controlt_trip_number });
+        }
+      }
+    }
+
+    // pendVerif: trips ausentes de /Resume — verificar en cumplidos si ya fueron finalizados
+    if (pendVerif.length > 0) {
+      const tripNums = [...new Set(pendVerif.map(p => p.controlt_trip_number))];
+      const idsStr   = tripNums.map(encodeURIComponent).join(',');
+      const finalizados = await sbFetch(
+        `/cumplidos?id=in.(${idsStr})&estado_cumplido=eq.FINALIZADO CONTROLT&select=id,estado_cumplido,estado_controlt`
+      ) || [];
+      const finalizadosSet = new Map(finalizados.map(c => [c.id, c]));
+      for (const { sol: pSol, controlt_trip_number: tripNum } of pendVerif) {
+        const cumplido = finalizadosSet.get(tripNum);
+        if (cumplido) {
+          console.log(`✅ [pendVerif] ${pSol.codigo_solicitud}: trip ${tripNum} → FINALIZADO CONTROLT en cumplidos — cerrando solicitud como completado`);
+          updates.push({ id: pSol.id, fields: {
+            estado:                        'completado',
+            estado_controlt:               'finalizado controlt',
+            ultima_actualizacion_controlt: ahora,
+            pct:                           100,
+            fecha_fin_real:                ahora,
+          }});
+          insertsNotif.push(..._notifs(pSol, 'completado', {}, pSol.estado));
+        } else {
+          console.log(`⏸ [pendVerif] ${pSol.codigo_solicitud}: trip ${tripNum} ausente de /Resume y de cumplidos finalizados — estado mantenido: ${pSol.estado}`);
         }
       }
     }
