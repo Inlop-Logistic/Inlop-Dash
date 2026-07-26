@@ -1487,7 +1487,38 @@ async function syncSolicitudes() {
             updates.push({ id, fields: keepFresh });
           }
         } else if (controlt_trip_number) {
-          console.log(`⏸ [syncSolicitudes] ${codigo_solicitud}: trip ${controlt_trip_number} ausente de /Resume — estado mantenido: ${estado}`);
+          // Trip ausente de /Resume. Consulta directa a la API pública de ControlT
+          // para obtener el estado real — nunca completar por mera ausencia.
+          try {
+            const ctToken = await getCtPublicToken();
+            const rDirect = await fetchConTimeout(
+              `${CT_PUBLIC_URL}/Travel/${encodeURIComponent(controlt_trip_number)}`,
+              { headers: { Authorization: `Bearer ${ctToken}`, Accept: 'application/json' } }
+            );
+            if (rDirect.ok) {
+              const detalle  = await rDirect.json();
+              const stateRaw = (detalle?.state_travel || '').toString();
+              const g        = _grupo(stateRaw);
+              if (g === 'completado' || g === 'cancelado') {
+                console.log(`🔄 [ESTADO] ${codigo_solicitud}: en_ruta → ${g} vía API directa (trip ${controlt_trip_number} ausente de Resume, state_travel=${stateRaw})`);
+                updates.push({ id, fields: {
+                  estado:                        g,
+                  estado_controlt:               stateRaw.toLowerCase().trim(),
+                  ultima_actualizacion_controlt: ahora,
+                  pct:                           100,
+                  ...(g === 'completado' ? { fecha_fin_real:    ahora } : {}),
+                  ...(g === 'cancelado'  ? { fecha_cancelacion: ahora } : {}),
+                }});
+                insertsNotif.push(..._notifs(sol, g, detalle, 'en_ruta'));
+              } else {
+                console.log(`⏸ [syncSolicitudes] ${codigo_solicitud}: trip ${controlt_trip_number} ausente de /Resume, API directa="${stateRaw}" — estado mantenido: ${estado}`);
+              }
+            } else {
+              console.log(`⏸ [syncSolicitudes] ${codigo_solicitud}: trip ${controlt_trip_number} ausente de /Resume, API directa HTTP ${rDirect.status} — estado mantenido: ${estado}`);
+            }
+          } catch (e) {
+            console.log(`⏸ [syncSolicitudes] ${codigo_solicitud}: trip ${controlt_trip_number} ausente de /Resume, API directa error (${e.message}) — estado mantenido: ${estado}`);
+          }
         }
       }
     }
