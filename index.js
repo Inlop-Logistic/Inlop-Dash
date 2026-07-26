@@ -2582,19 +2582,29 @@ serviciosRouter.post('/', async (req, res) => {
 
     const normalizedRef = normalizeExternalRef(tipo_vehiculo, external_ref);
 
-    // Validar duplicado de external_ref entre solicitudes activas de la misma empresa
+    // Validar duplicado de external_ref entre solicitudes activas de la misma empresa.
+    // ESTADOS_ACTIVOS usa los nombres de BD (pendiente, confirmado, en_ruta).
+    // "confirmado" es cómo la BD almacena el estado que la API expone como "aprobado".
+    // "programado" no existe en este sistema — no incluir.
     if (normalizedRef) {
-      const ESTADOS_ACTIVOS = ['pendiente', 'confirmado', 'programado', 'en_ruta'];
-      const estadosFilter   = ESTADOS_ACTIVOS.map(encodeURIComponent).join(',');
+      const ESTADOS_ACTIVOS_DB  = ['pendiente', 'confirmado', 'en_ruta'];
+      const ESTADO_LABEL_CLIENTE = {
+        pendiente:  'Pendiente',
+        confirmado: 'Aprobado',
+        en_ruta:    'En Ruta',
+      };
+      const estadosFilter = ESTADOS_ACTIVOS_DB.join(',');
       const duplicados = await sbFetch(
         `/solicitudes?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&external_ref=eq.${encodeURIComponent(normalizedRef)}&estado=in.(${estadosFilter})&select=codigo_solicitud,estado&limit=1`
       ) || [];
       if (duplicados.length > 0) {
         const dup = duplicados[0];
+        const estadoLabel = ESTADO_LABEL_CLIENTE[dup.estado] || dup.estado;
+        const estadoApi   = dup.estado === 'confirmado' ? 'aprobado' : dup.estado;
         return res.status(409).json({
-          error: `La referencia ${normalizedRef} ya está registrada en la solicitud ${dup.codigo_solicitud} (${dup.estado}).`,
+          error: `Ya existe una Solicitud activa con esta Referencia Externa. Solicitud: ${dup.codigo_solicitud} — Estado: ${estadoLabel}. Si corresponde a un nuevo servicio, utilice una Referencia Externa diferente.`,
           codigo_solicitud: dup.codigo_solicitud,
-          estado:           dup.estado,
+          estado:           estadoApi,
         });
       }
     }
