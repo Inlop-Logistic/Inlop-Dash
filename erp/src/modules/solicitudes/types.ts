@@ -50,4 +50,11 @@ export interface SolicitudDetalle extends Solicitud {
   fecha_fin_ruta: string | null;
   notas: string | null;
   distancia_km: number | null;
+  // Campos adicionales del detalle enriquecido
+  controlt_trip_number: string | null;
+  manifiesto: string | null;
+  pct: number | null;
+  fecha_confirmacion: string | null;
+  fecha_cancelacion: string | null;
+  fecha_programada: string | null;
 }
