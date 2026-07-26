@@ -5,6 +5,7 @@ import { publishBusinessEvent } from './services/notificationOrchestrator.js';
 import { buildLookupMap, normalizeClient, resolveCustomer, resolveTrip, isPlaceholderTmsCustomer } from './services/customerResolver.js';
 import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } from './services/authScope.js';
 import { getUserPreferences, updatePreference, KNOWN_CHANNELS } from './services/preferenceResolver.js';
+import { normalizeExternalRef } from './services/normalizeExternalRef.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -2579,6 +2580,25 @@ serviciosRouter.post('/', async (req, res) => {
     const n = lastCode?.startsWith('SOL-') ? parseInt(lastCode.slice(4), 10) : 0;
     const codigo_solicitud = 'SOL-' + String((isNaN(n) ? 0 : n) + 1).padStart(5, '0');
 
+    const normalizedRef = normalizeExternalRef(tipo_vehiculo, external_ref);
+
+    // Validar duplicado de external_ref entre solicitudes activas de la misma empresa
+    if (normalizedRef) {
+      const ESTADOS_ACTIVOS = ['pendiente', 'confirmado', 'programado', 'en_ruta'];
+      const estadosFilter   = ESTADOS_ACTIVOS.map(encodeURIComponent).join(',');
+      const duplicados = await sbFetch(
+        `/solicitudes?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&external_ref=eq.${encodeURIComponent(normalizedRef)}&estado=in.(${estadosFilter})&select=codigo_solicitud,estado&limit=1`
+      ) || [];
+      if (duplicados.length > 0) {
+        const dup = duplicados[0];
+        return res.status(409).json({
+          error: `La referencia ${normalizedRef} ya está registrada en la solicitud ${dup.codigo_solicitud} (${dup.estado}).`,
+          codigo_solicitud: dup.codigo_solicitud,
+          estado:           dup.estado,
+        });
+      }
+    }
+
     const row = {
       codigo_solicitud,
       empresa_cliente_id: req.empresaId,
@@ -2589,7 +2609,7 @@ serviciosRouter.post('/', async (req, res) => {
       destino:            destino        || null,
       agencia_id:         agencia_id     || null,
       agencia_nombre:     agencia_nombre || null,
-      external_ref:       external_ref   || null,
+      external_ref:       normalizedRef,
       fecha_requerida,
       observacion_coordinadora: observaciones || null,
       estado:    'pendiente',
@@ -2642,7 +2662,7 @@ serviciosRouter.patch('/:id', async (req, res) => {
     if (destino)         patch.destino                  = destino;
     if (tipo_vehiculo)   patch.tipo_vehiculo             = tipo_vehiculo;
     if (tipo_operacion)  patch.tipo_operacion            = tipo_operacion;
-    if (external_ref !== undefined) patch.external_ref  = external_ref || null;
+    if (external_ref !== undefined) patch.external_ref  = normalizeExternalRef(tipo_vehiculo || sol.tipo_vehiculo, external_ref);
 
     if (Object.keys(patch).length === 0) {
       return res.json(mapSolicitud(sol));
