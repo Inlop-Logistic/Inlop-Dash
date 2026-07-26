@@ -37,4 +37,4 @@ function normalizeExternalRef(tipoVehiculo, ref) {
   return val;
 }
 
-module.exports = { normalizeExternalRef };
+export { normalizeExternalRef };

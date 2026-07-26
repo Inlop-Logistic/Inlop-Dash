@@ -2670,9 +2670,22 @@ serviciosRouter.patch('/:id', async (req, res) => {
     if (observaciones)   patch.observacion_coordinadora = observaciones;
     if (origen)          patch.origen                   = origen;
     if (destino)         patch.destino                  = destino;
-    if (tipo_vehiculo)   patch.tipo_vehiculo             = tipo_vehiculo;
-    if (tipo_operacion)  patch.tipo_operacion            = tipo_operacion;
-    if (external_ref !== undefined) patch.external_ref  = normalizeExternalRef(tipo_vehiculo || sol.tipo_vehiculo, external_ref);
+    if (tipo_vehiculo)   patch.tipo_vehiculo  = tipo_vehiculo;
+    if (tipo_operacion)  patch.tipo_operacion = tipo_operacion;
+
+    // Mantener tipo_vehiculo y external_ref como unidad lógica.
+    // Cuando el tipo cambia (con o sin nueva ref), se quita el prefijo viejo
+    // y se aplica el nuevo, sin acumular: NHR-TO-234 + NKR → NKR-TO-234.
+    if (external_ref !== undefined || (tipo_vehiculo && sol.external_ref)) {
+      const efectiveTipo = tipo_vehiculo || sol.tipo_vehiculo;
+      const efectivoRef  = external_ref !== undefined ? external_ref : sol.external_ref;
+      const oldPfx = (sol.tipo_vehiculo || '').trim().toUpperCase()
+        .replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+      const payload = (oldPfx && (efectivoRef || '').toUpperCase().startsWith(oldPfx + '-'))
+        ? efectivoRef.slice(oldPfx.length + 1)
+        : efectivoRef;
+      patch.external_ref = normalizeExternalRef(efectiveTipo, payload);
+    }
 
     if (Object.keys(patch).length === 0) {
       return res.json(mapSolicitud(sol));
