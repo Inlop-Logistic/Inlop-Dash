@@ -1096,6 +1096,7 @@ app.get('/api/solicitudes/:id', requireInternalApiKey, async (req, res) => {
       'placa_asignada','conductor_nombre','conductor_tel',
       'controlt_trip_number','canal',
       'fecha_confirmacion','fecha_inicio_real','fecha_fin_real',
+      'manifiesto','pct','fecha_cancelacion',
     ].join(',');
 
     const sols = await sbFetch(
@@ -1132,6 +1133,21 @@ app.get('/api/solicitudes/:id', requireInternalApiKey, async (req, res) => {
           `/cumplidos?id=eq.${encodeURIComponent(tripNum)}&select=id,placa,conductor,conductor_tel,fecha_viaje,fecha_finalizacion&limit=1`
         ) || [];
         cumplido = cs[0] || null;
+      }
+    }
+
+    // Buscar fecha programada en planeados (schedulate_origin → ISO)
+    let fechaProgramada = null;
+    if (sol.controlt_trip_number) {
+      const planeadosRows = await sbFetch(
+        `/planeados?trip_number=eq.${encodeURIComponent(sol.controlt_trip_number)}&select=schedulate_origin&limit=1`
+      ) || [];
+      const rawSched = planeadosRows[0]?.schedulate_origin ?? null;
+      if (rawSched) {
+        const m = String(rawSched).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+        fechaProgramada = m
+          ? `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}T${m[4]}:${m[5]}:00`
+          : null;
       }
     }
 
@@ -1172,6 +1188,13 @@ app.get('/api/solicitudes/:id', requireInternalApiKey, async (req, res) => {
       fecha_fin_ruta:     cumplido?.fecha_finalizacion || sol.fecha_fin_real    || null,
       notas:              sol.observacion_coordinadora || null,
       distancia_km:       null,
+      // Campos adicionales para el detalle de solicitud
+      controlt_trip_number: sol.controlt_trip_number || null,
+      manifiesto:           sol.manifiesto           || null,
+      pct:                  sol.pct                  ?? null,
+      fecha_confirmacion:   sol.fecha_confirmacion   || null,
+      fecha_cancelacion:    sol.fecha_cancelacion    || null,
+      fecha_programada:     fechaProgramada,
     });
   } catch(e) {
     console.error('❌ GET /api/solicitudes/:id:', e.message);

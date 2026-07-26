@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import {
-  User, Truck, MapPin, Calendar, FileText, AlertCircle, ChevronRight, CalendarClock,
+  User, Truck, Calendar, FileText, AlertCircle, ChevronRight,
+  CalendarClock, Phone, MessageCircle, CheckCircle, Link2,
 } from "lucide-react";
-import { fmtFecha } from "@/utils/date";
+import { fmtFecha, fmtFechaCort, fmtHora } from "@/utils/date";
 import { SidePanel, PanelSection, InfoRow, Button } from "@/components/ui";
 import { useNavigationContext, navActions } from "@/core/navigation";
 import type { Solicitud, SolicitudDetalle as SolicitudDetalleType } from "../types";
 import { getSolicitudDetalle } from "../services/api";
 import { EstadoBadge } from "./EstadoBadge";
 import { CanalBadge } from "./CanalBadge";
-import { Timeline } from "./Timeline";
+import { ProgressBar } from "@/modules/viajes/components/ProgressBar";
 
 interface DetalleSolicitudProps {
   solicitud: Solicitud;
@@ -17,6 +18,168 @@ interface DetalleSolicitudProps {
   onEstado:  (id: string, estado: string) => Promise<void>;
 }
 
+// ---------------------------------------------------------------------------
+// Ciclo Operativo — timeline vertical con fechas reales
+// ---------------------------------------------------------------------------
+interface CicloStep {
+  label:     string;
+  fecha:     string | null | undefined;
+  isDone:    boolean;
+  isActive:  boolean;
+  dotColor:  string;
+  bgColor:   string;
+  textColor: string;
+}
+
+function CicloOperativo({
+  d,
+  estadoActual,
+  creado_en,
+}: {
+  d:            SolicitudDetalleType | null;
+  estadoActual: string;
+  creado_en:    string;
+}) {
+  const isCancelado = estadoActual === "cancelado";
+
+  const steps: CicloStep[] = [
+    {
+      label:     "Solicitud recibida",
+      fecha:     creado_en,
+      isDone:    true,
+      isActive:  estadoActual === "pendiente",
+      dotColor:  estadoActual === "pendiente" ? "#D97706" : "#059669",
+      bgColor:   estadoActual === "pendiente" ? "#FEF3C7" : "#D1FAE5",
+      textColor: estadoActual === "pendiente" ? "#B45309" : "var(--gray-700)",
+    },
+    {
+      label:     "Aprobada",
+      fecha:     d?.fecha_confirmacion,
+      isDone:    !!d?.fecha_confirmacion,
+      isActive:  estadoActual === "aprobado",
+      dotColor:  "#1D4ED8",
+      bgColor:   "#DBEAFE",
+      textColor: "#1D4ED8",
+    },
+    {
+      label:     "Programada",
+      fecha:     d?.fecha_programada,
+      isDone:    !!d?.fecha_programada,
+      isActive:  false,
+      dotColor:  "#6D28D9",
+      bgColor:   "#EDE9FE",
+      textColor: "#6D28D9",
+    },
+    {
+      label:     "En ruta",
+      fecha:     d?.fecha_inicio_ruta,
+      isDone:    !!d?.fecha_inicio_ruta,
+      isActive:  estadoActual === "en_ruta",
+      dotColor:  "#059669",
+      bgColor:   "#D1FAE5",
+      textColor: "#059669",
+    },
+    ...(isCancelado
+      ? [{
+          label:     "Cancelada",
+          fecha:     d?.fecha_cancelacion,
+          isDone:    !!d?.fecha_cancelacion,
+          isActive:  true,
+          dotColor:  "#E30613",
+          bgColor:   "#FFE4E6",
+          textColor: "#9F1239",
+        }]
+      : [{
+          label:     "Completada",
+          fecha:     d?.fecha_fin_ruta,
+          isDone:    !!d?.fecha_fin_ruta,
+          isActive:  estadoActual === "completado",
+          dotColor:  "#059669",
+          bgColor:   "#D1FAE5",
+          textColor: "#065F46",
+        }]
+    ),
+  ];
+
+  return (
+    <div className="flex flex-col gap-0">
+      {steps.map((step, idx) => {
+        const isLast    = idx === steps.length - 1;
+        const lineColor = step.isDone && !step.isActive ? "#D1FAE5" : "var(--gray-100)";
+
+        return (
+          <div key={step.label} className="flex items-start gap-3">
+            <div className="flex flex-col items-center shrink-0" style={{ width: 20 }}>
+              <div
+                className="h-5 w-5 rounded-full flex items-center justify-center z-10 shrink-0"
+                style={{
+                  background: step.isDone ? step.bgColor : "var(--gray-100)",
+                  border:     step.isActive ? `2px solid ${step.dotColor}` : "2px solid transparent",
+                  transition: "all 0.2s",
+                }}
+              >
+                {step.isDone && !step.isActive && (
+                  <CheckCircle className="w-3 h-3" style={{ color: step.dotColor }} />
+                )}
+                {step.isActive && (
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: step.dotColor }} />
+                )}
+                {!step.isDone && !step.isActive && (
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--gray-300)" }} />
+                )}
+              </div>
+              {!isLast && (
+                <div
+                  className="w-0.5 flex-1 min-h-[16px]"
+                  style={{ background: lineColor, marginTop: 2 }}
+                />
+              )}
+            </div>
+
+            <div className="pb-3 min-w-0 flex-1">
+              <div
+                className="text-[12px] font-semibold"
+                style={{
+                  color: step.isActive
+                    ? step.textColor
+                    : step.isDone
+                    ? "var(--gray-700)"
+                    : "var(--gray-300)",
+                }}
+              >
+                {step.label}
+              </div>
+              {step.fecha ? (
+                <div className="text-[11px] mt-0.5 tabular-nums leading-snug" style={{ color: "var(--gray-400)" }}>
+                  {fmtFecha(step.fecha)}
+                </div>
+              ) : (
+                <div className="text-[11px] mt-0.5" style={{ color: "var(--gray-300)" }}>
+                  Pendiente
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helper — construye link de WhatsApp a partir de un número de teléfono
+// ---------------------------------------------------------------------------
+function waLink(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return null;
+  const num = digits.startsWith("57") ? digits : `57${digits}`;
+  return `https://wa.me/${num}`;
+}
+
+// ---------------------------------------------------------------------------
+// Componente principal
+// ---------------------------------------------------------------------------
 export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolicitudProps) {
   const { navigateTo } = useNavigationContext();
   const [detalle, setDetalle]               = useState<SolicitudDetalleType | null>(null);
@@ -58,10 +221,8 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
     }
   };
 
-  const d              = detalle;
-  const tieneConductor = d?.conductor_nombre;
-  const tieneVehiculo  = d?.vehiculo_placa;
-  const historial      = d?.historial ?? [];
+  const d          = detalle;
+  const tripNumber = d?.controlt_trip_number ?? null;
 
   const footer = (solicitud.estado === "pendiente" || solicitud.estado === "aprobado") ? (
     <div className="px-6 py-4 flex flex-col gap-2.5">
@@ -108,90 +269,91 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
       width="480px"
     >
 
-      {/* Identificación */}
-      <PanelSection title="Identificación" icon={<FileText className="w-3.5 h-3.5" />} first>
-        <InfoRow label="Estado"    value={<EstadoBadge estado={solicitud.estado} />} />
-        <InfoRow label="Código"    value={solicitud.codigo_solicitud} mono />
-        {solicitud.external_ref && (
-          <InfoRow label="Referencia" value={solicitud.external_ref} mono />
-        )}
+      {/* ── SECCIÓN 1: Solicitud ── */}
+      <PanelSection title="Solicitud" icon={<FileText className="w-3.5 h-3.5" />} first>
+
+        {/* Cita de cargue — elemento más prominente */}
         <div
-          className="mt-3 px-3 py-2.5 rounded-xl"
-          style={{ background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}
+          className="flex items-center gap-3 px-3.5 py-3 rounded-xl mb-3"
+          style={{ background: "var(--navy)", color: "#fff" }}
         >
-          <div
-            className="text-[10px] font-semibold uppercase tracking-wide mb-1"
-            style={{ color: "var(--gray-400)" }}
-          >
-            Llave de correlación operativa
-          </div>
-          <div className="text-[14px] font-bold font-mono" style={{ color: "var(--navy)" }}>
-            {solicitud.external_ref ?? solicitud.codigo_solicitud}
-          </div>
-          <div className="text-[11px] mt-1 leading-snug" style={{ color: "var(--gray-400)" }}>
-            Este identificador permitirá relacionar esta solicitud con la operación logística durante su ciclo de ejecución.
+          <CalendarClock className="w-5 h-5 shrink-0" style={{ opacity: 0.6 }} />
+          <div className="flex flex-col min-w-0">
+            <div
+              className="text-[10px] font-semibold uppercase tracking-wide"
+              style={{ opacity: 0.65 }}
+            >
+              Cita de cargue
+            </div>
+            <div className="tabular-nums leading-none mt-1">
+              <div className="text-[11px]" style={{ opacity: 0.65 }}>
+                {fmtFechaCort(solicitud.fecha_requerida)}
+              </div>
+              <div className="text-[17px] font-bold mt-0.5">
+                {fmtHora(solicitud.fecha_requerida)}
+              </div>
+            </div>
           </div>
         </div>
-      </PanelSection>
 
-      {/* Cliente */}
-      <PanelSection title="Cliente" icon={<User className="w-3.5 h-3.5" />}>
-        <InfoRow label="Cliente"     value={solicitud.cliente} />
-        <InfoRow label="Agencia"     value={solicitud.agencia} />
-        <InfoRow label="Canal"       value={<CanalBadge canal={solicitud.canal} />} />
-        <InfoRow label="Solicitante" value={solicitud.solicitante ?? "No registrado"} />
-      </PanelSection>
-
-      {/* Operación */}
-      <PanelSection title="Operación" icon={<MapPin className="w-3.5 h-3.5" />}>
-        <InfoRow label="Tipo"            value={solicitud.tipo_operacion === "urbana" ? "Urbana" : "Nacional"} />
+        <InfoRow label="Fecha solicitud" value={fmtFecha(solicitud.creado_en)} />
+        <InfoRow label="Cliente"         value={solicitud.cliente} />
+        <InfoRow label="Agencia"         value={solicitud.agencia} />
+        <InfoRow label="Solicitante"     value={solicitud.solicitante ?? "No registrado"} />
+        <InfoRow label="Canal"           value={<CanalBadge canal={solicitud.canal} />} />
+        <InfoRow label="Tipo servicio"   value={solicitud.tipo_operacion === "urbana" ? "Urbana" : "Nacional"} />
         <InfoRow label="Tipo vehículo"   value={solicitud.tipo_vehiculo} />
-        <InfoRow label="Fecha requerida" value={fmtFecha(solicitud.fecha_requerida)} />
 
+        {/* Ruta origen → destino */}
         <div
-          className="flex items-center gap-2 mt-3 px-3 py-3 rounded-xl"
+          className="flex items-center gap-2.5 mt-3 px-3 py-3 rounded-xl"
           style={{ background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}
         >
           <div className="flex flex-col items-center gap-1 shrink-0">
-            <div className="w-2.5 h-2.5 rounded-full border-2" style={{ borderColor: "var(--navy)" }} />
-            <div className="w-0.5 h-5" style={{ background: "var(--gray-200)" }} />
-            <div className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--inlop-red)" }} />
+            <div className="w-2 h-2 rounded-full border-2" style={{ borderColor: "var(--navy)" }} />
+            <div className="w-0.5 h-5"                     style={{ background: "var(--gray-200)" }} />
+            <div className="w-2 h-2 rounded-full"          style={{ background: "var(--inlop-red)" }} />
           </div>
           <div className="flex flex-col gap-3 flex-1 min-w-0">
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>Origen</div>
-              <div className="text-[13px] font-bold truncate" style={{ color: "var(--gray-800)" }}>{solicitud.origen}</div>
+              <div className="text-[13px] font-bold truncate"                     style={{ color: "var(--gray-800)" }}>{solicitud.origen}</div>
             </div>
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>Destino</div>
-              <div className="text-[13px] font-bold truncate" style={{ color: "var(--gray-800)" }}>{solicitud.destino}</div>
+              <div className="text-[13px] font-bold truncate"                     style={{ color: "var(--gray-800)" }}>{solicitud.destino}</div>
             </div>
           </div>
-          {d?.distancia_km && (
-            <div className="shrink-0 text-right">
-              <div className="text-[18px] font-bold" style={{ color: "var(--navy)" }}>{d.distancia_km}</div>
-              <div className="text-[10px]" style={{ color: "var(--gray-400)" }}>km</div>
-            </div>
-          )}
         </div>
 
-        {d?.fecha_inicio_ruta && <InfoRow label="Inicio ruta" value={fmtFecha(d.fecha_inicio_ruta)} />}
-        {d?.fecha_fin_ruta    && <InfoRow label="Fin de ruta" value={fmtFecha(d.fecha_fin_ruta)}    />}
-        <InfoRow label="Creada"   value={fmtFecha(solicitud.creado_en)} />
-        {d?.actualizado_en    && <InfoRow label="Actualizada" value={fmtFecha(d.actualizado_en)}    />}
+        {/* Observaciones del coordinador */}
+        {d?.notas && (
+          <div
+            className="text-[12px] mt-3 px-3 py-2.5 rounded-xl"
+            style={{ background: "var(--gray-50)", color: "var(--gray-600)", border: "1px solid var(--gray-100)" }}
+          >
+            {d.notas}
+          </div>
+        )}
       </PanelSection>
 
-      {/* Asignación */}
+      {/* ── SECCIÓN 2: Asignación ── */}
       <PanelSection title="Asignación" icon={<Truck className="w-3.5 h-3.5" />}>
         {loadingDetalle ? (
           <div className="text-[12px] py-2" style={{ color: "var(--gray-300)" }}>Cargando…</div>
         ) : errorDetalle ? (
           <div className="flex items-center gap-2 text-[12px]" style={{ color: "var(--gray-400)" }}>
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-            No se pudo obtener información adicional
+            No se pudo obtener información de asignación
           </div>
         ) : (
           <div className="flex flex-col gap-4">
+
+            {/* Estado actual */}
+            <div className="flex items-center justify-between">
+              <span className="text-[12px]" style={{ color: "var(--gray-500)" }}>Estado actual</span>
+              <EstadoBadge estado={solicitud.estado} />
+            </div>
 
             {/* Conductor */}
             <div>
@@ -201,23 +363,51 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
               >
                 Conductor
               </div>
-              {tieneConductor ? (
+              {d?.conductor_nombre ? (
                 <div
                   className="flex items-center gap-3 p-3 rounded-xl"
                   style={{ background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}
                 >
                   <div
-                    className="h-10 w-10 rounded-full flex items-center justify-center font-bold text-[14px] shrink-0"
+                    className="h-9 w-9 rounded-full flex items-center justify-center font-bold text-[13px] shrink-0"
                     style={{ background: "var(--navy)", color: "#fff" }}
                   >
-                    {d!.conductor_nombre!.charAt(0).toUpperCase()}
+                    {d.conductor_nombre.charAt(0).toUpperCase()}
                   </div>
-                  <div className="min-w-0">
-                    <div className="text-[13px] font-bold" style={{ color: "var(--gray-800)" }}>{d!.conductor_nombre}</div>
-                    {d?.conductor_cedula   && <div className="text-[11px]" style={{ color: "var(--gray-400)" }}>CC {d.conductor_cedula}</div>}
-                    {d?.conductor_telefono && <div className="text-[11px]" style={{ color: "var(--gray-400)" }}>📞 {d.conductor_telefono}</div>}
-                    {d?.conductor_licencia && <div className="text-[11px]" style={{ color: "var(--gray-400)" }}>Lic. {d.conductor_licencia}</div>}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-bold" style={{ color: "var(--gray-800)" }}>
+                      {d.conductor_nombre}
+                    </div>
+                    {d.conductor_telefono && (
+                      <div className="text-[11px] mt-0.5" style={{ color: "var(--gray-400)" }}>
+                        {d.conductor_telefono}
+                      </div>
+                    )}
                   </div>
+                  {d.conductor_telefono && (
+                    <div className="flex gap-1.5 shrink-0">
+                      <a
+                        href={`tel:${d.conductor_telefono}`}
+                        className="h-7 w-7 rounded-full flex items-center justify-center"
+                        style={{ background: "var(--gray-100)", color: "var(--gray-600)" }}
+                        title="Llamar"
+                      >
+                        <Phone className="w-3 h-3" />
+                      </a>
+                      {waLink(d.conductor_telefono) && (
+                        <a
+                          href={waLink(d.conductor_telefono)!}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="h-7 w-7 rounded-full flex items-center justify-center"
+                          style={{ background: "#DCFCE7", color: "#15803D" }}
+                          title="WhatsApp"
+                        >
+                          <MessageCircle className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div
@@ -238,29 +428,19 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
               >
                 Vehículo
               </div>
-              {tieneVehiculo ? (
+              {d?.vehiculo_placa ? (
                 <div
-                  className="p-3 rounded-xl"
+                  className="px-3 py-2.5 rounded-xl"
                   style={{ background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div
-                        className="text-[18px] font-bold tracking-widest"
-                        style={{ color: "var(--navy)", fontFamily: "monospace" }}
-                      >
-                        {d!.vehiculo_placa}
-                      </div>
-                      {d?.vehiculo_tipo && (
-                        <div className="text-[12px] mt-0.5" style={{ color: "var(--gray-500)" }}>{d.vehiculo_tipo}</div>
-                      )}
-                    </div>
-                    {d?.vehiculo_capacidad && (
-                      <div className="text-right">
-                        <div className="text-[16px] font-bold" style={{ color: "var(--gray-700)" }}>{d.vehiculo_capacidad}</div>
-                        <div className="text-[10px]" style={{ color: "var(--gray-400)" }}>capacidad</div>
-                      </div>
-                    )}
+                  <div
+                    className="text-[18px] font-bold tracking-widest font-mono"
+                    style={{ color: "var(--navy)" }}
+                  >
+                    {d.vehiculo_placa}
+                  </div>
+                  <div className="text-[11px] mt-0.5" style={{ color: "var(--gray-400)" }}>
+                    {solicitud.tipo_vehiculo}
                   </div>
                 </div>
               ) : (
@@ -274,60 +454,88 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
               )}
             </div>
 
+            {/* Manifiesto y progreso */}
+            {(d?.manifiesto || d?.pct != null) && (
+              <div className="flex flex-col gap-2">
+                {d?.manifiesto && <InfoRow label="Manifiesto" value={d.manifiesto} mono />}
+                {d?.pct != null && (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[12px] shrink-0" style={{ color: "var(--gray-500)" }}>Progreso</span>
+                    <ProgressBar value={d.pct} maxWidth="120px" />
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
         )}
       </PanelSection>
 
-      {/* Observaciones (condicional) */}
-      {d?.notas && (
-        <PanelSection title="Observaciones" icon={<FileText className="w-3.5 h-3.5" />}>
-          <div
-            className="text-[12px] px-3 py-2.5 rounded-xl"
-            style={{ background: "var(--gray-50)", color: "var(--gray-600)", border: "1px solid var(--gray-100)" }}
+      {/* ── SECCIÓN 3: Conexiones ── */}
+      <PanelSection title="Conexiones" icon={<Link2 className="w-3.5 h-3.5" />}>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            disabled={!tripNumber}
+            onClick={() => tripNumber && navigateTo(navActions.verProgramacion(tripNumber, "solicitudes"))}
+            className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-[13px] font-medium"
+            style={{
+              background: tripNumber ? "#fff" : "var(--gray-50)",
+              color:      tripNumber ? "var(--gray-700)" : "var(--gray-300)",
+              border:     `1.5px solid ${tripNumber ? "var(--gray-200)" : "var(--gray-100)"}`,
+              cursor:     tripNumber ? "pointer" : "not-allowed",
+            }}
           >
-            {d.notas}
-          </div>
-        </PanelSection>
-      )}
+            <span className="flex items-center gap-2">
+              <CalendarClock className="w-3.5 h-3.5" />
+              Ver en Programación
+            </span>
+            <ChevronRight
+              className="w-3.5 h-3.5 shrink-0"
+              style={{ color: tripNumber ? "var(--gray-400)" : "var(--gray-200)" }}
+            />
+          </button>
 
-      {/* Módulos relacionados — navegación contextual */}
-      {solicitud.external_ref && (
-        <PanelSection title="Módulos relacionados" icon={<ChevronRight className="w-3.5 h-3.5" />}>
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => navigateTo(navActions.verProgramacion(solicitud.external_ref!, "solicitudes"))}
-              className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-[13px] font-medium transition-colors"
-              style={{ background: "#fff", color: "var(--gray-700)", border: "1.5px solid var(--gray-200)", cursor: "pointer" }}
-            >
-              <span className="flex items-center gap-2">
-                <CalendarClock className="w-3.5 h-3.5" />
-                Ver en Programación
-              </span>
-              <ChevronRight className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--gray-400)" }} />
-            </button>
-            <button
-              type="button"
-              onClick={() => navigateTo(navActions.verViaje(solicitud.external_ref!, "solicitudes"))}
-              className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-[13px] font-medium transition-colors"
-              style={{ background: "#fff", color: "var(--gray-700)", border: "1.5px solid var(--gray-200)", cursor: "pointer" }}
-            >
-              <span className="flex items-center gap-2">
-                <Truck className="w-3.5 h-3.5" />
-                Ver en Viajes
-              </span>
-              <ChevronRight className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--gray-400)" }} />
-            </button>
-          </div>
-        </PanelSection>
-      )}
+          <button
+            type="button"
+            disabled={!tripNumber}
+            onClick={() => tripNumber && navigateTo(navActions.verViaje(tripNumber, "solicitudes"))}
+            className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-[13px] font-medium"
+            style={{
+              background: tripNumber ? "#fff" : "var(--gray-50)",
+              color:      tripNumber ? "var(--gray-700)" : "var(--gray-300)",
+              border:     `1.5px solid ${tripNumber ? "var(--gray-200)" : "var(--gray-100)"}`,
+              cursor:     tripNumber ? "pointer" : "not-allowed",
+            }}
+          >
+            <span className="flex items-center gap-2">
+              <Truck className="w-3.5 h-3.5" />
+              Ver en Viajes
+            </span>
+            <ChevronRight
+              className="w-3.5 h-3.5 shrink-0"
+              style={{ color: tripNumber ? "var(--gray-400)" : "var(--gray-200)" }}
+            />
+          </button>
 
-      {/* Historial */}
-      <PanelSection title="Historial" icon={<Calendar className="w-3.5 h-3.5" />}>
+          {!tripNumber && !loadingDetalle && (
+            <div className="text-[11px]" style={{ color: "var(--gray-400)" }}>
+              Sin correlación operativa registrada.
+            </div>
+          )}
+        </div>
+      </PanelSection>
+
+      {/* ── SECCIÓN 4: Ciclo Operativo ── */}
+      <PanelSection title="Ciclo operativo" icon={<Calendar className="w-3.5 h-3.5" />}>
         {loadingDetalle ? (
-          <div className="text-[12px] py-2" style={{ color: "var(--gray-300)" }}>Cargando historial…</div>
+          <div className="text-[12px] py-2" style={{ color: "var(--gray-300)" }}>Cargando…</div>
         ) : (
-          <Timeline historial={historial} estadoActual={solicitud.estado} />
+          <CicloOperativo
+            d={d}
+            estadoActual={solicitud.estado}
+            creado_en={solicitud.creado_en}
+          />
         )}
       </PanelSection>
 
