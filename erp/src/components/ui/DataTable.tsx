@@ -62,9 +62,9 @@ export function DataTable<T>({
 
   function thStyle(col: Column<T>, i: number): CSSProperties {
     const base: CSSProperties = {
-      color:     "var(--gray-600)",
-      width:     col.width,
-      textAlign: col.align ?? "left",
+      color:      "var(--gray-600)",
+      width:      col.width,
+      textAlign:  col.align ?? "left",
       background: "var(--gray-50)",
     };
     if (!col.sticky) return base;
@@ -93,12 +93,14 @@ export function DataTable<T>({
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left min-w-[640px]">
+
+        {/* Header — fondo var(--gray-50), borde inferior 2px, texto var(--gray-600) */}
         <thead style={{ position: "sticky", top: 0, zIndex: 4 }}>
           <tr style={{ borderBottom: "2px solid var(--gray-200)" }}>
             {columns.map((col, i) => (
               <th
                 key={col.key}
-                className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide whitespace-nowrap"
+                className="px-4 py-3 text-[11px] font-semibold uppercase tracking-widest whitespace-nowrap"
                 style={thStyle(col, i)}
               >
                 {col.header}
@@ -106,16 +108,17 @@ export function DataTable<T>({
             ))}
           </tr>
         </thead>
+
         <tbody>
           {rows.map((row) => (
             <tr
               key={rowKey(row)}
-              className={`transition-colors ${onRowClick ? "cursor-pointer hover:bg-[var(--gray-50)]" : ""}`}
+              className={`transition-colors ${onRowClick ? "cursor-pointer hover:bg-[var(--gray-100)]" : ""}`}
               style={{ borderBottom: "1px solid var(--gray-100)" }}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >
               {columns.map((col, i) => (
-                <td key={col.key} className="px-4 py-3" style={tdStyle(col, i)}>
+                <td key={col.key} className="px-4 py-3.5" style={tdStyle(col, i)}>
                   {col.render(row)}
                 </td>
               ))}

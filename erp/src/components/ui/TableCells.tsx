@@ -20,7 +20,11 @@ export function DateTimeCell({ iso }: { iso: string | null | undefined }) {
   );
 }
 
-/** Código monoespaciado (SOL-XXXXX, trip number, remisión). */
+/**
+ * Código en DM Mono (var(--font-mono)) — elimina los ceros tachados del stack
+ * system-mono de Tailwind. Estándar oficial para SOL-XXXXX, trip numbers,
+ * remisiones, facturas, órdenes de compra y cualquier ID técnico del ERP.
+ */
 export function CodeCell({
   value,
   size = "md",
@@ -29,9 +33,12 @@ export function CodeCell({
   size?: "sm" | "md" | "lg";
 }) {
   if (!value) return <span className="text-[12px]" style={{ color: "var(--gray-300)" }}>—</span>;
-  const sz = size === "sm" ? "text-[11px]" : size === "lg" ? "text-[15px]" : "text-[13px]";
+  const fontSize = size === "sm" ? "11px" : size === "lg" ? "15px" : "13px";
   return (
-    <span className={`${sz} font-bold font-mono`} style={{ color: "var(--navy)" }}>
+    <span
+      className="font-bold"
+      style={{ fontSize, color: "var(--navy)", fontFamily: "var(--font-mono)" }}
+    >
       {value}
     </span>
   );

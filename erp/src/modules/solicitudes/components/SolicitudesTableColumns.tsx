@@ -6,14 +6,17 @@ import type { Solicitud } from "../types";
 import { EstadoBadge } from "./EstadoBadge";
 import { CanalBadge } from "./CanalBadge";
 
-/** Celda de Remisión con botón copiar y confirmación discreta. */
+/**
+ * Celda de Remisión con botón copiar absoluto — sin espacio reservado cuando
+ * el botón no está visible. Usa var(--font-mono) = DM Mono (sin ceros tachados).
+ */
 function RemisionCell({ value }: { value: string | null }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!value) return;
-    navigator.clipboard.writeText(value).then(() => {
+    navigator.clipboard.writeText(value.trim()).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -24,29 +27,33 @@ function RemisionCell({ value }: { value: string | null }) {
   }
 
   return (
-    <div className="flex items-center justify-between gap-1 group relative">
-      <span className="text-[12px] font-mono truncate" style={{ color: "var(--gray-700)" }}>
-        {value}
+    <div className="relative group min-w-0">
+      <span
+        className="text-[12px] block truncate"
+        style={{ color: "var(--gray-700)", fontFamily: "var(--font-mono)" }}
+      >
+        {value.trim()}
       </span>
-      <div className="relative shrink-0">
-        <button
-          type="button"
-          onClick={handleCopy}
-          title="Copiar remisión"
-          className="flex items-center justify-center w-5 h-5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ color: copied ? "#059669" : "var(--gray-400)" }}
+
+      {/* Botón absoluto — se superpone sobre el texto sin reservar espacio fijo */}
+      <button
+        type="button"
+        onClick={handleCopy}
+        title="Copiar remisión"
+        className="absolute right-0 top-0 bottom-0 flex items-center justify-center w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+        style={{ color: copied ? "#059669" : "var(--gray-400)" }}
+      >
+        {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+      </button>
+
+      {copied && (
+        <span
+          className="absolute bottom-full right-0 mb-1.5 text-[10px] font-semibold px-2 py-1 rounded whitespace-nowrap pointer-events-none"
+          style={{ background: "var(--gray-800, #1f2937)", color: "#fff", zIndex: 20 }}
         >
-          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-        </button>
-        {copied && (
-          <span
-            className="absolute bottom-full right-0 mb-1.5 text-[10px] font-semibold px-2 py-1 rounded whitespace-nowrap"
-            style={{ background: "var(--gray-800, #1f2937)", color: "#fff", zIndex: 20 }}
-          >
-            Remisión copiada
-          </span>
-        )}
-      </div>
+          ✓ Copiado
+        </span>
+      )}
     </div>
   );
 }
@@ -80,9 +87,10 @@ export const COLUMNS: Column<Solicitud>[] = [
     header: "Cliente",
     width:  "160px",
     render: (s) => (
+      /* Una sola línea con truncado elegante y tooltip sobre el nombre completo */
       <div
         className="text-[13px] font-medium truncate"
-        style={{ color: "var(--gray-800)", maxWidth: 128 }}
+        style={{ color: "var(--gray-800)" }}
         title={s.cliente}
       >
         {s.cliente}
@@ -103,8 +111,8 @@ export const COLUMNS: Column<Solicitud>[] = [
     render: (s) => (
       <div
         className="text-[12px] truncate"
-        style={{ color: s.agencia && s.agencia !== "—" ? "var(--gray-700)" : "var(--gray-300)", maxWidth: 78 }}
-        title={s.agencia}
+        style={{ color: s.agencia && s.agencia !== "—" ? "var(--gray-700)" : "var(--gray-300)" }}
+        title={s.agencia && s.agencia !== "—" ? s.agencia : undefined}
       >
         {s.agencia}
       </div>
@@ -145,9 +153,11 @@ export const COLUMNS: Column<Solicitud>[] = [
   {
     key:    "conductor_nombre",
     header: "Responsable",
-    width:  "100px",
-    render: (_s) => (
-      <span className="text-[12px]" style={{ color: "var(--gray-300)" }}>—</span>
+    width:  "110px",
+    render: (s) => (
+      <span className="text-[12px]" style={{ color: "var(--gray-400)" }}>
+        {s.conductor_nombre ?? "Sin asignar"}
+      </span>
     ),
   },
 ];
