@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   User, Truck, Calendar, FileText, AlertCircle, ChevronRight,
-  CalendarClock, Phone, MessageCircle, CheckCircle, Link2,
+  CalendarClock, Phone, MessageCircle, CheckCircle, Link2, ClipboardCheck,
 } from "lucide-react";
 import { fmtFecha, fmtFechaCort, fmtHora } from "@/utils/date";
 import { SidePanel, PanelSection, InfoRow, Button } from "@/components/ui";
@@ -272,25 +272,28 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
       {/* ── SECCIÓN 1: Solicitud ── */}
       <PanelSection title="Solicitud" icon={<FileText className="w-3.5 h-3.5" />} first>
 
-        {/* Cita de cargue — elemento más prominente */}
+        {/* Cita de cargue — fecha y hora con igual protagonismo visual */}
         <div
           className="flex items-center gap-3 px-3.5 py-3 rounded-xl mb-3"
           style={{ background: "var(--navy)", color: "#fff" }}
         >
           <CalendarClock className="w-5 h-5 shrink-0" style={{ opacity: 0.6 }} />
-          <div className="flex flex-col min-w-0">
+          <div className="flex-1 min-w-0">
             <div
-              className="text-[10px] font-semibold uppercase tracking-wide"
-              style={{ opacity: 0.65 }}
+              className="text-[10px] font-semibold uppercase tracking-wide mb-2"
+              style={{ opacity: 0.6 }}
             >
               Cita de cargue
             </div>
-            <div className="tabular-nums leading-none mt-1">
-              <div className="text-[11px]" style={{ opacity: 0.65 }}>
-                {fmtFechaCort(solicitud.fecha_requerida)}
+            <div className="flex items-start gap-3 tabular-nums">
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide mb-0.5" style={{ opacity: 0.5 }}>Fecha</div>
+                <div className="text-[14px] font-bold leading-none">{fmtFechaCort(solicitud.fecha_requerida)}</div>
               </div>
-              <div className="text-[17px] font-bold mt-0.5">
-                {fmtHora(solicitud.fecha_requerida)}
+              <div className="w-px self-stretch mx-0.5" style={{ background: "rgba(255,255,255,0.2)" }} />
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide mb-0.5" style={{ opacity: 0.5 }}>Hora</div>
+                <div className="text-[14px] font-bold leading-none">{fmtHora(solicitud.fecha_requerida)}</div>
               </div>
             </div>
           </div>
@@ -348,12 +351,6 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-
-            {/* Estado actual */}
-            <div className="flex items-center justify-between">
-              <span className="text-[12px]" style={{ color: "var(--gray-500)" }}>Estado actual</span>
-              <EstadoBadge estado={solicitud.estado} />
-            </div>
 
             {/* Conductor */}
             <div>
@@ -454,16 +451,14 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
               )}
             </div>
 
-            {/* Manifiesto y progreso */}
-            {(d?.manifiesto || d?.pct != null) && (
-              <div className="flex flex-col gap-2">
-                {d?.manifiesto && <InfoRow label="Manifiesto" value={d.manifiesto} mono />}
-                {d?.pct != null && (
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[12px] shrink-0" style={{ color: "var(--gray-500)" }}>Progreso</span>
-                    <ProgressBar value={d.pct} maxWidth="120px" />
-                  </div>
-                )}
+            {/* Trip Number */}
+            {tripNumber && <InfoRow label="Trip Number" value={tripNumber} mono />}
+
+            {/* Progreso del viaje */}
+            {d?.pct != null && (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[12px] shrink-0" style={{ color: "var(--gray-500)" }}>Progreso</span>
+                <ProgressBar value={d.pct} maxWidth="120px" />
               </div>
             )}
 
@@ -474,49 +469,85 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
       {/* ── SECCIÓN 3: Conexiones ── */}
       <PanelSection title="Conexiones" icon={<Link2 className="w-3.5 h-3.5" />}>
         <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            disabled={!tripNumber}
-            onClick={() => tripNumber && navigateTo(navActions.verProgramacion(tripNumber, "solicitudes"))}
-            className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-[13px] font-medium"
-            style={{
-              background: tripNumber ? "#fff" : "var(--gray-50)",
-              color:      tripNumber ? "var(--gray-700)" : "var(--gray-300)",
-              border:     `1.5px solid ${tripNumber ? "var(--gray-200)" : "var(--gray-100)"}`,
-              cursor:     tripNumber ? "pointer" : "not-allowed",
-            }}
-          >
-            <span className="flex items-center gap-2">
-              <CalendarClock className="w-3.5 h-3.5" />
-              Ver en Programación
-            </span>
-            <ChevronRight
-              className="w-3.5 h-3.5 shrink-0"
-              style={{ color: tripNumber ? "var(--gray-400)" : "var(--gray-200)" }}
-            />
-          </button>
 
-          <button
-            type="button"
-            disabled={!tripNumber}
-            onClick={() => tripNumber && navigateTo(navActions.verViaje(tripNumber, "solicitudes"))}
-            className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-[13px] font-medium"
-            style={{
-              background: tripNumber ? "#fff" : "var(--gray-50)",
-              color:      tripNumber ? "var(--gray-700)" : "var(--gray-300)",
-              border:     `1.5px solid ${tripNumber ? "var(--gray-200)" : "var(--gray-100)"}`,
-              cursor:     tripNumber ? "pointer" : "not-allowed",
-            }}
-          >
-            <span className="flex items-center gap-2">
-              <Truck className="w-3.5 h-3.5" />
-              Ver en Viajes
-            </span>
-            <ChevronRight
-              className="w-3.5 h-3.5 shrink-0"
-              style={{ color: tripNumber ? "var(--gray-400)" : "var(--gray-200)" }}
-            />
-          </button>
+          {/* Ver en Programación */}
+          {(() => {
+            const activo = !loadingDetalle && (d?.in_programacion ?? false) && !!tripNumber;
+            return (
+              <button
+                type="button"
+                disabled={!activo}
+                onClick={() => activo && navigateTo(navActions.verProgramacion(tripNumber!, "solicitudes"))}
+                className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-[13px] font-medium"
+                style={{
+                  background: activo ? "#fff" : "var(--gray-50)",
+                  color:      activo ? "var(--gray-700)" : "var(--gray-300)",
+                  border:     `1.5px solid ${activo ? "var(--gray-200)" : "var(--gray-100)"}`,
+                  cursor:     activo ? "pointer" : "not-allowed",
+                }}
+              >
+                <span className="flex items-center gap-2">
+                  <CalendarClock className="w-3.5 h-3.5" />
+                  Ver en Programación
+                </span>
+                <ChevronRight
+                  className="w-3.5 h-3.5 shrink-0"
+                  style={{ color: activo ? "var(--gray-400)" : "var(--gray-200)" }}
+                />
+              </button>
+            );
+          })()}
+
+          {/* Ver en Viajes (en_ruta) o Ver en Viajes Finalizados (completado) */}
+          {!loadingDetalle && (
+            d?.in_viajes ? (
+              <button
+                type="button"
+                disabled={!tripNumber}
+                onClick={() => tripNumber && navigateTo(navActions.verViaje(tripNumber, "solicitudes"))}
+                className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-[13px] font-medium"
+                style={{
+                  background: "#fff",
+                  color:      "var(--gray-700)",
+                  border:     "1.5px solid var(--gray-200)",
+                  cursor:     "pointer",
+                }}
+              >
+                <span className="flex items-center gap-2">
+                  <Truck className="w-3.5 h-3.5" />
+                  Ver en Viajes
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--gray-400)" }} />
+              </button>
+            ) : d?.in_cumplidos ? (
+              <button
+                type="button"
+                disabled={!tripNumber}
+                onClick={() => tripNumber && navigateTo(navActions.verCumplidos(tripNumber, "solicitudes"))}
+                className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-[13px] font-medium"
+                style={{
+                  background: "#fff",
+                  color:      "var(--gray-700)",
+                  border:     "1.5px solid var(--gray-200)",
+                  cursor:     "pointer",
+                }}
+              >
+                <span className="flex items-center gap-2">
+                  <ClipboardCheck className="w-3.5 h-3.5" />
+                  Ver en Viajes Finalizados
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--gray-400)" }} />
+              </button>
+            ) : tripNumber ? (
+              <div
+                className="flex items-center gap-2 text-[12px] py-2 px-3 rounded-xl"
+                style={{ background: "var(--gray-50)", color: "var(--gray-400)" }}
+              >
+                <Truck className="w-3.5 h-3.5 shrink-0" />
+                Viaje no encontrado en caché activa ni en histórico.
+              </div>
+            ) : null
+          )}
 
           {!tripNumber && !loadingDetalle && (
             <div className="text-[11px]" style={{ color: "var(--gray-400)" }}>

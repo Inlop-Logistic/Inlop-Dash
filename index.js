@@ -1136,12 +1136,14 @@ app.get('/api/solicitudes/:id', requireInternalApiKey, async (req, res) => {
       }
     }
 
-    // Buscar fecha programada en planeados (schedulate_origin → ISO)
-    let fechaProgramada = null;
+    // Buscar fecha programada en planeados (schedulate_origin → ISO) + validar existencia
+    let fechaProgramada  = null;
+    let inProgramacion   = false;
     if (sol.controlt_trip_number) {
       const planeadosRows = await sbFetch(
         `/planeados?trip_number=eq.${encodeURIComponent(sol.controlt_trip_number)}&select=schedulate_origin&limit=1`
       ) || [];
+      inProgramacion = planeadosRows.length > 0;
       const rawSched = planeadosRows[0]?.schedulate_origin ?? null;
       if (rawSched) {
         const m = String(rawSched).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{2}):(\d{2})/);
@@ -1190,11 +1192,14 @@ app.get('/api/solicitudes/:id', requireInternalApiKey, async (req, res) => {
       distancia_km:       null,
       // Campos adicionales para el detalle de solicitud
       controlt_trip_number: sol.controlt_trip_number || null,
-      manifiesto:           sol.manifiesto           || null,
       pct:                  sol.pct                  ?? null,
       fecha_confirmacion:   sol.fecha_confirmacion   || null,
       fecha_cancelacion:    sol.fecha_cancelacion    || null,
       fecha_programada:     fechaProgramada,
+      // Disponibilidad en módulos relacionados (para habilitar botones de conexión)
+      in_programacion: inProgramacion,
+      in_viajes:       viaje   !== null,
+      in_cumplidos:    cumplido !== null,
     });
   } catch(e) {
     console.error('❌ GET /api/solicitudes/:id:', e.message);

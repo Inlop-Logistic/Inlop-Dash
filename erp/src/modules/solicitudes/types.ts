@@ -54,9 +54,12 @@ export interface SolicitudDetalle extends Solicitud {
   distancia_km: number | null;
   // Campos adicionales del detalle enriquecido
   controlt_trip_number: string | null;
-  manifiesto: string | null;
   pct: number | null;
   fecha_confirmacion: string | null;
   fecha_cancelacion: string | null;
   fecha_programada: string | null;
+  // Disponibilidad en módulos relacionados
+  in_programacion: boolean;
+  in_viajes:       boolean;
+  in_cumplidos:    boolean;
 }
