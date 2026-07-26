@@ -91,11 +91,10 @@ export function useSolicitudes() {
   }, [data, tabEstado, estadoFiltro, clienteFiltro, busqueda, fechaDesde, fechaHasta]);
 
   const kpis = useMemo(() => ({
-    recibidas:   data.length,
+    total:       data.length,
     pendientes:  data.filter((s) => s.estado === "pendiente").length,
-    enGestion:   data.filter((s) => s.estado === "aprobado" || s.estado === "en_ruta").length,
-    completadas: data.filter((s) => s.estado === "completado").length,
-    canceladas:  data.filter((s) => s.estado === "cancelado").length,
+    enRuta:      data.filter((s) => s.estado === "en_ruta").length,
+    finalizadas: data.filter((s) => s.estado === "completado").length,
   }), [data]);
 
   const panelSol = panelId ? data.find((s) => s.id === panelId) ?? null : null;

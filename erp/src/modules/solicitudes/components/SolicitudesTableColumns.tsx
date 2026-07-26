@@ -1,34 +1,17 @@
 import { useState } from "react";
 import { Copy, Check } from "lucide-react";
-import { splitISO } from "@/utils/date";
 import type { Column } from "@/components/ui";
+import { CodeCell, DateTimeCell, RouteCell } from "@/components/ui";
 import type { Solicitud } from "../types";
 import { EstadoBadge } from "./EstadoBadge";
 import { CanalBadge } from "./CanalBadge";
-
-/**
- * Doble línea fecha + hora — mismo estilo visual que la columna Programado
- * del módulo Programación. Reutiliza splitISO en lugar de splitSchedulate
- * porque las fechas de solicitudes son ISO, no formato TMS DD/MM/YYYY HH:MM:SS.
- */
-function renderFechaHora(iso: string | null): React.ReactNode {
-  const { fecha, hora } = splitISO(iso);
-  return (
-    <div className="tabular-nums leading-none">
-      <div className="text-[11px]" style={{ color: "var(--gray-500)" }}>{fecha}</div>
-      {hora && hora !== "00:00" && (
-        <div className="text-[14px] font-bold mt-0.5" style={{ color: "var(--navy)" }}>{hora}</div>
-      )}
-    </div>
-  );
-}
 
 /** Celda de Remisión con botón copiar y confirmación discreta. */
 function RemisionCell({ value }: { value: string | null }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = (e: React.MouseEvent) => {
-    e.stopPropagation(); // no abrir el panel de detalle
+    e.stopPropagation();
     if (!value) return;
     navigator.clipboard.writeText(value).then(() => {
       setCopied(true);
@@ -71,39 +54,35 @@ function RemisionCell({ value }: { value: string | null }) {
 export const COLUMNS: Column<Solicitud>[] = [
   // ── Columnas fijas ─────────────────────────────────────────────────────────
   {
-    key: "codigo_solicitud",
+    key:    "codigo_solicitud",
     header: "Solicitud",
-    width: "112px",
+    width:  "112px",
     sticky: true,
-    render: (s) => (
-      <span className="text-[13px] font-bold font-mono" style={{ color: "var(--navy)" }}>
-        {s.codigo_solicitud}
-      </span>
-    ),
+    render: (s) => <CodeCell value={s.codigo_solicitud} />,
   },
   {
-    key: "external_ref",
+    key:    "external_ref",
     header: "Remisión",
-    width: "140px",
+    width:  "140px",
     sticky: true,
     render: (s) => <RemisionCell value={s.external_ref} />,
   },
 
   // ── Columnas desplazables ──────────────────────────────────────────────────
   {
-    key: "creado_en",
+    key:    "creado_en",
     header: "Fecha Solicitud",
-    width: "100px",
-    render: (s) => renderFechaHora(s.creado_en),
+    width:  "100px",
+    render: (s) => <DateTimeCell iso={s.creado_en} />,
   },
   {
-    key: "cliente",
+    key:    "cliente",
     header: "Cliente",
-    width: "140px",
+    width:  "160px",
     render: (s) => (
       <div
         className="text-[13px] font-medium truncate"
-        style={{ color: "var(--gray-800)", maxWidth: 108 }}
+        style={{ color: "var(--gray-800)", maxWidth: 128 }}
         title={s.cliente}
       >
         {s.cliente}
@@ -111,29 +90,16 @@ export const COLUMNS: Column<Solicitud>[] = [
     ),
   },
   {
-    key: "solicitante",
-    header: "Solicitante",
-    width: "110px",
-    render: (s) => (
-      <div
-        className="text-[12px] truncate"
-        style={{ color: s.solicitante ? "var(--gray-700)" : "var(--gray-300)", maxWidth: 78 }}
-        title={s.solicitante ?? undefined}
-      >
-        {s.solicitante ?? "—"}
-      </div>
-    ),
-  },
-  {
-    key: "canal",
+    key:    "canal",
     header: "Canal",
-    width: "68px",
+    width:  "68px",
+    align:  "center",
     render: (s) => <CanalBadge canal={s.canal} />,
   },
   {
-    key: "agencia",
+    key:    "agencia",
     header: "Ubicación",
-    width: "110px",
+    width:  "110px",
     render: (s) => (
       <div
         className="text-[12px] truncate"
@@ -145,9 +111,9 @@ export const COLUMNS: Column<Solicitud>[] = [
     ),
   },
   {
-    key: "tipo_operacion",
+    key:    "tipo_operacion",
     header: "Tipo Servicio",
-    width: "92px",
+    width:  "92px",
     render: (s) => (
       <span
         className="text-[11px] font-semibold tracking-wide uppercase"
@@ -158,63 +124,28 @@ export const COLUMNS: Column<Solicitud>[] = [
     ),
   },
   {
-    key: "tipo_vehiculo",
-    header: "Tipo Vehículo",
-    width: "100px",
-    render: (s) => (
-      <div
-        className="text-[12px] truncate"
-        style={{ color: s.tipo_vehiculo ? "var(--gray-600)" : "var(--gray-300)", maxWidth: 68 }}
-        title={s.tipo_vehiculo || undefined}
-      >
-        {s.tipo_vehiculo || "—"}
-      </div>
-    ),
+    key:    "ruta",
+    header: "Ruta",
+    width:  "200px",
+    render: (s) => <RouteCell origin={s.origen} destination={s.destino} />,
   },
   {
-    key: "origen",
-    header: "Origen",
-    width: "96px",
-    render: (s) => (
-      <div
-        className="text-[12px] truncate"
-        style={{ color: s.origen ? "var(--gray-700)" : "var(--gray-300)", maxWidth: 64 }}
-        title={s.origen || undefined}
-      >
-        {s.origen || "—"}
-      </div>
-    ),
-  },
-  {
-    key: "destino",
-    header: "Destino",
-    width: "96px",
-    render: (s) => (
-      <div
-        className="text-[12px] truncate"
-        style={{ color: s.destino ? "var(--gray-700)" : "var(--gray-300)", maxWidth: 64 }}
-        title={s.destino || undefined}
-      >
-        {s.destino || "—"}
-      </div>
-    ),
-  },
-  {
-    key: "fecha_requerida",
+    key:    "fecha_requerida",
     header: "Cita Cargue",
-    width: "100px",
-    render: (s) => renderFechaHora(s.fecha_requerida),
+    width:  "100px",
+    render: (s) => <DateTimeCell iso={s.fecha_requerida} />,
   },
   {
-    key: "estado",
+    key:    "estado",
     header: "Estado",
-    width: "110px",
+    width:  "120px",
+    align:  "center",
     render: (s) => <EstadoBadge estado={s.estado} />,
   },
   {
-    key: "conductor_nombre",
+    key:    "conductor_nombre",
     header: "Responsable",
-    width: "100px",
+    width:  "100px",
     render: (_s) => (
       <span className="text-[12px]" style={{ color: "var(--gray-300)" }}>—</span>
     ),

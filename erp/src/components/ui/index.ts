@@ -9,3 +9,4 @@ export { SidePanel, PanelSection, InfoRow } from "./SidePanel";
 export { DateRangePicker } from "./DateRangePicker";
 export { FilterBar } from "./FilterBar";
 export type { SelectFilter } from "./FilterBar";
+export { DateTimeCell, CodeCell, RouteCell, StatusChip } from "./TableCells";

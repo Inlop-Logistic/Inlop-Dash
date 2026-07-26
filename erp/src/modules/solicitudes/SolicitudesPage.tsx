@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   RefreshCw,
-  Clock, CheckCircle, Truck, XCircle, ClipboardList, AlertCircle,
+  Clock, CheckCircle, Truck, ClipboardList, AlertCircle,
 } from "lucide-react";
 import { KpiCard, PageHeader, Card, DataTable, Button, FilterBar } from "@/components/ui";
 import type { SelectFilter } from "@/components/ui";
@@ -25,7 +25,6 @@ export function SolicitudesPage() {
     cargar, handleEstado,
   } = useSolicitudes();
 
-  // Estado visual de fechas — empieza vacío; la lógica interna del hook usa sus propios defaults.
   const [visualDesde, setVisualDesde] = useState("");
   const [visualHasta, setVisualHasta] = useState("");
 
@@ -83,12 +82,43 @@ export function SolicitudesPage() {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <KpiCard label="Recibidas"   value={kpis.recibidas}   icon={<ClipboardList className="w-4.5 h-4.5" />} color="#1D4ED8"      bg="#DBEAFE"  onClick={() => setTabEstado("todos")}      />
-        <KpiCard label="Pendientes"  value={kpis.pendientes}  icon={<Clock         className="w-4.5 h-4.5" />} color="#B45309"      bg="#FEF3C7"  onClick={() => setTabEstado("pendiente")}  />
-        <KpiCard label="En gestión"  value={kpis.enGestion}   icon={<Truck         className="w-4.5 h-4.5" />} color="var(--navy)"  bg="#DBEAFE"  onClick={() => setTabEstado("aprobado")}   />
-        <KpiCard label="Completadas" value={kpis.completadas} icon={<CheckCircle   className="w-4.5 h-4.5" />} color="#065F46"      bg="#D1FAE5"  onClick={() => setTabEstado("completado")} />
-        <KpiCard label="Canceladas"  value={kpis.canceladas}  icon={<XCircle       className="w-4.5 h-4.5" />} color="#9F1239"      bg="#FFE4E6"  onClick={() => setTabEstado("cancelado")}  />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KpiCard
+          label="Solicitudes"
+          subtitle="Total de solicitudes"
+          value={kpis.total}
+          icon={<ClipboardList className="w-4.5 h-4.5" />}
+          color="#1D4ED8"
+          bg="#DBEAFE"
+          onClick={() => setTabEstado("todos")}
+        />
+        <KpiCard
+          label="Pendientes"
+          subtitle="Pendientes por gestionar"
+          value={kpis.pendientes}
+          icon={<Clock className="w-4.5 h-4.5" />}
+          color="#B45309"
+          bg="#FEF3C7"
+          onClick={() => setTabEstado("pendiente")}
+        />
+        <KpiCard
+          label="En Ruta"
+          subtitle="Viajes activos"
+          value={kpis.enRuta}
+          icon={<Truck className="w-4.5 h-4.5" />}
+          color="var(--navy)"
+          bg="#DBEAFE"
+          onClick={() => setTabEstado("en_ruta")}
+        />
+        <KpiCard
+          label="Finalizadas"
+          subtitle="Servicios completados"
+          value={kpis.finalizadas}
+          icon={<CheckCircle className="w-4.5 h-4.5" />}
+          color="#065F46"
+          bg="#D1FAE5"
+          onClick={() => setTabEstado("completado")}
+        />
       </div>
 
       {/* Filtros */}

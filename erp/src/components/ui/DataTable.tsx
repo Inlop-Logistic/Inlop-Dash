@@ -6,6 +6,8 @@ export interface Column<T> {
   width?: string;
   /** Mantiene la columna fija durante el desplazamiento horizontal. */
   sticky?: boolean;
+  /** Alineación del contenido. Por defecto: left. Badges/estados: center. Acciones: right. */
+  align?: "left" | "center" | "right";
   render: (row: T) => ReactNode;
 }
 
@@ -45,7 +47,7 @@ export function DataTable<T>({
     );
   }
 
-  // Compute sticky left offsets: each sticky column's left = sum of preceding sticky column widths (border-box px).
+  // Sticky left offsets: suma acumulada de anchos de columnas pegajosas anteriores.
   const stickyLeftMap = new Map<number, number>();
   const lastStickyIdx = columns.reduce((last, col, i) => (col.sticky ? i : last), -1);
   if (lastStickyIdx >= 0) {
@@ -59,38 +61,44 @@ export function DataTable<T>({
   }
 
   function thStyle(col: Column<T>, i: number): CSSProperties {
-    const base: CSSProperties = { color: "var(--gray-400)", width: col.width };
+    const base: CSSProperties = {
+      color:     "var(--gray-600)",
+      width:     col.width,
+      textAlign: col.align ?? "left",
+      background: "var(--gray-50)",
+    };
     if (!col.sticky) return base;
     return {
       ...base,
       position: "sticky",
       left: stickyLeftMap.get(i) ?? 0,
       zIndex: 3,
-      background: "white",
-      ...(i === lastStickyIdx ? { boxShadow: "2px 0 6px -2px rgba(0,0,0,0.08)" } : {}),
+      ...(i === lastStickyIdx ? { boxShadow: "2px 0 6px -2px rgba(0,0,0,0.06)" } : {}),
     };
   }
 
   function tdStyle(col: Column<T>, i: number): CSSProperties {
-    if (!col.sticky) return {};
+    const base: CSSProperties = { textAlign: col.align ?? "left" };
+    if (!col.sticky) return base;
     return {
+      ...base,
       position: "sticky",
-      left: stickyLeftMap.get(i) ?? 0,
-      zIndex: 2,
-      background: "white",
-      ...(i === lastStickyIdx ? { boxShadow: "2px 0 6px -2px rgba(0,0,0,0.08)" } : {}),
+      left:     stickyLeftMap.get(i) ?? 0,
+      zIndex:   2,
+      background: "#fff",
+      ...(i === lastStickyIdx ? { boxShadow: "2px 0 6px -2px rgba(0,0,0,0.06)" } : {}),
     };
   }
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left min-w-[640px]">
-        <thead>
-          <tr style={{ borderBottom: "1px solid var(--gray-100)" }}>
+        <thead style={{ position: "sticky", top: 0, zIndex: 4 }}>
+          <tr style={{ borderBottom: "2px solid var(--gray-200)" }}>
             {columns.map((col, i) => (
               <th
                 key={col.key}
-                className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide whitespace-nowrap"
+                className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide whitespace-nowrap"
                 style={thStyle(col, i)}
               >
                 {col.header}
@@ -102,7 +110,7 @@ export function DataTable<T>({
           {rows.map((row) => (
             <tr
               key={rowKey(row)}
-              className={`transition-colors ${onRowClick ? "cursor-pointer hover:bg-gray-50" : ""}`}
+              className={`transition-colors ${onRowClick ? "cursor-pointer hover:bg-[var(--gray-50)]" : ""}`}
               style={{ borderBottom: "1px solid var(--gray-100)" }}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >

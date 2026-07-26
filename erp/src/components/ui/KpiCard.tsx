@@ -6,11 +6,13 @@ interface KpiCardProps {
   icon: ReactNode;
   color: string;
   bg: string;
+  /** Texto descriptivo opcional debajo del label principal. */
+  subtitle?: string;
   trend?: { value: number; label: string };
   onClick?: () => void;
 }
 
-export function KpiCard({ label, value, icon, color, bg, trend, onClick }: KpiCardProps) {
+export function KpiCard({ label, value, icon, color, bg, subtitle, trend, onClick }: KpiCardProps) {
   return (
     <div
       className={`bg-white rounded-2xl px-4 py-3.5 flex items-center gap-3 ${onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
@@ -27,9 +29,14 @@ export function KpiCard({ label, value, icon, color, bg, trend, onClick }: KpiCa
         <div className="font-bold text-[24px] leading-none" style={{ color: "var(--gray-800)" }}>
           {value}
         </div>
-        <div className="text-[11px] mt-0.5 truncate" style={{ color: "var(--gray-400)" }}>
+        <div className="text-[11px] mt-0.5 truncate font-semibold" style={{ color: "var(--gray-600)" }}>
           {label}
         </div>
+        {subtitle && (
+          <div className="text-[10px] mt-0.5 truncate" style={{ color: "var(--gray-400)" }}>
+            {subtitle}
+          </div>
+        )}
         {trend && (
           <div
             className="text-[10px] mt-0.5 font-medium"
