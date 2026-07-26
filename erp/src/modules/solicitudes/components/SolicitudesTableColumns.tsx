@@ -154,9 +154,9 @@ export const COLUMNS: Column<Solicitud>[] = [
     key:    "conductor_nombre",
     header: "Responsable",
     width:  "110px",
-    render: (s) => (
+    render: (_s) => (
       <span className="text-[12px]" style={{ color: "var(--gray-400)" }}>
-        {s.conductor_nombre ?? "Sin asignar"}
+        Sin asignar
       </span>
     ),
   },

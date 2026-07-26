@@ -73,7 +73,6 @@ export function DataTable<T>({
       position: "sticky",
       left: stickyLeftMap.get(i) ?? 0,
       zIndex: 3,
-      ...(i === lastStickyIdx ? { boxShadow: "2px 0 6px -2px rgba(0,0,0,0.06)" } : {}),
     };
   }
 
@@ -86,7 +85,6 @@ export function DataTable<T>({
       left:     stickyLeftMap.get(i) ?? 0,
       zIndex:   2,
       background: "#fff",
-      ...(i === lastStickyIdx ? { boxShadow: "2px 0 6px -2px rgba(0,0,0,0.06)" } : {}),
     };
   }
 

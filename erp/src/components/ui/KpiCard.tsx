@@ -12,7 +12,7 @@ interface KpiCardProps {
   onClick?: () => void;
 }
 
-export function KpiCard({ label, value, icon, color, bg, subtitle, trend, onClick }: KpiCardProps) {
+export function KpiCard({ label, value, icon, color, bg, trend, onClick }: KpiCardProps) {
   return (
     <div
       className={`bg-white rounded-2xl px-4 py-3 flex items-center gap-2.5 ${onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
@@ -34,11 +34,6 @@ export function KpiCard({ label, value, icon, color, bg, subtitle, trend, onClic
         <div className="text-[11px] mt-1 truncate font-semibold" style={{ color: "var(--gray-600)" }}>
           {label}
         </div>
-        {subtitle && (
-          <div className="text-[10px] mt-0.5 truncate" style={{ color: "var(--gray-400)" }}>
-            {subtitle}
-          </div>
-        )}
         {trend && (
           <div
             className="text-[10px] mt-0.5 font-medium"
