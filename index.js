@@ -1498,7 +1498,7 @@ async function syncSolicitudes() {
       const tripNums = [...new Set(pendVerif.map(p => p.controlt_trip_number))];
       const idsStr   = tripNums.map(encodeURIComponent).join(',');
       const finalizados = await sbFetch(
-        `/cumplidos?id=in.(${idsStr})&estado_cumplido=eq.FINALIZADO CONTROLT&select=id,estado_cumplido,estado_controlt`
+        `/cumplidos?id=in.(${idsStr})&estado_cumplido=eq.FINALIZADO%20CONTROLT&select=id,estado_cumplido,estado_controlt`
       ) || [];
       const finalizadosSet = new Map(finalizados.map(c => [c.id, c]));
       for (const { sol: pSol, controlt_trip_number: tripNum } of pendVerif) {
