@@ -1,6 +1,6 @@
 import type { EstadoGps } from "./types";
 
-export const REFRESH_INTERVAL_MS = 60_000;
+export const REFRESH_INTERVAL_MS = 15_000;
 
 export const ESTADO_GPS_CFG: Record<EstadoGps, {
   label:    string;

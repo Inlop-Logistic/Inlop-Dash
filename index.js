@@ -981,6 +981,7 @@ app.get('/api/gps', requireInternalApiKey, (req, res) => {
         estadoGps:                derivarEstadoGps(v),
       };
     });
+  res.set('Cache-Control', 'no-store');
   res.json(vehiculos);
 });
 
