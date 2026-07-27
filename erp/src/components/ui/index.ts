@@ -6,3 +6,7 @@ export { PageHeader } from "./PageHeader";
 export { DataTable } from "./DataTable";
 export type { Column } from "./DataTable";
 export { SidePanel, PanelSection, InfoRow } from "./SidePanel";
+export { DateRangePicker } from "./DateRangePicker";
+export { FilterBar } from "./FilterBar";
+export type { SelectFilter } from "./FilterBar";
+export { DateTimeCell, CodeCell, RouteCell, StatusChip } from "./TableCells";

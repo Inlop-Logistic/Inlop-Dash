@@ -20,6 +20,8 @@ export interface Solicitud {
   destino: string;
   fecha_requerida: string;
   estado: EstadoSolicitud;
+  /** Conductor/responsable asignado cuando hay viaje vinculado en ControlT. */
+  conductor_nombre: string | null;
 }
 
 export interface HistorialEstado {
@@ -50,4 +52,14 @@ export interface SolicitudDetalle extends Solicitud {
   fecha_fin_ruta: string | null;
   notas: string | null;
   distancia_km: number | null;
+  // Campos adicionales del detalle enriquecido
+  controlt_trip_number: string | null;
+  pct: number | null;
+  fecha_confirmacion: string | null;
+  fecha_cancelacion: string | null;
+  fecha_programada: string | null;
+  // Disponibilidad en módulos relacionados
+  in_programacion: boolean;
+  in_viajes:       boolean;
+  in_cumplidos:    boolean;
 }

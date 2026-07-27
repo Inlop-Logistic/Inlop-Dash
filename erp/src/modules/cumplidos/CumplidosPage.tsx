@@ -1,10 +1,11 @@
 import { useEffect, useRef } from "react";
 import {
-  RefreshCw, Search, ClipboardCheck, Clock, AlertCircle,
-  CheckCircle2, FileStack, Truck, Receipt, Banknote, Trash2,
+  RefreshCw, ClipboardCheck, Clock, AlertCircle,
+  CheckCircle2, FileStack, Truck, Receipt, Banknote,
   ChevronFirst, ChevronLast, ChevronLeft, ChevronRight,
 } from "lucide-react";
-import { KpiCard, PageHeader, Card, DataTable, Button } from "@/components/ui";
+import { KpiCard, PageHeader, Card, DataTable, Button, FilterBar } from "@/components/ui";
+import type { SelectFilter } from "@/components/ui";
 import { useNavigationContext } from "@/core/navigation";
 import { useCumplidos } from "./hooks/useCumplidos";
 import { DetalleCumplido } from "./components/DetalleCumplido";
@@ -20,8 +21,7 @@ export function CumplidosPage() {
     tabActivo, setTabActivo,
     lineaNegocioFiltro, setLineaNegocioFiltro,
     clienteFiltro, setClienteFiltro,
-    desde, setDesde,
-    hasta, setHasta,
+    fechaDesde, fechaHasta, setFechaRango,
     filtradas, paginadas, kpis, clientes,
     pagina, setPagina,
     tamPagina, setTamPagina,
@@ -47,6 +47,29 @@ export function CumplidosPage() {
   const start = filtradas.length === 0 ? 0 : (pagina - 1) * tamPagina + 1;
   const end   = Math.min(pagina * tamPagina, filtradas.length);
 
+  const selects: SelectFilter[] = [
+    {
+      value:       lineaNegocioFiltro,
+      onChange:    setLineaNegocioFiltro,
+      placeholder: "Todas las líneas",
+      ariaLabel:   "Filtrar por línea de negocio",
+      minWidth:    160,
+      options:     [
+        { value: "Carga Líquida", label: "Carga Líquida" },
+        { value: "Carga Seca",    label: "Carga Seca"    },
+      ],
+    },
+    {
+      value:       clienteFiltro,
+      onChange:    setClienteFiltro,
+      placeholder: "Todos los clientes",
+      ariaLabel:   "Filtrar por cliente",
+      minWidth:    180,
+      show:        clientes.length > 0,
+      options:     clientes.map((c) => ({ value: c, label: c })),
+    },
+  ];
+
   return (
     <div className="p-6 flex flex-col gap-5">
 
@@ -68,145 +91,28 @@ export function CumplidosPage() {
         }
       />
 
-      {/* KPIs — calculados sobre el conjunto filtrado activo */}
+      {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KpiCard
-          label="Total Servicios"
-          value={kpis.total}
-          icon={<FileStack className="w-4.5 h-4.5" />}
-          color={KPI_COLORS.total.color}
-          bg={KPI_COLORS.total.bg}
-          onClick={() => setTabActivo("todos")}
-        />
-        <KpiCard
-          label="Pendientes"
-          value={kpis.pendientes}
-          icon={<Clock className="w-4.5 h-4.5" />}
-          color={KPI_COLORS.pendientes.color}
-          bg={KPI_COLORS.pendientes.bg}
-        />
-        <KpiCard
-          label="Finalizados"
-          value={kpis.finalizados}
-          icon={<CheckCircle2 className="w-4.5 h-4.5" />}
-          color={KPI_COLORS.finalizados.color}
-          bg={KPI_COLORS.finalizados.bg}
-        />
-        <KpiCard
-          label="Cumplidos"
-          value={kpis.cumplidos}
-          icon={<Truck className="w-4.5 h-4.5" />}
-          color={KPI_COLORS.cumplidos.color}
-          bg={KPI_COLORS.cumplidos.bg}
-          onClick={() => setTabActivo("validados")}
-        />
-        <KpiCard
-          label="Liquidados"
-          value={kpis.liquidados}
-          icon={<Receipt className="w-4.5 h-4.5" />}
-          color={KPI_COLORS.liquidados.color}
-          bg={KPI_COLORS.liquidados.bg}
-          onClick={() => setTabActivo("listosFacturacion")}
-        />
-        <KpiCard
-          label="Facturados"
-          value={kpis.facturados}
-          icon={<Banknote className="w-4.5 h-4.5" />}
-          color={KPI_COLORS.facturados.color}
-          bg={KPI_COLORS.facturados.bg}
-        />
+        <KpiCard label="Total Servicios" value={kpis.total}       icon={<FileStack   className="w-4.5 h-4.5" />} color={KPI_COLORS.total.color}       bg={KPI_COLORS.total.bg}       onClick={() => setTabActivo("todos")}            />
+        <KpiCard label="Pendientes"      value={kpis.pendientes}  icon={<Clock       className="w-4.5 h-4.5" />} color={KPI_COLORS.pendientes.color}  bg={KPI_COLORS.pendientes.bg}  />
+        <KpiCard label="Finalizados"     value={kpis.finalizados} icon={<CheckCircle2 className="w-4.5 h-4.5" />} color={KPI_COLORS.finalizados.color} bg={KPI_COLORS.finalizados.bg} />
+        <KpiCard label="Cumplidos"       value={kpis.cumplidos}   icon={<Truck       className="w-4.5 h-4.5" />} color={KPI_COLORS.cumplidos.color}   bg={KPI_COLORS.cumplidos.bg}   onClick={() => setTabActivo("validados")}        />
+        <KpiCard label="Liquidados"      value={kpis.liquidados}  icon={<Receipt     className="w-4.5 h-4.5" />} color={KPI_COLORS.liquidados.color}  bg={KPI_COLORS.liquidados.bg}  onClick={() => setTabActivo("listosFacturacion")} />
+        <KpiCard label="Facturados"      value={kpis.facturados}  icon={<Banknote    className="w-4.5 h-4.5" />} color={KPI_COLORS.facturados.color}  bg={KPI_COLORS.facturados.bg}  />
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Fecha Desde */}
-        <div className="flex items-center gap-2">
-          <label htmlFor="cumplidos-filtro-desde" className="text-[12px] font-medium whitespace-nowrap" style={{ color: "var(--gray-500)" }}>Desde</label>
-          <input
-            id="cumplidos-filtro-desde"
-            type="date"
-            value={desde}
-            onChange={(e) => setDesde(e.target.value)}
-            className="text-[13px] outline-none"
-            style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "7px 12px", color: "var(--gray-700)", background: "#fff" }}
-          />
-        </div>
-
-        {/* Fecha Hasta */}
-        <div className="flex items-center gap-2">
-          <label htmlFor="cumplidos-filtro-hasta" className="text-[12px] font-medium whitespace-nowrap" style={{ color: "var(--gray-500)" }}>Hasta</label>
-          <input
-            id="cumplidos-filtro-hasta"
-            type="date"
-            value={hasta}
-            onChange={(e) => setHasta(e.target.value)}
-            className="text-[13px] outline-none"
-            style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "7px 12px", color: "var(--gray-700)", background: "#fff" }}
-          />
-        </div>
-
-        {/* Búsqueda */}
-        <div className="flex-1 min-w-[220px] relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "var(--gray-400)" }} />
-          <input
-            type="text"
-            value={busqueda}
-            aria-label="Buscar viajes finalizados"
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Viaje, conductor, cliente…"
-            className="w-full text-[13px] outline-none"
-            style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "8px 12px 8px 36px", color: "var(--gray-700)", background: "#fff" }}
-          />
-        </div>
-
-        {/* Filtro Línea de Negocio */}
-        <select
-          value={lineaNegocioFiltro}
-          onChange={(e) => setLineaNegocioFiltro(e.target.value)}
-          aria-label="Filtrar por línea de negocio"
-          className="text-[13px] outline-none"
-          style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "8px 12px", color: "var(--gray-700)", background: "#fff", minWidth: 160 }}
-        >
-          <option value="">Todas las líneas</option>
-          <option value="Carga Líquida">Carga Líquida</option>
-          <option value="Carga Seca">Carga Seca</option>
-        </select>
-
-        {/* Filtro Cliente */}
-        {clientes.length > 0 && (
-          <select
-            value={clienteFiltro}
-            onChange={(e) => setClienteFiltro(e.target.value)}
-            aria-label="Filtrar por cliente"
-            className="text-[13px] outline-none"
-            style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "8px 12px", color: "var(--gray-700)", background: "#fff", minWidth: 180 }}
-          >
-            <option value="">Todos los clientes</option>
-            {clientes.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        )}
-
-        {/* Botón Limpiar Filtros */}
-        <button
-          type="button"
-          onClick={limpiarFiltros}
-          disabled={!hayFiltros}
-          aria-label="Limpiar todos los filtros"
-          title="Limpiar filtros"
-          className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-2 rounded-xl transition-colors"
-          style={{
-            border:     `1.5px solid ${hayFiltros ? "var(--inlop-red)" : "var(--gray-100)"}`,
-            color:      hayFiltros ? "var(--inlop-red)" : "var(--gray-300)",
-            background: hayFiltros ? "#FFF1F2"           : "var(--gray-50)",
-            cursor:     hayFiltros ? "pointer"           : "not-allowed",
-          }}
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-          Limpiar
-        </button>
-      </div>
+      <FilterBar
+        busqueda={busqueda}
+        onBusqueda={setBusqueda}
+        searchPlaceholder="Viaje, conductor, cliente…"
+        selects={selects}
+        fechaDesde={fechaDesde}
+        fechaHasta={fechaHasta}
+        onFechaRango={setFechaRango}
+        hayFiltros={hayFiltros}
+        onLimpiar={limpiarFiltros}
+      />
 
       {/* Tabs */}
       <div className="flex items-center gap-1.5 flex-wrap" role="tablist">

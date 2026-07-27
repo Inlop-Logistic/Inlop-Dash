@@ -6,6 +6,8 @@ interface KpiCardProps {
   icon: ReactNode;
   color: string;
   bg: string;
+  /** Texto descriptivo opcional debajo del label principal. */
+  subtitle?: string;
   trend?: { value: number; label: string };
   onClick?: () => void;
 }
@@ -13,21 +15,23 @@ interface KpiCardProps {
 export function KpiCard({ label, value, icon, color, bg, trend, onClick }: KpiCardProps) {
   return (
     <div
-      className={`bg-white rounded-2xl px-4 py-3.5 flex items-center gap-3 ${onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
+      className={`bg-white rounded-2xl px-4 py-3 flex items-center gap-2.5 ${onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
       style={{ border: "1px solid var(--gray-100)", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}
       onClick={onClick}
     >
+      {/* Icono compacto — protagonismo reducido frente al número */}
       <div
-        className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
+        className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0"
         style={{ background: bg, color }}
       >
         {icon}
       </div>
       <div className="min-w-0">
-        <div className="font-bold text-[24px] leading-none" style={{ color: "var(--gray-800)" }}>
+        {/* Número — protagonista principal */}
+        <div className="font-bold text-[26px] leading-none" style={{ color: "var(--gray-800)" }}>
           {value}
         </div>
-        <div className="text-[11px] mt-0.5 truncate" style={{ color: "var(--gray-400)" }}>
+        <div className="text-[11px] mt-1 truncate font-semibold" style={{ color: "var(--gray-600)" }}>
           {label}
         </div>
         {trend && (

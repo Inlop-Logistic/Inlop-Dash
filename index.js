@@ -5,6 +5,7 @@ import { publishBusinessEvent } from './services/notificationOrchestrator.js';
 import { buildLookupMap, normalizeClient, resolveCustomer, resolveTrip, isPlaceholderTmsCustomer } from './services/customerResolver.js';
 import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } from './services/authScope.js';
 import { getUserPreferences, updatePreference, KNOWN_CHANNELS } from './services/preferenceResolver.js';
+import { normalizeExternalRef } from './services/normalizeExternalRef.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -1096,6 +1097,7 @@ app.get('/api/solicitudes/:id', requireInternalApiKey, async (req, res) => {
       'placa_asignada','conductor_nombre','conductor_tel',
       'controlt_trip_number','canal',
       'fecha_confirmacion','fecha_inicio_real','fecha_fin_real',
+      'manifiesto','pct','fecha_cancelacion',
     ].join(',');
 
     const sols = await sbFetch(
@@ -1132,6 +1134,23 @@ app.get('/api/solicitudes/:id', requireInternalApiKey, async (req, res) => {
           `/cumplidos?id=eq.${encodeURIComponent(tripNum)}&select=id,placa,conductor,conductor_tel,fecha_viaje,fecha_finalizacion&limit=1`
         ) || [];
         cumplido = cs[0] || null;
+      }
+    }
+
+    // Buscar fecha programada en planeados (schedulate_origin → ISO) + validar existencia
+    let fechaProgramada  = null;
+    let inProgramacion   = false;
+    if (sol.controlt_trip_number) {
+      const planeadosRows = await sbFetch(
+        `/planeados?trip_number=eq.${encodeURIComponent(sol.controlt_trip_number)}&select=schedulate_origin&limit=1`
+      ) || [];
+      inProgramacion = planeadosRows.length > 0;
+      const rawSched = planeadosRows[0]?.schedulate_origin ?? null;
+      if (rawSched) {
+        const m = String(rawSched).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+        fechaProgramada = m
+          ? `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}T${m[4]}:${m[5]}:00`
+          : null;
       }
     }
 
@@ -1172,6 +1191,16 @@ app.get('/api/solicitudes/:id', requireInternalApiKey, async (req, res) => {
       fecha_fin_ruta:     cumplido?.fecha_finalizacion || sol.fecha_fin_real    || null,
       notas:              sol.observacion_coordinadora || null,
       distancia_km:       null,
+      // Campos adicionales para el detalle de solicitud
+      controlt_trip_number: sol.controlt_trip_number || null,
+      pct:                  sol.pct                  ?? null,
+      fecha_confirmacion:   sol.fecha_confirmacion   || null,
+      fecha_cancelacion:    sol.fecha_cancelacion    || null,
+      fecha_programada:     fechaProgramada,
+      // Disponibilidad en módulos relacionados (para habilitar botones de conexión)
+      in_programacion: inProgramacion,
+      in_viajes:       viaje   !== null,
+      in_cumplidos:    cumplido !== null,
     });
   } catch(e) {
     console.error('❌ GET /api/solicitudes/:id:', e.message);
@@ -1370,6 +1399,7 @@ async function syncSolicitudes() {
     const orphanCutoff = new Date(Date.now() - ORPHAN_HOURS * 3600 * 1000).toISOString();
     const updates      = [];
     const insertsNotif = [];
+    const pendVerif    = []; // trip_numbers ausentes de /Resume — se verifican contra cumplidos
 
     for (const sol of solicitudes) {
       const { id, codigo_solicitud, external_ref, estado, controlt_trip_number,
@@ -1436,7 +1466,7 @@ async function syncSolicitudes() {
             updates.push({ id, fields: { estado_controlt: (vR.state_travel||'').toLowerCase().trim(), ultima_actualizacion_controlt: ahora } });
           }
         } else if (controlt_trip_number) {
-          console.log(`⏸ [syncSolicitudes] ${codigo_solicitud}: trip ${controlt_trip_number} ausente de /Resume — estado mantenido: ${estado}`);
+          pendVerif.push({ sol, controlt_trip_number });
         } else {
           console.warn(`⚠️ [syncSolicitudes] ${codigo_solicitud}: confirmado sin controlt_trip_number`);
         }
@@ -1464,7 +1494,33 @@ async function syncSolicitudes() {
             updates.push({ id, fields: keepFresh });
           }
         } else if (controlt_trip_number) {
-          console.log(`⏸ [syncSolicitudes] ${codigo_solicitud}: trip ${controlt_trip_number} ausente de /Resume — estado mantenido: ${estado}`);
+          pendVerif.push({ sol, controlt_trip_number });
+        }
+      }
+    }
+
+    // pendVerif: trips ausentes de /Resume — verificar en cumplidos si ya fueron finalizados
+    if (pendVerif.length > 0) {
+      const tripNums = [...new Set(pendVerif.map(p => p.controlt_trip_number))];
+      const idsStr   = tripNums.map(encodeURIComponent).join(',');
+      const finalizados = await sbFetch(
+        `/cumplidos?id=in.(${idsStr})&estado_cumplido=eq.FINALIZADO%20CONTROLT&select=id,estado_cumplido,estado_controlt`
+      ) || [];
+      const finalizadosSet = new Map(finalizados.map(c => [c.id, c]));
+      for (const { sol: pSol, controlt_trip_number: tripNum } of pendVerif) {
+        const cumplido = finalizadosSet.get(tripNum);
+        if (cumplido) {
+          console.log(`✅ [pendVerif] ${pSol.codigo_solicitud}: trip ${tripNum} → FINALIZADO CONTROLT en cumplidos — cerrando solicitud como completado`);
+          updates.push({ id: pSol.id, fields: {
+            estado:                        'completado',
+            estado_controlt:               'finalizado controlt',
+            ultima_actualizacion_controlt: ahora,
+            pct:                           100,
+            fecha_fin_real:                ahora,
+          }});
+          insertsNotif.push(..._notifs(pSol, 'completado', {}, pSol.estado));
+        } else {
+          console.log(`⏸ [pendVerif] ${pSol.codigo_solicitud}: trip ${tripNum} ausente de /Resume y de cumplidos finalizados — estado mantenido: ${pSol.estado}`);
         }
       }
     }
@@ -2524,6 +2580,35 @@ serviciosRouter.post('/', async (req, res) => {
     const n = lastCode?.startsWith('SOL-') ? parseInt(lastCode.slice(4), 10) : 0;
     const codigo_solicitud = 'SOL-' + String((isNaN(n) ? 0 : n) + 1).padStart(5, '0');
 
+    const normalizedRef = normalizeExternalRef(tipo_vehiculo, external_ref);
+
+    // Validar duplicado de external_ref entre solicitudes activas de la misma empresa.
+    // ESTADOS_ACTIVOS usa los nombres de BD (pendiente, confirmado, en_ruta).
+    // "confirmado" es cómo la BD almacena el estado que la API expone como "aprobado".
+    // "programado" no existe en este sistema — no incluir.
+    if (normalizedRef) {
+      const ESTADOS_ACTIVOS_DB  = ['pendiente', 'confirmado', 'en_ruta'];
+      const ESTADO_LABEL_CLIENTE = {
+        pendiente:  'Pendiente',
+        confirmado: 'Aprobado',
+        en_ruta:    'En Ruta',
+      };
+      const estadosFilter = ESTADOS_ACTIVOS_DB.join(',');
+      const duplicados = await sbFetch(
+        `/solicitudes?empresa_cliente_id=eq.${encodeURIComponent(req.empresaId)}&external_ref=eq.${encodeURIComponent(normalizedRef)}&estado=in.(${estadosFilter})&select=codigo_solicitud,estado&limit=1`
+      ) || [];
+      if (duplicados.length > 0) {
+        const dup = duplicados[0];
+        const estadoLabel = ESTADO_LABEL_CLIENTE[dup.estado] || dup.estado;
+        const estadoApi   = dup.estado === 'confirmado' ? 'aprobado' : dup.estado;
+        return res.status(409).json({
+          error: `Ya existe una Solicitud activa con esta Referencia Externa. Solicitud: ${dup.codigo_solicitud} — Estado: ${estadoLabel}. Si corresponde a un nuevo servicio, utilice una Referencia Externa diferente.`,
+          codigo_solicitud: dup.codigo_solicitud,
+          estado:           estadoApi,
+        });
+      }
+    }
+
     const row = {
       codigo_solicitud,
       empresa_cliente_id: req.empresaId,
@@ -2534,7 +2619,7 @@ serviciosRouter.post('/', async (req, res) => {
       destino:            destino        || null,
       agencia_id:         agencia_id     || null,
       agencia_nombre:     agencia_nombre || null,
-      external_ref:       external_ref   || null,
+      external_ref:       normalizedRef,
       fecha_requerida,
       observacion_coordinadora: observaciones || null,
       estado:    'pendiente',
@@ -2585,9 +2670,22 @@ serviciosRouter.patch('/:id', async (req, res) => {
     if (observaciones)   patch.observacion_coordinadora = observaciones;
     if (origen)          patch.origen                   = origen;
     if (destino)         patch.destino                  = destino;
-    if (tipo_vehiculo)   patch.tipo_vehiculo             = tipo_vehiculo;
-    if (tipo_operacion)  patch.tipo_operacion            = tipo_operacion;
-    if (external_ref !== undefined) patch.external_ref  = external_ref || null;
+    if (tipo_vehiculo)   patch.tipo_vehiculo  = tipo_vehiculo;
+    if (tipo_operacion)  patch.tipo_operacion = tipo_operacion;
+
+    // Mantener tipo_vehiculo y external_ref como unidad lógica.
+    // Cuando el tipo cambia (con o sin nueva ref), se quita el prefijo viejo
+    // y se aplica el nuevo, sin acumular: NHR-TO-234 + NKR → NKR-TO-234.
+    if (external_ref !== undefined || (tipo_vehiculo && sol.external_ref)) {
+      const efectiveTipo = tipo_vehiculo || sol.tipo_vehiculo;
+      const efectivoRef  = external_ref !== undefined ? external_ref : sol.external_ref;
+      const oldPfx = (sol.tipo_vehiculo || '').trim().toUpperCase()
+        .replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+      const payload = (oldPfx && (efectivoRef || '').toUpperCase().startsWith(oldPfx + '-'))
+        ? efectivoRef.slice(oldPfx.length + 1)
+        : efectivoRef;
+      patch.external_ref = normalizeExternalRef(efectiveTipo, payload);
+    }
 
     if (Object.keys(patch).length === 0) {
       return res.json(mapSolicitud(sol));

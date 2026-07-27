@@ -53,3 +53,15 @@ export function fmtDDMMYYYY(iso: string | null | undefined): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
+
+/** Separa un ISO timestamp en { fecha: DD/MM/YYYY, hora: HH:mm } — para celdas de doble línea. */
+export function splitISO(iso: string | null | undefined): { fecha: string; hora: string } {
+  if (!iso) return { fecha: "—", hora: "" };
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return { fecha: "—", hora: "" };
+  const p = (n: number) => String(n).padStart(2, "0");
+  return {
+    fecha: `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`,
+    hora:  `${p(d.getHours())}:${p(d.getMinutes())}`,
+  };
+}

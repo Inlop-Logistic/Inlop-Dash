@@ -1,9 +1,13 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 export interface Column<T> {
   key: string;
   header: string;
   width?: string;
+  /** Mantiene la columna fija durante el desplazamiento horizontal. */
+  sticky?: boolean;
+  /** Alineación del contenido. Por defecto: left. Badges/estados: center. Acciones: right. */
+  align?: "left" | "center" | "right";
   render: (row: T) => ReactNode;
 }
 
@@ -43,32 +47,76 @@ export function DataTable<T>({
     );
   }
 
+  // Sticky left offsets: suma acumulada de anchos de columnas pegajosas anteriores.
+  const stickyLeftMap = new Map<number, number>();
+  const lastStickyIdx = columns.reduce((last, col, i) => (col.sticky ? i : last), -1);
+  if (lastStickyIdx >= 0) {
+    let cumLeft = 0;
+    columns.forEach((col, i) => {
+      if (col.sticky) {
+        stickyLeftMap.set(i, cumLeft);
+        cumLeft += parseInt(col.width ?? "0", 10);
+      }
+    });
+  }
+
+  function thStyle(col: Column<T>, i: number): CSSProperties {
+    const base: CSSProperties = {
+      color:      "var(--gray-600)",
+      width:      col.width,
+      textAlign:  col.align ?? "left",
+      background: "var(--gray-50)",
+    };
+    if (!col.sticky) return base;
+    return {
+      ...base,
+      position: "sticky",
+      left: stickyLeftMap.get(i) ?? 0,
+      zIndex: 3,
+    };
+  }
+
+  function tdStyle(col: Column<T>, i: number): CSSProperties {
+    const base: CSSProperties = { textAlign: col.align ?? "left" };
+    if (!col.sticky) return base;
+    return {
+      ...base,
+      position: "sticky",
+      left:     stickyLeftMap.get(i) ?? 0,
+      zIndex:   2,
+      background: "#fff",
+    };
+  }
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left min-w-[640px]">
-        <thead>
-          <tr style={{ borderBottom: "1px solid var(--gray-100)" }}>
-            {columns.map((col) => (
+
+        {/* Header — fondo var(--gray-50), borde inferior 2px, texto var(--gray-600) */}
+        <thead style={{ position: "sticky", top: 0, zIndex: 4 }}>
+          <tr style={{ borderBottom: "2px solid var(--gray-200)" }}>
+            {columns.map((col, i) => (
               <th
                 key={col.key}
-                className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide whitespace-nowrap"
-                style={{ color: "var(--gray-400)", width: col.width }}
+                className="px-4 py-3 text-[11px] font-semibold uppercase tracking-widest whitespace-nowrap"
+                style={thStyle(col, i)}
               >
                 {col.header}
               </th>
             ))}
           </tr>
         </thead>
+
         <tbody>
           {rows.map((row) => (
             <tr
               key={rowKey(row)}
-              className={`transition-colors ${onRowClick ? "cursor-pointer hover:bg-gray-50" : ""}`}
+              className={`transition-colors ${onRowClick ? "cursor-pointer hover:bg-[var(--gray-100)]" : ""}`}
               style={{ borderBottom: "1px solid var(--gray-100)" }}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >
-              {columns.map((col) => (
-                <td key={col.key} className="px-4 py-3">
+              {columns.map((col, i) => (
+                <td key={col.key} className="px-4 py-3.5" style={tdStyle(col, i)}>
                   {col.render(row)}
                 </td>
               ))}
