@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { hoy, hace7dias } from "@/utils/date";
+import { hoy, hace7dias, extraerFechaColombia } from "@/utils/date";
 import type { Solicitud, ActorAccion } from "../types";
 import { getSolicitudes, cambiarEstadoSolicitud } from "../services/api";
 import { useFiltrosComunes } from "@/hooks/useFiltrosComunes";
@@ -69,7 +69,7 @@ export function useSolicitudes() {
 
       // Filtro de fecha (client-side; solo activo cuando el usuario aplica un rango)
       if (fechaDesde || fechaHasta) {
-        const vFecha = s.creado_en?.slice(0, 10) ?? "";
+        const vFecha = s.creado_en ? extraerFechaColombia(new Date(s.creado_en)) : "";
         if (fechaDesde && vFecha < fechaDesde) return false;
         if (fechaHasta && vFecha > fechaHasta) return false;
       }

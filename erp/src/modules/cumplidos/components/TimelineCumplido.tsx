@@ -84,7 +84,7 @@ export function TimelineCumplido({ cumplido }: { cumplido: CumplidoRecord }) {
           icon={<Truck className="w-3 h-3" />}
           label="Viaje finalizado"
           sublabel="Servicio completado en la plataforma de monitoreo"
-          timestamp={fmtTms(cumplido.activated_on, "DMY")}
+          timestamp={fmtTms(cumplido.activated_on, "MDY")}
           status="completed"
         />
         <TLItem

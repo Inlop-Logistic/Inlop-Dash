@@ -3,14 +3,15 @@ import type { TmsViaje, KpisViaje } from "../types";
 import type { TabViajes } from "../constants";
 import { ESTADOS_ACTIVOS, ESTADOS_FINALIZADOS, REFRESH_INTERVAL_MS, tabCount } from "../constants";
 import { listarViajes } from "../services/api";
-import { parseFechaMDY } from "@/utils/parseFecha";
+import { parseFechaTMS } from "@/utils/parseFecha";
+import { extraerFechaColombia } from "@/utils/date";
 import { useFiltrosComunes } from "@/hooks/useFiltrosComunes";
 
-/** Extrae YYYY-MM-DD de un activated_on en formato MM/DD/YYYY HH:MM:SS. */
+/** Extrae YYYY-MM-DD Colombia de activated_on (MDY: MM/DD/YYYY HH:MM:SS). RESUELVE H-06. */
 function toDateISO(activated_on: string | null): string | null {
-  const d = parseFechaMDY(activated_on);
+  const d = parseFechaTMS(activated_on, 'MDY');
   if (!d) return null;
-  return d.toISOString().slice(0, 10);
+  return extraerFechaColombia(d);
 }
 
 export function useViajes() {

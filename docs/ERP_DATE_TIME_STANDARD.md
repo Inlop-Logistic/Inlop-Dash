@@ -707,27 +707,36 @@ la misma sesión de trabajo.
 **Acción:** Reemplazar la implementación de `hoy()` por `fechaHoyColombia()`.
 Dado que `hace7dias()` usa el mismo patrón, corregir ambas en la misma intervención.
 
-### Fase 3 — Alta prioridad (integridad de datos y GPS)
+### ✅ Fase 3 — Alta prioridad (integridad de datos y GPS) — COMPLETADA
 
-| Hallazgo | Descripción | Archivo | Líneas |
-|---|---|---|---|
-| **H-04** | `parseSchedulate` interpreta hora Colombia como UTC en servidor | `index.js` | 240–246 |
-| **H-05** | `derivarEstadoGps` muestra unidades activas como desconectadas | `index.js` | 549–578 |
+| Hallazgo | Descripción | Archivo | Líneas | Estado |
+|---|---|---|---|---|
+| **H-04** | `parseSchedulate` interpreta hora Colombia como UTC en servidor | `index.js` | 240–246 | ✅ CORREGIDO |
+| **H-05** | `derivarEstadoGps` muestra unidades activas como desconectadas | `index.js` | 549–578 | ✅ CORREGIDO |
 
-**Acción:** Crear `parseFechaTMS` en el backend con sufijo `−05:00` explícito.
-Reemplazar `parseSchedulate` y la versión backend de `parseFechaMDY`. Refactorizar
-`derivarEstadoGps` para usar la nueva función.
+**Acción ejecutada:**
+- Creada `parseFechaTMS(str, formato)` en `utils/fechas.js` y `erp/src/utils/parseFecha.ts` con offset `−05:00` explícito.
+- Creada `extraerFechaColombia(date)` en `utils/fechas.js` y ya existía en `erp/src/utils/date.ts`.
+- `parseSchedulate` convertida en wrapper de `parseFechaTMS('DMY')` — eliminada implementación UTC.
+- `parseFechaMDY` backend convertida en wrapper de `parseFechaTMS('MDY')` — eliminada implementación UTC.
+- Definición local de `parseSchedulate` dentro de `/api/pendientes` eliminada.
+- Las tres ocurrencias de `f.toISOString().slice(0, 10)` en sync reemplazadas por `extraerFechaColombia(f)`.
+- `parseFechaMDY` y `parseFechaDMY` frontend convertidas en wrappers `@deprecated`.
+- `gpsRelativo` frontend actualizada para usar `parseFechaTMS('MDY')` internamente.
+- `fmtTms` frontend ahora declara `timeZone: 'America/Bogota'` explícitamente.
 
-### Fase 4 — Media prioridad (correcciones frontend de módulos)
+### ✅ Fase 4 — Media prioridad (correcciones frontend de módulos) — COMPLETADA
 
-| Hallazgo | Descripción | Archivo | Líneas |
-|---|---|---|---|
-| **H-06** | `toDateISO` reconvierte a UTC después de parseo local | `useViajes.ts` | 10–14 |
-| **H-07** | `TimelineCumplido` usa parser DMY sobre campo MDY | `TimelineCumplido.tsx` | 87, 100 |
-| **H-08** | Filtro client-side de Solicitudes usa `.slice(0,10)` sobre UTC | `useSolicitudes.ts` | 71–75 |
+| Hallazgo | Descripción | Archivo | Líneas | Estado |
+|---|---|---|---|---|
+| **H-06** | `toDateISO` reconvierte a UTC después de parseo local | `useViajes.ts` | 10–14 | ✅ CORREGIDO |
+| **H-07** | `TimelineCumplido` usa parser DMY sobre campo MDY | `TimelineCumplido.tsx` | 87 | ✅ CORREGIDO |
+| **H-08** | Filtro client-side de Solicitudes usa `.slice(0,10)` sobre UTC | `useSolicitudes.ts` | 71–75 | ✅ CORREGIDO |
 
-**Acción:** Tres correcciones puntuales en tres archivos distintos. Pueden ser parte
-de un mismo commit de "normalización de fechas frontend".
+**Acción ejecutada:**
+- H-06: `toDateISO` reemplazada por `parseFechaTMS(str, 'MDY')` + `extraerFechaColombia(d)`.
+- H-07: `fmtTms(cumplido.activated_on, "DMY")` corregida a `"MDY"`. Corregido comentario de documentación en `cumplidos/types.ts` (DMY → MDY).
+- H-08: `s.creado_en?.slice(0, 10)` reemplazada por `extraerFechaColombia(new Date(s.creado_en))`.
 
 ### Fase 5 — Estándar (prevención de regresiones futuras)
 
@@ -802,26 +811,26 @@ están corregidos y sus implementaciones de fecha cumplen los principios P-01 a 
 
 | Módulo | Archivo principal | Estado | Hallazgos activos | Fase de corrección |
 |---|---|---|---|---|
-| Utilidades de fecha | `erp/src/utils/date.ts` | ⏳ Pendiente de Normalización | H-01 | Fase 2 |
-| Utilidades de parseo | `erp/src/utils/parseFecha.ts` | ⏳ Pendiente de Normalización | H-06, H-07 (indirectos) | Fase 4 |
-| Solicitudes | `erp/src/modules/solicitudes/` | ⏳ Pendiente de Normalización | H-01 (indirecto), H-08 | Fases 2, 4 |
-| Programación | `erp/src/modules/programacion/` | ⏳ Pendiente de Normalización | H-01 (indirecto) | Fase 2 |
-| Viajes | `erp/src/modules/viajes/` | ⏳ Pendiente de Normalización | H-06 | Fase 4 |
-| Cumplidos | `erp/src/modules/cumplidos/` | ⏳ Pendiente de Normalización | H-07 | Fase 4 |
-| Centro GPS | `erp/src/modules/gps/` | ⏳ Pendiente de Normalización | H-05 (parcial, frontend correcto) | Fase 3 |
+| Utilidades de fecha | `erp/src/utils/date.ts` | ✅ NORMALIZADO | Ninguno | Fase 2 completada |
+| Utilidades de parseo | `erp/src/utils/parseFecha.ts` | ✅ NORMALIZADO | N-04 a N-08 (ver §16) | Fases 3–4 completadas |
+| Solicitudes | `erp/src/modules/solicitudes/` | ✅ NORMALIZADO | Ninguno | Fases 2, 4 completadas |
+| Programación | `erp/src/modules/programacion/` | ⏳ N-04, N-05 pendientes | N-04 (`schedulateToISO`), N-05 (local getters) | Futura fase |
+| Viajes | `erp/src/modules/viajes/` | ✅ NORMALIZADO | N-06 pendiente (ver §16) | Fase 4 completada; N-06 futura fase |
+| Cumplidos | `erp/src/modules/cumplidos/` | ✅ NORMALIZADO | N-03, N-07, N-08 pendientes (ver §16) | Fase 4 completada |
+| Centro GPS | `erp/src/modules/gps/` | ✅ NORMALIZADO | Ninguno | Fase 3 completada (via wrappers) |
 | Componentes UI compartidos | `erp/src/components/ui/TableCells.tsx` | ✅ Conforme | Ninguno activo | — |
 
 ### 15.2 Estado por módulo (backend)
 
 | Módulo | Función / Endpoint | Estado | Hallazgos activos | Fase de corrección |
 |---|---|---|---|---|
-| `utils/fechas.js` | `fechaHoyColombia()` | ⏳ Pendiente de creación | — | **Fase 1 (en curso)** |
-| Sync Programación | `syncPlaneados()` | ⏳ Pendiente de Normalización | H-02, H-04 | **Fase 1** (H-02), Fase 3 (H-04) |
-| API Programación | `GET /api/programacion` | ⏳ Pendiente de Normalización | H-03 | **Fase 1 (en curso)** |
-| API Planeados | `GET /api/planeados` | ⏳ Pendiente de Normalización | H-03b | **Fase 1 (en curso)** |
+| `utils/fechas.js` | `fechaHoyColombia`, `parseFechaTMS`, `extraerFechaColombia` | ✅ NORMALIZADO | N-01, N-02 pendientes (ver §16) | Fases 1, 3 completadas |
+| Sync Programación | `syncPlaneados()` | ✅ NORMALIZADO | Ninguno | Fases 1, 3 completadas |
+| API Programación | `GET /api/programacion` | ✅ NORMALIZADO | Ninguno | Fase 1 completada |
+| API Planeados | `GET /api/planeados` | ✅ NORMALIZADO | Ninguno | Fase 1 completada |
 | API Solicitudes | `GET /api/solicitudes` | ✅ Conforme | Ninguno activo | — |
-| Parse TMS backend | `parseSchedulate()` | ⏳ Pendiente de Normalización | H-04 | Fase 3 |
-| Estado GPS backend | `derivarEstadoGps()` | ⏳ Pendiente de Normalización | H-05 | Fase 3 |
+| Parse TMS backend | `parseFechaTMS()` (ex-`parseSchedulate`) | ✅ NORMALIZADO | Ninguno | Fase 3 completada |
+| Estado GPS backend | `derivarEstadoGps()` | ✅ NORMALIZADO | Ninguno | Fase 3 completada (via wrapper) |
 
 ### 15.3 Leyenda de estados
 
@@ -831,6 +840,29 @@ están corregidos y sus implementaciones de fecha cumplen los principios P-01 a 
 | ⏳ Pendiente de Normalización | Tiene hallazgos activos. Corrección programada en el plan de normalización (§13). |
 | 🔄 En corrección | Corrección actualmente en progreso (rama de trabajo activa). |
 | ❌ Bloqueado | Corrección bloqueada por dependencia de otro hallazgo o decisión pendiente. |
+
+---
+
+## 16. Nuevos Hallazgos Detectados en Sprint 2 (Fases 3–4)
+
+Hallazgos identificados durante la implementación de Fases 3 y 4 que están **fuera del
+alcance del sprint actual**. Se documentan aquí para trazabilidad. No corregir sin
+justificación de impacto previa.
+
+| ID | Módulo | Descripción | Severidad | Fase sugerida |
+|---|---|---|---|---|
+| **N-01** | `index.js:543` | `parseCreated()` tiene el mismo bug UTC que `parseFechaMDY` — construye Date sin offset. Usado internamente para cumplidos. | Media | Futura Fase 5 |
+| **N-02** | `index.js:537` | `sortViajes()` usa `new Date(a.latest_gps_report \|\| 0)` directamente sobre un string TMS MDY. El navegador/Node.js puede rechazarlo o mal-parsearlo. | Media | Futura Fase 5 |
+| **N-03** | `cumplidos/types.ts` | `fecha_validacion` no tiene formato documentado. Actualmente siempre `null` desde el backend. Cuando se pueble, el formato (ISO vs TMS) debe definirse antes de que `TimelineCumplido` lo formatee. | Baja | Cuando se implemente |
+| **N-04** | `useProgramacion.ts:12` | `schedulateToISO()` usa `d.getFullYear()`, `d.getMonth()`, `d.getDate()` (getters locales) en lugar de `extraerFechaColombia(d)`. Correcto en browsers Colombia; viola P-06 en otros. | Baja | Futura Fase 5 |
+| **N-05** | `ProgramacionTableColumns.tsx:13` | `splitSchedulate()` usa getters locales para extraer fecha/hora del Date. Mismo patrón que N-04. | Baja | Futura Fase 5 |
+| **N-06** | `ViajesTableColumns.tsx:16` | `fmtActivado()` usa getters locales más `toLocaleTimeString('es-CO')` sin `timeZone` explícito. Correcto en browsers Colombia. | Baja | Futura Fase 5 |
+| **N-07** | `useCumplidos.ts:12` | `activatedOnISO()` usa getters locales para fecha Colombia. Mismo patrón que H-06 (ya corregido en Viajes). | Baja | Futura Fase 5 |
+| **N-08** | `CumplidosTableColumns.tsx:10` | `splitActivatedOn()` usa getters locales. Mismo patrón que N-07. | Baja | Futura Fase 5 |
+
+> **Nota:** N-04 a N-08 son violaciones del principio P-06 del estándar pero **no son
+> bugs funcionales** en el entorno objetivo (browsers de operadores Colombia). Se
+> documentan para que no queden sin clasificar en el inventario de deuda técnica de fechas.
 
 ---
 
@@ -889,6 +921,7 @@ const esDeHoy = fechaRegistro === hoy;
 
 | Versión | Fecha | Cambios |
 |---|---|---|
+| **V1.2** | Julio 2026 | Sprint 2 — Fases 3 y 4 completadas. Creadas `parseFechaTMS` y `extraerFechaColombia` en backend (`utils/fechas.js`) y frontend (`erp/src/utils/parseFecha.ts`). Convertidos `parseSchedulate`, `parseFechaMDY` (backend) y `parseFechaMDY`, `parseFechaDMY` (frontend) en wrappers `@deprecated`. Corregidos H-04 (UTC drift en `parseSchedulate`), H-05 (`derivarEstadoGps` GPS age), H-06 (`toDateISO` en Viajes), H-07 (parser DMY→MDY en `TimelineCumplido`), H-08 (`.slice(0,10)` en Solicitudes). Actualizados §13, §15. Agregado §16 con 8 nuevos hallazgos (N-01 a N-08), todos clasificados como bajos/medios y no bloqueantes. |
 | **V1.1** | Julio 2026 | Agregado P-09 (Single Source of Truth). Agregada §14 Política de Validación (12 casos). Agregada §15 Matriz de Cobertura del Estándar. Actualización de estados: `syncPlaneados`, `/api/programacion`, `/api/planeados` marcados como "En corrección" (Fase 1 en curso). |
 | **V1.0** | Julio 2026 | Versión inicial. 13 secciones, 8 principios, 9 integraciones, 5 funciones corporativas, plan de normalización de 5 fases. Basado en Auditoría Integral de Fechas (9 hallazgos). |
 

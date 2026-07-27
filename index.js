@@ -6,7 +6,7 @@ import { buildLookupMap, normalizeClient, resolveCustomer, resolveTrip, isPlaceh
 import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } from './services/authScope.js';
 import { getUserPreferences, updatePreference, KNOWN_CHANNELS } from './services/preferenceResolver.js';
 import { normalizeExternalRef } from './services/normalizeExternalRef.js';
-import { fechaHoyColombia } from './utils/fechas.js';
+import { fechaHoyColombia, parseFechaTMS, extraerFechaColombia } from './utils/fechas.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -238,13 +238,9 @@ function requireLegacyOrInternal(req, res, next) {
   return res.status(401).json({ error: "No autorizado" });
 }
 
-// Parsear schedulate_origin DD/MM/YYYY HH:MM:SS
+// Wrapper de compatibilidad — usa parseFechaTMS('DMY') con offset −05:00. RESUELVE H-04.
 function parseSchedulate(str) {
-  if (!str) return null;
-  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):?(\d{2})?/);
-  if (!m) return null;
-  const [, dd, mm, yyyy, hh, min, ss = '00'] = m;
-  return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:${ss.padStart(2,'0')}`);
+  return parseFechaTMS(str, 'DMY');
 }
 
 const app = express();
@@ -548,14 +544,9 @@ function parseCreated(str) {
   return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:00`);
 }
 
-// Parsea "MM/DD/YYYY HH:MM[:SS]" (formato de latest_gps_report del TMS). Devuelve null si inválido.
+// Wrapper de compatibilidad — usa parseFechaTMS('MDY') con offset −05:00. RESUELVE H-05.
 function parseFechaMDY(str) {
-  if (!str) return null;
-  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
-  if (!m) return null;
-  const [, mm, dd, yyyy, hh, min] = m;
-  const d = new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:00`);
-  return isNaN(d.getTime()) ? null : d;
+  return parseFechaTMS(str, 'MDY');
 }
 
 const GPS_THRESHOLD_DETENIDO     = 2;   // horas — coincide con frontend
@@ -674,7 +665,7 @@ async function syncPlaneados() {
     const viajesFuturos = arr.filter(v => {
       const f = parseSchedulate(v.schedulate_origin);
       if (!f || isNaN(f.getTime())) return false;
-      const fechaDia = f.toISOString().slice(0, 10);
+      const fechaDia = extraerFechaColombia(f);
       return fechaDia >= hoyStr;
     });
 
@@ -718,7 +709,7 @@ async function syncPlaneados() {
         city_destination:      v.city_destination      || null,
         origin_address:        v.origin_address        || null,
         schedulate_origin:     v.schedulate_origin     || null,
-        fecha_programada_dia:  f ? f.toISOString().slice(0, 10) : null,
+        fecha_programada_dia:  f ? extraerFechaColombia(f) : null,
         activo_en_resume:      estaActivo,
         fecha_detectado:       yaExiste ? yaExiste.fecha_detectado : new Date().toISOString(),
         activado_en:           (estaActivo && yaExiste && !yaExiste.activo_en_resume) || (estaActivo && !yaExiste)
@@ -843,14 +834,6 @@ app.get("/api/pendientes", requireLegacyOrInternal, async (req, res) => {
       await syncPendientes();
     }
     const arr = cache.pendientes.data;
-
-    function parseSchedulate(str) {
-      if (!str) return null;
-      const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):?(\d{2})?/);
-      if (!m) return null;
-      const [, dd, mm, yyyy, hh, min, ss = '00'] = m;
-      return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:${ss.padStart(2,'0')}`);
-    }
 
     const ahora     = new Date();
     const hace1dia  = new Date(ahora.getTime() - 1 * 24 * 60 * 60 * 1000);
@@ -3095,7 +3078,7 @@ app.post("/api/programacion/:id/sync", requireInternalApiKey, async (req, res) =
           city_destination:      viajeCache.city_destination      || null,
           origin_address:        viajeCache.origin_address        || null,
           schedulate_origin:     viajeCache.schedulate_origin     || null,
-          fecha_programada_dia:  f ? f.toISOString().slice(0, 10) : null,
+          fecha_programada_dia:  f ? extraerFechaColombia(f) : null,
           activo_en_resume:      estaActivo,
           actualizado_en:        new Date().toISOString(),
         }
