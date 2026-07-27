@@ -6,6 +6,7 @@ import { buildLookupMap, normalizeClient, resolveCustomer, resolveTrip, isPlaceh
 import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } from './services/authScope.js';
 import { getUserPreferences, updatePreference, KNOWN_CHANNELS } from './services/preferenceResolver.js';
 import { normalizeExternalRef } from './services/normalizeExternalRef.js';
+import { fechaHoyColombia } from './utils/fechas.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -668,14 +669,13 @@ async function syncPlaneados() {
       return;
     }
 
-    const ahora = new Date();
-    const hoyInicio = new Date(ahora);
-    hoyInicio.setHours(0, 0, 0, 0);
+    const hoyStr = fechaHoyColombia();
 
     const viajesFuturos = arr.filter(v => {
       const f = parseSchedulate(v.schedulate_origin);
       if (!f || isNaN(f.getTime())) return false;
-      return f >= hoyInicio;
+      const fechaDia = f.toISOString().slice(0, 10);
+      return fechaDia >= hoyStr;
     });
 
     console.log(`📅 Planeados: ${arr.length} en Travel/search → ${viajesFuturos.length} hoy o futuros`);
@@ -730,7 +730,6 @@ async function syncPlaneados() {
       upsertados++;
     }
 
-    const hoyStr = hoyInicio.toISOString().slice(0, 10);
     await sbFetch(`/planeados?fecha_programada_dia=lt.${hoyStr}`, 'DELETE');
     console.log(`📅 Planeados: ${upsertados} upsertados, ${clientesCreados} clientes creados, ${placeholdersOmitidos} sin Match TMS (esperando), limpieza de anteriores a ${hoyStr}`);
 
@@ -2870,9 +2869,7 @@ app.get('/catalogos/vehiculos', (req, res) => {
 // Planeados — desde Supabase
 app.get("/api/planeados", requireInternalApiKey, async (req, res) => {
   try {
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const hoyStr = hoy.toISOString().slice(0, 10);
+    const hoyStr = fechaHoyColombia();
     const data = await sbFetch(
       `/planeados?fecha_programada_dia=gte.${hoyStr}&order=schedulate_origin.asc&limit=500`
     );
@@ -2899,10 +2896,9 @@ app.get("/api/planeados", requireInternalApiKey, async (req, res) => {
 app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
   try {
     const { desde, hasta } = req.query;
-    const hoyInicio = new Date();
-    hoyInicio.setHours(0, 0, 0, 0);
-    const desdeStr = desde || hoyInicio.toISOString().slice(0, 10);
-    const hastaStr = hasta || hoyInicio.toISOString().slice(0, 10);
+    const hoyStr = fechaHoyColombia();
+    const desdeStr = desde || hoyStr;
+    const hastaStr = hasta || hoyStr;
 
     const data = await sbFetch(
       `/planeados?fecha_programada_dia=gte.${desdeStr}&fecha_programada_dia=lte.${hastaStr}&order=schedulate_origin.asc&limit=500`
