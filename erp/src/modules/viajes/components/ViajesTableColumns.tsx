@@ -4,21 +4,7 @@ import type { TmsViaje } from "../types";
 import { VIAJES_COLUMNS_DEF } from "../viajes.definition";
 import { EstadoBadge } from "./EstadoBadge";
 import { GpsStatus } from "./GpsStatus";
-import { parseFechaMDY } from "@/utils/parseFecha";
 import { esPanico } from "../constants";
-
-const LOCALE = "es-CO";
-
-function fmtActivado(str: string | null | undefined): string {
-  if (!str) return "—";
-  const d = parseFechaMDY(str);
-  if (!d) return "—";
-  const day   = String(d.getDate()).padStart(2, "0");
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const year  = d.getFullYear();
-  const time  = d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", hour12: true });
-  return `${day}/${month}/${year} ${time}`;
-}
 
 /** Razón social del Maestro, con fallback al primer nombre TMS. */
 function clienteDisplay(v: TmsViaje): string {
@@ -51,6 +37,36 @@ const RENDERERS: Record<string, (v: TmsViaje) => React.ReactNode> = {
     );
   },
 
+  type_operation: (v) => {
+    const linea = v.type_operation === "Granel Liquido" ? "Carga Líquida" : "Carga Seca";
+    return (
+      <span className="text-[12px]" style={{ color: "var(--gray-700)" }}>
+        {linea}
+      </span>
+    );
+  },
+
+  _tipo: (v) => {
+    const urbano = !!(v.origin_city_name && v.origin_city_name === v.destiny_city_name);
+    return (
+      <span className="text-[12px]" style={{ color: "var(--gray-700)" }}>
+        {urbano ? "Urbano" : "Nacional"}
+      </span>
+    );
+  },
+
+  _ruta: (v) => (
+    <div className="flex items-center gap-1 min-w-0">
+      <span className="text-[12px] truncate font-mono uppercase" style={{ color: "var(--gray-700)" }}>
+        {v.origin_city_name ?? "—"}
+      </span>
+      <span className="text-[10px] shrink-0" style={{ color: "var(--gray-300)" }}>→</span>
+      <span className="text-[12px] truncate font-mono uppercase" style={{ color: "var(--gray-500)" }}>
+        {v.destiny_city_name ?? "—"}
+      </span>
+    </div>
+  ),
+
   license_plate: (v) => v.license_plate ? (
     <span
       className="text-[11px] font-bold font-mono tracking-widest px-1.5 py-0.5 rounded"
@@ -66,22 +82,17 @@ const RENDERERS: Record<string, (v: TmsViaje) => React.ReactNode> = {
     </span>
   ),
 
-  _ruta: (v) => (
-    <div className="flex items-center gap-1 min-w-0">
-      <span className="text-[12px] truncate" style={{ color: "var(--gray-700)" }}>{v.origin_city_name ?? "—"}</span>
-      <span className="text-[10px] shrink-0" style={{ color: "var(--gray-300)" }}>→</span>
-      <span className="text-[12px] truncate" style={{ color: "var(--gray-500)" }}>{v.destiny_city_name ?? "—"}</span>
-    </div>
+  driver_phone: (v) => (
+    <span className="text-[12px] font-mono" style={{ color: v.driver_phone ? "var(--gray-700)" : "var(--gray-300)" }}>
+      {v.driver_phone ?? "—"}
+    </span>
   ),
 
-  state_travel: (v) => <EstadoBadge estado={v.state_travel} />,
-
-  latest_gps_report: (v) => <GpsStatus report={v.latest_gps_report} compact />,
-
-  activated_on: (v) => (
-    <span className="text-[11px] font-mono" style={{ color: "var(--gray-400)" }}>
-      {fmtActivado(v.activated_on)}
-    </span>
+  state_travel: (v) => (
+    <div className="flex flex-col gap-0.5">
+      <EstadoBadge estado={v.state_travel} />
+      <GpsStatus report={v.latest_gps_report} compact />
+    </div>
   ),
 
   _actions: () => <ChevronRight className="w-4 h-4" style={{ color: "var(--gray-300)" }} />,
