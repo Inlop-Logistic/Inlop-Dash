@@ -2,7 +2,7 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import { useAuth } from "@/state/AuthContext";
 import {
   LayoutDashboard, ClipboardList, Truck, Map,
-  AlertTriangle, Car, CalendarClock, CheckSquare,
+  CalendarClock, CheckSquare,
   LogOut, ChevronRight, ChevronLeft, Building2,
 } from "lucide-react";
 import { TopbarSearch } from "@/components/layout/TopbarSearch";
@@ -31,8 +31,6 @@ const NAV_SECTIONS: NavSection[] = [
       { id: "viajes",       label: "Viajes Activos",       icon: <Truck           className="w-4 h-4" /> },
       { id: "mapa",         label: "Centro GPS",           icon: <Map             className="w-4 h-4" /> },
       { id: "cumplidos",    label: "Viajes Finalizados",   icon: <CheckSquare     className="w-4 h-4" /> },
-      { id: "alarmas",      label: "Alarmas",              icon: <AlertTriangle   className="w-4 h-4" /> },
-      { id: "vehiculos",    label: "Vehículos",            icon: <Car             className="w-4 h-4" /> },
     ],
   },
   // Secciones futuras — descomentar y agregar items[] cuando el módulo esté listo:
