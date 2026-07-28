@@ -12,16 +12,18 @@ export const VIAJES_ENTITY = "viaje" as const;
 
 /** Metadatos de cada columna — sin renderers. */
 export const VIAJES_COLUMNS_DEF = [
-  { key: "trip_number",           header: "Manifiesto",     width: "110px",  sortable: true,  mono: true  },
-  { key: "company_customer_name", header: "Cliente",        width: "180px",  sortable: true,  mono: false },
-  { key: "type_operation",        header: "Línea Negocio",  width: "120px",  sortable: false, mono: false },
-  { key: "_tipo",                 header: "Tipo",           width: "80px",   sortable: false, mono: false },
-  { key: "_ruta",                 header: "Origen - Destino", width: "200px", sortable: false, mono: false },
-  { key: "license_plate",         header: "Placa",          width: "100px",  sortable: true,  mono: true  },
-  { key: "driver_name",           header: "Conductor",      width: "150px",  sortable: true,  mono: false },
-  { key: "driver_phone",          header: "Teléfono",       width: "130px",  sortable: false, mono: true  },
-  { key: "state_travel",          header: "Estado",         width: "150px",  sortable: true,  mono: false },
-  { key: "_actions",              header: "",               width: "36px",   sortable: false, mono: false },
+  { key: "activated_on",          header: "Fecha",      width: "84px",   align: "center" as const, sortable: true,  mono: true  },
+  { key: "trip_number",           header: "Manifiesto", width: "104px",  align: "left"   as const, sortable: true,  mono: true  },
+  { key: "company_customer_name", header: "Cliente",    width: "160px",  align: "left"   as const, sortable: true,  mono: false },
+  { key: "type_operation",        header: "Operación",  width: "100px",  align: "left"   as const, sortable: false, mono: false },
+  { key: "_tipo",                 header: "Tipo",       width: "72px",   align: "center" as const, sortable: false, mono: false },
+  { key: "origin_city_name",      header: "Origen",     width: "110px",  align: "left"   as const, sortable: false, mono: true  },
+  { key: "destiny_city_name",     header: "Destino",    width: "110px",  align: "left"   as const, sortable: false, mono: true  },
+  { key: "license_plate",         header: "Placa",      width: "90px",   align: "center" as const, sortable: true,  mono: true  },
+  { key: "driver_name",           header: "Conductor",  width: "140px",  align: "left"   as const, sortable: true,  mono: false },
+  { key: "driver_phone",          header: "Teléfono",   width: "110px",  align: "left"   as const, sortable: false, mono: true  },
+  { key: "state_travel",          header: "Estado",     width: "140px",  align: "left"   as const, sortable: true,  mono: false },
+  { key: "_actions",              header: "",           width: "36px",   align: "center" as const, sortable: false, mono: false },
 ] as const;
 
 /** Especificaciones de filtro — sin componentes UI. */
