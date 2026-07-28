@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  User, Car, MapPin, FileText, AlertCircle, Link2, CheckCircle2,
+  User, Car, MapPin, FileText, Link2, CheckCircle2,
   RefreshCw, AlertTriangle, Truck, Map, ChevronRight, Phone, X,
 } from "lucide-react";
 import { parseFechaTMS } from "@/utils/parseFecha";
@@ -85,8 +85,8 @@ export function CentroOperativo({ viaje, onClose, onEstado, onSync, accionLoadin
 
   // Solicitud vinculada
   const [solicitud, setSolicitud]   = useState<SolicitudVinculadaResult | null>(null);
-  const [loadingSol, setLoadingSol] = useState(false);
-  const [errorSol, setErrorSol]     = useState<string | null>(null);
+  const [, setLoadingSol] = useState(false);
+  const [, setErrorSol]   = useState<string | null>(null);
 
   // Modal cancelación
   const [showCancelModal, setShowCancelModal] = useState(false);
