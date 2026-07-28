@@ -1,26 +1,34 @@
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { CalendarDays, X } from "lucide-react";
+import { fechaHoyColombia, sumarDias } from "@/utils/date";
 
 const MAX_DAYS = 30;
 
-function toISO(d: Date): string {
-  return d.toISOString().slice(0, 10);
+// Formatea un string YYYY-MM-DD para label de rango (DD mmm), usando siempre
+// Colombia timezone. Construye a mediodía UTC para evitar cualquier ambigüedad
+// de día en cualquier timezone del browser.
+function fmtLabel(ymd: string): string {
+  return new Date(ymd + "T12:00:00Z").toLocaleDateString("es-CO", {
+    timeZone: "America/Bogota",
+    day:   "2-digit",
+    month: "short",
+  });
 }
 
-function today(): string {
-  return toISO(new Date());
+// Días de diferencia entre dos strings YYYY-MM-DD (UTC-safe).
+function diffDays(desde: string, hasta: string): number {
+  const [Y1, M1, D1] = desde.split("-").map(Number);
+  const [Y2, M2, D2] = hasta.split("-").map(Number);
+  return (Date.UTC(Y2, M2 - 1, D2) - Date.UTC(Y1, M1 - 1, D1)) / 86_400_000;
 }
 
 function labelRango(desde: string, hasta: string): string {
   if (!desde && !hasta) return "";
   if (desde === hasta) {
-    const d = new Date(desde + "T00:00:00");
-    if (desde === today()) return "Hoy";
-    return d.toLocaleDateString("es-CO", { day: "2-digit", month: "short" });
+    if (desde === fechaHoyColombia()) return "Hoy";
+    return fmtLabel(desde);
   }
-  const d1 = new Date(desde + "T00:00:00");
-  const d2 = new Date(hasta + "T00:00:00");
-  return `${d1.toLocaleDateString("es-CO", { day: "2-digit", month: "short" })} – ${d2.toLocaleDateString("es-CO", { day: "2-digit", month: "short" })}`;
+  return `${fmtLabel(desde)} – ${fmtLabel(hasta)}`;
 }
 
 interface DateRangePickerProps {
@@ -38,7 +46,7 @@ export function DateRangePicker({ desde, hasta, onChange }: DateRangePickerProps
   const [draftHasta, setDraftHasta] = useState(hasta);
 
   // Posición del popover: calculada al abrir para evitar salir del viewport.
-  const [openUp, setOpenUp]     = useState(false);
+  const [openUp, setOpenUp]       = useState(false);
   const [openRight, setOpenRight] = useState(false);
 
   const wrapRef   = useRef<HTMLDivElement>(null);
@@ -56,11 +64,9 @@ export function DateRangePicker({ desde, hasta, onChange }: DateRangePickerProps
   // Detectar posición al abrir para evitar clipping contra el viewport.
   useLayoutEffect(() => {
     if (!open || !buttonRef.current) return;
-    const rect    = buttonRef.current.getBoundingClientRect();
-    const popH    = 280;
-    const popW    = 250;
-    setOpenUp(rect.bottom + popH > window.innerHeight);
-    setOpenRight(rect.right - popW < 0);
+    const rect = buttonRef.current.getBoundingClientRect();
+    setOpenUp(rect.bottom + 280 > window.innerHeight);
+    setOpenRight(rect.right - 250 < 0);
   }, [open]);
 
   // Cerrar al hacer clic fuera.
@@ -77,13 +83,12 @@ export function DateRangePicker({ desde, hasta, onChange }: DateRangePickerProps
 
   function handleDesde(val: string) {
     setDraftDesde(val);
-    // Si 'hasta' ya está y quedaría fuera del rango de 30 días, ajustar.
     if (draftHasta && val) {
-      const d1 = new Date(val + "T00:00:00");
-      const d2 = new Date(draftHasta + "T00:00:00");
-      if (d2 < d1) setDraftHasta(val);
-      else if ((d2.getTime() - d1.getTime()) / 86_400_000 > MAX_DAYS) {
-        setDraftHasta(toISO(new Date(d1.getTime() + MAX_DAYS * 86_400_000)));
+      // YYYY-MM-DD strings son comparables lexicográficamente.
+      if (draftHasta < val) {
+        setDraftHasta(val);
+      } else if (diffDays(val, draftHasta) > MAX_DAYS) {
+        setDraftHasta(sumarDias(val, MAX_DAYS));
       }
     }
   }
@@ -91,11 +96,10 @@ export function DateRangePicker({ desde, hasta, onChange }: DateRangePickerProps
   function handleHasta(val: string) {
     setDraftHasta(val);
     if (draftDesde && val) {
-      const d1 = new Date(draftDesde + "T00:00:00");
-      const d2 = new Date(val + "T00:00:00");
-      if (d2 < d1) setDraftDesde(val);
-      else if ((d2.getTime() - d1.getTime()) / 86_400_000 > MAX_DAYS) {
-        setDraftDesde(toISO(new Date(d2.getTime() - MAX_DAYS * 86_400_000)));
+      if (val < draftDesde) {
+        setDraftDesde(val);
+      } else if (diffDays(draftDesde, val) > MAX_DAYS) {
+        setDraftDesde(sumarDias(val, -MAX_DAYS));
       }
     }
   }
@@ -122,29 +126,36 @@ export function DateRangePicker({ desde, hasta, onChange }: DateRangePickerProps
   const label     = labelRango(desde, hasta);
   const hayFiltro = desde !== "" || hasta !== "";
 
-  const maxHastaConstraint = draftDesde
-    ? toISO(new Date(new Date(draftDesde + "T00:00:00").getTime() + MAX_DAYS * 86_400_000))
-    : "";
+  // Límite superior de "hasta" según MAX_DAYS a partir de "desde".
+  const maxHastaConstraint = draftDesde ? sumarDias(draftDesde, MAX_DAYS) : "";
 
   const popoverStyle: React.CSSProperties = {
-    position:     "absolute",
-    zIndex:       50,
-    background:   "#fff",
-    border:       "1.5px solid var(--gray-200)",
-    borderRadius: 12,
-    boxShadow:    "0 4px 20px rgba(0,0,0,0.12)",
-    padding:      "14px 16px",
-    minWidth:     240,
-    display:      "flex",
-    flexDirection:"column",
-    gap:          12,
+    position:      "absolute",
+    zIndex:        50,
+    background:    "#fff",
+    border:        "1.5px solid var(--gray-200)",
+    borderRadius:  12,
+    boxShadow:     "0 4px 20px rgba(0,0,0,0.12)",
+    padding:       "14px 16px",
+    minWidth:      240,
+    display:       "flex",
+    flexDirection: "column",
+    gap:           12,
     ...(openUp
-      ? { bottom: "calc(100% + 6px)", top: "auto" }
+      ? { bottom: "calc(100% + 6px)", top:    "auto" }
       : { top:    "calc(100% + 6px)", bottom: "auto" }),
     ...(openRight
-      ? { left: 0,    right: "auto" }
-      : { right: 0,   left:  "auto" }),
+      ? { left: 0,   right: "auto" }
+      : { right: 0,  left:  "auto" }),
   };
+
+  // Shortcuts preestablecidos — todos calculados en hora Colombia.
+  const hoy     = fechaHoyColombia();
+  const SHORTCUTS = [
+    { label: "Hoy",         d: hoy,                    h: hoy                    },
+    { label: "Últimos 7d",  d: sumarDias(hoy, -6),     h: hoy                    },
+    { label: "Últimos 30d", d: sumarDias(hoy, -29),    h: hoy                    },
+  ];
 
   return (
     <div ref={wrapRef} style={{ position: "relative" }}>
@@ -227,11 +238,7 @@ export function DateRangePicker({ desde, hasta, onChange }: DateRangePickerProps
 
           {/* Shortcuts */}
           <div className="flex gap-2 flex-wrap">
-            {[
-              { label: "Hoy",          d: today(),                                                h: today() },
-              { label: "Últimos 7d",   d: toISO(new Date(Date.now() - 6  * 86_400_000)),          h: today() },
-              { label: "Últimos 30d",  d: toISO(new Date(Date.now() - 29 * 86_400_000)),          h: today() },
-            ].map((s) => (
+            {SHORTCUTS.map((s) => (
               <button
                 key={s.label}
                 type="button"

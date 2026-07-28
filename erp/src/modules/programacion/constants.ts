@@ -1,4 +1,5 @@
 import type { ViajeResumen } from "./types";
+import { parseFechaDMY } from "@/utils/parseFecha";
 
 export const ESTADO_CFG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
   programado: { label: "Programado",  color: "#374151",           bg: "var(--gray-100)",  dot: "var(--gray-400)" },
@@ -18,7 +19,10 @@ export const TABS = [
 export function estadoVisual(v: ViajeResumen): string {
   if (v.estado_programacion === "cancelado") return "cancelado";
   if (v.activo_en_resume) return "asignado";
-  if (v.schedulate_origin && new Date(v.schedulate_origin) < new Date()) return "vencido";
+  if (v.schedulate_origin) {
+    const d = parseFechaDMY(v.schedulate_origin);
+    if (d && d.getTime() < Date.now()) return "vencido";
+  }
   return "programado";
 }
 

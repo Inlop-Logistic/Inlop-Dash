@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { hoy } from "@/utils/date";
+import { hoy, extraerFechaColombia } from "@/utils/date";
 import { parseFechaDMY } from "@/utils/parseFecha";
 import type { ViajeResumen, EstadoProgramacion } from "../types";
 import { listarProgramacion, cambiarEstadoProgramacion, sincronizarViaje } from "../services/api";
@@ -8,12 +8,11 @@ import { useFiltrosComunes } from "@/hooks/useFiltrosComunes";
 
 type TabEstado = "todos" | "programado" | "asignado" | "cancelado";
 
-/** Convierte schedulate_origin (DD/MM/YYYY HH:MM:SS) a YYYY-MM-DD para filtro de fecha. */
+/** Convierte schedulate_origin (DD/MM/YYYY HH:MM:SS) a YYYY-MM-DD Colombia para filtro de fecha. */
 function schedulateToISO(raw: string | null | undefined): string | null {
   const d = parseFechaDMY(raw);
   if (!d) return null;
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return extraerFechaColombia(d);
 }
 
 export function useProgramacion() {

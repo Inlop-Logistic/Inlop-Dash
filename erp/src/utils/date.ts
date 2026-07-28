@@ -109,6 +109,22 @@ export function formatearFecha(
 // funciones corporativas directamente.
 // ═══════════════════════════════════════════════════════════════════
 
+/**
+ * Suma (o resta) N días calendario a un string YYYY-MM-DD.
+ * Opera en UTC puro: construye UTC-midnight del día base, ajusta N días,
+ * extrae la fecha UTC resultante. Seguro frente a cualquier DST o timezone
+ * del browser — nunca usa la hora local del sistema.
+ *
+ * Uso: constraints de MAX_DAYS en DateRangePicker, cálculos de rangos
+ * predefinidos ("Últimos 7d", "Últimos 30d").
+ */
+export function sumarDias(ymd: string, n: number): string {
+  const [Y, M, D] = ymd.split('-').map(Number);
+  const d = new Date(Date.UTC(Y, M - 1, D));
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 /** @deprecated Usar fechaHoyColombia() — RESUELVE H-01 */
 export function hoy(): string {
   return fechaHoyColombia();

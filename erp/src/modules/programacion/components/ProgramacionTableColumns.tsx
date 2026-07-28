@@ -1,20 +1,20 @@
-import { fmtDDMMYYYY } from "@/utils/date";
-import { parseFechaDMY } from "@/utils/parseFecha";
+import { fmtDDMMYYYY, extraerFechaColombia } from "@/utils/date";
+import { parseFechaTMS } from "@/utils/parseFecha";
 import type { Column } from "@/components/ui";
 import type { ViajeResumen } from "../types";
 import { EstadoBadge } from "./EstadoBadge";
 import { estadoVisual } from "../constants";
 
-/** Extrae fecha DD/MM/YYYY y hora HH:mm de un string TMS DD/MM/YYYY HH:MM:SS. */
+const TZ_COL = "America/Bogota";
+
+/** Extrae fecha DD/MM/YYYY y hora HH:mm de un string TMS DD/MM/YYYY HH:MM:SS, en hora Colombia. */
 function splitSchedulate(raw: string | null | undefined): { fecha: string; hora: string } {
   if (!raw) return { fecha: "—", hora: "" };
-  const d = parseFechaDMY(raw);
+  const d = parseFechaTMS(raw, "DMY");
   if (!d) return { fecha: "—", hora: "" };
-  const p = (n: number) => String(n).padStart(2, "0");
-  return {
-    fecha: `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`,
-    hora:  `${p(d.getHours())}:${p(d.getMinutes())}`,
-  };
+  const [Y, M, D] = extraerFechaColombia(d).split("-");
+  const hora = d.toLocaleTimeString("en-US", { timeZone: TZ_COL, hour: "2-digit", minute: "2-digit", hour12: false });
+  return { fecha: `${D}/${M}/${Y}`, hora };
 }
 
 /** Transforma type_operation en etiqueta de Línea de Negocio. */

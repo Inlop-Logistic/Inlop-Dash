@@ -4,8 +4,11 @@ import type { TmsViaje } from "../types";
 import { VIAJES_COLUMNS_DEF } from "../viajes.definition";
 import { EstadoBadge } from "./EstadoBadge";
 import { GpsStatus } from "./GpsStatus";
-import { parseFechaMDY } from "@/utils/parseFecha";
+import { parseFechaTMS } from "@/utils/parseFecha";
+import { extraerFechaColombia } from "@/utils/date";
 import { esPanico } from "../constants";
+
+const TZ_COL = "America/Bogota";
 
 /** Razón social del Maestro, con fallback al primer nombre TMS. */
 function clienteDisplay(v: TmsViaje): string {
@@ -19,20 +22,17 @@ const RENDERERS: Record<string, (v: TmsViaje) => React.ReactNode> = {
 
   activated_on: (v) => {
     if (!v.activated_on) return <span style={{ color: "var(--gray-300)" }}>—</span>;
-    const d = parseFechaMDY(v.activated_on);
+    const d = parseFechaTMS(v.activated_on, "MDY");
     if (!d) return <span style={{ color: "var(--gray-300)" }}>—</span>;
-    const dd  = String(d.getDate()).padStart(2, "0");
-    const mm  = String(d.getMonth() + 1).padStart(2, "0");
-    const yy  = String(d.getFullYear()).slice(2);
-    const hh  = String(d.getHours()).padStart(2, "0");
-    const min = String(d.getMinutes()).padStart(2, "0");
+    const [Y, M, D] = extraerFechaColombia(d).split("-");
+    const hhmm = d.toLocaleTimeString("en-US", { timeZone: TZ_COL, hour: "2-digit", minute: "2-digit", hour12: false });
     return (
       <div className="flex flex-col items-center leading-none gap-0.5">
         <span className="text-[12px] font-mono tabular-nums" style={{ color: "var(--gray-700)" }}>
-          {dd}/{mm}/{yy}
+          {D}/{M}/{Y.slice(2)}
         </span>
         <span className="text-[12px] font-mono tabular-nums" style={{ color: "var(--gray-700)" }}>
-          {hh}:{min}
+          {hhmm}
         </span>
       </div>
     );
