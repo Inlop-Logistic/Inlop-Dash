@@ -1388,9 +1388,9 @@ async function syncSolicitudes() {
       const { id, codigo_solicitud, external_ref, estado, controlt_trip_number,
               creado_por, fecha_requerida, observacion_coordinadora, empresa_cliente_id: solEmpresaId } = sol;
 
-      // Clave de match: external_ref si está puesto (pruebas con remisión real), sino codigo_solicitud
-      // Normalizar espacios dobles igual que _splitRem para que "NHR-IB-2185" == "NHR-  IB-2185"
-      const matchKey = ((external_ref || '').trim().replace(/\s+/g, ' ')) || codigo_solicitud;
+      // Clave de match: external_ref normalizado si está puesto, sino codigo_solicitud.
+      // _normRemision garantiza que "NHR-   TO-2743" == "NHR-TO-2743" == "nhr-to-2743".
+      const matchKey = _normRemision(external_ref || '') || codigo_solicitud;
 
       if (estado === 'pendiente') {
         // Solo descartar como huérfana si la fecha ya venció Y no tiene external_ref (match explícito)
@@ -1599,10 +1599,20 @@ async function propagarEmpresaId(tripNumber, empresaId) {
   ]).catch(err => console.error('⚠️  propagarEmpresaId:', err.message));
 }
 
+// Normaliza una remisión para el matching: elimina espacios alrededor de guiones,
+// colapsa espacios múltiples y convierte a mayúsculas.
+// Exclusivamente para comparación — nunca modifica el dato almacenado.
+function _normRemision(s) {
+  return (s || '').trim()
+    .replace(/\s*-\s*/g, '-')  // "NHR-  TO" → "NHR-TO", "NHR - TO" → "NHR-TO"
+    .replace(/\s+/g, ' ')      // colapsar espacios múltiples residuales
+    .toUpperCase();
+}
+
 function _splitRem(remission) {
-  // ControlT devuelve remission como ",val1,val2" y puede tener espacios dobles internos
+  // ControlT devuelve remission como ",val1,val2". Se normaliza cada parte para matching.
   return (remission || '').split(',')
-    .map(p => p.trim().replace(/\s+/g, ' '))  // colapsar espacios dobles
+    .map(_normRemision)
     .filter(Boolean);
 }
 
