@@ -27,11 +27,11 @@ const RENDERERS: Record<string, (v: TmsViaje) => React.ReactNode> = {
     const hh  = String(d.getHours()).padStart(2, "0");
     const min = String(d.getMinutes()).padStart(2, "0");
     return (
-      <div className="flex flex-col items-center leading-tight">
+      <div className="flex flex-col items-center leading-none gap-0.5">
         <span className="text-[12px] font-mono tabular-nums" style={{ color: "var(--gray-700)" }}>
           {dd}/{mm}/{yy}
         </span>
-        <span className="text-[11px] font-mono tabular-nums" style={{ color: "var(--gray-400)" }}>
+        <span className="text-[12px] font-mono tabular-nums" style={{ color: "var(--gray-700)" }}>
           {hh}:{min}
         </span>
       </div>
@@ -128,9 +128,12 @@ const RENDERERS: Record<string, (v: TmsViaje) => React.ReactNode> = {
   ),
 
   state_travel: (v) => (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col items-start gap-1">
       <EstadoBadge estado={v.state_travel} />
-      <GpsStatus report={v.latest_gps_report} compact />
+      <div className="flex items-center gap-1">
+        <span className="text-[10px]" style={{ color: "var(--gray-400)" }}>GPS</span>
+        <GpsStatus report={v.latest_gps_report} compact />
+      </div>
     </div>
   ),
 
