@@ -71,16 +71,16 @@ export function useGps() {
     });
   }, [data, tabActivo, busqueda, estadoFiltro, clienteFiltro]);
 
-  // ── KPIs ──────────────────────────────────────────────────────────────────
+  // ── KPIs — calculados sobre filtrados para reflejar exactamente lo visible ─
   const kpis = useMemo<KpisGps>(() => ({
-    total:         data.length,
-    activos:       data.filter((v) => v.estadoGps === "activo").length,
-    detenidos:     data.filter((v) => v.estadoGps === "detenido").length,
-    sinReporte:    data.filter((v) => !v.latest_gps_report).length,
-    conAlarmas:    data.filter((v) => v.estadoGps === "con_alarma").length,
-    panico:        data.filter((v) => v.estadoGps === "panico").length,
-    desconectados: data.filter((v) => v.estadoGps === "desconectado").length,
-  }), [data]);
+    total:         filtrados.length,
+    activos:       filtrados.filter((v) => v.estadoGps === "activo").length,
+    detenidos:     filtrados.filter((v) => v.estadoGps === "detenido").length,
+    sinReporte:    filtrados.filter((v) => !v.latest_gps_report).length,
+    conAlarmas:    filtrados.filter((v) => v.estadoGps === "con_alarma").length,
+    panico:        filtrados.filter((v) => v.estadoGps === "panico").length,
+    desconectados: filtrados.filter((v) => v.estadoGps === "desconectado").length,
+  }), [filtrados]);
 
   // ── Selección ──────────────────────────────────────────────────────────────
   const selectedVehiculo = useMemo(

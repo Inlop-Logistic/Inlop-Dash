@@ -94,8 +94,8 @@ export function GpsPage() {
         <GpsKPIs kpis={kpis} onTabClick={setTabActivo} />
       </div>
 
-      {/* Filtros + Tabs */}
-      <div className="px-5 pb-3 shrink-0 flex flex-wrap items-center gap-2.5">
+      {/* Filtros + Tabs — position+zIndex crean stacking context por encima del mapa (Leaflet) */}
+      <div className="px-5 pb-3 shrink-0 flex flex-wrap items-center gap-2.5" style={{ position: "relative", zIndex: 30 }}>
         <div className="flex-1 min-w-[160px] relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: "var(--gray-400)" }} />
           <input

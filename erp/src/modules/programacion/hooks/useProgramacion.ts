@@ -114,12 +114,13 @@ export function useProgramacion() {
     });
   }, [data, tabEstado, estadoFiltro, clienteFiltro, busqueda, fechaDesde, fechaHasta]);
 
+  // KPIs calculados sobre filtradas para reflejar exactamente lo visible en la tabla
   const kpis = useMemo(() => ({
-    total:    data.length,
-    pendiente: data.filter((v) => !v.activo_en_resume && v.estado_programacion !== "cancelado").length,
-    activo:    data.filter((v) => v.activo_en_resume).length,
-    cancelado: data.filter((v) => v.estado_programacion === "cancelado").length,
-  }), [data]);
+    total:     filtradas.length,
+    pendiente: filtradas.filter((v) => !v.activo_en_resume && v.estado_programacion !== "cancelado").length,
+    activo:    filtradas.filter((v) => v.activo_en_resume).length,
+    cancelado: filtradas.filter((v) => v.estado_programacion === "cancelado").length,
+  }), [filtradas]);
 
   const panelViaje = panelId ? data.find((v) => v.trip_number === panelId) ?? null : null;
 
