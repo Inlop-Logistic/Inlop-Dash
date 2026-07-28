@@ -12,7 +12,6 @@ export function useGps() {
   // Filtros
   const [busqueda,      setBusqueda]      = useState("");
   const [tabActivo,     setTabActivo]     = useState<TabGps>("todos");
-  const [estadoFiltro,  setEstadoFiltro]  = useState("");
   const [clienteFiltro, setClienteFiltro] = useState("");
 
   // Selección
@@ -49,9 +48,6 @@ export function useGps() {
       if (tabActivo === "alarmas")   { if (v.estadoGps !== "con_alarma" && v.estadoGps !== "panico") return false; }
       if (tabActivo === "sin_senial"){ if (v.estadoGps !== "desconectado")              return false; }
 
-      // Estado dropdown
-      if (estadoFiltro && v.estadoGps !== estadoFiltro) return false;
-
       // Filtro de cliente
       if (clienteFiltro) {
         const clienteDelVehiculo = v.razon_social || v.company_customer_name || "";
@@ -69,7 +65,7 @@ export function useGps() {
 
       return true;
     });
-  }, [data, tabActivo, busqueda, estadoFiltro, clienteFiltro]);
+  }, [data, tabActivo, busqueda, clienteFiltro]);
 
   // ── KPIs — calculados sobre filtrados para reflejar exactamente lo visible ─
   const kpis = useMemo<KpisGps>(() => ({
@@ -98,7 +94,6 @@ export function useGps() {
     data, loading, error,
     busqueda, setBusqueda,
     tabActivo, setTabActivo,
-    estadoFiltro, setEstadoFiltro,
     clienteFiltro, setClienteFiltro,
     filtrados, kpis,
     selectedId, setSelectedId, selectedVehiculo,

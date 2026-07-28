@@ -6,8 +6,7 @@ import { useGps } from "./hooks/useGps";
 import { GpsKPIs } from "./components/GpsKPIs";
 import { MapaPrincipal } from "./components/MapaPrincipal";
 import { GpsInfoPanel } from "./components/GpsInfoPanel";
-import { TABS_GPS, ESTADO_GPS_CFG } from "./constants";
-import type { EstadoGps } from "./types";
+import { TABS_GPS } from "./constants";
 
 function formatAge(from: Date, now: Date): string {
   const s = Math.floor((now.getTime() - from.getTime()) / 1000);
@@ -23,7 +22,6 @@ export function GpsPage() {
     data, loading, error,
     busqueda, setBusqueda,
     tabActivo, setTabActivo,
-    estadoFiltro, setEstadoFiltro,
     clienteFiltro, setClienteFiltro,
     filtrados, kpis,
     selectedId, setSelectedId, selectedVehiculo,
@@ -94,8 +92,8 @@ export function GpsPage() {
         <GpsKPIs kpis={kpis} onTabClick={setTabActivo} />
       </div>
 
-      {/* Filtros + Tabs — position+zIndex crean stacking context por encima del mapa (Leaflet) */}
-      <div className="px-5 pb-3 shrink-0 flex flex-wrap items-center gap-2.5" style={{ position: "relative", zIndex: 30 }}>
+      {/* Filtros + Tabs */}
+      <div className="px-5 pb-3 shrink-0 flex flex-wrap items-center gap-2.5">
         <div className="flex-1 min-w-[160px] relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: "var(--gray-400)" }} />
           <input
@@ -108,19 +106,6 @@ export function GpsPage() {
             style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "6px 12px 6px 34px", color: "var(--gray-700)", background: "#fff" }}
           />
         </div>
-
-        <select
-          value={estadoFiltro}
-          onChange={(e) => setEstadoFiltro(e.target.value)}
-          aria-label="Filtrar por estado"
-          className="text-[13px] outline-none"
-          style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "6px 12px", color: "var(--gray-700)", background: "#fff", minWidth: 140 }}
-        >
-          <option value="">Todos los estados</option>
-          {(Object.keys(ESTADO_GPS_CFG) as EstadoGps[]).map((k) => (
-            <option key={k} value={k}>{ESTADO_GPS_CFG[k].label}</option>
-          ))}
-        </select>
 
         <ClienteFilter
           value={clienteFiltro}
