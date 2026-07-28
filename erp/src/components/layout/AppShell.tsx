@@ -15,24 +15,24 @@ export type { Vista } from "@/types/navigation";
 
 const NAV_SECTIONS: NavSection[] = [
   {
-    id: "operaciones",
-    label: "OPERACIONES",
+    id: "comercial",
+    label: "GESTIÓN COMERCIAL",
     items: [
-      { id: "dashboard",    label: "Inicio",       icon: <LayoutDashboard className="w-4 h-4" /> },
-      { id: "solicitudes",  label: "Solicitudes",  icon: <ClipboardList   className="w-4 h-4" /> },
-      { id: "viajes",       label: "Viajes",       icon: <Truck           className="w-4 h-4" /> },
-      { id: "mapa",         label: "Centro GPS",   icon: <Map             className="w-4 h-4" /> },
-      { id: "alarmas",      label: "Alarmas",      icon: <AlertTriangle   className="w-4 h-4" /> },
-      { id: "vehiculos",    label: "Vehículos",    icon: <Car             className="w-4 h-4" /> },
-      { id: "programacion", label: "Programación", icon: <CalendarClock   className="w-4 h-4" /> },
-      { id: "cumplidos",    label: "Viajes Finalizados", icon: <CheckSquare className="w-4 h-4" /> },
+      { id: "clientes", label: "Clientes", icon: <Building2 className="w-4 h-4" /> },
     ],
   },
   {
-    id: "comercial",
-    label: "COMERCIAL",
+    id: "logistica",
+    label: "GESTIÓN LOGÍSTICA",
     items: [
-      { id: "clientes", label: "Clientes", icon: <Building2 className="w-4 h-4" /> },
+      { id: "dashboard",    label: "Inicio",               icon: <LayoutDashboard className="w-4 h-4" /> },
+      { id: "solicitudes",  label: "Solicitudes",          icon: <ClipboardList   className="w-4 h-4" /> },
+      { id: "programacion", label: "Programación",         icon: <CalendarClock   className="w-4 h-4" /> },
+      { id: "viajes",       label: "Viajes Activos",       icon: <Truck           className="w-4 h-4" /> },
+      { id: "mapa",         label: "Centro GPS",           icon: <Map             className="w-4 h-4" /> },
+      { id: "cumplidos",    label: "Viajes Finalizados",   icon: <CheckSquare     className="w-4 h-4" /> },
+      { id: "alarmas",      label: "Alarmas",              icon: <AlertTriangle   className="w-4 h-4" /> },
+      { id: "vehiculos",    label: "Vehículos",            icon: <Car             className="w-4 h-4" /> },
     ],
   },
   // Secciones futuras — descomentar y agregar items[] cuando el módulo esté listo:
@@ -134,9 +134,9 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
             IN
           </div>
           <div style={textStyle}>
-            <div className="font-bold text-[var(--text-md)] text-white leading-tight">INLOP ERP</div>
+            <div className="font-bold text-[var(--text-md)] text-white leading-tight">INLOP</div>
             <div className="leading-tight whitespace-nowrap" style={{ color: "rgba(255,255,255,0.45)", fontSize: "var(--text-xs)" }}>
-              Plataforma Empresarial Integrada
+              ERP
             </div>
           </div>
         </div>
@@ -312,7 +312,7 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
           {/* Breadcrumb semántico — WAI-ARIA breadcrumb pattern */}
           <nav aria-label="Ruta de navegación">
             <ol className="flex items-center gap-1.5 list-none m-0 p-0 text-[var(--text-md)]" style={{ color: "var(--gray-400)" }}>
-              <li><span>INLOP ERP</span></li>
+              <li><span>INLOP</span></li>
               <li aria-hidden="true"><ChevronRight className="w-3.5 h-3.5" /></li>
               <li aria-current="page" style={{ color: "var(--gray-700)", fontWeight: "var(--weight-semibold)" }}>
                 {NAV_ALL.find((n) => n.id === vista)?.label ?? "—"}
