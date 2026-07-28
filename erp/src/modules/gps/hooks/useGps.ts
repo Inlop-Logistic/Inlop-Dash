@@ -10,9 +10,10 @@ export function useGps() {
   const [error,   setError]   = useState<string | null>(null);
 
   // Filtros
-  const [busqueda,     setBusqueda]     = useState("");
-  const [tabActivo,    setTabActivo]    = useState<TabGps>("todos");
-  const [estadoFiltro, setEstadoFiltro] = useState("");
+  const [busqueda,      setBusqueda]      = useState("");
+  const [tabActivo,     setTabActivo]     = useState<TabGps>("todos");
+  const [estadoFiltro,  setEstadoFiltro]  = useState("");
+  const [clienteFiltro, setClienteFiltro] = useState("");
 
   // Selección
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -51,6 +52,12 @@ export function useGps() {
       // Estado dropdown
       if (estadoFiltro && v.estadoGps !== estadoFiltro) return false;
 
+      // Filtro de cliente
+      if (clienteFiltro) {
+        const clienteDelVehiculo = v.razon_social || v.company_customer_name || "";
+        if (clienteDelVehiculo !== clienteFiltro) return false;
+      }
+
       // Texto libre
       if (term) {
         const hay = [
@@ -62,7 +69,7 @@ export function useGps() {
 
       return true;
     });
-  }, [data, tabActivo, busqueda, estadoFiltro]);
+  }, [data, tabActivo, busqueda, estadoFiltro, clienteFiltro]);
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const kpis = useMemo<KpisGps>(() => ({
@@ -92,6 +99,7 @@ export function useGps() {
     busqueda, setBusqueda,
     tabActivo, setTabActivo,
     estadoFiltro, setEstadoFiltro,
+    clienteFiltro, setClienteFiltro,
     filtrados, kpis,
     selectedId, setSelectedId, selectedVehiculo,
     selectByPlate, cargar,

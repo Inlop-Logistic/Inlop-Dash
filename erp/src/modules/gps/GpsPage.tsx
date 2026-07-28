@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { RefreshCw, Search, Satellite, AlertCircle } from "lucide-react";
-import { PageHeader, Button } from "@/components/ui";
+import { PageHeader, Button, ClienteFilter } from "@/components/ui";
 import { useNavigationContext } from "@/core/navigation";
 import { useGps } from "./hooks/useGps";
 import { GpsKPIs } from "./components/GpsKPIs";
@@ -20,15 +20,27 @@ export function GpsPage() {
   const { navPayload } = useNavigationContext();
 
   const {
-    loading, error,
+    data, loading, error,
     busqueda, setBusqueda,
     tabActivo, setTabActivo,
     estadoFiltro, setEstadoFiltro,
+    clienteFiltro, setClienteFiltro,
     filtrados, kpis,
     selectedId, setSelectedId, selectedVehiculo,
     selectByPlate, cargar,
     lastRefresh,
   } = useGps();
+
+  // Clientes únicos para el combobox — derivados del dataset actual
+  const opcionesCliente = useMemo(() => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const v of data) {
+      const n = v.razon_social || v.company_customer_name;
+      if (n && !seen.has(n)) { seen.add(n); result.push(n); }
+    }
+    return result.sort((a, b) => a.localeCompare(b, "es"));
+  }, [data]);
 
   // Ticker for "updated X ago" display
   const [now, setNow] = useState(() => new Date());
@@ -109,6 +121,14 @@ export function GpsPage() {
             <option key={k} value={k}>{ESTADO_GPS_CFG[k].label}</option>
           ))}
         </select>
+
+        <ClienteFilter
+          value={clienteFiltro}
+          onChange={setClienteFiltro}
+          opciones={opcionesCliente}
+          minWidth={190}
+          size="sm"
+        />
 
         <div className="flex items-center gap-1 flex-wrap" role="tablist">
           {TABS_GPS.map((t) => {

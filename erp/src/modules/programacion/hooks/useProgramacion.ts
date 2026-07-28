@@ -19,9 +19,10 @@ export function useProgramacion() {
   const [data, setData]           = useState<ViajeResumen[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
-  const [tabEstado,    setTabEstado]    = useState<TabEstado>("todos");
-  const [estadoFiltro, setEstadoFiltro] = useState("");
-  const [panelId, setPanelId]           = useState<string | null>(null);
+  const [tabEstado,      setTabEstado]      = useState<TabEstado>("todos");
+  const [estadoFiltro,   setEstadoFiltro]   = useState("");
+  const [clienteFiltro,  setClienteFiltro]  = useState("");
+  const [panelId, setPanelId]               = useState<string | null>(null);
   const [accionLoading, setAccionLoading] = useState(false);
 
   // Filtros comunes — fechas inicializadas a hoy (bandeja diaria)
@@ -83,6 +84,12 @@ export function useProgramacion() {
       // Select de estado (estado visual derivado)
       if (estadoFiltro && estadoVisual(v) !== estadoFiltro) return false;
 
+      // Filtro de cliente
+      if (clienteFiltro) {
+        const clienteDelViaje = v.nombre_cliente || v.company_customer_name || "";
+        if (clienteDelViaje !== clienteFiltro) return false;
+      }
+
       // Filtro de fecha (client-side; solo activo cuando el usuario aplica un rango)
       if (fechaDesde || fechaHasta) {
         const vFecha = schedulateToISO(v.schedulate_origin) ?? v.fecha_programada_dia ?? null;
@@ -105,7 +112,7 @@ export function useProgramacion() {
 
       return true;
     });
-  }, [data, tabEstado, estadoFiltro, busqueda, fechaDesde, fechaHasta]);
+  }, [data, tabEstado, estadoFiltro, clienteFiltro, busqueda, fechaDesde, fechaHasta]);
 
   const kpis = useMemo(() => ({
     total:    data.length,
@@ -117,13 +124,14 @@ export function useProgramacion() {
   const panelViaje = panelId ? data.find((v) => v.trip_number === panelId) ?? null : null;
 
   const hayFiltros =
-    busqueda !== "" || tabEstado !== "todos" || estadoFiltro !== "" ||
+    busqueda !== "" || tabEstado !== "todos" || estadoFiltro !== "" || clienteFiltro !== "" ||
     fechaDesde !== hoy() || fechaHasta !== hoy();
 
   function limpiarFiltros() {
     limpiarBase();
     setTabEstado("todos");
     setEstadoFiltro("");
+    setClienteFiltro("");
   }
 
   return {
@@ -132,6 +140,7 @@ export function useProgramacion() {
     fechaDesde, fechaHasta, setFechaRango,
     tabEstado, setTabEstado,
     estadoFiltro, setEstadoFiltro,
+    clienteFiltro, setClienteFiltro,
     panelId, setPanelId, panelViaje,
     accionLoading,
     filtradas, kpis,

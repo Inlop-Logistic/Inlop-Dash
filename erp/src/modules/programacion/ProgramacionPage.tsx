@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { RefreshCw, CalendarClock, Clock, Activity, XCircle, AlertCircle } from "lucide-react";
-import { KpiCard, PageHeader, Card, DataTable, Button, FilterBar } from "@/components/ui";
+import { KpiCard, PageHeader, Card, DataTable, Button, FilterBar, ClienteFilter } from "@/components/ui";
 import type { SelectFilter } from "@/components/ui";
 import { useNavigationContext } from "@/core/navigation";
 import { useProgramacion } from "./hooks/useProgramacion";
@@ -17,6 +17,7 @@ export function ProgramacionPage() {
     setFechaRango,
     tabEstado, setTabEstado,
     estadoFiltro, setEstadoFiltro,
+    clienteFiltro, setClienteFiltro,
     setPanelId, panelViaje,
     accionLoading,
     filtradas, kpis,
@@ -39,6 +40,17 @@ export function ProgramacionPage() {
     setVisualDesde("");
     setVisualHasta("");
   }
+
+  // Clientes únicos para el combobox — derivados del dataset actual
+  const opcionesCliente = useMemo(() => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const v of data) {
+      const n = v.nombre_cliente || v.company_customer_name;
+      if (n && !seen.has(n)) { seen.add(n); result.push(n); }
+    }
+    return result.sort((a, b) => a.localeCompare(b, "es"));
+  }, [data]);
 
   // Auto-abrir panel cuando se navega con contexto (ej. desde Viajes)
   const autoOpenedRef = useRef(false);
@@ -99,6 +111,14 @@ export function ProgramacionPage() {
         onBusqueda={setBusqueda}
         searchPlaceholder="Trip, conductor, placa, cliente, ciudad…"
         selects={selects}
+        extraFilters={
+          <ClienteFilter
+            value={clienteFiltro}
+            onChange={setClienteFiltro}
+            opciones={opcionesCliente}
+            minWidth={200}
+          />
+        }
         fechaDesde={visualDesde}
         fechaHasta={visualHasta}
         onFechaRango={handleFechaRango}
@@ -139,7 +159,7 @@ export function ProgramacionPage() {
             </button>
           );
         })}
-        {(busqueda || estadoFiltro) && (
+        {(busqueda || estadoFiltro || clienteFiltro) && (
           <span className="text-[12px]" style={{ color: "var(--gray-400)" }}>
             · {filtradas.length} resultado{filtradas.length !== 1 ? "s" : ""}
           </span>

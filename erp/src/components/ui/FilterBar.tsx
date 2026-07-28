@@ -23,8 +23,11 @@ interface FilterBarProps {
   fechaHasta?: string;
   onFechaRango?: (desde: string, hasta: string) => void;
 
-  // Selects adicionales configurados por el módulo (estado, cliente, línea de negocio…)
+  // Selects adicionales configurados por el módulo (estado, línea de negocio…)
   selects?: SelectFilter[];
+
+  // Filtros personalizados insertados entre los selects y el DateRangePicker (ej. ClienteFilter)
+  extraFilters?: React.ReactNode;
 
   // Botón Limpiar
   hayFiltros?: boolean;
@@ -47,6 +50,7 @@ export function FilterBar({
   fechaHasta,
   onFechaRango,
   selects,
+  extraFilters,
   hayFiltros,
   onLimpiar,
 }: FilterBarProps) {
@@ -90,6 +94,9 @@ export function FilterBar({
           </select>
         )
       )}
+
+      {/* Filtros personalizados (ej. ClienteFilter) */}
+      {extraFilters}
 
       {/* Selector de rango de fechas */}
       {onFechaRango !== undefined && (
