@@ -29,13 +29,14 @@ export function useProgramacion() {
   const { busqueda, setBusqueda, fechaDesde, fechaHasta, setFechaRango, limpiarBase } =
     useFiltrosComunes({ defaultDesde: hoy(), defaultHasta: hoy() });
 
-  const cargar = async () => {
+  // desdeOpt/hastaOpt permiten pasar fechas explícitas sin depender del estado async.
+  const cargar = async (desdeOpt?: string, hastaOpt?: string) => {
+    const d = desdeOpt ?? fechaDesde ?? hoy();
+    const h = hastaOpt ?? fechaHasta ?? hoy();
     setLoading(true);
     setError(null);
     try {
-      // Usa las fechas actuales del estado para la carga.
-      // "Actualizar" con rango activo recarga ese rango; al montar, carga hoy.
-      setData(await listarProgramacion(fechaDesde || hoy(), fechaHasta || hoy()));
+      setData(await listarProgramacion(d, h));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al cargar programación");
     } finally {
@@ -43,8 +44,15 @@ export function useProgramacion() {
     }
   };
 
-  // Carga solo al montar — el selector de fechas aplica client-side (igual que Viajes).
+  // Carga al montar con el rango por defecto (hoy).
   useEffect(() => { cargar(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Aplica un rango de fechas y recarga el backend inmediatamente.
+  // Pasa las fechas explícitas para evitar la lectura de estado async tras setFechaRango.
+  const buscar = (desde: string, hasta: string) => {
+    setFechaRango(desde, hasta);
+    cargar(desde, hasta);
+  };
 
   const handleEstado = async (id: string, estado: EstadoProgramacion) => {
     setAccionLoading(true);
@@ -149,12 +157,13 @@ export function useProgramacion() {
     setTabEstado("todos");
     setEstadoFiltro("");
     setClienteFiltro("");
+    cargar(hoy(), hoy()); // recarga con el rango por defecto tras limpiar
   }
 
   return {
     data, loading, error,
     busqueda, setBusqueda,
-    fechaDesde, fechaHasta, setFechaRango,
+    fechaDesde, fechaHasta,
     tabEstado, setTabEstado,
     estadoFiltro, setEstadoFiltro,
     clienteFiltro, setClienteFiltro,
@@ -162,6 +171,6 @@ export function useProgramacion() {
     accionLoading,
     filtradas, kpis,
     hayFiltros, limpiarFiltros,
-    cargar, handleEstado, handleSync,
+    cargar, buscar, handleEstado, handleSync,
   };
 }

@@ -14,7 +14,7 @@ export function ProgramacionPage() {
   const {
     data, loading, error,
     busqueda, setBusqueda,
-    setFechaRango,
+    buscar,
     tabEstado, setTabEstado,
     estadoFiltro, setEstadoFiltro,
     clienteFiltro, setClienteFiltro,
@@ -30,9 +30,9 @@ export function ProgramacionPage() {
   const [visualHasta, setVisualHasta] = useState("");
 
   function handleFechaRango(desde: string, hasta: string) {
-    setFechaRango(desde, hasta);
     setVisualDesde(desde);
     setVisualHasta(hasta);
+    buscar(desde, hasta);
   }
 
   function handleLimpiarFiltros() {

@@ -734,7 +734,11 @@ async function syncPlaneados() {
       upsertados++;
     }
 
-    console.log(`📅 Planeados: ${upsertados} upsertados, ${clientesCreados} clientes creados, ${placeholdersOmitidos} sin Match TMS (esperando). Registros históricos retenidos (soft-delete pendiente).`);
+    // Ventana móvil de retención: conservar últimos 8 días, eliminar registros anteriores.
+    const corte = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const corteStr = extraerFechaColombia(corte);
+    await sbFetch(`/planeados?fecha_programada_dia=lt.${corteStr}`, 'DELETE');
+    console.log(`📅 Planeados: ${upsertados} upsertados, ${clientesCreados} clientes creados, ${placeholdersOmitidos} sin Match TMS. Eliminados anteriores a ${corteStr} (ventana 8 días).`);
 
     const sinCliente = (existentes || []).filter(e => !e.company_customer_name);
     for (const e of sinCliente) {
@@ -1344,14 +1348,21 @@ async function syncCumplidos() {
             'PATCH',
             { estado_cumplido: nuevoEstado, fecha_finalizacion: new Date().toISOString() }
           );
-          // Propagar COMPLETADO a planeados para mantener consistencia de estado
-          await sbFetch(
-            `/planeados?trip_number=eq.${encodeURIComponent(id)}`,
-            'PATCH',
-            { estado_programacion: 'completado', actualizado_en: new Date().toISOString() }
+          // Verificar estado sticky antes de propagar COMPLETADO — CANCELADO nunca se sobreescribe
+          const planeadoActual = await sbFetch(
+            `/planeados?trip_number=eq.${encodeURIComponent(id)}&select=estado_programacion`
           );
+          if (planeadoActual?.[0]?.estado_programacion === 'cancelado') {
+            console.log(`🔒 Cumplido ${id} → ${nuevoEstado} | Planeado cancelado — sticky, COMPLETADO omitido`);
+          } else {
+            await sbFetch(
+              `/planeados?trip_number=eq.${encodeURIComponent(id)}`,
+              'PATCH',
+              { estado_programacion: 'completado', actualizado_en: new Date().toISOString() }
+            );
+            console.log(`🏁 Cumplido ${id} → ${nuevoEstado} | Planeado → completado`);
+          }
           finalizados++;
-          console.log(`🏁 Cumplido ${id} → ${nuevoEstado} | Planeado → completado`);
         }
       }
     }
