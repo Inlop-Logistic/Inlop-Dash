@@ -672,7 +672,7 @@ async function syncPlaneados() {
     console.log(`📅 Planeados: ${arr.length} en Travel/search → ${viajesFuturos.length} hoy o futuros`);
     if (!viajesFuturos.length) return;
 
-    const existentes = await sbFetch('/planeados?select=trip_number,fecha_detectado,company_customer_name,activo_en_resume,empresa_cliente_id');
+    const existentes = await sbFetch('/planeados?select=trip_number,fecha_detectado,company_customer_name,activo_en_resume,empresa_cliente_id,estado_programacion');
     const existMap = {};
     (existentes || []).forEach(e => { existMap[e.trip_number] = e; });
 
@@ -699,6 +699,18 @@ async function syncPlaneados() {
         });
       }
 
+      // Derivar estado_programacion — backend es fuente de verdad
+      const estadoActual = yaExiste?.estado_programacion || 'programado';
+      const ahora        = Date.now();
+      let estado_programacion;
+      if (estadoActual === 'cancelado' || estadoActual === 'completado') {
+        estado_programacion = estadoActual; // estados sticky: sync nunca los revierte
+      } else if (estaActivo) {
+        estado_programacion = (f && f.getTime() <= ahora) ? 'en_ruta' : 'asignado';
+      } else {
+        estado_programacion = (f && f.getTime() <= ahora) ? 'sin_asignar' : 'programado';
+      }
+
       const row = {
         trip_number:           v.trip_number,
         license_plate:         v.license_plate         || null,
@@ -711,6 +723,7 @@ async function syncPlaneados() {
         schedulate_origin:     v.schedulate_origin     || null,
         fecha_programada_dia:  f ? extraerFechaColombia(f) : null,
         activo_en_resume:      estaActivo,
+        estado_programacion,
         fecha_detectado:       yaExiste ? yaExiste.fecha_detectado : new Date().toISOString(),
         activado_en:           (estaActivo && yaExiste && !yaExiste.activo_en_resume) || (estaActivo && !yaExiste)
                                  ? new Date().toISOString()
@@ -721,8 +734,7 @@ async function syncPlaneados() {
       upsertados++;
     }
 
-    await sbFetch(`/planeados?fecha_programada_dia=lt.${hoyStr}`, 'DELETE');
-    console.log(`📅 Planeados: ${upsertados} upsertados, ${clientesCreados} clientes creados, ${placeholdersOmitidos} sin Match TMS (esperando), limpieza de anteriores a ${hoyStr}`);
+    console.log(`📅 Planeados: ${upsertados} upsertados, ${clientesCreados} clientes creados, ${placeholdersOmitidos} sin Match TMS (esperando). Registros históricos retenidos (soft-delete pendiente).`);
 
     const sinCliente = (existentes || []).filter(e => !e.company_customer_name);
     for (const e of sinCliente) {
@@ -1332,8 +1344,14 @@ async function syncCumplidos() {
             'PATCH',
             { estado_cumplido: nuevoEstado, fecha_finalizacion: new Date().toISOString() }
           );
+          // Propagar COMPLETADO a planeados para mantener consistencia de estado
+          await sbFetch(
+            `/planeados?trip_number=eq.${encodeURIComponent(id)}`,
+            'PATCH',
+            { estado_programacion: 'completado', actualizado_en: new Date().toISOString() }
+          );
           finalizados++;
-          console.log(`🏁 Cumplido ${id} → ${nuevoEstado}`);
+          console.log(`🏁 Cumplido ${id} → ${nuevoEstado} | Planeado → completado`);
         }
       }
     }
@@ -3029,9 +3047,10 @@ app.patch("/api/programacion/:id/estado", requireInternalApiKey, async (req, res
   try {
     const { id } = req.params;
     const { estado } = req.body || {};
-    const ESTADOS_VALIDOS = ["programado", "cancelado"];
-    if (!ESTADOS_VALIDOS.includes(estado)) {
-      return res.status(400).json({ error: `Estado inválido: ${estado}` });
+    // Solo se admiten transiciones manuales; los estados automáticos los gestiona syncPlaneados/syncCumplidos
+    const ESTADOS_MANUALES = ["programado", "cancelado"];
+    if (!ESTADOS_MANUALES.includes(estado)) {
+      return res.status(400).json({ error: `Estado inválido. Transiciones manuales permitidas: ${ESTADOS_MANUALES.join(", ")}` });
     }
     await sbFetch(
       `/planeados?trip_number=eq.${encodeURIComponent(id)}`,
@@ -3076,6 +3095,23 @@ app.post("/api/programacion/:id/sync", requireInternalApiKey, async (req, res) =
 
     const viajeCache = [...cache.viajes.data, ...(cache.pendientes.data || [])].find(v => v.trip_number === id);
 
+    // Leer estado actual para respetar estados sticky (cancelado, completado)
+    const planeadoRows = await sbFetch(`/planeados?trip_number=eq.${encodeURIComponent(id)}&select=estado_programacion,schedulate_origin`);
+    const planeadoActual   = planeadoRows?.[0] || null;
+    const estadoActual     = planeadoActual?.estado_programacion || 'programado';
+    const schedulateRaw    = viajeCache?.schedulate_origin || planeadoActual?.schedulate_origin;
+    const fSync            = schedulateRaw ? parseSchedulate(schedulateRaw) : null;
+    const ahoraSync        = Date.now();
+
+    let estado_programacion;
+    if (estadoActual === 'cancelado' || estadoActual === 'completado') {
+      estado_programacion = estadoActual;
+    } else if (estaActivo) {
+      estado_programacion = (fSync && fSync.getTime() <= ahoraSync) ? 'en_ruta' : 'asignado';
+    } else {
+      estado_programacion = (fSync && fSync.getTime() <= ahoraSync) ? 'sin_asignar' : 'programado';
+    }
+
     if (viajeCache) {
       const f = parseSchedulate(viajeCache.schedulate_origin);
       await sbFetch(
@@ -3091,6 +3127,7 @@ app.post("/api/programacion/:id/sync", requireInternalApiKey, async (req, res) =
           schedulate_origin:     viajeCache.schedulate_origin     || null,
           fecha_programada_dia:  f ? extraerFechaColombia(f) : null,
           activo_en_resume:      estaActivo,
+          estado_programacion,
           actualizado_en:        new Date().toISOString(),
         }
       );
@@ -3098,11 +3135,11 @@ app.post("/api/programacion/:id/sync", requireInternalApiKey, async (req, res) =
       await sbFetch(
         `/planeados?trip_number=eq.${encodeURIComponent(id)}`,
         'PATCH',
-        { activo_en_resume: estaActivo, actualizado_en: new Date().toISOString() }
+        { activo_en_resume: estaActivo, estado_programacion, actualizado_en: new Date().toISOString() }
       );
     }
 
-    res.json({ ok: true, activo_en_resume: estaActivo });
+    res.json({ ok: true, activo_en_resume: estaActivo, estado_programacion });
   } catch (e) {
     console.error("❌ POST /api/programacion/:id/sync:", e.message);
     res.status(500).json({ error: e.message });

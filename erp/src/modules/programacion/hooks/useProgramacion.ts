@@ -6,7 +6,7 @@ import { listarProgramacion, cambiarEstadoProgramacion, sincronizarViaje } from 
 import { estadoVisual } from "../constants";
 import { useFiltrosComunes } from "@/hooks/useFiltrosComunes";
 
-type TabEstado = "todos" | "programado" | "asignado" | "cancelado";
+type TabEstado = "todos" | "programado" | "asignado" | "en_ruta" | "completado" | "cancelado" | "sin_asignar";
 
 /** Convierte schedulate_origin (DD/MM/YYYY HH:MM:SS) a YYYY-MM-DD Colombia para filtro de fecha. */
 function schedulateToISO(raw: string | null | undefined): string | null {
@@ -64,7 +64,11 @@ export function useProgramacion() {
     try {
       const result = await sincronizarViaje(id);
       setData((prev) =>
-        prev.map((v) => v.trip_number === id ? { ...v, activo_en_resume: result.activo_en_resume } : v)
+        prev.map((v) =>
+          v.trip_number === id
+            ? { ...v, activo_en_resume: result.activo_en_resume, estado_programacion: result.estado_programacion }
+            : v
+        )
       );
     } finally {
       setAccionLoading(false);
@@ -76,12 +80,10 @@ export function useProgramacion() {
     const term = busqueda.trim().toLowerCase();
 
     return data.filter((v) => {
-      // Tab de estado
-      if (tabEstado === "programado" && (v.activo_en_resume || v.estado_programacion === "cancelado")) return false;
-      if (tabEstado === "asignado"   && !v.activo_en_resume) return false;
-      if (tabEstado === "cancelado"  && v.estado_programacion !== "cancelado") return false;
+      // Tab de estado — usa estado_programacion como fuente de verdad
+      if (tabEstado !== "todos" && v.estado_programacion !== tabEstado) return false;
 
-      // Select de estado (estado visual derivado)
+      // Select de estado
       if (estadoFiltro && estadoVisual(v) !== estadoFiltro) return false;
 
       // Filtro de cliente
@@ -114,13 +116,27 @@ export function useProgramacion() {
     });
   }, [data, tabEstado, estadoFiltro, clienteFiltro, busqueda, fechaDesde, fechaHasta]);
 
-  // KPIs calculados sobre filtradas para reflejar exactamente lo visible en la tabla
-  const kpis = useMemo(() => ({
-    total:     filtradas.length,
-    pendiente: filtradas.filter((v) => !v.activo_en_resume && v.estado_programacion !== "cancelado").length,
-    activo:    filtradas.filter((v) => v.activo_en_resume).length,
-    cancelado: filtradas.filter((v) => v.estado_programacion === "cancelado").length,
-  }), [filtradas]);
+  // KPIs calculados sobre el dataset completo (no sobre filtradas) para mostrar totales reales
+  const kpis = useMemo(() => {
+    const programado  = data.filter((v) => v.estado_programacion === "programado").length;
+    const sinAsignar  = data.filter((v) => v.estado_programacion === "sin_asignar").length;
+    const asignado    = data.filter((v) => v.estado_programacion === "asignado").length;
+    const enRuta      = data.filter((v) => v.estado_programacion === "en_ruta").length;
+    const completado  = data.filter((v) => v.estado_programacion === "completado").length;
+    const cancelado   = data.filter((v) => v.estado_programacion === "cancelado").length;
+    return {
+      total:       data.length,
+      programado,
+      sin_asignar: sinAsignar,
+      asignado,
+      en_ruta:     enRuta,
+      completado,
+      cancelado,
+      // aliases para backward-compat con ProgramacionPage KPI cards
+      pendiente: programado + sinAsignar,
+      activo:    asignado + enRuta,
+    };
+  }, [data]);
 
   const panelViaje = panelId ? data.find((v) => v.trip_number === panelId) ?? null : null;
 

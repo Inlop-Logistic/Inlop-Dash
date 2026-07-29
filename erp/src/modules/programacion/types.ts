@@ -1,4 +1,4 @@
-export type EstadoProgramacion = "programado" | "cancelado";
+export type EstadoProgramacion = "programado" | "asignado" | "en_ruta" | "completado" | "cancelado" | "sin_asignar";
 
 export interface ViajeResumen {
   trip_number: string;

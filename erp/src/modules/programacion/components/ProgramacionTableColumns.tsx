@@ -3,7 +3,6 @@ import { parseFechaTMS } from "@/utils/parseFecha";
 import type { Column } from "@/components/ui";
 import type { ViajeResumen } from "../types";
 import { EstadoBadge } from "./EstadoBadge";
-import { estadoVisual } from "../constants";
 
 const TZ_COL = "America/Bogota";
 
@@ -168,6 +167,6 @@ export const COLUMNS: Column<ViajeResumen>[] = [
     key: "estado",
     header: "Estado",
     width: "120px",
-    render: (v) => <EstadoBadge estado={estadoVisual(v)} />,
+    render: (v) => <EstadoBadge estado={v.estado_programacion} />,
   },
 ];

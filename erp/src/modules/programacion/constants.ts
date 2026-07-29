@@ -1,36 +1,31 @@
 import type { ViajeResumen } from "./types";
-import { parseFechaDMY } from "@/utils/parseFecha";
 
 export const ESTADO_CFG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  programado: { label: "Programado",  color: "#374151",           bg: "var(--gray-100)",  dot: "var(--gray-400)" },
-  asignado:   { label: "Asignado",    color: "#1D4ED8",           bg: "#DBEAFE",          dot: "var(--info)"     },
-  vencido:    { label: "Sin activar", color: "#92400E",           bg: "#FEF3C7",          dot: "#F59E0B"         },
-  cancelado:  { label: "Cancelado",   color: "var(--gray-600)",   bg: "var(--gray-100)",  dot: "var(--gray-400)" },
+  programado:  { label: "Programado",   color: "#374151",           bg: "var(--gray-100)",  dot: "var(--gray-400)" },
+  asignado:    { label: "Asignado",     color: "#1D4ED8",           bg: "#DBEAFE",          dot: "var(--info)"     },
+  en_ruta:     { label: "En ruta",      color: "#065F46",           bg: "#D1FAE5",          dot: "#10B981"         },
+  completado:  { label: "Completado",   color: "#1E3A5F",           bg: "#DBEAFE",          dot: "var(--navy)"     },
+  cancelado:   { label: "Cancelado",    color: "var(--gray-600)",   bg: "var(--gray-100)",  dot: "var(--gray-400)" },
+  sin_asignar: { label: "Sin asignar",  color: "#92400E",           bg: "#FEF3C7",          dot: "#F59E0B"         },
 };
 
 export const TABS = [
-  { id: "todos",      label: "Todos"      },
-  { id: "programado", label: "Programado" },
-  { id: "asignado",   label: "Asignado"   },
-  { id: "cancelado",  label: "Cancelado"  },
+  { id: "todos",       label: "Todos"        },
+  { id: "programado",  label: "Programado"   },
+  { id: "asignado",    label: "Asignado"     },
+  { id: "en_ruta",     label: "En ruta"      },
+  { id: "completado",  label: "Completado"   },
+  { id: "cancelado",   label: "Cancelado"    },
+  { id: "sin_asignar", label: "Sin asignar"  },
 ];
 
-/** Estado visual derivado (para badges y filtros): combina estado_programacion + activo_en_resume + tiempo. */
+/** Estado visual: lee directamente del campo authoritative del backend. */
 export function estadoVisual(v: ViajeResumen): string {
-  if (v.estado_programacion === "cancelado") return "cancelado";
-  if (v.activo_en_resume) return "asignado";
-  if (v.schedulate_origin) {
-    const d = parseFechaDMY(v.schedulate_origin);
-    if (d && d.getTime() < Date.now()) return "vencido";
-  }
-  return "programado";
+  return v.estado_programacion ?? "programado";
 }
 
-/** Conteo por tab considerando el estado derivado. */
+/** Conteo por tab usando estado_programacion como fuente de verdad. */
 export function tabCount(data: ViajeResumen[], tabId: string): number {
-  if (tabId === "todos")      return data.length;
-  if (tabId === "programado") return data.filter((v) => !v.activo_en_resume && v.estado_programacion !== "cancelado").length;
-  if (tabId === "asignado")   return data.filter((v) => v.activo_en_resume).length;
-  if (tabId === "cancelado")  return data.filter((v) => v.estado_programacion === "cancelado").length;
-  return 0;
+  if (tabId === "todos") return data.length;
+  return data.filter((v) => v.estado_programacion === tabId).length;
 }

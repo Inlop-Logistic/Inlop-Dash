@@ -9,7 +9,6 @@ import { useNavigationContext, navActions } from "@/core/navigation";
 import type { ViajeResumen, EstadoProgramacion, SolicitudVinculadaResult } from "../types";
 import { guardarObservacion, obtenerSolicitudVinculada } from "../services/api";
 import { EstadoBadge } from "./EstadoBadge";
-import { estadoVisual } from "../constants";
 
 // ── Helpers locales ────────────────────────────────────────────────────
 
@@ -106,10 +105,10 @@ export function CentroOperativo({ viaje, onClose, onEstado, onSync, accionLoadin
     return () => { cancelled = true; };
   }, [viaje.trip_number]);
 
-  const estadoD             = estadoVisual(viaje);
+  const estadoD             = viaje.estado_programacion;
   const esCancelado         = viaje.estado_programacion === "cancelado";
-  const esVencido           = estadoD === "vencido";
-  const esperandoActivacion = !viaje.activo_en_resume && !esCancelado;
+  const esVencido           = estadoD === "sin_asignar";
+  const esperandoActivacion = estadoD === "programado" || estadoD === "sin_asignar";
 
   const tienePhone = !!viaje.conductor_tel;
   const { fecha: fechaProg, hora: horaProg } = splitSchedulate(viaje.schedulate_origin);
