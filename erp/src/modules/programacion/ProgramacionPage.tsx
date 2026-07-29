@@ -90,7 +90,7 @@ export function ProgramacionPage() {
             size="sm"
             icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />}
             loading={loading}
-            onClick={cargar}
+            onClick={() => cargar()}
           >
             Actualizar
           </Button>
@@ -172,7 +172,7 @@ export function ProgramacionPage() {
           <div className="py-16 text-center">
             <AlertCircle className="w-8 h-8 mx-auto mb-3" style={{ color: "var(--inlop-red)", opacity: 0.5 }} />
             <p className="text-[13px]" style={{ color: "var(--inlop-red)" }}>{error}</p>
-            <button type="button" onClick={cargar} className="mt-3 text-[12px] underline" style={{ color: "var(--navy)" }}>
+            <button type="button" onClick={() => cargar()} className="mt-3 text-[12px] underline" style={{ color: "var(--navy)" }}>
               Reintentar
             </button>
           </div>
