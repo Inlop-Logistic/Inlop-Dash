@@ -24,7 +24,7 @@ export function obtenerSolicitudVinculada(tripNumber: string) {
 }
 
 export function sincronizarViaje(tripNumber: string) {
-  return req<{ ok: boolean; activo_en_resume: boolean }>(
+  return req<{ ok: boolean; activo_en_resume: boolean; estado_programacion: EstadoProgramacion }>(
     `/api/programacion/${encodeURIComponent(tripNumber)}/sync`,
     { method: "POST" },
   );

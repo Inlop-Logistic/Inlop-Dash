@@ -1,4 +1,4 @@
-import { CalendarClock, ClipboardList, Map, CheckSquare, Car, User, Building2, ChevronRight } from "lucide-react";
+import { Map, CheckSquare, Building2, ChevronRight, Link2 } from "lucide-react";
 import { PanelSection } from "@/components/ui";
 import { useNavigationContext, navActions } from "@/core/navigation";
 import type { TmsViaje } from "../types";
@@ -9,14 +9,16 @@ interface AccionProps {
   onClick?:  () => void;
   disabled?: boolean;
   badge?:    string;
+  tooltip?:  string;
 }
 
-function Accion({ icon, label, onClick, disabled, badge }: AccionProps) {
+function Accion({ icon, label, onClick, disabled, badge, tooltip }: AccionProps) {
   return (
     <button
       type="button"
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
+      title={tooltip}
       className="flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-[13px] font-medium transition-colors"
       style={{
         background: disabled ? "var(--gray-50)" : "#fff",
@@ -42,46 +44,36 @@ export function AccionesPanel({ viaje }: { viaje: TmsViaje }) {
   const trip = viaje.trip_number;
 
   return (
-    <PanelSection title="Acciones" icon={<ChevronRight className="w-3.5 h-3.5" />}>
+    <PanelSection title="Conexiones" icon={<Link2 className="w-3.5 h-3.5" />}>
       <div className="flex flex-col gap-2">
-        <Accion
-          icon={<CalendarClock className="w-3.5 h-3.5" />}
-          label="Abrir Programación"
-          onClick={() => navigateTo(navActions.verProgramacion(trip, "viajes"))}
-        />
-        <Accion
-          icon={<ClipboardList className="w-3.5 h-3.5" />}
-          label="Abrir Solicitud"
-          onClick={() => navigateTo(navActions.verSolicitud(trip, "viajes"))}
-        />
-        <Accion
-          icon={<Map className="w-3.5 h-3.5" />}
-          label="Abrir GPS"
-          onClick={() => navigateTo(navActions.verGps(viaje.license_plate ?? "", trip, "viajes"))}
-        />
-        <Accion
-          icon={<CheckSquare className="w-3.5 h-3.5" />}
-          label="Abrir Viajes Finalizados"
-          onClick={() => navigateTo(navActions.verCumplidos(trip, "viajes"))}
-        />
+
+        {/* Cliente — siempre habilitado */}
         <Accion
           icon={<Building2 className="w-3.5 h-3.5" />}
-          label="Abrir Cliente"
-          disabled
-          badge="Próximamente"
+          label="Cliente"
+          onClick={() => navigateTo(navActions.verCliente(viaje.empresa_cliente_id ?? "", "viajes"))}
+          tooltip="Abrir la ficha del cliente"
         />
+
+        {/* Centro GPS — siempre habilitado */}
         <Accion
-          icon={<Car className="w-3.5 h-3.5" />}
-          label="Abrir Vehículo"
-          disabled
-          badge="Próximamente"
+          icon={<Map className="w-3.5 h-3.5" />}
+          label="Centro GPS"
+          onClick={() => navigateTo(navActions.verGps(viaje.license_plate ?? "", trip, "viajes"))}
+          tooltip="Abrir el mapa con el vehículo seleccionado"
         />
+
+        {/* Viajes Finalizados — habilitado cuando existe trip_number */}
         <Accion
-          icon={<User className="w-3.5 h-3.5" />}
-          label="Abrir Conductor"
-          disabled
-          badge="Próximamente"
+          icon={<CheckSquare className="w-3.5 h-3.5" />}
+          label="Viajes Finalizados"
+          onClick={trip ? () => navigateTo(navActions.verCumplidos(trip, "viajes")) : undefined}
+          disabled={!trip}
+          tooltip={trip
+            ? "Buscar el registro de este viaje en Viajes Finalizados"
+            : "Este viaje aún no cuenta con un registro en Viajes Finalizados."}
         />
+
       </div>
     </PanelSection>
   );

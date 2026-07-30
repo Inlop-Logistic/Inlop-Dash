@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { parseFechaMDY } from "@/utils/parseFecha";
+import { extraerFechaColombia } from "@/utils/date";
 import { lineaNegocio } from "@/utils/lineaNegocio";
 import type { CumplidoRecord, KpisCumplidos } from "../types";
 import type { TabCumplidos } from "../constants";
@@ -7,12 +8,11 @@ import { REFRESH_INTERVAL_MS, tabCount } from "../constants";
 import { listarCumplidos } from "../services/api";
 import { useFiltrosComunes } from "@/hooks/useFiltrosComunes";
 
-/** Convierte activated_on (MM/DD/YYYY HH:MM:SS) a YYYY-MM-DD para comparar contra date inputs. */
+/** Convierte activated_on (MM/DD/YYYY HH:MM:SS) a YYYY-MM-DD Colombia para comparar contra date inputs. */
 function activatedOnISO(c: CumplidoRecord): string | null {
   const d = parseFechaMDY(c.activated_on);
   if (!d) return null;
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return extraerFechaColombia(d);
 }
 
 export function useCumplidos() {

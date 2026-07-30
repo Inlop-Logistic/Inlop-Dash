@@ -1,41 +1,42 @@
 import { useState, useEffect, useMemo } from "react";
-import { hoy } from "@/utils/date";
+import { hoy, extraerFechaColombia } from "@/utils/date";
 import { parseFechaDMY } from "@/utils/parseFecha";
 import type { ViajeResumen, EstadoProgramacion } from "../types";
 import { listarProgramacion, cambiarEstadoProgramacion, sincronizarViaje } from "../services/api";
 import { estadoVisual } from "../constants";
 import { useFiltrosComunes } from "@/hooks/useFiltrosComunes";
 
-type TabEstado = "todos" | "programado" | "asignado" | "cancelado";
+type TabEstado = "todos" | "programado" | "asignado" | "en_ruta" | "completado" | "cancelado" | "sin_asignar";
 
-/** Convierte schedulate_origin (DD/MM/YYYY HH:MM:SS) a YYYY-MM-DD para filtro de fecha. */
+/** Convierte schedulate_origin (DD/MM/YYYY HH:MM:SS) a YYYY-MM-DD Colombia para filtro de fecha. */
 function schedulateToISO(raw: string | null | undefined): string | null {
   const d = parseFechaDMY(raw);
   if (!d) return null;
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return extraerFechaColombia(d);
 }
 
 export function useProgramacion() {
   const [data, setData]           = useState<ViajeResumen[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
-  const [tabEstado,    setTabEstado]    = useState<TabEstado>("todos");
-  const [estadoFiltro, setEstadoFiltro] = useState("");
-  const [panelId, setPanelId]           = useState<string | null>(null);
+  const [tabEstado,      setTabEstado]      = useState<TabEstado>("todos");
+  const [estadoFiltro,   setEstadoFiltro]   = useState("");
+  const [clienteFiltro,  setClienteFiltro]  = useState("");
+  const [panelId, setPanelId]               = useState<string | null>(null);
   const [accionLoading, setAccionLoading] = useState(false);
 
   // Filtros comunes — fechas inicializadas a hoy (bandeja diaria)
   const { busqueda, setBusqueda, fechaDesde, fechaHasta, setFechaRango, limpiarBase } =
     useFiltrosComunes({ defaultDesde: hoy(), defaultHasta: hoy() });
 
-  const cargar = async () => {
+  // desdeOpt/hastaOpt permiten pasar fechas explícitas sin depender del estado async.
+  const cargar = async (desdeOpt?: string, hastaOpt?: string) => {
+    const d = desdeOpt ?? fechaDesde ?? hoy();
+    const h = hastaOpt ?? fechaHasta ?? hoy();
     setLoading(true);
     setError(null);
     try {
-      // Usa las fechas actuales del estado para la carga.
-      // "Actualizar" con rango activo recarga ese rango; al montar, carga hoy.
-      setData(await listarProgramacion(fechaDesde || hoy(), fechaHasta || hoy()));
+      setData(await listarProgramacion(d, h));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al cargar programación");
     } finally {
@@ -43,8 +44,15 @@ export function useProgramacion() {
     }
   };
 
-  // Carga solo al montar — el selector de fechas aplica client-side (igual que Viajes).
+  // Carga al montar con el rango por defecto (hoy).
   useEffect(() => { cargar(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Aplica un rango de fechas y recarga el backend inmediatamente.
+  // Pasa las fechas explícitas para evitar la lectura de estado async tras setFechaRango.
+  const buscar = (desde: string, hasta: string) => {
+    setFechaRango(desde, hasta);
+    cargar(desde, hasta);
+  };
 
   const handleEstado = async (id: string, estado: EstadoProgramacion) => {
     setAccionLoading(true);
@@ -64,7 +72,11 @@ export function useProgramacion() {
     try {
       const result = await sincronizarViaje(id);
       setData((prev) =>
-        prev.map((v) => v.trip_number === id ? { ...v, activo_en_resume: result.activo_en_resume } : v)
+        prev.map((v) =>
+          v.trip_number === id
+            ? { ...v, activo_en_resume: result.activo_en_resume, estado_programacion: result.estado_programacion }
+            : v
+        )
       );
     } finally {
       setAccionLoading(false);
@@ -76,13 +88,17 @@ export function useProgramacion() {
     const term = busqueda.trim().toLowerCase();
 
     return data.filter((v) => {
-      // Tab de estado
-      if (tabEstado === "programado" && (v.activo_en_resume || v.estado_programacion === "cancelado")) return false;
-      if (tabEstado === "asignado"   && !v.activo_en_resume) return false;
-      if (tabEstado === "cancelado"  && v.estado_programacion !== "cancelado") return false;
+      // Tab de estado — usa estado_programacion como fuente de verdad
+      if (tabEstado !== "todos" && v.estado_programacion !== tabEstado) return false;
 
-      // Select de estado (estado visual derivado)
+      // Select de estado
       if (estadoFiltro && estadoVisual(v) !== estadoFiltro) return false;
+
+      // Filtro de cliente
+      if (clienteFiltro) {
+        const clienteDelViaje = v.nombre_cliente || v.company_customer_name || "";
+        if (clienteDelViaje !== clienteFiltro) return false;
+      }
 
       // Filtro de fecha (client-side; solo activo cuando el usuario aplica un rango)
       if (fechaDesde || fechaHasta) {
@@ -106,37 +122,55 @@ export function useProgramacion() {
 
       return true;
     });
-  }, [data, tabEstado, estadoFiltro, busqueda, fechaDesde, fechaHasta]);
+  }, [data, tabEstado, estadoFiltro, clienteFiltro, busqueda, fechaDesde, fechaHasta]);
 
-  const kpis = useMemo(() => ({
-    total:    data.length,
-    pendiente: data.filter((v) => !v.activo_en_resume && v.estado_programacion !== "cancelado").length,
-    activo:    data.filter((v) => v.activo_en_resume).length,
-    cancelado: data.filter((v) => v.estado_programacion === "cancelado").length,
-  }), [data]);
+  // KPIs calculados sobre el dataset completo (no sobre filtradas) para mostrar totales reales
+  const kpis = useMemo(() => {
+    const programado  = data.filter((v) => v.estado_programacion === "programado").length;
+    const sinAsignar  = data.filter((v) => v.estado_programacion === "sin_asignar").length;
+    const asignado    = data.filter((v) => v.estado_programacion === "asignado").length;
+    const enRuta      = data.filter((v) => v.estado_programacion === "en_ruta").length;
+    const completado  = data.filter((v) => v.estado_programacion === "completado").length;
+    const cancelado   = data.filter((v) => v.estado_programacion === "cancelado").length;
+    return {
+      total:       data.length,
+      programado,
+      sin_asignar: sinAsignar,
+      asignado,
+      en_ruta:     enRuta,
+      completado,
+      cancelado,
+      // aliases para backward-compat con ProgramacionPage KPI cards
+      pendiente: programado + sinAsignar,
+      activo:    asignado + enRuta,
+    };
+  }, [data]);
 
   const panelViaje = panelId ? data.find((v) => v.trip_number === panelId) ?? null : null;
 
   const hayFiltros =
-    busqueda !== "" || tabEstado !== "todos" || estadoFiltro !== "" ||
+    busqueda !== "" || tabEstado !== "todos" || estadoFiltro !== "" || clienteFiltro !== "" ||
     fechaDesde !== hoy() || fechaHasta !== hoy();
 
   function limpiarFiltros() {
     limpiarBase();
     setTabEstado("todos");
     setEstadoFiltro("");
+    setClienteFiltro("");
+    cargar(hoy(), hoy()); // recarga con el rango por defecto tras limpiar
   }
 
   return {
     data, loading, error,
     busqueda, setBusqueda,
-    fechaDesde, fechaHasta, setFechaRango,
+    fechaDesde, fechaHasta,
     tabEstado, setTabEstado,
     estadoFiltro, setEstadoFiltro,
+    clienteFiltro, setClienteFiltro,
     panelId, setPanelId, panelViaje,
     accionLoading,
     filtradas, kpis,
     hayFiltros, limpiarFiltros,
-    cargar, handleEstado, handleSync,
+    cargar, buscar, handleEstado, handleSync,
   };
 }

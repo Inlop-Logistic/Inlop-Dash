@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { RefreshCw, Truck, Activity, Package, Navigation, PackageCheck, AlertTriangle, AlertCircle } from "lucide-react";
 import { KpiCard, PageHeader, Card, DataTable, Button, FilterBar } from "@/components/ui";
 import type { SelectFilter } from "@/components/ui";
@@ -7,12 +7,12 @@ import { useViajes } from "./hooks/useViajes";
 import { DetalleViaje } from "./components/DetalleViaje";
 import { COLUMNS } from "./components/ViajesTableColumns";
 import { TABS, ESTADO_CFG } from "./constants";
-import type { EstadoViaje } from "./types";
 
 export function ViajesPage() {
   const { navPayload } = useNavigationContext();
 
   const {
+    data,
     loading, error,
     busqueda, setBusqueda,
     tabActivo, setTabActivo,
@@ -44,6 +44,25 @@ export function ViajesPage() {
     conNovedad:   "Con Novedad",
   };
 
+  // Deriva estados únicos del snapshot actual del TMS (no de config estática).
+  // Usa ESTADO_CFG para el label de cada estado; si no existe, muestra el valor raw.
+  const estadosDisponibles = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const v of data) {
+      const raw = (v.state_travel ?? "").trim().toLowerCase();
+      if (!raw || seen.has(raw)) continue;
+      const cfg = ESTADO_CFG[raw];
+      seen.set(raw, cfg?.label ?? raw);
+    }
+    if (seen.size === 0) {
+      // Mientras carga, usa la config estática como fallback
+      return Object.entries(ESTADO_CFG).map(([value, cfg]) => ({ value, label: cfg.label }));
+    }
+    return [...seen.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, "es"));
+  }, [data]);
+
   const selects: SelectFilter[] = [
     {
       value:       estadoFiltro,
@@ -51,9 +70,7 @@ export function ViajesPage() {
       placeholder: "Todos los estados",
       ariaLabel:   "Filtrar por estado",
       minWidth:    160,
-      options:     (Object.entries(ESTADO_CFG) as [EstadoViaje, typeof ESTADO_CFG[string]][]).map(
-        ([key, cfg]) => ({ value: key, label: cfg.label }),
-      ),
+      options:     estadosDisponibles,
     },
     {
       value:       clienteFiltro,
@@ -143,7 +160,7 @@ export function ViajesPage() {
             </button>
           );
         })}
-        {(busqueda || clienteFiltro || estadoFiltro) && (
+        {(busqueda || clienteFiltro || estadoFiltro || fechaDesde) && (
           <span className="text-[12px]" style={{ color: "var(--gray-400)" }}>
             · {filtradas.length} resultado{filtradas.length !== 1 ? "s" : ""}
           </span>

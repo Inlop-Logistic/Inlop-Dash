@@ -1,13 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { RefreshCw, Search, Satellite, AlertCircle } from "lucide-react";
-import { PageHeader, Button } from "@/components/ui";
+import { PageHeader, Button, ClienteFilter } from "@/components/ui";
 import { useNavigationContext } from "@/core/navigation";
 import { useGps } from "./hooks/useGps";
 import { GpsKPIs } from "./components/GpsKPIs";
 import { MapaPrincipal } from "./components/MapaPrincipal";
 import { GpsInfoPanel } from "./components/GpsInfoPanel";
-import { TABS_GPS, ESTADO_GPS_CFG } from "./constants";
-import type { EstadoGps } from "./types";
+import { TABS_GPS } from "./constants";
 
 function formatAge(from: Date, now: Date): string {
   const s = Math.floor((now.getTime() - from.getTime()) / 1000);
@@ -20,15 +19,26 @@ export function GpsPage() {
   const { navPayload } = useNavigationContext();
 
   const {
-    loading, error,
+    data, loading, error,
     busqueda, setBusqueda,
     tabActivo, setTabActivo,
-    estadoFiltro, setEstadoFiltro,
+    clienteFiltro, setClienteFiltro,
     filtrados, kpis,
     selectedId, setSelectedId, selectedVehiculo,
     selectByPlate, cargar,
     lastRefresh,
   } = useGps();
+
+  // Clientes únicos para el combobox — derivados del dataset actual
+  const opcionesCliente = useMemo(() => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const v of data) {
+      const n = v.razon_social || v.company_customer_name;
+      if (n && !seen.has(n)) { seen.add(n); result.push(n); }
+    }
+    return result.sort((a, b) => a.localeCompare(b, "es"));
+  }, [data]);
 
   // Ticker for "updated X ago" display
   const [now, setNow] = useState(() => new Date());
@@ -97,18 +107,13 @@ export function GpsPage() {
           />
         </div>
 
-        <select
-          value={estadoFiltro}
-          onChange={(e) => setEstadoFiltro(e.target.value)}
-          aria-label="Filtrar por estado"
-          className="text-[13px] outline-none"
-          style={{ border: "1.5px solid var(--gray-200)", borderRadius: 10, padding: "6px 12px", color: "var(--gray-700)", background: "#fff", minWidth: 140 }}
-        >
-          <option value="">Todos los estados</option>
-          {(Object.keys(ESTADO_GPS_CFG) as EstadoGps[]).map((k) => (
-            <option key={k} value={k}>{ESTADO_GPS_CFG[k].label}</option>
-          ))}
-        </select>
+        <ClienteFilter
+          value={clienteFiltro}
+          onChange={setClienteFiltro}
+          opciones={opcionesCliente}
+          minWidth={190}
+          size="sm"
+        />
 
         <div className="flex items-center gap-1 flex-wrap" role="tablist">
           {TABS_GPS.map((t) => {

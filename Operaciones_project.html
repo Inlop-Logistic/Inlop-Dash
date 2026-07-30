@@ -5562,8 +5562,11 @@ async function loadWeekData(wk){
   // Cargar tareas de esa semana
   const taskRows=await sbGet('project_tareas','semana=eq.'+wk+'&order=orden.asc');
 
-  // IDs de tareas default eliminadas para esta semana (marcadas con deleted=true)
-  const deletedIds=new Set(taskRows.filter(t=>t.deleted===true).map(t=>t.task_id));
+  // IDs de tareas default suprimidas: incluye eliminaciones de esta semana Y de
+  // cualquier semana anterior (semana<=wk), para que la supresión persista en
+  // semanas futuras sin necesidad de insertar marcadores semana a semana.
+  const deletedPrior=await sbGet('project_tareas','deleted=eq.true&semana=lte.'+wk);
+  const deletedIds=new Set(deletedPrior.map(t=>t.task_id));
 
   // Merge con defaults — excluir las eliminadas para esta semana
   const merged=DEFAULT_TASKS

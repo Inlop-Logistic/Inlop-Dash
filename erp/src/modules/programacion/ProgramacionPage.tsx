@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { RefreshCw, CalendarClock, Clock, Activity, XCircle, AlertCircle } from "lucide-react";
-import { KpiCard, PageHeader, Card, DataTable, Button, FilterBar } from "@/components/ui";
+import { KpiCard, PageHeader, Card, DataTable, Button, FilterBar, ClienteFilter } from "@/components/ui";
 import type { SelectFilter } from "@/components/ui";
 import { useNavigationContext } from "@/core/navigation";
 import { useProgramacion } from "./hooks/useProgramacion";
@@ -14,9 +14,10 @@ export function ProgramacionPage() {
   const {
     data, loading, error,
     busqueda, setBusqueda,
-    setFechaRango,
+    buscar,
     tabEstado, setTabEstado,
     estadoFiltro, setEstadoFiltro,
+    clienteFiltro, setClienteFiltro,
     setPanelId, panelViaje,
     accionLoading,
     filtradas, kpis,
@@ -29,9 +30,9 @@ export function ProgramacionPage() {
   const [visualHasta, setVisualHasta] = useState("");
 
   function handleFechaRango(desde: string, hasta: string) {
-    setFechaRango(desde, hasta);
     setVisualDesde(desde);
     setVisualHasta(hasta);
+    buscar(desde, hasta);
   }
 
   function handleLimpiarFiltros() {
@@ -39,6 +40,17 @@ export function ProgramacionPage() {
     setVisualDesde("");
     setVisualHasta("");
   }
+
+  // Clientes únicos para el combobox — derivados del dataset actual
+  const opcionesCliente = useMemo(() => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const v of data) {
+      const n = v.nombre_cliente || v.company_customer_name;
+      if (n && !seen.has(n)) { seen.add(n); result.push(n); }
+    }
+    return result.sort((a, b) => a.localeCompare(b, "es"));
+  }, [data]);
 
   // Auto-abrir panel cuando se navega con contexto (ej. desde Viajes)
   const autoOpenedRef = useRef(false);
@@ -78,7 +90,7 @@ export function ProgramacionPage() {
             size="sm"
             icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />}
             loading={loading}
-            onClick={cargar}
+            onClick={() => cargar()}
           >
             Actualizar
           </Button>
@@ -99,6 +111,14 @@ export function ProgramacionPage() {
         onBusqueda={setBusqueda}
         searchPlaceholder="Trip, conductor, placa, cliente, ciudad…"
         selects={selects}
+        extraFilters={
+          <ClienteFilter
+            value={clienteFiltro}
+            onChange={setClienteFiltro}
+            opciones={opcionesCliente}
+            minWidth={200}
+          />
+        }
         fechaDesde={visualDesde}
         fechaHasta={visualHasta}
         onFechaRango={handleFechaRango}
@@ -139,7 +159,7 @@ export function ProgramacionPage() {
             </button>
           );
         })}
-        {(busqueda || estadoFiltro) && (
+        {(busqueda || estadoFiltro || clienteFiltro) && (
           <span className="text-[12px]" style={{ color: "var(--gray-400)" }}>
             · {filtradas.length} resultado{filtradas.length !== 1 ? "s" : ""}
           </span>
@@ -152,7 +172,7 @@ export function ProgramacionPage() {
           <div className="py-16 text-center">
             <AlertCircle className="w-8 h-8 mx-auto mb-3" style={{ color: "var(--inlop-red)", opacity: 0.5 }} />
             <p className="text-[13px]" style={{ color: "var(--inlop-red)" }}>{error}</p>
-            <button type="button" onClick={cargar} className="mt-3 text-[12px] underline" style={{ color: "var(--navy)" }}>
+            <button type="button" onClick={() => cargar()} className="mt-3 text-[12px] underline" style={{ color: "var(--navy)" }}>
               Reintentar
             </button>
           </div>

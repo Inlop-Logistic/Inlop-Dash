@@ -10,9 +10,9 @@ export function useGps() {
   const [error,   setError]   = useState<string | null>(null);
 
   // Filtros
-  const [busqueda,     setBusqueda]     = useState("");
-  const [tabActivo,    setTabActivo]    = useState<TabGps>("todos");
-  const [estadoFiltro, setEstadoFiltro] = useState("");
+  const [busqueda,      setBusqueda]      = useState("");
+  const [tabActivo,     setTabActivo]     = useState<TabGps>("todos");
+  const [clienteFiltro, setClienteFiltro] = useState("");
 
   // Selección
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -48,8 +48,11 @@ export function useGps() {
       if (tabActivo === "alarmas")   { if (v.estadoGps !== "con_alarma" && v.estadoGps !== "panico") return false; }
       if (tabActivo === "sin_senial"){ if (v.estadoGps !== "desconectado")              return false; }
 
-      // Estado dropdown
-      if (estadoFiltro && v.estadoGps !== estadoFiltro) return false;
+      // Filtro de cliente
+      if (clienteFiltro) {
+        const clienteDelVehiculo = v.razon_social || v.company_customer_name || "";
+        if (clienteDelVehiculo !== clienteFiltro) return false;
+      }
 
       // Texto libre
       if (term) {
@@ -62,18 +65,18 @@ export function useGps() {
 
       return true;
     });
-  }, [data, tabActivo, busqueda, estadoFiltro]);
+  }, [data, tabActivo, busqueda, clienteFiltro]);
 
-  // ── KPIs ──────────────────────────────────────────────────────────────────
+  // ── KPIs — calculados sobre filtrados para reflejar exactamente lo visible ─
   const kpis = useMemo<KpisGps>(() => ({
-    total:         data.length,
-    activos:       data.filter((v) => v.estadoGps === "activo").length,
-    detenidos:     data.filter((v) => v.estadoGps === "detenido").length,
-    sinReporte:    data.filter((v) => !v.latest_gps_report).length,
-    conAlarmas:    data.filter((v) => v.estadoGps === "con_alarma").length,
-    panico:        data.filter((v) => v.estadoGps === "panico").length,
-    desconectados: data.filter((v) => v.estadoGps === "desconectado").length,
-  }), [data]);
+    total:         filtrados.length,
+    activos:       filtrados.filter((v) => v.estadoGps === "activo").length,
+    detenidos:     filtrados.filter((v) => v.estadoGps === "detenido").length,
+    sinReporte:    filtrados.filter((v) => !v.latest_gps_report).length,
+    conAlarmas:    filtrados.filter((v) => v.estadoGps === "con_alarma").length,
+    panico:        filtrados.filter((v) => v.estadoGps === "panico").length,
+    desconectados: filtrados.filter((v) => v.estadoGps === "desconectado").length,
+  }), [filtrados]);
 
   // ── Selección ──────────────────────────────────────────────────────────────
   const selectedVehiculo = useMemo(
@@ -91,7 +94,7 @@ export function useGps() {
     data, loading, error,
     busqueda, setBusqueda,
     tabActivo, setTabActivo,
-    estadoFiltro, setEstadoFiltro,
+    clienteFiltro, setClienteFiltro,
     filtrados, kpis,
     selectedId, setSelectedId, selectedVehiculo,
     selectByPlate, cargar,

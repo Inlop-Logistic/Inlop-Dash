@@ -15,7 +15,7 @@ const INTEGRACIONES = [
 
 function fmtFecha(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
+  return d.toLocaleDateString("es-CO", { timeZone: "America/Bogota", day: "2-digit", month: "short", year: "numeric" });
 }
 
 function Badge({ activo }: { activo: boolean }) {

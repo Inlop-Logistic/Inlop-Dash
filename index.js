@@ -6,6 +6,7 @@ import { buildLookupMap, normalizeClient, resolveCustomer, resolveTrip, isPlaceh
 import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } from './services/authScope.js';
 import { getUserPreferences, updatePreference, KNOWN_CHANNELS } from './services/preferenceResolver.js';
 import { normalizeExternalRef } from './services/normalizeExternalRef.js';
+import { fechaHoyColombia, parseFechaTMS, extraerFechaColombia } from './utils/fechas.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -237,13 +238,9 @@ function requireLegacyOrInternal(req, res, next) {
   return res.status(401).json({ error: "No autorizado" });
 }
 
-// Parsear schedulate_origin DD/MM/YYYY HH:MM:SS
+// Wrapper de compatibilidad — usa parseFechaTMS('DMY') con offset −05:00. RESUELVE H-04.
 function parseSchedulate(str) {
-  if (!str) return null;
-  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):?(\d{2})?/);
-  if (!m) return null;
-  const [, dd, mm, yyyy, hh, min, ss = '00'] = m;
-  return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:${ss.padStart(2,'0')}`);
+  return parseFechaTMS(str, 'DMY');
 }
 
 const app = express();
@@ -324,7 +321,23 @@ const cache = {
   pendientes:{ data: [], ts: 0 },
 };
 
-let syncCumplidosRunning = false;
+let syncCumplidosRunning  = false;
+let syncPlaneadosRunning  = false;
+
+// ─── DIAGNÓSTICO PROGRAMACIÓN ────────────────────────────────────────────────
+// Variables y helpers para instrumentación temporal. No tocar reglas funcionales.
+let syncCounter       = 0;   // SYNC_ID incremental; se incrementa en cada llamada
+let lastSyncFinished  = 0;   // ID del último SYNC que terminó exitosamente
+let getProgCounter    = 0;   // Contador de solicitudes GET /api/programacion
+
+/** Hora actual en zona Colombia, formato HH:MM:SS, para logs de diagnóstico. */
+function horaAhora() {
+  return new Date().toLocaleTimeString('es-CO', {
+    hour12: false, timeZone: 'America/Bogota',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 function cacheVigente(key) {
   return (Date.now() - cache[key].ts) < CACHE_TTL && cache[key].data.length > 0;
@@ -547,14 +560,9 @@ function parseCreated(str) {
   return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:00`);
 }
 
-// Parsea "MM/DD/YYYY HH:MM[:SS]" (formato de latest_gps_report del TMS). Devuelve null si inválido.
+// Wrapper de compatibilidad — usa parseFechaTMS('MDY') con offset −05:00. RESUELVE H-05.
 function parseFechaMDY(str) {
-  if (!str) return null;
-  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
-  if (!m) return null;
-  const [, mm, dd, yyyy, hh, min] = m;
-  const d = new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:00`);
-  return isNaN(d.getTime()) ? null : d;
+  return parseFechaTMS(str, 'MDY');
 }
 
 const GPS_THRESHOLD_DETENIDO     = 2;   // horas — coincide con frontend
@@ -657,84 +665,204 @@ async function refreshCustomerLookup() {
 }
 
 // ─── SYNC PLANEADOS ─────────────────────────────────────
-async function syncPlaneados() {
+// Espejo operacional puro del TMS. No resuelve ni crea clientes.
+// El módulo Clientes es responsable de la resolución comercial de forma independiente.
+async function syncPlaneados(motivo = 'scheduler') {
+  if (syncPlaneadosRunning) {
+    console.warn(`⚠️  [SYNC] syncPlaneados bloqueada por mutex | hora: ${horaAhora()} | último SYNC completado: #${lastSyncFinished}`);
+    return;
+  }
+  syncPlaneadosRunning = true;
+
+  const syncId = ++syncCounter;
+  const tTotal = Date.now();
+
+  console.log(`\n════════════════════════════════════════════════════════════════`);
+  console.log(`[SYNC #${syncId}] ▶  Inicio`);
+  console.log(`[SYNC #${syncId}]    Motivo           : ${motivo}`);
+  console.log(`[SYNC #${syncId}]    Hora             : ${horaAhora()}`);
+  console.log(`[SYNC #${syncId}]    Último completado: #${lastSyncFinished}`);
+  console.log(`════════════════════════════════════════════════════════════════`);
+
   try {
-    const path = `/Travel/search?size=200&page=1`;
-    const data = await safeFetch(path, []);
-    const arr = Array.isArray(data) ? data : data.data || data.result || [];
+    // ─── 1. Consulta TMS ──────────────────────────────────────────────────────
+    const tTMS0 = Date.now();
+    const path  = `/Travel/search?size=200&page=1`;
+    const data  = await safeFetch(path, []);
+    const tTMS  = Date.now() - tTMS0;
+    const arr   = Array.isArray(data) ? data : data.data || data.result || [];
+
+    console.log(`[SYNC #${syncId}] TMS | ${arr.length} viajes recibidos | ${tTMS}ms`);
 
     if (!arr.length) {
-      console.log('📅 Planeados: Travel/search devolvió 0 viajes');
+      console.log(`[SYNC #${syncId}] ⚠️  Travel/search devolvió 0 viajes — abortando`);
+      lastSyncFinished = syncId;
       return;
     }
 
-    const ahora = new Date();
-    const hoyInicio = new Date(ahora);
-    hoyInicio.setHours(0, 0, 0, 0);
+    const hoyStr = fechaHoyColombia();
+    console.log(`[SYNC #${syncId}] Fecha de corte Colombia: ${hoyStr}`);
 
+    // ─── 2. Filtrado y ordenamiento ───────────────────────────────────────────
+    const descartados = [];
     const viajesFuturos = arr.filter(v => {
       const f = parseSchedulate(v.schedulate_origin);
-      if (!f || isNaN(f.getTime())) return false;
-      return f >= hoyInicio;
+      if (!f || isNaN(f.getTime())) {
+        descartados.push({ trip: v.trip_number, motivo: `schedulate_origin inválido: "${v.schedulate_origin}"` });
+        return false;
+      }
+      const fechaDia = extraerFechaColombia(f);
+      if (fechaDia < hoyStr) {
+        descartados.push({ trip: v.trip_number, motivo: `fecha pasada: ${fechaDia}` });
+        return false;
+      }
+      return true;
     });
 
-    console.log(`📅 Planeados: ${arr.length} en Travel/search → ${viajesFuturos.length} hoy o futuros`);
-    if (!viajesFuturos.length) return;
+    // Orden determinista: fecha de programación ascendente
+    viajesFuturos.sort((a, b) => {
+      const fa = parseSchedulate(a.schedulate_origin);
+      const fb = parseSchedulate(b.schedulate_origin);
+      if (!fa && !fb) return 0;
+      if (!fa) return 1;
+      if (!fb) return -1;
+      return fa.getTime() - fb.getTime();
+    });
 
-    const existentes = await sbFetch('/planeados?select=trip_number,fecha_detectado,company_customer_name,activo_en_resume,empresa_cliente_id');
+    console.log(`[SYNC #${syncId}] Filtro | ${arr.length} total → ${viajesFuturos.length} hoy/futuros | ${descartados.length} descartados`);
+    if (descartados.length > 0 && descartados.length <= 20) {
+      descartados.forEach(d => console.log(`  ✗ ${d.trip} — ${d.motivo}`));
+    } else if (descartados.length > 20) {
+      descartados.slice(0, 5).forEach(d => console.log(`  ✗ ${d.trip} — ${d.motivo}`));
+      console.log(`  … y ${descartados.length - 5} más`);
+    }
+
+    if (!viajesFuturos.length) {
+      console.log(`[SYNC #${syncId}] ⚠️  0 viajes futuros — abortando sin tocar BD`);
+      lastSyncFinished = syncId;
+      return;
+    }
+
+    // Log muestra TMS
+    const fmtTMS = v => `${v.trip_number} | ${v.license_plate || '—'} | ${v.schedulate_origin || '—'}`;
+    console.log(`[SYNC #${syncId}] Primeros 5 viajes futuros (TMS):`);
+    viajesFuturos.slice(0, 5).forEach((v, i) => console.log(`  [${i + 1}] ${fmtTMS(v)}`));
+    if (viajesFuturos.length > 5) {
+      console.log(`[SYNC #${syncId}] Últimos 5 viajes futuros (TMS):`);
+      viajesFuturos.slice(-5).forEach((v, i) =>
+        console.log(`  [${viajesFuturos.length - 4 + i}] ${fmtTMS(v)}`)
+      );
+    }
+
+    // ─── 3. Estado actual BD (PRE-BATCH) ──────────────────────────────────────
+    const tPreCount0 = Date.now();
+    const preSnap = await sbFetch('/planeados?select=trip_number');
+    const preCount = (preSnap || []).length;
+    console.log(`[SYNC #${syncId}] BD PRE-BATCH | ${preCount} filas totales | ${Date.now() - tPreCount0}ms`);
+
+    // ─── 4. Construcción del lote ─────────────────────────────────────────────
+    const tLot0    = Date.now();
+    const existentes = await sbFetch('/planeados?select=trip_number,fecha_detectado,company_customer_name,activo_en_resume,empresa_cliente_id,estado_programacion');
     const existMap = {};
     (existentes || []).forEach(e => { existMap[e.trip_number] = e; });
 
     const activeIds = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
 
-    let upsertados = 0, clientesCreados = 0, placeholdersOmitidos = 0;
+    const ahora = Date.now();
+    const rows  = [];
     for (const v of viajesFuturos) {
-      const f = parseSchedulate(v.schedulate_origin);
-      const yaExiste = existMap[v.trip_number];
+      const f          = parseSchedulate(v.schedulate_origin);
+      const yaExiste   = existMap[v.trip_number];
       const estaActivo = activeIds.has(v.trip_number);
       const viajeResume = cache.viajes.data.find(r => r.trip_number === v.trip_number);
       const rawCliente = viajeResume?.company_customer_name || v.company_customer_name || null;
-      const cliente = rawCliente ? rawCliente.split(',')[0].trim() : null;
-      const resolved = await resolveTrip(
-        { rawName: cliente, existingEmpresaId: existMap[v.trip_number]?.empresa_cliente_id ?? null },
-        { lookupMap: customerLookupMap, empresaById: customerLookupById, sbFetch, generarCodigo: generarCodigoCliente, actor: 'sistema:tms' }
-      );
-      if (resolved.created)     clientesCreados++;
-      if (resolved.placeholder) placeholdersOmitidos++;
-      if (resolved.empresa_cliente_id) {
-        tripCustomerCache.set(v.trip_number, {
-          empresa_cliente_id: resolved.empresa_cliente_id,
-          razon_social:       resolved.razon_social,
-        });
+      const cliente    = rawCliente ? rawCliente.split(',')[0].trim() : null;
+
+      // Derivar estado_programacion — backend es fuente de verdad
+      const estadoActual = yaExiste?.estado_programacion || 'programado';
+      let estado_programacion;
+      if (estadoActual === 'cancelado' || estadoActual === 'completado') {
+        estado_programacion = estadoActual; // estados sticky: sync nunca los revierte
+      } else if (estaActivo) {
+        estado_programacion = (f && f.getTime() <= ahora) ? 'en_ruta' : 'asignado';
+      } else {
+        estado_programacion = (f && f.getTime() <= ahora) ? 'sin_asignar' : 'programado';
       }
 
-      const row = {
+      rows.push({
         trip_number:           v.trip_number,
         license_plate:         v.license_plate         || null,
         driver_name:           v.driver_name           || null,
         company_customer_name: cliente,
-        empresa_cliente_id:    resolved.empresa_cliente_id,
         city_origin:           v.city_origin           || null,
         city_destination:      v.city_destination      || null,
         origin_address:        v.origin_address        || null,
         schedulate_origin:     v.schedulate_origin     || null,
-        fecha_programada_dia:  f ? f.toISOString().slice(0, 10) : null,
+        fecha_programada_dia:  f ? extraerFechaColombia(f) : null,
         activo_en_resume:      estaActivo,
+        estado_programacion,
         fecha_detectado:       yaExiste ? yaExiste.fecha_detectado : new Date().toISOString(),
         activado_en:           (estaActivo && yaExiste && !yaExiste.activo_en_resume) || (estaActivo && !yaExiste)
                                  ? new Date().toISOString()
                                  : null,
-      };
-
-      await sbFetch('/planeados', 'POST', row);
-      upsertados++;
+      });
     }
 
-    const hoyStr = hoyInicio.toISOString().slice(0, 10);
-    await sbFetch(`/planeados?fecha_programada_dia=lt.${hoyStr}`, 'DELETE');
-    console.log(`📅 Planeados: ${upsertados} upsertados, ${clientesCreados} clientes creados, ${placeholdersOmitidos} sin Match TMS (esperando), limpieza de anteriores a ${hoyStr}`);
+    const tLot = Date.now() - tLot0;
+    console.log(`[SYNC #${syncId}] Lote | ${rows.length} filas preparadas | ${tLot}ms construcción`);
 
+    // ─── 5. Batch upsert ──────────────────────────────────────────────────────
+    // empresa_cliente_id se omite intencionalmente: merge-duplicates preserva el valor
+    // existente en BD; nuevas filas lo dejan null (resuelto por el módulo Clientes).
+    const tBatch0  = Date.now();
+    const batchRes = await sbFetch('/planeados', 'POST', rows);
+    const tBatch   = Date.now() - tBatch0;
+    const retornadas = (batchRes || []).length;
+    console.log(`[SYNC #${syncId}] Batch | ${rows.length} enviadas → ${retornadas} retornadas por Supabase | ${tBatch}ms`);
+    if (!batchRes) {
+      console.log(`[SYNC #${syncId}] ⚠️  Batch retornó null — ver error Supabase encima de este log`);
+    }
+
+    // ─── 6. Conteo BD post-batch (+0s / +2s / +5s) ───────────────────────────
+    const tP0 = Date.now();
+    const post0 = (await sbFetch('/planeados?select=trip_number') || []).length;
+    console.log(`[SYNC #${syncId}] BD POST-BATCH (+0s) | ${post0} filas | ${Date.now() - tP0}ms`);
+
+    await new Promise(r => setTimeout(r, 2000));
+    const tP2 = Date.now();
+    const post2 = (await sbFetch('/planeados?select=trip_number') || []).length;
+    console.log(`[SYNC #${syncId}] BD POST-BATCH (+2s) | ${post2} filas | ${Date.now() - tP2}ms`);
+
+    await new Promise(r => setTimeout(r, 3000));
+    const tP5 = Date.now();
+    const post5 = (await sbFetch('/planeados?select=trip_number') || []).length;
+    console.log(`[SYNC #${syncId}] BD POST-BATCH (+5s) | ${post5} filas | ${Date.now() - tP5}ms`);
+
+    // Muestra: primeras 10 y últimas 10 filas ordenadas por fecha
+    const snapshot = await sbFetch(
+      '/planeados?select=trip_number,fecha_programada_dia,estado_programacion,license_plate&order=fecha_programada_dia.asc&limit=10000'
+    );
+    const snRows = snapshot || [];
+    console.log(`[SYNC #${syncId}] Muestra BD (${snRows.length} total) — primeras 10 por fecha asc:`);
+    snRows.slice(0, 10).forEach((r, i) =>
+      console.log(`  [${i + 1}] ${r.trip_number} | ${r.fecha_programada_dia} | ${r.estado_programacion} | ${r.license_plate || '—'}`)
+    );
+    if (snRows.length > 10) {
+      console.log(`[SYNC #${syncId}] Muestra BD — últimas 10 por fecha asc:`);
+      snRows.slice(-10).forEach((r, i) =>
+        console.log(`  [${snRows.length - 9 + i}] ${r.trip_number} | ${r.fecha_programada_dia} | ${r.estado_programacion} | ${r.license_plate || '—'}`)
+      );
+    }
+
+    // ─── 7. Retención ─────────────────────────────────────────────────────────
+    const corte    = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const corteStr = extraerFechaColombia(corte);
+    await sbFetch(`/planeados?fecha_programada_dia=lt.${corteStr}`, 'DELETE');
+    console.log(`[SYNC #${syncId}] Retención | eliminados anteriores a ${corteStr} (ventana 8 días)`);
+
+    // ─── 8. Parche de respaldo: filas retenidas sin nombre de cliente ─────────
     const sinCliente = (existentes || []).filter(e => !e.company_customer_name);
+    let parchesAplicados = 0;
     for (const e of sinCliente) {
       const viajeResume = cache.viajes.data.find(r => r.trip_number === e.trip_number);
       if (viajeResume?.company_customer_name) {
@@ -743,10 +871,50 @@ async function syncPlaneados() {
           'PATCH',
           { company_customer_name: viajeResume.company_customer_name }
         );
+        parchesAplicados++;
       }
     }
+    if (parchesAplicados > 0) {
+      console.log(`[SYNC #${syncId}] Parche sinCliente | ${parchesAplicados} filas actualizadas`);
+    }
+
+    // ─── 9. Verificación de consistencia ─────────────────────────────────────
+    const bdFuturos = await sbFetch(
+      `/planeados?fecha_programada_dia=gte.${hoyStr}&select=trip_number,fecha_programada_dia,license_plate,estado_programacion`
+    ) || [];
+    const bdSet  = new Set(bdFuturos.map(r => r.trip_number));
+    const tmsSet = new Set(viajesFuturos.map(v => v.trip_number));
+
+    const faltanEnBD = viajesFuturos.filter(v => !bdSet.has(v.trip_number));
+    const soloEnBD   = bdFuturos.filter(r => !tmsSet.has(r.trip_number));
+
+    console.log(`[SYNC #${syncId}] ─── Verificación de Consistencia ─────────────────────────`);
+    console.log(`[SYNC #${syncId}] TMS futuros enviados : ${viajesFuturos.length}`);
+    console.log(`[SYNC #${syncId}] BD  futuros (hoy+)   : ${bdFuturos.length}`);
+    if (faltanEnBD.length === 0) {
+      console.log(`[SYNC #${syncId}] ✅ CONSISTENTE — todos los viajes TMS futuros están en BD`);
+    } else {
+      console.log(`[SYNC #${syncId}] ❌ INCONSISTENTE — ${faltanEnBD.length} viajes TMS NO encontrados en BD:`);
+      faltanEnBD.forEach(v =>
+        console.log(`  ✗ ${v.trip_number} | ${v.schedulate_origin || '—'} | ${v.license_plate || '—'}`)
+      );
+    }
+    if (soloEnBD.length > 0) {
+      console.log(`[SYNC #${syncId}] ℹ️  ${soloEnBD.length} filas BD hoy+ no vienen en este TMS response (retenidas de pasados o SYNCs previos):`);
+      soloEnBD.slice(0, 10).forEach(r =>
+        console.log(`  · ${r.trip_number} | ${r.fecha_programada_dia} | ${r.estado_programacion}`)
+      );
+    }
+    console.log(`[SYNC #${syncId}] ─────────────────────────────────────────────────────────`);
+
+    lastSyncFinished = syncId;
+
   } catch(e) {
-    console.error("❌ Error sync planeados:", e.message);
+    console.error(`[SYNC #${syncId}] ❌ Error: ${e.message}`, e.stack);
+  } finally {
+    syncPlaneadosRunning = false;
+    console.log(`[SYNC #${syncId}] ■  Fin | Duración total: ${Date.now() - tTotal}ms | hora: ${horaAhora()}`);
+    console.log(`════════════════════════════════════════════════════════════════\n`);
   }
 }
 
@@ -844,14 +1012,6 @@ app.get("/api/pendientes", requireLegacyOrInternal, async (req, res) => {
       await syncPendientes();
     }
     const arr = cache.pendientes.data;
-
-    function parseSchedulate(str) {
-      if (!str) return null;
-      const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):?(\d{2})?/);
-      if (!m) return null;
-      const [, dd, mm, yyyy, hh, min, ss = '00'] = m;
-      return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:${ss.padStart(2,'0')}`);
-    }
 
     const ahora     = new Date();
     const hace1dia  = new Date(ahora.getTime() - 1 * 24 * 60 * 60 * 1000);
@@ -999,6 +1159,7 @@ app.get('/api/gps', requireInternalApiKey, (req, res) => {
         estadoGps:                derivarEstadoGps(v),
       };
     });
+  res.set('Cache-Control', 'no-store');
   res.json(vehiculos);
 });
 
@@ -1349,8 +1510,21 @@ async function syncCumplidos() {
             'PATCH',
             { estado_cumplido: nuevoEstado, fecha_finalizacion: new Date().toISOString() }
           );
+          // Verificar estado sticky antes de propagar COMPLETADO — CANCELADO nunca se sobreescribe
+          const planeadoActual = await sbFetch(
+            `/planeados?trip_number=eq.${encodeURIComponent(id)}&select=estado_programacion`
+          );
+          if (planeadoActual?.[0]?.estado_programacion === 'cancelado') {
+            console.log(`🔒 Cumplido ${id} → ${nuevoEstado} | Planeado cancelado — sticky, COMPLETADO omitido`);
+          } else {
+            await sbFetch(
+              `/planeados?trip_number=eq.${encodeURIComponent(id)}`,
+              'PATCH',
+              { estado_programacion: 'completado', actualizado_en: new Date().toISOString() }
+            );
+            console.log(`🏁 Cumplido ${id} → ${nuevoEstado} | Planeado → completado`);
+          }
           finalizados++;
-          console.log(`🏁 Cumplido ${id} → ${nuevoEstado}`);
         }
       }
     }
@@ -1405,9 +1579,9 @@ async function syncSolicitudes() {
       const { id, codigo_solicitud, external_ref, estado, controlt_trip_number,
               creado_por, fecha_requerida, observacion_coordinadora, empresa_cliente_id: solEmpresaId } = sol;
 
-      // Clave de match: external_ref si está puesto (pruebas con remisión real), sino codigo_solicitud
-      // Normalizar espacios dobles igual que _splitRem para que "NHR-IB-2185" == "NHR-  IB-2185"
-      const matchKey = ((external_ref || '').trim().replace(/\s+/g, ' ')) || codigo_solicitud;
+      // Clave de match: external_ref normalizado si está puesto, sino codigo_solicitud.
+      // _normRemision garantiza que "NHR-   TO-2743" == "NHR-TO-2743" == "nhr-to-2743".
+      const matchKey = _normRemision(external_ref || '') || codigo_solicitud;
 
       if (estado === 'pendiente') {
         // Solo descartar como huérfana si la fecha ya venció Y no tiene external_ref (match explícito)
@@ -1616,10 +1790,20 @@ async function propagarEmpresaId(tripNumber, empresaId) {
   ]).catch(err => console.error('⚠️  propagarEmpresaId:', err.message));
 }
 
+// Normaliza una remisión para el matching: elimina espacios alrededor de guiones,
+// colapsa espacios múltiples y convierte a mayúsculas.
+// Exclusivamente para comparación — nunca modifica el dato almacenado.
+function _normRemision(s) {
+  return (s || '').trim()
+    .replace(/\s*-\s*/g, '-')  // "NHR-  TO" → "NHR-TO", "NHR - TO" → "NHR-TO"
+    .replace(/\s+/g, ' ')      // colapsar espacios múltiples residuales
+    .toUpperCase();
+}
+
 function _splitRem(remission) {
-  // ControlT devuelve remission como ",val1,val2" y puede tener espacios dobles internos
+  // ControlT devuelve remission como ",val1,val2". Se normaliza cada parte para matching.
   return (remission || '').split(',')
-    .map(p => p.trim().replace(/\s+/g, ' '))  // colapsar espacios dobles
+    .map(_normRemision)
     .filter(Boolean);
 }
 
@@ -2870,9 +3054,7 @@ app.get('/catalogos/vehiculos', (req, res) => {
 // Planeados — desde Supabase
 app.get("/api/planeados", requireInternalApiKey, async (req, res) => {
   try {
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const hoyStr = hoy.toISOString().slice(0, 10);
+    const hoyStr = fechaHoyColombia();
     const data = await sbFetch(
       `/planeados?fecha_programada_dia=gte.${hoyStr}&order=schedulate_origin.asc&limit=500`
     );
@@ -2897,12 +3079,15 @@ app.get("/api/planeados", requireInternalApiKey, async (req, res) => {
 // Enriquece cada fila con nombre_cliente: razon_social oficial cuando existe,
 // company_customer_name como fallback. El original siempre se conserva.
 app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
+  const getId  = ++getProgCounter;
+  const tGet0  = Date.now();
   try {
     const { desde, hasta } = req.query;
-    const hoyInicio = new Date();
-    hoyInicio.setHours(0, 0, 0, 0);
-    const desdeStr = desde || hoyInicio.toISOString().slice(0, 10);
-    const hastaStr = hasta || hoyInicio.toISOString().slice(0, 10);
+    const hoyStr = fechaHoyColombia();
+    const desdeStr = desde || hoyStr;
+    const hastaStr = hasta || hoyStr;
+
+    console.log(`[GET PROGRAMACION #${getId}] hora: ${horaAhora()} | desde: ${desdeStr} | hasta: ${hastaStr} | último SYNC completado: #${lastSyncFinished} | mutex activo: ${syncPlaneadosRunning}`);
 
     const data = await sbFetch(
       `/planeados?fecha_programada_dia=gte.${desdeStr}&fecha_programada_dia=lte.${hastaStr}&order=schedulate_origin.asc&limit=500`
@@ -2953,9 +3138,13 @@ app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
       };
     });
 
+    const primeraFecha = enriched[0]?.fecha_programada_dia ?? null;
+    const ultimaFecha  = enriched[enriched.length - 1]?.fecha_programada_dia ?? null;
+    console.log(`[GET PROGRAMACION #${getId}] resultado: ${enriched.length} filas | primera fecha: ${primeraFecha} | última fecha: ${ultimaFecha} | ${Date.now() - tGet0}ms`);
+
     res.json(enriched);
   } catch (e) {
-    console.error("❌ GET /api/programacion:", e.message);
+    console.error(`[GET PROGRAMACION #${getId}] ❌ Error: ${e.message}`);
     res.status(500).json({ error: e.message });
   }
 });
@@ -3039,9 +3228,10 @@ app.patch("/api/programacion/:id/estado", requireInternalApiKey, async (req, res
   try {
     const { id } = req.params;
     const { estado } = req.body || {};
-    const ESTADOS_VALIDOS = ["programado", "cancelado"];
-    if (!ESTADOS_VALIDOS.includes(estado)) {
-      return res.status(400).json({ error: `Estado inválido: ${estado}` });
+    // Solo se admiten transiciones manuales; los estados automáticos los gestiona syncPlaneados/syncCumplidos
+    const ESTADOS_MANUALES = ["programado", "cancelado"];
+    if (!ESTADOS_MANUALES.includes(estado)) {
+      return res.status(400).json({ error: `Estado inválido. Transiciones manuales permitidas: ${ESTADOS_MANUALES.join(", ")}` });
     }
     await sbFetch(
       `/planeados?trip_number=eq.${encodeURIComponent(id)}`,
@@ -3086,6 +3276,23 @@ app.post("/api/programacion/:id/sync", requireInternalApiKey, async (req, res) =
 
     const viajeCache = [...cache.viajes.data, ...(cache.pendientes.data || [])].find(v => v.trip_number === id);
 
+    // Leer estado actual para respetar estados sticky (cancelado, completado)
+    const planeadoRows = await sbFetch(`/planeados?trip_number=eq.${encodeURIComponent(id)}&select=estado_programacion,schedulate_origin`);
+    const planeadoActual   = planeadoRows?.[0] || null;
+    const estadoActual     = planeadoActual?.estado_programacion || 'programado';
+    const schedulateRaw    = viajeCache?.schedulate_origin || planeadoActual?.schedulate_origin;
+    const fSync            = schedulateRaw ? parseSchedulate(schedulateRaw) : null;
+    const ahoraSync        = Date.now();
+
+    let estado_programacion;
+    if (estadoActual === 'cancelado' || estadoActual === 'completado') {
+      estado_programacion = estadoActual;
+    } else if (estaActivo) {
+      estado_programacion = (fSync && fSync.getTime() <= ahoraSync) ? 'en_ruta' : 'asignado';
+    } else {
+      estado_programacion = (fSync && fSync.getTime() <= ahoraSync) ? 'sin_asignar' : 'programado';
+    }
+
     if (viajeCache) {
       const f = parseSchedulate(viajeCache.schedulate_origin);
       await sbFetch(
@@ -3099,8 +3306,9 @@ app.post("/api/programacion/:id/sync", requireInternalApiKey, async (req, res) =
           city_destination:      viajeCache.city_destination      || null,
           origin_address:        viajeCache.origin_address        || null,
           schedulate_origin:     viajeCache.schedulate_origin     || null,
-          fecha_programada_dia:  f ? f.toISOString().slice(0, 10) : null,
+          fecha_programada_dia:  f ? extraerFechaColombia(f) : null,
           activo_en_resume:      estaActivo,
+          estado_programacion,
           actualizado_en:        new Date().toISOString(),
         }
       );
@@ -3108,11 +3316,11 @@ app.post("/api/programacion/:id/sync", requireInternalApiKey, async (req, res) =
       await sbFetch(
         `/planeados?trip_number=eq.${encodeURIComponent(id)}`,
         'PATCH',
-        { activo_en_resume: estaActivo, actualizado_en: new Date().toISOString() }
+        { activo_en_resume: estaActivo, estado_programacion, actualizado_en: new Date().toISOString() }
       );
     }
 
-    res.json({ ok: true, activo_en_resume: estaActivo });
+    res.json({ ok: true, activo_en_resume: estaActivo, estado_programacion });
   } catch (e) {
     console.error("❌ POST /api/programacion/:id/sync:", e.message);
     res.status(500).json({ error: e.message });
@@ -3778,7 +3986,7 @@ app.listen(PORT, async () => {
     await syncViajes();
     await syncAlarmas();
     await syncPendientes();
-    await syncPlaneados();
+    await syncPlaneados('inicio-servidor');
     await syncCumplidos();
     await syncSolicitudes();
   } catch(e) {
@@ -3789,7 +3997,12 @@ app.listen(PORT, async () => {
   setInterval(syncViajes,             60 * 1000);
   setInterval(syncAlarmas,            70 * 1000);
   setInterval(syncPendientes,          5 * 60 * 1000);
-  setInterval(syncPlaneados,           5 * 60 * 1000);
+  setInterval(async () => {
+    const tSched0 = Date.now();
+    console.log(`[SCHEDULER] syncPlaneados — hora: ${horaAhora()} | mutex: ${syncPlaneadosRunning ? 'BLOQUEADO (omitiendo)' : 'libre'} | último SYNC: #${lastSyncFinished}`);
+    await syncPlaneados('scheduler');
+    console.log(`[SCHEDULER] syncPlaneados — fin | ${Date.now() - tSched0}ms`);
+  }, 5 * 60 * 1000);
   setInterval(syncCumplidos,          60 * 1000);
   setInterval(syncSolicitudes,        65 * 1000);
 });

@@ -30,7 +30,7 @@ export interface CumplidoRecord {
   origin_city_name:      string | null;
   destiny_city_name:     string | null;
   state_travel:          string;
-  /** DD/MM/YYYY HH:MM:SS */
+  /** MM/DD/YYYY HH:MM:SS — formato TMS (mismo campo que en TmsViaje). */
   activated_on:          string | null;
   /** MM/DD/YYYY HH:MM:SS */
   created_on:            string | null;

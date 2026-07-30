@@ -1,67 +1,176 @@
-// Locale colombiano para todos los formatos de fecha del ERP.
-const LOCALE = "es-CO";
+/**
+ * erp/src/utils/date.ts — Módulo corporativo de fechas · ERP INLOP
+ *
+ * ESTÁNDAR: ERP_DATE_TIME_STANDARD.md V1.1
+ * Zona oficial: America/Bogota (UTC−5 fijo, sin DST)
+ *
+ * REGLA (P-09 Single Source of Truth): toda función de fecha del frontend
+ * importa desde este módulo. No reimplementar aquí fuera.
+ *
+ * Funciones corporativas (§10.1): fechaHoyColombia · extraerFechaColombia · formatearFecha
+ * Wrappers de compatibilidad: hoy · hace7dias · fmtFecha · fmtFechaCort · fmtHora
+ *                             fmtDDMMYYYYHm · fmtDDMMYYYY · splitISO
+ */
 
-/** Fecha de hoy como string ISO-8601 (YYYY-MM-DD). */
-export function hoy(): string {
-  return new Date().toISOString().slice(0, 10);
+const TZ_COLOMBIA = 'America/Bogota';
+
+// ═══════════════════════════════════════════════════════════════════
+// FUNCIONES CORPORATIVAS (§10.1 ERP_DATE_TIME_STANDARD.md V1.1)
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Fecha actual en hora Colombia como string YYYY-MM-DD.
+ *
+ * @param offsetDias Días a sumar (+) o restar (−). Default 0.
+ * @returns String YYYY-MM-DD en hora Colombia.
+ *
+ * Casos de borde (§14):
+ *   00:00 COL (05:00 UTC)  → devuelve el día Colombia iniciado
+ *   19:00 COL (00:00 UTC)  → devuelve el día Colombia corriente (no el siguiente UTC)
+ *   23:59 COL (04:59 UTC)  → devuelve el día Colombia corriente
+ *
+ * RESUELVE H-01. REEMPLAZA: hoy() y hace7dias() — ambas son wrappers hacia esta función.
+ */
+export function fechaHoyColombia(offsetDias = 0): string {
+  const base = new Date();
+  if (offsetDias !== 0) {
+    base.setUTCDate(base.getUTCDate() + offsetDias);
+  }
+  return base.toLocaleDateString('en-CA', { timeZone: TZ_COLOMBIA });
 }
 
-/** Fecha de hace 7 días como string ISO-8601 (YYYY-MM-DD). */
-export function hace7dias(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 7);
+/**
+ * Extrae la parte de fecha (YYYY-MM-DD) de un objeto Date en hora Colombia.
+ * Nunca usa .toISOString().slice(0,10) — siempre declara la zona Colombia.
+ *
+ * Uso: filtros client-side donde se compara la fecha Colombia de un registro
+ * contra un rango YYYY-MM-DD.
+ */
+export function extraerFechaColombia(date: Date): string {
+  return date.toLocaleDateString('en-CA', { timeZone: TZ_COLOMBIA });
+}
+
+/**
+ * Formatea un timestamp ISO-8601 para mostrar al usuario en hora Colombia.
+ * Zona de salida explícita: America/Bogota. Locale: es-CO para texto natural.
+ * Formato 24 horas siempre (P-01, §7.3).
+ *
+ * Modos (§7.1):
+ *   'fecha'      → "28/07/2026"            columnas de tabla
+ *   'hora'       → "14:30"                 hora operativa (24h)
+ *   'completo'   → "28/07/2026 14:30"      drawer y exportaciones
+ *   'largo'      → "28 jul. 2026"          fecha larga sin hora
+ *   'largo-hora' → "28 jul. 2026, 14:30"   detalles y timelines
+ *
+ * Devuelve "—" si iso es null, undefined o string vacío.
+ *
+ * REEMPLAZA: fmtFecha · fmtFechaCort · fmtHora · fmtDDMMYYYY · fmtDDMMYYYYHm · splitISO
+ */
+export function formatearFecha(
+  iso: string | null | undefined,
+  modo: 'fecha' | 'hora' | 'completo' | 'largo' | 'largo-hora',
+): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+
+  // Extrae año, mes, día en hora Colombia con formato ISO de calendario.
+  const ymd = d.toLocaleDateString('en-CA', { timeZone: TZ_COLOMBIA }); // "2026-07-28"
+  const [Y, M, D] = ymd.split('-');
+
+  // Extrae hora:minuto en hora Colombia, forzando formato 24h.
+  const hhmm = d.toLocaleTimeString('en-US', {
+    timeZone: TZ_COLOMBIA,
+    hour: '2-digit', minute: '2-digit',
+    hour12: false,
+  }); // "14:30"
+
+  switch (modo) {
+    case 'fecha':    return `${D}/${M}/${Y}`;
+    case 'hora':     return hhmm;
+    case 'completo': return `${D}/${M}/${Y} ${hhmm}`;
+    case 'largo': {
+      const mes = d.toLocaleDateString('es-CO', { timeZone: TZ_COLOMBIA, month: 'short' });
+      return `${parseInt(D, 10)} ${mes} ${Y}`;
+    }
+    case 'largo-hora': {
+      const mes = d.toLocaleDateString('es-CO', { timeZone: TZ_COLOMBIA, month: 'short' });
+      return `${parseInt(D, 10)} ${mes} ${Y}, ${hhmm}`;
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WRAPPERS DE COMPATIBILIDAD
+//
+// Delegan en las funciones corporativas de arriba.
+// Se mantienen para no romper módulos pendientes de migración.
+// Marcar como @deprecated al usar en código nuevo — importar las
+// funciones corporativas directamente.
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Suma (o resta) N días calendario a un string YYYY-MM-DD.
+ * Opera en UTC puro: construye UTC-midnight del día base, ajusta N días,
+ * extrae la fecha UTC resultante. Seguro frente a cualquier DST o timezone
+ * del browser — nunca usa la hora local del sistema.
+ *
+ * Uso: constraints de MAX_DAYS en DateRangePicker, cálculos de rangos
+ * predefinidos ("Últimos 7d", "Últimos 30d").
+ */
+export function sumarDias(ymd: string, n: number): string {
+  const [Y, M, D] = ymd.split('-').map(Number);
+  const d = new Date(Date.UTC(Y, M - 1, D));
+  d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
 
-/** Fecha larga con hora: "12 jun. 2025, 10:35 a. m." — para detalles y timelines. */
+/** @deprecated Usar fechaHoyColombia() — RESUELVE H-01 */
+export function hoy(): string {
+  return fechaHoyColombia();
+}
+
+/** @deprecated Usar fechaHoyColombia(-7) — RESUELVE H-01 */
+export function hace7dias(): string {
+  return fechaHoyColombia(-7);
+}
+
+/** @deprecated Usar formatearFecha(iso, 'largo-hora') */
 export function fmtFecha(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString(LOCALE, {
-    day: "2-digit", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
+  return formatearFecha(iso, 'largo-hora');
 }
 
-/** Fecha corta sin hora: "12 jun. 2025" — para columnas de tabla. */
+/** @deprecated Usar formatearFecha(iso, 'largo') */
 export function fmtFechaCort(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString(LOCALE, {
-    day: "2-digit", month: "short", year: "numeric",
-  });
+  return formatearFecha(iso, 'largo');
 }
 
-/** Solo hora: "10:35 a. m." — para bandejas operativas con hora de salida. */
+/** @deprecated Usar formatearFecha(iso, 'hora') */
 export function fmtHora(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
+  return formatearFecha(iso, 'hora');
 }
 
-/** Fecha y hora en formato operativo DD/MM/YYYY HH:mm (desde ISO string). */
+/** @deprecated Usar formatearFecha(iso, 'completo') */
 export function fmtDDMMYYYYHm(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "—";
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return formatearFecha(iso, 'completo');
 }
 
-/** Solo fecha DD/MM/YYYY sin hora (desde ISO string). */
+/** @deprecated Usar formatearFecha(iso, 'fecha') */
 export function fmtDDMMYYYY(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "—";
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+  return formatearFecha(iso, 'fecha');
 }
 
-/** Separa un ISO timestamp en { fecha: DD/MM/YYYY, hora: HH:mm } — para celdas de doble línea. */
+/**
+ * Separa un ISO timestamp en { fecha: DD/MM/YYYY, hora: HH:mm }.
+ * hora es string vacío cuando iso es null/inválido (preserva comportamiento de DateTimeCell).
+ * @deprecated Usar formatearFecha(iso, 'fecha') y formatearFecha(iso, 'hora') directamente.
+ */
 export function splitISO(iso: string | null | undefined): { fecha: string; hora: string } {
-  if (!iso) return { fecha: "—", hora: "" };
+  if (!iso) return { fecha: '—', hora: '' };
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return { fecha: "—", hora: "" };
-  const p = (n: number) => String(n).padStart(2, "0");
+  if (isNaN(d.getTime())) return { fecha: '—', hora: '' };
   return {
-    fecha: `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`,
-    hora:  `${p(d.getHours())}:${p(d.getMinutes())}`,
+    fecha: formatearFecha(iso, 'fecha'),
+    hora:  formatearFecha(iso, 'hora'),
   };
 }

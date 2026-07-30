@@ -1,19 +1,20 @@
-import { parseFechaMDY } from "@/utils/parseFecha";
+import { parseFechaTMS } from "@/utils/parseFecha";
+import { extraerFechaColombia } from "@/utils/date";
 import { lineaNegocio } from "@/utils/lineaNegocio";
 import type { Column } from "@/components/ui";
 import type { CumplidoRecord } from "../types";
 import { estadoViajeVisual, ESTADO_VIAJE_CFG } from "../constants";
 
-/** Extrae fecha y hora de un string MM/DD/YYYY HH:MM:SS. */
+const TZ_COL = "America/Bogota";
+
+/** Extrae fecha DD/MM/YYYY y hora HH:mm de un string MM/DD/YYYY HH:MM:SS, en hora Colombia. */
 function splitActivatedOn(raw: string | null | undefined): { fecha: string; hora: string } {
   if (!raw) return { fecha: "—", hora: "" };
-  const d = parseFechaMDY(raw);
+  const d = parseFechaTMS(raw, "MDY");
   if (!d) return { fecha: "—", hora: "" };
-  const p = (n: number) => String(n).padStart(2, "0");
-  return {
-    fecha: `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`,
-    hora:  `${p(d.getHours())}:${p(d.getMinutes())}`,
-  };
+  const [Y, M, D] = extraerFechaColombia(d).split("-");
+  const hora = d.toLocaleTimeString("en-US", { timeZone: TZ_COL, hour: "2-digit", minute: "2-digit", hour12: false });
+  return { fecha: `${D}/${M}/${Y}`, hora };
 }
 
 

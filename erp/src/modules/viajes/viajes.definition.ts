@@ -12,15 +12,18 @@ export const VIAJES_ENTITY = "viaje" as const;
 
 /** Metadatos de cada columna — sin renderers. */
 export const VIAJES_COLUMNS_DEF = [
-  { key: "trip_number",           header: "Viaje",                 width: "110px",  sortable: true,  mono: true  },
-  { key: "company_customer_name", header: "Cliente",               width: "180px",  sortable: true,  mono: false },
-  { key: "license_plate",         header: "Vehículo",              width: "100px",  sortable: true,  mono: true  },
-  { key: "driver_name",           header: "Conductor",             width: "160px",  sortable: true,  mono: false },
-  { key: "_ruta",                 header: "Ruta",                  width: "160px",  sortable: false, mono: false },
-  { key: "state_travel",          header: "Estado",                width: "130px",  sortable: true,  mono: false },
-  { key: "latest_gps_report",     header: "GPS",                   width: "110px",  sortable: false, mono: false },
-  { key: "activated_on",          header: "Última actualización",  width: "140px",  sortable: true,  mono: false },
-  { key: "_actions",              header: "",                      width: "36px",   sortable: false, mono: false },
+  { key: "activated_on",          header: "Fecha",      width: "84px",   align: "center" as const, sortable: true,  mono: true  },
+  { key: "trip_number",           header: "Manifiesto", width: "104px",  align: "left"   as const, sortable: true,  mono: true  },
+  { key: "company_customer_name", header: "Cliente",    width: "160px",  align: "left"   as const, sortable: true,  mono: false },
+  { key: "type_operation",        header: "Operación",  width: "100px",  align: "left"   as const, sortable: false, mono: false },
+  { key: "_tipo",                 header: "Tipo",       width: "72px",   align: "center" as const, sortable: false, mono: false },
+  { key: "origin_city_name",      header: "Origen",     width: "110px",  align: "left"   as const, sortable: false, mono: true  },
+  { key: "destiny_city_name",     header: "Destino",    width: "110px",  align: "left"   as const, sortable: false, mono: true  },
+  { key: "license_plate",         header: "Placa",      width: "90px",   align: "center" as const, sortable: true,  mono: true  },
+  { key: "driver_name",           header: "Conductor",  width: "140px",  align: "left"   as const, sortable: true,  mono: false },
+  { key: "driver_phone",          header: "Teléfono",   width: "110px",  align: "left"   as const, sortable: false, mono: true  },
+  { key: "state_travel",          header: "Estado",     width: "140px",  align: "left"   as const, sortable: true,  mono: false },
+  { key: "_actions",              header: "",           width: "36px",   align: "center" as const, sortable: false, mono: false },
 ] as const;
 
 /** Especificaciones de filtro — sin componentes UI. */

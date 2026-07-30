@@ -54,13 +54,6 @@ export function DocumentosPanel({ viaje }: { viaje: TmsViaje }) {
     <PanelSection title="Documentos asociados" icon={<FileText className="w-3.5 h-3.5" />}>
       <div className="flex flex-col gap-2">
         <DocRow
-          icon={<FileText className="w-3.5 h-3.5" />}
-          label="Remisión"
-          value={viaje.number_order ?? undefined}
-          disabled={!viaje.number_order}
-          badge={!viaje.number_order ? "Sin remisión" : undefined}
-        />
-        <DocRow
           icon={<ClipboardList className="w-3.5 h-3.5" />}
           label="Solicitud origen"
           onClick={() => navigateTo(navActions.verSolicitud(viaje.trip_number, "viajes"))}
