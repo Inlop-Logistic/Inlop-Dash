@@ -321,7 +321,8 @@ const cache = {
   pendientes:{ data: [], ts: 0 },
 };
 
-let syncCumplidosRunning = false;
+let syncCumplidosRunning  = false;
+let syncPlaneadosRunning  = false;
 
 function cacheVigente(key) {
   return (Date.now() - cache[key].ts) < CACHE_TTL && cache[key].data.length > 0;
@@ -649,7 +650,14 @@ async function refreshCustomerLookup() {
 }
 
 // ─── SYNC PLANEADOS ─────────────────────────────────────
+// Espejo operacional puro del TMS. No resuelve ni crea clientes.
+// El módulo Clientes es responsable de la resolución comercial de forma independiente.
 async function syncPlaneados() {
+  if (syncPlaneadosRunning) {
+    console.warn('⚠️  syncPlaneados: ciclo anterior aún activo — omitiendo.');
+    return;
+  }
+  syncPlaneadosRunning = true;
   try {
     const path = `/Travel/search?size=200&page=1`;
     const data = await safeFetch(path, []);
@@ -669,6 +677,16 @@ async function syncPlaneados() {
       return fechaDia >= hoyStr;
     });
 
+    // Orden determinista: fecha de programación ascendente
+    viajesFuturos.sort((a, b) => {
+      const fa = parseSchedulate(a.schedulate_origin);
+      const fb = parseSchedulate(b.schedulate_origin);
+      if (!fa && !fb) return 0;
+      if (!fa) return 1;
+      if (!fb) return -1;
+      return fa.getTime() - fb.getTime();
+    });
+
     console.log(`📅 Planeados: ${arr.length} en Travel/search → ${viajesFuturos.length} hoy o futuros`);
     if (!viajesFuturos.length) return;
 
@@ -678,7 +696,8 @@ async function syncPlaneados() {
 
     const activeIds = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
 
-    let upsertados = 0, clientesCreados = 0, placeholdersOmitidos = 0;
+    const ahora = Date.now();
+    const rows = [];
     for (const v of viajesFuturos) {
       const f = parseSchedulate(v.schedulate_origin);
       const yaExiste = existMap[v.trip_number];
@@ -686,22 +705,9 @@ async function syncPlaneados() {
       const viajeResume = cache.viajes.data.find(r => r.trip_number === v.trip_number);
       const rawCliente = viajeResume?.company_customer_name || v.company_customer_name || null;
       const cliente = rawCliente ? rawCliente.split(',')[0].trim() : null;
-      const resolved = await resolveTrip(
-        { rawName: cliente, existingEmpresaId: existMap[v.trip_number]?.empresa_cliente_id ?? null },
-        { lookupMap: customerLookupMap, empresaById: customerLookupById, sbFetch, generarCodigo: generarCodigoCliente, actor: 'sistema:tms' }
-      );
-      if (resolved.created)     clientesCreados++;
-      if (resolved.placeholder) placeholdersOmitidos++;
-      if (resolved.empresa_cliente_id) {
-        tripCustomerCache.set(v.trip_number, {
-          empresa_cliente_id: resolved.empresa_cliente_id,
-          razon_social:       resolved.razon_social,
-        });
-      }
 
       // Derivar estado_programacion — backend es fuente de verdad
       const estadoActual = yaExiste?.estado_programacion || 'programado';
-      const ahora        = Date.now();
       let estado_programacion;
       if (estadoActual === 'cancelado' || estadoActual === 'completado') {
         estado_programacion = estadoActual; // estados sticky: sync nunca los revierte
@@ -711,12 +717,11 @@ async function syncPlaneados() {
         estado_programacion = (f && f.getTime() <= ahora) ? 'sin_asignar' : 'programado';
       }
 
-      const row = {
+      rows.push({
         trip_number:           v.trip_number,
         license_plate:         v.license_plate         || null,
         driver_name:           v.driver_name           || null,
         company_customer_name: cliente,
-        empresa_cliente_id:    resolved.empresa_cliente_id,
         city_origin:           v.city_origin           || null,
         city_destination:      v.city_destination      || null,
         origin_address:        v.origin_address        || null,
@@ -728,18 +733,22 @@ async function syncPlaneados() {
         activado_en:           (estaActivo && yaExiste && !yaExiste.activo_en_resume) || (estaActivo && !yaExiste)
                                  ? new Date().toISOString()
                                  : null,
-      };
-
-      await sbFetch('/planeados', 'POST', row);
-      upsertados++;
+      });
     }
+
+    // Upsert en lote — una sola transacción elimina la ventana de inconsistencia.
+    // empresa_cliente_id se omite intencionalmente: merge-duplicates preserva el valor
+    // existente en BD; nuevas filas lo dejan null (resuelto por el módulo Clientes).
+    await sbFetch('/planeados', 'POST', rows);
 
     // Ventana móvil de retención: conservar últimos 8 días, eliminar registros anteriores.
     const corte = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const corteStr = extraerFechaColombia(corte);
     await sbFetch(`/planeados?fecha_programada_dia=lt.${corteStr}`, 'DELETE');
-    console.log(`📅 Planeados: ${upsertados} upsertados, ${clientesCreados} clientes creados, ${placeholdersOmitidos} sin Match TMS. Eliminados anteriores a ${corteStr} (ventana 8 días).`);
+    console.log(`📅 Planeados: ${rows.length} upsertados en lote. Eliminados anteriores a ${corteStr} (ventana 8 días).`);
 
+    // Parche de respaldo: filas retenidas (fuera de viajesFuturos) sin nombre de cliente
+    // que ya tienen el dato en el cache de Resume.
     const sinCliente = (existentes || []).filter(e => !e.company_customer_name);
     for (const e of sinCliente) {
       const viajeResume = cache.viajes.data.find(r => r.trip_number === e.trip_number);
@@ -753,6 +762,8 @@ async function syncPlaneados() {
     }
   } catch(e) {
     console.error("❌ Error sync planeados:", e.message);
+  } finally {
+    syncPlaneadosRunning = false;
   }
 }
 
