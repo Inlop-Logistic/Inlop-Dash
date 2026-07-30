@@ -98,9 +98,10 @@ export const COLUMNS: Column<ViajeResumen>[] = [
   {
     key: "cliente",
     header: "Cliente",
+    width: "180px",
     render: (v) => (
       <div
-        className="text-[13px] font-medium truncate max-w-[160px]"
+        className="text-[13px] font-medium truncate"
         style={{ color: v.nombre_cliente ? "var(--gray-800)" : "var(--gray-300)" }}
         title={v.nombre_cliente ?? undefined}
       >

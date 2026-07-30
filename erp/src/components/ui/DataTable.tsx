@@ -92,6 +92,14 @@ export function DataTable<T>({
     <div className="overflow-x-auto">
       <table className="w-full text-left min-w-[640px]">
 
+        {/* colgroup declara los anchos antes de que el navegador procese el contenido,
+            haciendo que los anchos de columna sean respetados en todos los módulos. */}
+        <colgroup>
+          {columns.map((col) => (
+            <col key={col.key} style={{ width: col.width }} />
+          ))}
+        </colgroup>
+
         {/* Header — fondo var(--gray-50), borde inferior 2px, texto var(--gray-600) */}
         <thead style={{ position: "sticky", top: 0, zIndex: 4 }}>
           <tr style={{ borderBottom: "2px solid var(--gray-200)" }}>
