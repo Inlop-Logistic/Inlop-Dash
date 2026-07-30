@@ -350,8 +350,12 @@ const cache = {
   pendientes:{ data: [], ts: 0 },
 };
 
+let syncViajesRunning     = false;
 let syncCumplidosRunning  = false;
 let syncPlaneadosRunning  = false;
+
+// Métricas del último ciclo de syncViajes — expuestas en /health para observabilidad.
+let lastSnapshotMetrics = null;
 
 // ─── DIAGNÓSTICO PROGRAMACIÓN ────────────────────────────────────────────────
 // Variables y helpers para instrumentación temporal. No tocar reglas funcionales.
@@ -948,46 +952,131 @@ async function syncPlaneados(motivo = 'scheduler') {
 }
 
 async function syncViajes() {
+  // Mutex: evitar ejecuciones concurrentes si un ciclo tarda más de 60 s.
+  if (syncViajesRunning) {
+    console.warn('⚠️  syncViajes: ciclo anterior aún activo — omitiendo.');
+    return;
+  }
+  syncViajesRunning = true;
+  const t0 = Date.now();
+
+  // Objeto de métricas del ciclo — se persiste en lastSnapshotMetrics al finalizar.
+  const metricas = {
+    timestamp:           new Date().toISOString(),
+    paginas_intentadas:  0,
+    paginas_exitosas:    0,
+    registros_p1:        0,
+    registros_p2:        0,
+    registros_p3:        0,
+    total_viajes:        0,
+    duplicados:          0,
+    completo:            false,
+    truncado_por_limite: false,
+    errores:             [],
+    duracion_ms:         0,
+    estado:              'iniciando',
+  };
+
+  console.log('🔄 syncViajes: iniciando snapshot ControlT /Resume');
+
   try {
+    // ── Página 1 ──────────────────────────────────────────────────────────────
+    metricas.paginas_intentadas++;
     const data1 = await safeFetch("/Resume?size=100&page=1", null);
-    if (!data1) return;
-    const arr1 = Array.isArray(data1) ? data1 : data1.data || data1.result || [];
-    if (arr1.length === 0) {
-      console.warn("⚠️  Resume devolvió 0 viajes — manteniendo caché anterior");
+
+    // null indica error HTTP, parse failure o permisos denegados en safeFetch.
+    // No actualizar caché para preservar el snapshot anterior.
+    if (data1 === null) {
+      metricas.errores.push({ pagina: 1, motivo: 'http_error_o_parse' });
+      metricas.estado = 'abortado_p1_error';
+      console.warn('❌ syncViajes: página 1 devolvió error — caché anterior preservada.');
       return;
     }
 
-    let todos = [...arr1];
+    const arr1 = Array.isArray(data1) ? data1 : (data1?.data || data1?.result || []);
+    if (arr1.length === 0) {
+      metricas.estado = 'abortado_p1_vacia';
+      console.warn('⚠️  syncViajes: página 1 devolvió 0 viajes — caché anterior preservada.');
+      return;
+    }
+
+    metricas.paginas_exitosas++;
+    metricas.registros_p1 = arr1.length;
+    console.log(`📄 syncViajes p1: ${arr1.length} viajes`);
+
+    let todos    = [...arr1];
     let completo = true;
 
+    // ── Página 2 ──────────────────────────────────────────────────────────────
     if (arr1.length >= 100) {
+      metricas.paginas_intentadas++;
       try {
         const data2 = await safeFetch("/Resume?size=100&page=2", null);
-        const arr2 = Array.isArray(data2) ? data2 : (data2?.data || data2?.result || []);
-        if (arr2.length > 0) {
-          todos = [...todos, ...arr2];
-          console.log(`📄 Página 2 cargada: ${arr2.length} viajes adicionales`);
-          if (arr2.length >= 100) {
-            try {
-              const data3 = await safeFetch("/Resume?size=100&page=3", null);
-              const arr3 = Array.isArray(data3) ? data3 : (data3?.data || data3?.result || []);
-              if (arr3.length > 0) {
-                todos = [...todos, ...arr3];
-                console.log(`📄 Página 3 cargada: ${arr3.length} viajes adicionales`);
+
+        if (data2 === null) {
+          // Error HTTP / parse silencioso: marcar snapshot incompleto.
+          // Antes este caso quedaba como completo=true porque arr2=[] y no se lanzaba excepción.
+          completo = false;
+          metricas.errores.push({ pagina: 2, motivo: 'http_error_o_parse' });
+          console.error('❌ syncViajes: página 2 falló con error HTTP/parse — snapshot INCOMPLETO. syncCumplidos suspenderá lógica de finalización.');
+        } else {
+          const arr2 = Array.isArray(data2) ? data2 : (data2?.data || data2?.result || []);
+          metricas.paginas_exitosas++;
+          metricas.registros_p2 = arr2.length;
+
+          if (arr2.length > 0) {
+            todos = [...todos, ...arr2];
+            console.log(`📄 syncViajes p2: ${arr2.length} viajes adicionales`);
+
+            // ── Página 3 ──────────────────────────────────────────────────────
+            if (arr2.length >= 100) {
+              metricas.paginas_intentadas++;
+              try {
+                const data3 = await safeFetch("/Resume?size=100&page=3", null);
+
+                if (data3 === null) {
+                  completo = false;
+                  metricas.errores.push({ pagina: 3, motivo: 'http_error_o_parse' });
+                  console.error('❌ syncViajes: página 3 falló con error HTTP/parse — snapshot INCOMPLETO.');
+                } else {
+                  const arr3 = Array.isArray(data3) ? data3 : (data3?.data || data3?.result || []);
+                  metricas.paginas_exitosas++;
+                  metricas.registros_p3 = arr3.length;
+
+                  if (arr3.length > 0) {
+                    todos = [...todos, ...arr3];
+                    console.log(`📄 syncViajes p3: ${arr3.length} viajes adicionales`);
+                  } else {
+                    console.log('📄 syncViajes p3: 0 registros — paginación completa.');
+                  }
+
+                  // Página 3 llena: existen viajes más allá del límite de 3 páginas.
+                  if (arr3.length >= 100) {
+                    completo = false;
+                    metricas.truncado_por_limite = true;
+                    metricas.errores.push({ pagina: 3, motivo: 'limite_paginas_alcanzado' });
+                    console.warn(`⚠️  syncViajes: página 3 completa (${arr3.length} registros). Límite de 3 páginas alcanzado — viajes adicionales no descargados. Snapshot INCOMPLETO.`);
+                  }
+                }
+              } catch(e) {
+                completo = false;
+                metricas.errores.push({ pagina: 3, motivo: 'excepcion', detalle: e.message });
+                console.error(`❌ syncViajes: página 3 — excepción: ${e.message}`);
               }
-            } catch(e) {
-              console.warn("⚠️  Página 3 no disponible — snapshot parcial:", e.message);
-              completo = false;
             }
+          } else {
+            console.log('📄 syncViajes p2: 0 registros — paginación completa.');
           }
         }
       } catch(e) {
-        console.warn("⚠️  Página 2 no disponible — snapshot parcial:", e.message);
         completo = false;
+        metricas.errores.push({ pagina: 2, motivo: 'excepcion', detalle: e.message });
+        console.error(`❌ syncViajes: página 2 — excepción: ${e.message}`);
       }
     }
 
-    const seen = new Set();
+    // ── Deduplicación ─────────────────────────────────────────────────────────
+    const seen  = new Set();
     const dedup = todos.filter(v => {
       const k = v.trip_number || v.id_monitoring_order;
       if (seen.has(k)) return false;
@@ -995,16 +1084,36 @@ async function syncViajes() {
       return true;
     });
 
-    cache.viajes.data    = sortViajes(dedup);
-    cache.viajes.ts      = Date.now();
+    metricas.duplicados   = todos.length - dedup.length;
+    metricas.total_viajes = dedup.length;
+    metricas.completo     = completo;
+    metricas.estado       = completo ? 'completo' : 'parcial';
+
+    cache.viajes.data     = sortViajes(dedup);
+    cache.viajes.ts       = Date.now();
     cache.viajes.completo = completo;
 
     if (!completo) {
-      console.warn(`⚠️  syncViajes: snapshot PARCIAL (${dedup.length} viajes). Lógica de finalización suspendida en próximo ciclo.`);
+      const resumenErrores = metricas.errores.map(e => `p${e.pagina}:${e.motivo}`).join(', ');
+      console.warn(`⚠️  syncViajes: snapshot PARCIAL (${dedup.length} viajes). Errores: [${resumenErrores}]. syncCumplidos suspenderá lógica de finalización.`);
     }
-    console.log(`📦 Caché: ${dedup.length} viajes totales (p1:${arr1.length} + extras)`);
+
   } catch(e) {
-    console.error("❌ Error sync viajes:", e.message);
+    metricas.estado = 'error_fatal';
+    metricas.errores.push({ pagina: 0, motivo: 'excepcion_fatal', detalle: e.message });
+    console.error(`❌ syncViajes: error fatal — ${e.message}`);
+  } finally {
+    metricas.duracion_ms = Date.now() - t0;
+    lastSnapshotMetrics  = metricas;
+    syncViajesRunning    = false;
+    console.log(
+      `📊 syncViajes fin | estado:${metricas.estado}` +
+      ` | viajes:${metricas.total_viajes}` +
+      ` | páginas:${metricas.paginas_exitosas}/${metricas.paginas_intentadas}` +
+      ` | p1:${metricas.registros_p1} p2:${metricas.registros_p2} p3:${metricas.registros_p3}` +
+      ` | dedup:-${metricas.duplicados}` +
+      ` | ${metricas.duracion_ms}ms`
+    );
   }
 }
 
@@ -4061,15 +4170,17 @@ app.get("/health", (req, res) => {
     ultimoLogin: lastLogin ? new Date(lastLogin).toISOString() : null,
     cache: {
       viajes:  {
-        cantidad: cache.viajes.data.length,
-        edad_seg: Math.round((Date.now() - cache.viajes.ts) / 1000),
-        por_estado: estados
+        cantidad:  cache.viajes.data.length,
+        edad_seg:  Math.round((Date.now() - cache.viajes.ts) / 1000),
+        completo:  cache.viajes.completo,
+        por_estado: estados,
       },
       alarmas: {
         cantidad: cache.alarmas.data.length,
-        edad_seg: Math.round((Date.now() - cache.alarmas.ts) / 1000)
-      }
-    }
+        edad_seg: Math.round((Date.now() - cache.alarmas.ts) / 1000),
+      },
+    },
+    ultimo_snapshot: lastSnapshotMetrics,
   });
 });
 
