@@ -7,6 +7,19 @@ export type EstadoDocumental =
   | "rechazado"
   | "listo_facturacion";
 
+/** Tipos de documento del bucket Supabase `cumplidos` (según TorreControl). */
+export type TipoDocumento = "remesa" | "cumplido" | "manifiesto" | "evidencias" | "tiquete" | "gut";
+
+/** Archivo almacenado en el bucket `cumplidos` para un viaje. */
+export interface DocumentoArchivo {
+  nombre:     string;
+  ruta:       string;
+  size:       number;
+  mimetype:   string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 /** Ítem individual del checklist documental. */
 export interface DocumentoCheck {
   id:         string;
@@ -36,13 +49,23 @@ export interface CumplidoRecord {
   created_on:            string | null;
   fecha_cumplido:        string | null;
 
-  // Expediente documental
+  // Expediente documental (ERP)
   estado_documental:  EstadoDocumental;
   documentos:         DocumentoCheck[];
   observaciones:      string | null;
   responsable:        string | null;
   fecha_validacion:   string | null;
   aprobado_por:       string | null;
+
+  // Campos del sistema TorreControl (bucket Supabase)
+  /** Estado operativo según TorreControl: PENDIENTE / SOLICITADO / CUMPLIDO RECIBIDO / etc. */
+  estado_cumplido:  string | null;
+  /** Indica si hay al menos un documento subido al bucket. */
+  tiene_soporte:    boolean;
+  /** Observaciones libres registradas en TorreControl. */
+  obs:              string | null;
+  /** URL del soporte registrado en TorreControl. */
+  link_soporte:     string | null;
 }
 
 /** KPIs calculados del conjunto filtrado activo. */

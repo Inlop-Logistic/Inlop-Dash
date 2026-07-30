@@ -55,7 +55,36 @@ let tripCustomerCache = new Map();
 const SB_URL = "https://gtyydandwcgoaratmnqh.supabase.co/rest/v1";
 const SB_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0eXlkYW5kd2Nnb2FyYXRtbnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDAyMTcsImV4cCI6MjA5MjYxNjIxN30.utGZtr0L5t9hIpRABTtfhsKEsrSCBJLHcP_gQ5Hq0EI";
 const SB_KEY = process.env.SUPABASE_SERVICE_KEY || SB_ANON_KEY;
-const SB_AUTH_URL = 'https://gtyydandwcgoaratmnqh.supabase.co/auth/v1';
+const SB_AUTH_URL    = 'https://gtyydandwcgoaratmnqh.supabase.co/auth/v1';
+const SB_STORAGE_URL = 'https://gtyydandwcgoaratmnqh.supabase.co/storage/v1';
+
+// Helper para Supabase Storage (bucket cumplidos).
+// body puede ser un Buffer (upload binario) u objeto JSON (list/sign/delete).
+async function sbStorageFetch(path, method = 'GET', body = null, extraHeaders = {}) {
+  const headers = {
+    'apikey':        SB_ANON_KEY,
+    'Authorization': `Bearer ${SB_KEY}`,
+    ...extraHeaders,
+  };
+  const opts = { method, headers };
+  if (body !== null) {
+    if (Buffer.isBuffer(body)) {
+      opts.body = body;
+    } else {
+      headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+  }
+  const r = await fetchConTimeout(`${SB_STORAGE_URL}${path}`, opts, 30_000);
+  if (!r.ok) {
+    const txt = await r.text();
+    console.error(`SB Storage ${method} ${path} → ${r.status}: ${txt}`);
+    return null;
+  }
+  if (method === 'DELETE') return null;
+  const text = await r.text();
+  return text ? JSON.parse(text) : null;
+}
 
 if (!process.env.SUPABASE_SERVICE_KEY) {
   console.warn(
@@ -1090,7 +1119,7 @@ app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
     const allRows = [];
     while (true) {
       const page = await sbFetch(
-        `/cumplidos?select=id,manifiesto,placa,conductor,conductor_tel,cliente,origen,destino,estado_controlt,pct,fecha_viaje,fecha_finalizacion,tipo_negocio&order=fecha_viaje.desc&limit=${SB_PAGE}&offset=${sbOffset}`
+        `/cumplidos?select=id,manifiesto,placa,conductor,conductor_tel,cliente,origen,destino,estado_controlt,pct,fecha_viaje,fecha_finalizacion,tipo_negocio,estado_cumplido,tiene_soporte,obs,link_soporte&order=fecha_viaje.desc&limit=${SB_PAGE}&offset=${sbOffset}`
       );
       if (!page || page.length === 0) break;
       allRows.push(...page);
@@ -1117,7 +1146,11 @@ app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
         ...d,
         presente: d.id === 'remision' ? !!r.manifiesto : false,
       })),
-      type_operation:   r.tipo_negocio || null,
+      type_operation:   r.tipo_negocio    || null,
+      estado_cumplido:  r.estado_cumplido || null,
+      tiene_soporte:    r.tiene_soporte   ?? false,
+      obs:              r.obs             || null,
+      link_soporte:     r.link_soporte    || null,
       observaciones:    null,
       responsable:      null,
       fecha_validacion: null,
@@ -1128,6 +1161,112 @@ app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
   } catch(e) {
     console.error('❌ Error GET /api/cumplidos:', e.message);
     res.status(500).json({ error: 'Error interno al obtener viajes finalizados' });
+  }
+});
+
+// ─── DOCUMENTOS CUMPLIDOS (bucket Supabase Storage "cumplidos") ─────────────
+
+// GET /api/cumplidos/:trip/documentos — lista archivos del bucket para el viaje.
+app.get('/api/cumplidos/:trip/documentos', requireInternalApiKey, async (req, res) => {
+  try {
+    const { trip } = req.params;
+    const result = await sbStorageFetch('/object/list/cumplidos', 'POST', {
+      prefix:  `${trip}/`,
+      limit:   100,
+      offset:  0,
+      sortBy:  { column: 'name', order: 'asc' },
+    });
+    const archivos = (result || [])
+      .filter(f => f.name && f.name !== '.emptyFolderPlaceholder')
+      .map(f => ({
+        nombre:     f.name,
+        ruta:       `${trip}/${f.name}`,
+        size:       f.metadata?.size     || 0,
+        mimetype:   f.metadata?.mimetype || 'application/octet-stream',
+        created_at: f.created_at         || null,
+        updated_at: f.updated_at         || null,
+      }));
+    res.json({ archivos });
+  } catch(e) {
+    console.error('❌ GET /api/cumplidos/:trip/documentos:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/cumplidos/:trip/documentos — sube un documento al bucket (proxy).
+// Headers esperados: X-Tipo-Documento, X-Placa, X-Filename, Content-Type.
+app.post(
+  '/api/cumplidos/:trip/documentos',
+  requireInternalApiKey,
+  express.raw({ type: '*/*', limit: '50mb' }),
+  async (req, res) => {
+    try {
+      const { trip } = req.params;
+      const tipo     = (req.headers['x-tipo-documento'] || 'documento').replace(/[^a-z]/gi, '');
+      const placa    = (req.headers['x-placa'] || 'SINPLACA').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      const origName = req.headers['x-filename'] || 'archivo.bin';
+      const mime     = req.headers['content-type'] || 'application/octet-stream';
+      const ext      = origName.includes('.') ? origName.split('.').pop().toLowerCase() : 'bin';
+      const fecha    = fechaHoyColombia().replace(/-/g, '');
+      const filename = `${tipo}_${placa}_${fecha}_${Date.now()}.${ext}`;
+      const path     = `${trip}/${filename}`;
+
+      await sbStorageFetch(`/object/cumplidos/${path}`, 'POST', req.body, {
+        'Content-Type': mime,
+        'x-upsert':     'true',
+      });
+      // Marca tiene_soporte = true en la tabla cumplidos
+      await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(trip)}`, 'PATCH', { tiene_soporte: true });
+      res.json({ ok: true, filename, path });
+    } catch(e) {
+      console.error('❌ POST /api/cumplidos/:trip/documentos:', e.message);
+      res.status(500).json({ error: e.message });
+    }
+  },
+);
+
+// DELETE /api/cumplidos/:trip/documentos/:filename — elimina un documento del bucket.
+app.delete('/api/cumplidos/:trip/documentos/:filename', requireInternalApiKey, async (req, res) => {
+  try {
+    const { trip, filename } = req.params;
+    await sbStorageFetch('/object/cumplidos', 'DELETE', { prefixes: [`${trip}/${filename}`] });
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('❌ DELETE /api/cumplidos/:trip/documentos:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/cumplidos/:trip/documentos/:filename/sign — URL firmada (1h) para ver/descargar.
+app.get('/api/cumplidos/:trip/documentos/:filename/sign', requireInternalApiKey, async (req, res) => {
+  try {
+    const { trip, filename } = req.params;
+    const path   = `${trip}/${filename}`;
+    const result = await sbStorageFetch(`/object/sign/cumplidos/${path}`, 'POST', { expiresIn: 3600 });
+    if (!result?.signedURL) return res.status(404).json({ error: 'No se pudo generar URL firmada' });
+    const url = result.signedURL.startsWith('http')
+      ? result.signedURL
+      : `https://gtyydandwcgoaratmnqh.supabase.co${result.signedURL}`;
+    res.json({ url });
+  } catch(e) {
+    console.error('❌ GET /api/cumplidos/:trip/documentos/:filename/sign:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/cumplidos/:trip/estado — actualiza estado_cumplido (y opcionalmente fecha_cumplido).
+app.patch('/api/cumplidos/:trip/estado', requireInternalApiKey, async (req, res) => {
+  try {
+    const { trip }                    = req.params;
+    const { estado_cumplido, fecha_cumplido } = req.body || {};
+    if (!estado_cumplido) return res.status(400).json({ error: 'estado_cumplido requerido' });
+    const patch = { estado_cumplido };
+    if (fecha_cumplido) patch.fecha_cumplido = fecha_cumplido;
+    await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(trip)}`, 'PATCH', patch);
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('❌ PATCH /api/cumplidos/:trip/estado:', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
