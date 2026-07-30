@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { hoy, extraerFechaColombia } from "@/utils/date";
+import { fechaHoyColombia, extraerFechaColombia } from "@/utils/date";
 import { parseFechaDMY } from "@/utils/parseFecha";
 import type { ViajeResumen, EstadoProgramacion } from "../types";
 import { listarProgramacion, cambiarEstadoProgramacion, sincronizarViaje } from "../services/api";
@@ -8,7 +8,18 @@ import { useFiltrosComunes } from "@/hooks/useFiltrosComunes";
 
 type TabEstado = "todos" | "programado" | "asignado" | "en_ruta" | "completado" | "cancelado" | "sin_asignar";
 
-const TAM_PAGINA = 50;
+const TAM_PAGINA = 25;
+
+/**
+ * Ventana operativa de Programación: hoy − 8 días → hoy.
+ * Fuente única para el rango inicial de la bandeja.
+ */
+export function rangoOperativo() {
+  return {
+    desde: fechaHoyColombia(-8),
+    hasta: fechaHoyColombia(),
+  };
+}
 
 /** Convierte schedulate_origin (DD/MM/YYYY HH:MM:SS) a YYYY-MM-DD Colombia para filtro de fecha. */
 function schedulateToISO(raw: string | null | undefined): string | null {
@@ -35,14 +46,16 @@ export function useProgramacion() {
   const [accionLoading, setAccionLoading]   = useState(false);
   const [pagina, setPagina]                 = useState(1);
 
-  // Filtros comunes — fechas inicializadas a hoy (bandeja diaria)
+  // Filtros comunes — fechas inicializadas a la ventana operativa (hoy − 8 días → hoy)
+  const rango0 = rangoOperativo();
   const { busqueda, setBusqueda, fechaDesde, fechaHasta, setFechaRango, limpiarBase } =
-    useFiltrosComunes({ defaultDesde: hoy(), defaultHasta: hoy() });
+    useFiltrosComunes({ defaultDesde: rango0.desde, defaultHasta: rango0.hasta });
 
   // desdeOpt/hastaOpt permiten pasar fechas explícitas sin depender del estado async.
   const cargar = async (desdeOpt?: string, hastaOpt?: string) => {
-    const d = desdeOpt ?? fechaDesde ?? hoy();
-    const h = hastaOpt ?? fechaHasta ?? hoy();
+    const { desde: r0d, hasta: r0h } = rangoOperativo();
+    const d = desdeOpt ?? fechaDesde ?? r0d;
+    const h = hastaOpt ?? fechaHasta ?? r0h;
     setLoading(true);
     setError(null);
     try {
@@ -182,17 +195,19 @@ export function useProgramacion() {
 
   const panelViaje = panelId ? data.find((v) => v.trip_number === panelId) ?? null : null;
 
+  const { desde: r0d, hasta: r0h } = rangoOperativo();
   const hayFiltros =
     busqueda !== "" || tabEstado !== "todos" || estadoFiltro !== "" || clienteFiltro !== "" ||
-    fechaDesde !== hoy() || fechaHasta !== hoy();
+    fechaDesde !== r0d || fechaHasta !== r0h;
 
   function limpiarFiltros() {
+    const rango = rangoOperativo();
     limpiarBase();
     setTabEstado("todos");
     setEstadoFiltro("");
     setClienteFiltro("");
     setPagina(1);
-    cargar(hoy(), hoy());
+    cargar(rango.desde, rango.hasta);
   }
 
   return {

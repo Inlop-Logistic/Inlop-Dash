@@ -6,7 +6,7 @@ import {
 import { KpiCard, PageHeader, Card, DataTable, Button, FilterBar, ClienteFilter } from "@/components/ui";
 import type { SelectFilter } from "@/components/ui";
 import { useNavigationContext } from "@/core/navigation";
-import { useProgramacion } from "./hooks/useProgramacion";
+import { useProgramacion, rangoOperativo } from "./hooks/useProgramacion";
 import { CentroOperativo } from "./components/CentroOperativo";
 import { COLUMNS } from "./components/ProgramacionTableColumns";
 import { TABS, tabCount, ESTADO_CFG } from "./constants";
@@ -63,9 +63,9 @@ export function ProgramacionPage() {
     cargar, handleEstado, handleSync,
   } = useProgramacion();
 
-  // Estado visual de fechas — empieza vacío; la lógica interna del hook usa sus propios defaults.
-  const [visualDesde, setVisualDesde] = useState("");
-  const [visualHasta, setVisualHasta] = useState("");
+  // Estado visual del DatePicker — refleja exactamente el rango aplicado al backend.
+  const [visualDesde, setVisualDesde] = useState(() => rangoOperativo().desde);
+  const [visualHasta, setVisualHasta] = useState(() => rangoOperativo().hasta);
 
   function handleFechaRango(desde: string, hasta: string) {
     setVisualDesde(desde);
@@ -74,9 +74,10 @@ export function ProgramacionPage() {
   }
 
   function handleLimpiarFiltros() {
+    const rango = rangoOperativo();
     limpiarFiltros();
-    setVisualDesde("");
-    setVisualHasta("");
+    setVisualDesde(rango.desde);
+    setVisualHasta(rango.hasta);
   }
 
   // Clientes únicos — excluye placeholders internos, derivados del dataset raw
