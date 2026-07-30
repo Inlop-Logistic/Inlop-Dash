@@ -8,11 +8,20 @@ import { useFiltrosComunes } from "@/hooks/useFiltrosComunes";
 
 type TabEstado = "todos" | "programado" | "asignado" | "en_ruta" | "completado" | "cancelado" | "sin_asignar";
 
+const TAM_PAGINA = 50;
+
 /** Convierte schedulate_origin (DD/MM/YYYY HH:MM:SS) a YYYY-MM-DD Colombia para filtro de fecha. */
 function schedulateToISO(raw: string | null | undefined): string | null {
   const d = parseFechaDMY(raw);
   if (!d) return null;
   return extraerFechaColombia(d);
+}
+
+/** Extrae la parte de hora de schedulate_origin ("DD/MM/YYYY HH:MM:SS" → "HH:MM:SS"). */
+function schedulateToTime(raw: string | null | undefined): string {
+  if (!raw) return "00:00:00";
+  const parts = raw.trim().split(" ");
+  return parts[1] ?? "00:00:00";
 }
 
 export function useProgramacion() {
@@ -23,7 +32,8 @@ export function useProgramacion() {
   const [estadoFiltro,   setEstadoFiltro]   = useState("");
   const [clienteFiltro,  setClienteFiltro]  = useState("");
   const [panelId, setPanelId]               = useState<string | null>(null);
-  const [accionLoading, setAccionLoading] = useState(false);
+  const [accionLoading, setAccionLoading]   = useState(false);
+  const [pagina, setPagina]                 = useState(1);
 
   // Filtros comunes — fechas inicializadas a hoy (bandeja diaria)
   const { busqueda, setBusqueda, fechaDesde, fechaHasta, setFechaRango, limpiarBase } =
@@ -48,7 +58,6 @@ export function useProgramacion() {
   useEffect(() => { cargar(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Aplica un rango de fechas y recarga el backend inmediatamente.
-  // Pasa las fechas explícitas para evitar la lectura de estado async tras setFechaRango.
   const buscar = (desde: string, hasta: string) => {
     setFechaRango(desde, hasta);
     cargar(desde, hasta);
@@ -83,15 +92,13 @@ export function useProgramacion() {
     }
   };
 
-  // ── Filtrado acumulativo (client-side, igual que Viajes) ──────────────────
-  const filtradas = useMemo(() => {
+  // ── Filtrado base — sin tab de estado ────────────────────────────────────
+  // Sobre este conjunto se calculan KPIs y conteos de chips.
+  const filtradas_base = useMemo<ViajeResumen[]>(() => {
     const term = busqueda.trim().toLowerCase();
 
     return data.filter((v) => {
-      // Tab de estado — usa estado_programacion como fuente de verdad
-      if (tabEstado !== "todos" && v.estado_programacion !== tabEstado) return false;
-
-      // Select de estado
+      // Select de estado (dropdown)
       if (estadoFiltro && estadoVisual(v) !== estadoFiltro) return false;
 
       // Filtro de cliente
@@ -100,7 +107,7 @@ export function useProgramacion() {
         if (clienteDelViaje !== clienteFiltro) return false;
       }
 
-      // Filtro de fecha (client-side; solo activo cuando el usuario aplica un rango)
+      // Filtro de fecha (client-side)
       if (fechaDesde || fechaHasta) {
         const vFecha = schedulateToISO(v.schedulate_origin) ?? v.fecha_programada_dia ?? null;
         if (!vFecha) return false;
@@ -122,29 +129,56 @@ export function useProgramacion() {
 
       return true;
     });
-  }, [data, tabEstado, estadoFiltro, clienteFiltro, busqueda, fechaDesde, fechaHasta]);
+  }, [data, estadoFiltro, clienteFiltro, busqueda, fechaDesde, fechaHasta]);
 
-  // KPIs calculados sobre el dataset completo (no sobre filtradas) para mostrar totales reales
+  // ── Filtrado con tab + ordenamiento ──────────────────────────────────────
+  // Fecha programada DESC, hora schedulate_origin ASC dentro del mismo día.
+  const filtradas = useMemo<ViajeResumen[]>(() => {
+    const base = tabEstado === "todos"
+      ? filtradas_base
+      : filtradas_base.filter((v) => v.estado_programacion === tabEstado);
+
+    return [...base].sort((a, b) => {
+      const fa = a.fecha_programada_dia ?? "0000-00-00";
+      const fb = b.fecha_programada_dia ?? "0000-00-00";
+      if (fa !== fb) return fa > fb ? -1 : 1;               // fecha DESC
+      const ta = schedulateToTime(a.schedulate_origin);
+      const tb = schedulateToTime(b.schedulate_origin);
+      return ta < tb ? -1 : ta > tb ? 1 : 0;                // hora ASC
+    });
+  }, [filtradas_base, tabEstado]);
+
+  // ── KPIs calculados sobre filtradas_base (refleja filtros sin tab) ────────
   const kpis = useMemo(() => {
-    const programado  = data.filter((v) => v.estado_programacion === "programado").length;
-    const sinAsignar  = data.filter((v) => v.estado_programacion === "sin_asignar").length;
-    const asignado    = data.filter((v) => v.estado_programacion === "asignado").length;
-    const enRuta      = data.filter((v) => v.estado_programacion === "en_ruta").length;
-    const completado  = data.filter((v) => v.estado_programacion === "completado").length;
-    const cancelado   = data.filter((v) => v.estado_programacion === "cancelado").length;
+    const programado  = filtradas_base.filter((v) => v.estado_programacion === "programado").length;
+    const sinAsignar  = filtradas_base.filter((v) => v.estado_programacion === "sin_asignar").length;
+    const asignado    = filtradas_base.filter((v) => v.estado_programacion === "asignado").length;
+    const enRuta      = filtradas_base.filter((v) => v.estado_programacion === "en_ruta").length;
+    const completado  = filtradas_base.filter((v) => v.estado_programacion === "completado").length;
+    const cancelado   = filtradas_base.filter((v) => v.estado_programacion === "cancelado").length;
     return {
-      total:       data.length,
+      total:       filtradas_base.length,
       programado,
       sin_asignar: sinAsignar,
       asignado,
       en_ruta:     enRuta,
       completado,
       cancelado,
-      // aliases para backward-compat con ProgramacionPage KPI cards
-      pendiente: programado + sinAsignar,
-      activo:    asignado + enRuta,
+      pendiente:   programado + sinAsignar,
+      activo:      asignado + enRuta,
     };
-  }, [data]);
+  }, [filtradas_base]);
+
+  // ── Paginación ────────────────────────────────────────────────────────────
+  const totalPaginas = Math.max(1, Math.ceil(filtradas.length / TAM_PAGINA));
+
+  const paginadas = useMemo(
+    () => filtradas.slice((pagina - 1) * TAM_PAGINA, pagina * TAM_PAGINA),
+    [filtradas, pagina],
+  );
+
+  // Resetear página cuando cambia cualquier filtro o el resultado filtrado
+  useEffect(() => { setPagina(1); }, [tabEstado, estadoFiltro, clienteFiltro, busqueda, fechaDesde, fechaHasta]);
 
   const panelViaje = panelId ? data.find((v) => v.trip_number === panelId) ?? null : null;
 
@@ -157,7 +191,8 @@ export function useProgramacion() {
     setTabEstado("todos");
     setEstadoFiltro("");
     setClienteFiltro("");
-    cargar(hoy(), hoy()); // recarga con el rango por defecto tras limpiar
+    setPagina(1);
+    cargar(hoy(), hoy());
   }
 
   return {
@@ -169,7 +204,8 @@ export function useProgramacion() {
     clienteFiltro, setClienteFiltro,
     panelId, setPanelId, panelViaje,
     accionLoading,
-    filtradas, kpis,
+    filtradas_base, filtradas, kpis,
+    pagina, setPagina, totalPaginas, paginadas,
     hayFiltros, limpiarFiltros,
     cargar, buscar, handleEstado, handleSync,
   };
