@@ -324,6 +324,21 @@ const cache = {
 let syncCumplidosRunning  = false;
 let syncPlaneadosRunning  = false;
 
+// ─── DIAGNÓSTICO PROGRAMACIÓN ────────────────────────────────────────────────
+// Variables y helpers para instrumentación temporal. No tocar reglas funcionales.
+let syncCounter       = 0;   // SYNC_ID incremental; se incrementa en cada llamada
+let lastSyncFinished  = 0;   // ID del último SYNC que terminó exitosamente
+let getProgCounter    = 0;   // Contador de solicitudes GET /api/programacion
+
+/** Hora actual en zona Colombia, formato HH:MM:SS, para logs de diagnóstico. */
+function horaAhora() {
+  return new Date().toLocaleTimeString('es-CO', {
+    hour12: false, timeZone: 'America/Bogota',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function cacheVigente(key) {
   return (Date.now() - cache[key].ts) < CACHE_TTL && cache[key].data.length > 0;
 }
@@ -652,29 +667,56 @@ async function refreshCustomerLookup() {
 // ─── SYNC PLANEADOS ─────────────────────────────────────
 // Espejo operacional puro del TMS. No resuelve ni crea clientes.
 // El módulo Clientes es responsable de la resolución comercial de forma independiente.
-async function syncPlaneados() {
+async function syncPlaneados(motivo = 'scheduler') {
   if (syncPlaneadosRunning) {
-    console.warn('⚠️  syncPlaneados: ciclo anterior aún activo — omitiendo.');
+    console.warn(`⚠️  [SYNC] syncPlaneados bloqueada por mutex | hora: ${horaAhora()} | último SYNC completado: #${lastSyncFinished}`);
     return;
   }
   syncPlaneadosRunning = true;
+
+  const syncId = ++syncCounter;
+  const tTotal = Date.now();
+
+  console.log(`\n════════════════════════════════════════════════════════════════`);
+  console.log(`[SYNC #${syncId}] ▶  Inicio`);
+  console.log(`[SYNC #${syncId}]    Motivo           : ${motivo}`);
+  console.log(`[SYNC #${syncId}]    Hora             : ${horaAhora()}`);
+  console.log(`[SYNC #${syncId}]    Último completado: #${lastSyncFinished}`);
+  console.log(`════════════════════════════════════════════════════════════════`);
+
   try {
-    const path = `/Travel/search?size=200&page=1`;
-    const data = await safeFetch(path, []);
-    const arr = Array.isArray(data) ? data : data.data || data.result || [];
+    // ─── 1. Consulta TMS ──────────────────────────────────────────────────────
+    const tTMS0 = Date.now();
+    const path  = `/Travel/search?size=200&page=1`;
+    const data  = await safeFetch(path, []);
+    const tTMS  = Date.now() - tTMS0;
+    const arr   = Array.isArray(data) ? data : data.data || data.result || [];
+
+    console.log(`[SYNC #${syncId}] TMS | ${arr.length} viajes recibidos | ${tTMS}ms`);
 
     if (!arr.length) {
-      console.log('📅 Planeados: Travel/search devolvió 0 viajes');
+      console.log(`[SYNC #${syncId}] ⚠️  Travel/search devolvió 0 viajes — abortando`);
+      lastSyncFinished = syncId;
       return;
     }
 
     const hoyStr = fechaHoyColombia();
+    console.log(`[SYNC #${syncId}] Fecha de corte Colombia: ${hoyStr}`);
 
+    // ─── 2. Filtrado y ordenamiento ───────────────────────────────────────────
+    const descartados = [];
     const viajesFuturos = arr.filter(v => {
       const f = parseSchedulate(v.schedulate_origin);
-      if (!f || isNaN(f.getTime())) return false;
+      if (!f || isNaN(f.getTime())) {
+        descartados.push({ trip: v.trip_number, motivo: `schedulate_origin inválido: "${v.schedulate_origin}"` });
+        return false;
+      }
       const fechaDia = extraerFechaColombia(f);
-      return fechaDia >= hoyStr;
+      if (fechaDia < hoyStr) {
+        descartados.push({ trip: v.trip_number, motivo: `fecha pasada: ${fechaDia}` });
+        return false;
+      }
+      return true;
     });
 
     // Orden determinista: fecha de programación ascendente
@@ -687,9 +729,39 @@ async function syncPlaneados() {
       return fa.getTime() - fb.getTime();
     });
 
-    console.log(`📅 Planeados: ${arr.length} en Travel/search → ${viajesFuturos.length} hoy o futuros`);
-    if (!viajesFuturos.length) return;
+    console.log(`[SYNC #${syncId}] Filtro | ${arr.length} total → ${viajesFuturos.length} hoy/futuros | ${descartados.length} descartados`);
+    if (descartados.length > 0 && descartados.length <= 20) {
+      descartados.forEach(d => console.log(`  ✗ ${d.trip} — ${d.motivo}`));
+    } else if (descartados.length > 20) {
+      descartados.slice(0, 5).forEach(d => console.log(`  ✗ ${d.trip} — ${d.motivo}`));
+      console.log(`  … y ${descartados.length - 5} más`);
+    }
 
+    if (!viajesFuturos.length) {
+      console.log(`[SYNC #${syncId}] ⚠️  0 viajes futuros — abortando sin tocar BD`);
+      lastSyncFinished = syncId;
+      return;
+    }
+
+    // Log muestra TMS
+    const fmtTMS = v => `${v.trip_number} | ${v.license_plate || '—'} | ${v.schedulate_origin || '—'}`;
+    console.log(`[SYNC #${syncId}] Primeros 5 viajes futuros (TMS):`);
+    viajesFuturos.slice(0, 5).forEach((v, i) => console.log(`  [${i + 1}] ${fmtTMS(v)}`));
+    if (viajesFuturos.length > 5) {
+      console.log(`[SYNC #${syncId}] Últimos 5 viajes futuros (TMS):`);
+      viajesFuturos.slice(-5).forEach((v, i) =>
+        console.log(`  [${viajesFuturos.length - 4 + i}] ${fmtTMS(v)}`)
+      );
+    }
+
+    // ─── 3. Estado actual BD (PRE-BATCH) ──────────────────────────────────────
+    const tPreCount0 = Date.now();
+    const preSnap = await sbFetch('/planeados?select=trip_number');
+    const preCount = (preSnap || []).length;
+    console.log(`[SYNC #${syncId}] BD PRE-BATCH | ${preCount} filas totales | ${Date.now() - tPreCount0}ms`);
+
+    // ─── 4. Construcción del lote ─────────────────────────────────────────────
+    const tLot0    = Date.now();
     const existentes = await sbFetch('/planeados?select=trip_number,fecha_detectado,company_customer_name,activo_en_resume,empresa_cliente_id,estado_programacion');
     const existMap = {};
     (existentes || []).forEach(e => { existMap[e.trip_number] = e; });
@@ -697,14 +769,14 @@ async function syncPlaneados() {
     const activeIds = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
 
     const ahora = Date.now();
-    const rows = [];
+    const rows  = [];
     for (const v of viajesFuturos) {
-      const f = parseSchedulate(v.schedulate_origin);
-      const yaExiste = existMap[v.trip_number];
+      const f          = parseSchedulate(v.schedulate_origin);
+      const yaExiste   = existMap[v.trip_number];
       const estaActivo = activeIds.has(v.trip_number);
       const viajeResume = cache.viajes.data.find(r => r.trip_number === v.trip_number);
       const rawCliente = viajeResume?.company_customer_name || v.company_customer_name || null;
-      const cliente = rawCliente ? rawCliente.split(',')[0].trim() : null;
+      const cliente    = rawCliente ? rawCliente.split(',')[0].trim() : null;
 
       // Derivar estado_programacion — backend es fuente de verdad
       const estadoActual = yaExiste?.estado_programacion || 'programado';
@@ -736,20 +808,61 @@ async function syncPlaneados() {
       });
     }
 
-    // Upsert en lote — una sola transacción elimina la ventana de inconsistencia.
+    const tLot = Date.now() - tLot0;
+    console.log(`[SYNC #${syncId}] Lote | ${rows.length} filas preparadas | ${tLot}ms construcción`);
+
+    // ─── 5. Batch upsert ──────────────────────────────────────────────────────
     // empresa_cliente_id se omite intencionalmente: merge-duplicates preserva el valor
     // existente en BD; nuevas filas lo dejan null (resuelto por el módulo Clientes).
-    await sbFetch('/planeados', 'POST', rows);
+    const tBatch0  = Date.now();
+    const batchRes = await sbFetch('/planeados', 'POST', rows);
+    const tBatch   = Date.now() - tBatch0;
+    const retornadas = (batchRes || []).length;
+    console.log(`[SYNC #${syncId}] Batch | ${rows.length} enviadas → ${retornadas} retornadas por Supabase | ${tBatch}ms`);
+    if (!batchRes) {
+      console.log(`[SYNC #${syncId}] ⚠️  Batch retornó null — ver error Supabase encima de este log`);
+    }
 
-    // Ventana móvil de retención: conservar últimos 8 días, eliminar registros anteriores.
-    const corte = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    // ─── 6. Conteo BD post-batch (+0s / +2s / +5s) ───────────────────────────
+    const tP0 = Date.now();
+    const post0 = (await sbFetch('/planeados?select=trip_number') || []).length;
+    console.log(`[SYNC #${syncId}] BD POST-BATCH (+0s) | ${post0} filas | ${Date.now() - tP0}ms`);
+
+    await new Promise(r => setTimeout(r, 2000));
+    const tP2 = Date.now();
+    const post2 = (await sbFetch('/planeados?select=trip_number') || []).length;
+    console.log(`[SYNC #${syncId}] BD POST-BATCH (+2s) | ${post2} filas | ${Date.now() - tP2}ms`);
+
+    await new Promise(r => setTimeout(r, 3000));
+    const tP5 = Date.now();
+    const post5 = (await sbFetch('/planeados?select=trip_number') || []).length;
+    console.log(`[SYNC #${syncId}] BD POST-BATCH (+5s) | ${post5} filas | ${Date.now() - tP5}ms`);
+
+    // Muestra: primeras 10 y últimas 10 filas ordenadas por fecha
+    const snapshot = await sbFetch(
+      '/planeados?select=trip_number,fecha_programada_dia,estado_programacion,license_plate&order=fecha_programada_dia.asc&limit=10000'
+    );
+    const snRows = snapshot || [];
+    console.log(`[SYNC #${syncId}] Muestra BD (${snRows.length} total) — primeras 10 por fecha asc:`);
+    snRows.slice(0, 10).forEach((r, i) =>
+      console.log(`  [${i + 1}] ${r.trip_number} | ${r.fecha_programada_dia} | ${r.estado_programacion} | ${r.license_plate || '—'}`)
+    );
+    if (snRows.length > 10) {
+      console.log(`[SYNC #${syncId}] Muestra BD — últimas 10 por fecha asc:`);
+      snRows.slice(-10).forEach((r, i) =>
+        console.log(`  [${snRows.length - 9 + i}] ${r.trip_number} | ${r.fecha_programada_dia} | ${r.estado_programacion} | ${r.license_plate || '—'}`)
+      );
+    }
+
+    // ─── 7. Retención ─────────────────────────────────────────────────────────
+    const corte    = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const corteStr = extraerFechaColombia(corte);
     await sbFetch(`/planeados?fecha_programada_dia=lt.${corteStr}`, 'DELETE');
-    console.log(`📅 Planeados: ${rows.length} upsertados en lote. Eliminados anteriores a ${corteStr} (ventana 8 días).`);
+    console.log(`[SYNC #${syncId}] Retención | eliminados anteriores a ${corteStr} (ventana 8 días)`);
 
-    // Parche de respaldo: filas retenidas (fuera de viajesFuturos) sin nombre de cliente
-    // que ya tienen el dato en el cache de Resume.
+    // ─── 8. Parche de respaldo: filas retenidas sin nombre de cliente ─────────
     const sinCliente = (existentes || []).filter(e => !e.company_customer_name);
+    let parchesAplicados = 0;
     for (const e of sinCliente) {
       const viajeResume = cache.viajes.data.find(r => r.trip_number === e.trip_number);
       if (viajeResume?.company_customer_name) {
@@ -758,12 +871,50 @@ async function syncPlaneados() {
           'PATCH',
           { company_customer_name: viajeResume.company_customer_name }
         );
+        parchesAplicados++;
       }
     }
+    if (parchesAplicados > 0) {
+      console.log(`[SYNC #${syncId}] Parche sinCliente | ${parchesAplicados} filas actualizadas`);
+    }
+
+    // ─── 9. Verificación de consistencia ─────────────────────────────────────
+    const bdFuturos = await sbFetch(
+      `/planeados?fecha_programada_dia=gte.${hoyStr}&select=trip_number,fecha_programada_dia,license_plate,estado_programacion`
+    ) || [];
+    const bdSet  = new Set(bdFuturos.map(r => r.trip_number));
+    const tmsSet = new Set(viajesFuturos.map(v => v.trip_number));
+
+    const faltanEnBD = viajesFuturos.filter(v => !bdSet.has(v.trip_number));
+    const soloEnBD   = bdFuturos.filter(r => !tmsSet.has(r.trip_number));
+
+    console.log(`[SYNC #${syncId}] ─── Verificación de Consistencia ─────────────────────────`);
+    console.log(`[SYNC #${syncId}] TMS futuros enviados : ${viajesFuturos.length}`);
+    console.log(`[SYNC #${syncId}] BD  futuros (hoy+)   : ${bdFuturos.length}`);
+    if (faltanEnBD.length === 0) {
+      console.log(`[SYNC #${syncId}] ✅ CONSISTENTE — todos los viajes TMS futuros están en BD`);
+    } else {
+      console.log(`[SYNC #${syncId}] ❌ INCONSISTENTE — ${faltanEnBD.length} viajes TMS NO encontrados en BD:`);
+      faltanEnBD.forEach(v =>
+        console.log(`  ✗ ${v.trip_number} | ${v.schedulate_origin || '—'} | ${v.license_plate || '—'}`)
+      );
+    }
+    if (soloEnBD.length > 0) {
+      console.log(`[SYNC #${syncId}] ℹ️  ${soloEnBD.length} filas BD hoy+ no vienen en este TMS response (retenidas de pasados o SYNCs previos):`);
+      soloEnBD.slice(0, 10).forEach(r =>
+        console.log(`  · ${r.trip_number} | ${r.fecha_programada_dia} | ${r.estado_programacion}`)
+      );
+    }
+    console.log(`[SYNC #${syncId}] ─────────────────────────────────────────────────────────`);
+
+    lastSyncFinished = syncId;
+
   } catch(e) {
-    console.error("❌ Error sync planeados:", e.message);
+    console.error(`[SYNC #${syncId}] ❌ Error: ${e.message}`, e.stack);
   } finally {
     syncPlaneadosRunning = false;
+    console.log(`[SYNC #${syncId}] ■  Fin | Duración total: ${Date.now() - tTotal}ms | hora: ${horaAhora()}`);
+    console.log(`════════════════════════════════════════════════════════════════\n`);
   }
 }
 
@@ -2928,11 +3079,15 @@ app.get("/api/planeados", requireInternalApiKey, async (req, res) => {
 // Enriquece cada fila con nombre_cliente: razon_social oficial cuando existe,
 // company_customer_name como fallback. El original siempre se conserva.
 app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
+  const getId  = ++getProgCounter;
+  const tGet0  = Date.now();
   try {
     const { desde, hasta } = req.query;
     const hoyStr = fechaHoyColombia();
     const desdeStr = desde || hoyStr;
     const hastaStr = hasta || hoyStr;
+
+    console.log(`[GET PROGRAMACION #${getId}] hora: ${horaAhora()} | desde: ${desdeStr} | hasta: ${hastaStr} | último SYNC completado: #${lastSyncFinished} | mutex activo: ${syncPlaneadosRunning}`);
 
     const data = await sbFetch(
       `/planeados?fecha_programada_dia=gte.${desdeStr}&fecha_programada_dia=lte.${hastaStr}&order=schedulate_origin.asc&limit=500`
@@ -2983,9 +3138,13 @@ app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
       };
     });
 
+    const primeraFecha = enriched[0]?.fecha_programada_dia ?? null;
+    const ultimaFecha  = enriched[enriched.length - 1]?.fecha_programada_dia ?? null;
+    console.log(`[GET PROGRAMACION #${getId}] resultado: ${enriched.length} filas | primera fecha: ${primeraFecha} | última fecha: ${ultimaFecha} | ${Date.now() - tGet0}ms`);
+
     res.json(enriched);
   } catch (e) {
-    console.error("❌ GET /api/programacion:", e.message);
+    console.error(`[GET PROGRAMACION #${getId}] ❌ Error: ${e.message}`);
     res.status(500).json({ error: e.message });
   }
 });
@@ -3827,7 +3986,7 @@ app.listen(PORT, async () => {
     await syncViajes();
     await syncAlarmas();
     await syncPendientes();
-    await syncPlaneados();
+    await syncPlaneados('inicio-servidor');
     await syncCumplidos();
     await syncSolicitudes();
   } catch(e) {
@@ -3838,7 +3997,12 @@ app.listen(PORT, async () => {
   setInterval(syncViajes,             60 * 1000);
   setInterval(syncAlarmas,            70 * 1000);
   setInterval(syncPendientes,          5 * 60 * 1000);
-  setInterval(syncPlaneados,           5 * 60 * 1000);
+  setInterval(async () => {
+    const tSched0 = Date.now();
+    console.log(`[SCHEDULER] syncPlaneados — hora: ${horaAhora()} | mutex: ${syncPlaneadosRunning ? 'BLOQUEADO (omitiendo)' : 'libre'} | último SYNC: #${lastSyncFinished}`);
+    await syncPlaneados('scheduler');
+    console.log(`[SCHEDULER] syncPlaneados — fin | ${Date.now() - tSched0}ms`);
+  }, 5 * 60 * 1000);
   setInterval(syncCumplidos,          60 * 1000);
   setInterval(syncSolicitudes,        65 * 1000);
 });
