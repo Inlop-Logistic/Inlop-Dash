@@ -814,8 +814,10 @@ async function syncPlaneados(motivo = 'scheduler') {
       // Derivar estado_programacion — backend es fuente de verdad
       const estadoActual = yaExiste?.estado_programacion || 'programado';
       let estado_programacion;
-      if (estadoActual === 'cancelado' || estadoActual === 'completado') {
-        estado_programacion = estadoActual; // estados sticky: sync nunca los revierte
+      if (estadoActual === 'cancelado') {
+        estado_programacion = estadoActual; // cancelado: sticky, sync nunca lo revierte
+      } else if (estadoActual === 'completado' && !estaActivo) {
+        estado_programacion = 'completado'; // completado: sticky solo si el viaje ya no está en Resume
       } else if (estaActivo) {
         estado_programacion = (f && f.getTime() <= ahora) ? 'en_ruta' : 'asignado';
       } else {
@@ -1742,36 +1744,37 @@ async function syncCumplidos() {
           patch.empresa_cliente_id = resolved.empresa_cliente_id;
         }
 
-        // Detección de falsa finalización: el viaje reaparece en el snapshot de ControlT
-        // pero aún tiene fecha_finalizacion y un estado auto-asignado por syncCumplidos.
-        // Solo se revierten estados en ESTADOS_AUTO_FINALIZACION — estados asignados
-        // manualmente por un usuario nunca son modificados por esta lógica.
-        const fueAutoFinalizado = !!(existe.fecha_finalizacion &&
-          ESTADOS_AUTO_FINALIZACION.has((existe.estado_cumplido || '').toUpperCase()));
+        // Reconciliación: cualquier viaje presente en el snapshot de ControlT no puede
+        // tener fecha_finalizacion registrada. El snapshot es la única fuente de verdad.
+        const hayFinalizacion = !!(existe.fecha_finalizacion);
 
-        if (fueAutoFinalizado) {
+        if (hayFinalizacion) {
           patch.fecha_finalizacion = null;
-          patch.estado_cumplido    = 'LIVE';
+          // Solo restaurar a LIVE si el estado era de finalización automática.
+          // Si ya es LIVE u otro estado activo (SOLICITADO, CUMPLIDO RECIBIDO), se conserva.
+          if (ESTADOS_AUTO_FINALIZACION.has((existe.estado_cumplido || '').toUpperCase())) {
+            patch.estado_cumplido = 'LIVE';
+          }
         }
 
         await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(v.trip_number)}`, 'PATCH', patch);
 
-        if (fueAutoFinalizado) {
+        if (hayFinalizacion) {
           revertidos++;
           // Revertir planeados solo cuando estado_programacion sea 'completado'.
           // El filtro condicional de Supabase garantiza que no hay efecto si ya fue
-          // corregido manualmente o si corresponde a una finalización legítima distinta.
+          // revertido o si corresponde a una finalización legítima distinta.
           await sbFetch(
             `/planeados?trip_number=eq.${encodeURIComponent(v.trip_number)}&estado_programacion=eq.completado`,
             'PATCH',
             { estado_programacion: 'en_ruta', actualizado_en: new Date().toISOString() }
           );
           console.log(
-            `↩  syncCumplidos reversión | trip:${v.trip_number}` +
-            ` | estado_cumplido:${existe.estado_cumplido} → LIVE` +
+            `↩  syncCumplidos reconciliación | trip:${v.trip_number}` +
+            ` | estado_cumplido:${existe.estado_cumplido}${patch.estado_cumplido ? ` → ${patch.estado_cumplido}` : ' (sin cambio)'}` +
             ` | fecha_finalizacion:${existe.fecha_finalizacion} → null` +
             ` | planeados:completado → en_ruta (condicional)` +
-            ` | motivo:reaparición en snapshot ControlT`
+            ` | motivo:presente en snapshot ControlT`
           );
         }
 
