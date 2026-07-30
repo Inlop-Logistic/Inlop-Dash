@@ -10,13 +10,11 @@ export const ESTADO_CFG: Record<string, { label: string; color: string; bg: stri
 };
 
 export const TABS = [
-  { id: "todos",       label: "Todos"        },
-  { id: "programado",  label: "Programado"   },
-  { id: "asignado",    label: "Asignado"     },
-  { id: "en_ruta",     label: "En ruta"      },
-  { id: "completado",  label: "Completado"   },
-  { id: "cancelado",   label: "Cancelado"    },
-  { id: "sin_asignar", label: "Sin asignar"  },
+  { id: "todos",      label: "Todos"      },
+  { id: "asignado",   label: "Asignado"   },
+  { id: "en_ruta",    label: "En ruta"    },
+  { id: "completado", label: "Completado" },
+  { id: "cancelado",  label: "Cancelado"  },
 ];
 
 /** Estado visual: lee directamente del campo authoritative del backend. */

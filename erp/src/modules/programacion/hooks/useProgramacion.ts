@@ -12,9 +12,10 @@ const TAM_PAGINA = 25;
 
 /**
  * Ventana operativa de Programación: hoy − 8 días → hoy.
- * Fuente única para el rango inicial de la bandeja.
+ * Define el rango que se envía a la API cuando el usuario no ha aplicado
+ * ningún filtro de fecha. No se representa visualmente como filtro activo.
  */
-export function rangoOperativo() {
+function rangoOperativo() {
   return {
     desde: fechaHoyColombia(-8),
     hasta: fechaHoyColombia(),
@@ -46,16 +47,17 @@ export function useProgramacion() {
   const [accionLoading, setAccionLoading]   = useState(false);
   const [pagina, setPagina]                 = useState(1);
 
-  // Filtros comunes — fechas inicializadas a la ventana operativa (hoy − 8 días → hoy)
-  const rango0 = rangoOperativo();
+  // Filtros comunes — fechas vacías: el selector de fecha no representa el estado inicial.
+  // La ventana operativa se pasa directamente a la API al montar; no se expone al usuario.
   const { busqueda, setBusqueda, fechaDesde, fechaHasta, setFechaRango, limpiarBase } =
-    useFiltrosComunes({ defaultDesde: rango0.desde, defaultHasta: rango0.hasta });
+    useFiltrosComunes({ defaultDesde: "", defaultHasta: "" });
 
-  // desdeOpt/hastaOpt permiten pasar fechas explícitas sin depender del estado async.
+  // desdeOpt/hastaOpt explícitos tienen prioridad; si no, usa el estado del filtro;
+  // si el estado también está vacío, la API recibe la ventana operativa completa.
   const cargar = async (desdeOpt?: string, hastaOpt?: string) => {
     const { desde: r0d, hasta: r0h } = rangoOperativo();
-    const d = desdeOpt ?? fechaDesde ?? r0d;
-    const h = hastaOpt ?? fechaHasta ?? r0h;
+    const d = (desdeOpt !== undefined ? desdeOpt : fechaDesde) || r0d;
+    const h = (hastaOpt !== undefined ? hastaOpt : fechaHasta) || r0h;
     setLoading(true);
     setError(null);
     try {
@@ -195,19 +197,19 @@ export function useProgramacion() {
 
   const panelViaje = panelId ? data.find((v) => v.trip_number === panelId) ?? null : null;
 
-  const { desde: r0d, hasta: r0h } = rangoOperativo();
+  // hayFiltros: verdadero cuando el usuario ha aplicado algo por encima del dataset base.
+  // El rango operativo (8 días) no cuenta como filtro activo — es el estado neutro.
   const hayFiltros =
     busqueda !== "" || tabEstado !== "todos" || estadoFiltro !== "" || clienteFiltro !== "" ||
-    fechaDesde !== r0d || fechaHasta !== r0h;
+    fechaDesde !== "" || fechaHasta !== "";
 
   function limpiarFiltros() {
-    const rango = rangoOperativo();
-    limpiarBase();
+    limpiarBase();             // resetea busqueda, fechaDesde, fechaHasta a ""
     setTabEstado("todos");
     setEstadoFiltro("");
     setClienteFiltro("");
     setPagina(1);
-    cargar(rango.desde, rango.hasta);
+    cargar("", "");            // "" → fallback a rangoOperativo() en cargar
   }
 
   return {
