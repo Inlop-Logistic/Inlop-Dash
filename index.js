@@ -1674,7 +1674,7 @@ async function syncCumplidos() {
     const allExistentes = [];
     while (true) {
       const page = await sbFetch(
-        `/cumplidos?select=id,estado_cumplido,tiene_soporte,cliente,empresa_cliente_id&limit=${SB_PAGE}&offset=${sbOffset}`
+        `/cumplidos?select=id,estado_cumplido,tiene_soporte,cliente,empresa_cliente_id,fecha_finalizacion&limit=${SB_PAGE}&offset=${sbOffset}`
       );
       if (!page || page.length === 0) break;
       allExistentes.push(...page);
@@ -1683,10 +1683,13 @@ async function syncCumplidos() {
     }
     const existentes = new Map(allExistentes.map(c => [c.id, c]));
 
-    const ESTADOS_ACTIVOS = new Set(['LIVE', 'SOLICITADO', 'CUMPLIDO RECIBIDO']);
+    const ESTADOS_ACTIVOS           = new Set(['LIVE', 'SOLICITADO', 'CUMPLIDO RECIBIDO']);
+    // Estados escritos exclusivamente por syncCumplidos durante una finalización automática.
+    // Usados para distinguir finalizaciones auto-generadas de estados asignados manualmente.
+    const ESTADOS_AUTO_FINALIZACION = new Set(['FINALIZADO CONTROLT', 'PENDIENTE LIQUIDACION']);
     const apiSet = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
 
-    let insertados = 0, actualizados = 0, clientesCreados = 0, placeholdersOmitidos = 0;
+    let insertados = 0, actualizados = 0, revertidos = 0, clientesCreados = 0, placeholdersOmitidos = 0;
     for (const v of cache.viajes.data) {
       if (!v.trip_number) continue;
       const existe = existentes.get(v.trip_number);
@@ -1738,7 +1741,40 @@ async function syncCumplidos() {
         if (resolved.empresa_cliente_id && existe.empresa_cliente_id !== resolved.empresa_cliente_id) {
           patch.empresa_cliente_id = resolved.empresa_cliente_id;
         }
+
+        // Detección de falsa finalización: el viaje reaparece en el snapshot de ControlT
+        // pero aún tiene fecha_finalizacion y un estado auto-asignado por syncCumplidos.
+        // Solo se revierten estados en ESTADOS_AUTO_FINALIZACION — estados asignados
+        // manualmente por un usuario nunca son modificados por esta lógica.
+        const fueAutoFinalizado = !!(existe.fecha_finalizacion &&
+          ESTADOS_AUTO_FINALIZACION.has((existe.estado_cumplido || '').toUpperCase()));
+
+        if (fueAutoFinalizado) {
+          patch.fecha_finalizacion = null;
+          patch.estado_cumplido    = 'LIVE';
+        }
+
         await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(v.trip_number)}`, 'PATCH', patch);
+
+        if (fueAutoFinalizado) {
+          revertidos++;
+          // Revertir planeados solo cuando estado_programacion sea 'completado'.
+          // El filtro condicional de Supabase garantiza que no hay efecto si ya fue
+          // corregido manualmente o si corresponde a una finalización legítima distinta.
+          await sbFetch(
+            `/planeados?trip_number=eq.${encodeURIComponent(v.trip_number)}&estado_programacion=eq.completado`,
+            'PATCH',
+            { estado_programacion: 'en_ruta', actualizado_en: new Date().toISOString() }
+          );
+          console.log(
+            `↩  syncCumplidos reversión | trip:${v.trip_number}` +
+            ` | estado_cumplido:${existe.estado_cumplido} → LIVE` +
+            ` | fecha_finalizacion:${existe.fecha_finalizacion} → null` +
+            ` | planeados:completado → en_ruta (condicional)` +
+            ` | motivo:reaparición en snapshot ControlT`
+          );
+        }
+
         actualizados++;
       }
     }
@@ -1777,7 +1813,7 @@ async function syncCumplidos() {
       }
     }
 
-    console.log(`✅ Cumplidos sync: +${insertados} nuevos, ~${actualizados} actualizados, 🏁${finalizados} finalizados, 👤${clientesCreados} clientes creados, ⏳${placeholdersOmitidos} sin Match TMS`);
+    console.log(`✅ Cumplidos sync: +${insertados} nuevos, ~${actualizados} actualizados, 🏁${finalizados} finalizados, ↩${revertidos} revertidos, 👤${clientesCreados} clientes creados, ⏳${placeholdersOmitidos} sin Match TMS`);
   } catch(e) {
     console.error('❌ Error syncCumplidos:', e.message);
   } finally {
