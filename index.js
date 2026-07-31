@@ -1322,14 +1322,6 @@ async function syncCumplidos() {
           pct:             parseFloat(v.percentage_travel) || 0,
           tipo_negocio:    v.type_operation || '',
         };
-        // El viaje sigue presente y operativo en /Resume: si había sido marcado como
-        // finalizado por una ausencia transitoria de un ciclo anterior, revertir para
-        // que ControlT (/Resume) vuelva a ser la única fuente del estado operativo.
-        if (existe.estado_cumplido === 'FINALIZADO CONTROLT') {
-          patch.estado_cumplido    = 'LIVE';
-          patch.fecha_finalizacion = null;
-          console.log(`♻️  Cumplido ${v.trip_number}: FINALIZADO CONTROLT → LIVE (reapareció activo en /Resume)`);
-        }
         const existenteEsPlaceholder = isPlaceholderTmsCustomer(existe.cliente);
         if (cliente && !resolved.placeholder && (!existe.cliente || existenteEsPlaceholder)) {
           patch.cliente = cliente;
@@ -1507,41 +1499,29 @@ async function syncSolicitudes() {
       }
     }
 
-    // pendVerif: trips ausentes de /Resume — verificar en cumplidos si ya fueron finalizados.
-    // ControlT (/Resume) sigue siendo la única fuente del estado operativo mientras el viaje
-    // exista ahí; cumplidos actúa solo como validación final, y solo se confía en su marca de
-    // finalización cuando ya lleva al menos un ciclo completo de /Resume sin que el viaje haya
-    // reaparecido — así una ausencia transitoria de un único ciclo no cierra la solicitud.
-    const PENDVERIF_GRACE_MS = 90 * 1000;
+    // pendVerif: trips ausentes de /Resume — verificar en cumplidos si ya fueron finalizados
     if (pendVerif.length > 0) {
       const tripNums = [...new Set(pendVerif.map(p => p.controlt_trip_number))];
       const idsStr   = tripNums.map(encodeURIComponent).join(',');
       const finalizados = await sbFetch(
-        `/cumplidos?id=in.(${idsStr})&estado_cumplido=eq.FINALIZADO%20CONTROLT&select=id,estado_cumplido,estado_controlt,fecha_finalizacion`
+        `/cumplidos?id=in.(${idsStr})&estado_cumplido=eq.FINALIZADO%20CONTROLT&select=id,estado_cumplido,estado_controlt`
       ) || [];
       const finalizadosSet = new Map(finalizados.map(c => [c.id, c]));
       for (const { sol: pSol, controlt_trip_number: tripNum } of pendVerif) {
         const cumplido = finalizadosSet.get(tripNum);
-        if (!cumplido) {
+        if (cumplido) {
+          console.log(`✅ [pendVerif] ${pSol.codigo_solicitud}: trip ${tripNum} → FINALIZADO CONTROLT en cumplidos — cerrando solicitud como completado`);
+          updates.push({ id: pSol.id, fields: {
+            estado:                        'completado',
+            estado_controlt:               'finalizado controlt',
+            ultima_actualizacion_controlt: ahora,
+            pct:                           100,
+            fecha_fin_real:                ahora,
+          }});
+          insertsNotif.push(..._notifs(pSol, 'completado', {}, pSol.estado));
+        } else {
           console.log(`⏸ [pendVerif] ${pSol.codigo_solicitud}: trip ${tripNum} ausente de /Resume y de cumplidos finalizados — estado mantenido: ${pSol.estado}`);
-          continue;
         }
-        const antiguedadMs = cumplido.fecha_finalizacion
-          ? Date.now() - new Date(cumplido.fecha_finalizacion).getTime()
-          : Infinity;
-        if (antiguedadMs < PENDVERIF_GRACE_MS) {
-          console.log(`⏸ [pendVerif] ${pSol.codigo_solicitud}: trip ${tripNum} finalizado hace ${Math.round(antiguedadMs / 1000)}s (<${PENDVERIF_GRACE_MS / 1000}s) — esperando confirmación del próximo ciclo de /Resume antes de cerrar`);
-          continue;
-        }
-        console.log(`✅ [pendVerif] ${pSol.codigo_solicitud}: trip ${tripNum} → FINALIZADO CONTROLT en cumplidos (confirmado hace ${Math.round(antiguedadMs / 1000)}s) — cerrando solicitud como completado`);
-        updates.push({ id: pSol.id, fields: {
-          estado:                        'completado',
-          estado_controlt:               'finalizado controlt',
-          ultima_actualizacion_controlt: ahora,
-          pct:                           100,
-          fecha_fin_real:                ahora,
-        }});
-        insertsNotif.push(..._notifs(pSol, 'completado', {}, pSol.estado));
       }
     }
 
