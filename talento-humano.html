@@ -1,0 +1,2227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Talento Humano BI — INLOP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@500;600;700&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ══════════════════════════════════════════════════════════════
+   INLOP DESIGN SYSTEM — Talento Humano BI
+   Basado en Operaciones_project.html (Design System v4)
+   Rama: feature/erp-talento-humano-bi
+   ══════════════════════════════════════════════════════════════ */
+
+/* ─── VARIABLES CORPORATIVAS ─── */
+:root {
+  --c0:#F5F7FA; --c1:#FFFFFF; --c2:#FFFFFF; --c3:#F9FAFC; --c4:#EEF2F8;
+  --sb-bg:#0A1735; --sb-bg2:#0F1F45;
+  --sb-line:rgba(255,255,255,0.06); --sb-line2:rgba(255,255,255,0.10);
+  --sb-txt:rgba(255,255,255,0.7); --sb-txt2:rgba(255,255,255,0.5); --sb-txt3:rgba(255,255,255,0.35);
+  --navy:#012A6B; --navy2:#0A3A8F; --navy3:rgba(1,42,107,.5);
+  --red:#E10613; --red2:#F02030; --red3:rgba(225,6,19,.4);
+  --line:rgba(1,42,107,.08); --line2:rgba(1,42,107,.16); --line3:rgba(1,42,107,.28);
+  --w1:#0A0E27; --w2:#1F2937; --w3:#4B5563; --w4:#6B7280;
+  --green:#00875F; --green2:#006A4A; --green3:rgba(0,135,95,.10);
+  --amber:#D97706; --amber2:#B45309; --amber3:rgba(217,119,6,.10);
+  --danger:#DC2626; --danger2:#B91C1C; --danger3:rgba(220,38,38,.10);
+  --blue:#0284C7; --blue2:#0369A1; --blue3:rgba(2,132,199,.10);
+  --purple:#7C3AED; --purple3:rgba(124,58,237,.10);
+  --teal:#0D9488; --teal3:rgba(13,148,136,.10);
+  --ax:#6B7280; --ax-grid:rgba(1,42,107,.06);
+  --sb-width:230px;
+}
+
+/* ─── RESET ─── */
+*{margin:0;padding:0;box-sizing:border-box}
+
+html, body {
+  background:var(--c0);
+  color:var(--w1);
+  font-family:'DM Sans',sans-serif;
+  font-size:13px;
+  line-height:1.5;
+  overflow:hidden;
+  height:100vh;
+}
+
+/* Barra de acento superior */
+body::after {
+  content:'';
+  position:fixed;
+  top:0; left:0; right:0;
+  height:2px;
+  background:linear-gradient(90deg,var(--navy) 0%,var(--red) 50%,var(--navy) 100%);
+  z-index:999;
+}
+
+/* ─── SHELL ─── */
+.shell {
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+  padding-top:2px; /* espacio para la barra de acento */
+  overflow:hidden;
+}
+
+/* ─── LAYOUT PRINCIPAL ─── */
+.ops-body-row {
+  display:flex;
+  flex-direction:row;
+  flex:1;
+  min-height:0;
+  overflow:hidden;
+}
+
+.ops-body-col {
+  display:flex;
+  flex-direction:column;
+  flex:1;
+  min-width:0;
+  overflow:hidden;
+}
+
+/* ═══════════════════════════════════════
+   SIDEBAR
+   ═══════════════════════════════════════ */
+.tab-row {
+  width:var(--sb-width);
+  flex-shrink:0;
+  background:var(--sb-bg);
+  color:#fff;
+  display:flex;
+  flex-direction:column;
+  padding:18px 0 14px;
+  overflow-x:visible;
+  overflow-y:auto;
+  transition:width .22s ease, min-width .22s ease;
+  position:relative;
+  z-index:20;
+  scrollbar-width:thin;
+  scrollbar-color:var(--sb-line2) transparent;
+}
+.tab-row::-webkit-scrollbar{width:4px}
+.tab-row::-webkit-scrollbar-track{background:transparent}
+.tab-row::-webkit-scrollbar-thumb{background:var(--sb-line2);border-radius:2px}
+
+.sb-brand {
+  padding:0 18px 16px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  border-bottom:1px solid var(--sb-line);
+  margin-bottom:14px;
+  flex-shrink:0;
+}
+.sb-brand-mark {
+  width:34px; height:34px;
+  background:#fff;
+  border-radius:7px;
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0;
+}
+.sb-brand-mark span {
+  font-family:'Anton',sans-serif;
+  font-size:14px;
+  color:#012A6B;
+  letter-spacing:.12em;
+  line-height:1;
+}
+.sb-brand-name {
+  font-family:'Anton',sans-serif;
+  font-size:17px;
+  letter-spacing:.18em;
+  line-height:1;
+  color:#fff;
+}
+.sb-brand-sub {
+  font-family:'JetBrains Mono',monospace;
+  font-size:7.5px;
+  letter-spacing:.16em;
+  color:var(--sb-txt2);
+  margin-top:3px;
+  text-transform:uppercase;
+}
+
+.sb-section-label {
+  padding:0 16px 4px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px;
+  letter-spacing:.22em;
+  color:var(--sb-txt3);
+  text-transform:uppercase;
+  font-weight:500;
+  flex-shrink:0;
+}
+.sb-section-label.mt {
+  margin-top:10px;
+  padding-top:14px;
+  border-top:1px solid var(--sb-line);
+}
+
+.tb {
+  width:100%;
+  background:transparent;
+  text-align:left;
+  padding:9px 16px;
+  border:none;
+  border-left:3px solid transparent;
+  border-radius:0;
+  margin:0;
+  color:var(--sb-txt);
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:13px;
+  font-weight:600;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  display:flex;
+  align-items:center;
+  gap:11px;
+  white-space:nowrap;
+  line-height:1.3;
+  cursor:pointer;
+  transition:all .15s;
+  position:relative;
+  flex-shrink:0;
+}
+.tb i.ti { font-size:17px; color:var(--sb-txt2); transition:color .15s; flex-shrink:0; }
+.tb:hover { background:rgba(255,255,255,0.04); color:#fff; }
+.tb:hover i.ti { color:#fff; }
+.tb.on {
+  background:rgba(225,6,19,0.14);
+  border-left:3px solid var(--red);
+  color:#fff;
+}
+.tb.on i.ti { color:#FF6B6B; }
+
+/* Módulos próximamente */
+.tb.soon {
+  opacity:.45;
+  cursor:not-allowed;
+}
+.tb.soon:hover { background:transparent; color:var(--sb-txt); }
+.tb.soon:hover i.ti { color:var(--sb-txt2); }
+.tb-soon-badge {
+  margin-left:auto;
+  font-family:'JetBrains Mono',monospace;
+  font-size:7px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  padding:2px 6px;
+  border-radius:3px;
+  background:rgba(255,255,255,.08);
+  color:var(--sb-txt3);
+  flex-shrink:0;
+}
+
+.sb-footer {
+  margin-top:auto;
+  padding:14px 16px 0;
+  border-top:1px solid var(--sb-line);
+  flex-shrink:0;
+}
+.sb-footer .tb {
+  padding:7px 0;
+  border-left:none;
+  color:var(--sb-txt2);
+  font-size:11px;
+  letter-spacing:.1em;
+}
+.sb-footer .tb:hover { background:transparent; color:#fff; }
+.sb-footer .tb i.ti { color:var(--sb-txt2); font-size:14px; }
+.sb-footer .tb:hover i.ti { color:#fff; }
+.sb-version {
+  font-family:'JetBrains Mono',monospace;
+  font-size:8px;
+  color:rgba(255,255,255,0.3);
+  letter-spacing:.12em;
+  margin-top:6px;
+}
+
+/* Sidebar colapsado */
+.ops-body-row.sb-collapsed .tab-row {
+  width:60px;
+  min-width:60px;
+  padding:18px 0 14px;
+}
+.ops-body-row.sb-collapsed .sb-brand-name,
+.ops-body-row.sb-collapsed .sb-brand-sub,
+.ops-body-row.sb-collapsed .sb-section-label,
+.ops-body-row.sb-collapsed .sb-version,
+.ops-body-row.sb-collapsed .tb-soon-badge { display:none; }
+.ops-body-row.sb-collapsed .sb-brand { justify-content:center; padding:0 0 16px; }
+.ops-body-row.sb-collapsed .tb {
+  padding:11px 0;
+  justify-content:center;
+  gap:0;
+  font-size:0;
+  letter-spacing:0;
+}
+.ops-body-row.sb-collapsed .tb i.ti { font-size:20px; color:var(--sb-txt2); }
+.ops-body-row.sb-collapsed .tb.on i.ti { color:#FF6B6B; }
+.ops-body-row.sb-collapsed .tb:hover i.ti { color:#fff; }
+.ops-body-row.sb-collapsed .tb[data-label]::after {
+  content:attr(data-label);
+  position:absolute;
+  left:calc(100% + 10px);
+  top:50%;
+  transform:translateY(-50%);
+  background:var(--sb-bg2);
+  color:#fff;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:12px; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase;
+  padding:5px 12px;
+  border-radius:6px;
+  white-space:nowrap;
+  opacity:0; pointer-events:none;
+  transition:opacity .15s;
+  z-index:100;
+  box-shadow:0 4px 12px rgba(0,0,0,.35);
+}
+.ops-body-row.sb-collapsed .tb[data-label]:hover::after { opacity:1; }
+.ops-body-row.sb-collapsed .tb.soon { opacity:.3; }
+.ops-body-row.sb-collapsed .sb-footer { padding:14px 0 0; }
+.ops-body-row.sb-collapsed .sb-footer .tb { justify-content:center; }
+
+/* ═══════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════ */
+.header {
+  background:#fff;
+  border-bottom:1px solid var(--line);
+  padding:10px 22px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:nowrap;
+  flex-shrink:0;
+  min-height:54px;
+  position:relative;
+  z-index:30;
+}
+
+.header-module-title {
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  margin-right:auto;
+}
+.hmt-main {
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:17px;
+  letter-spacing:.07em;
+  color:var(--navy);
+  text-transform:uppercase;
+  line-height:1;
+}
+.hmt-sub {
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px;
+  color:var(--w4);
+  letter-spacing:.08em;
+  margin-top:3px;
+  font-weight:400;
+}
+
+.hdr-r {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:nowrap;
+}
+
+.btn-portada-header {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 14px;
+  border-radius:6px;
+  background:#fff;
+  border:1px solid var(--line2);
+  color:var(--w3);
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:11px; font-weight:700;
+  letter-spacing:.12em; text-transform:uppercase;
+  cursor:pointer;
+  transition:all .15s;
+}
+.btn-portada-header:hover {
+  border-color:var(--red);
+  color:var(--red);
+  background:rgba(225,6,19,.03);
+}
+.btn-portada-header i.ti { font-size:14px; }
+
+.live-pip {
+  background:var(--green3);
+  border:1px solid rgba(0,135,95,.3);
+  color:var(--green);
+  padding:4px 11px;
+  border-radius:100px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; letter-spacing:.08em; font-weight:500;
+  display:flex; align-items:center; gap:6px;
+}
+.live-d {
+  width:6px; height:6px;
+  border-radius:50%;
+  background:var(--green);
+  box-shadow:0 0 4px var(--green);
+  animation:blink 2s infinite;
+  flex-shrink:0;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+.header-clock {
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px;
+  color:var(--w4);
+  letter-spacing:.04em;
+}
+
+.header-user-wrap { position:relative; }
+.header-user {
+  display:flex; align-items:center; gap:8px;
+  padding:3px 11px 3px 4px;
+  border-radius:100px;
+  background:#F5F7FA;
+  border:1px solid rgba(1,42,107,0.1);
+  cursor:pointer; user-select:none;
+  transition:background .15s;
+}
+.header-user:hover { background:#EEF2F8; }
+.header-user-chevron {
+  font-size:10px; color:var(--w4); margin-left:2px;
+  transition:transform .15s;
+}
+.header-user-wrap.open .header-user-chevron { transform:rotate(180deg); }
+.header-user-menu {
+  display:none; position:fixed; min-width:190px;
+  background:#fff; border:1px solid rgba(1,42,107,.12);
+  border-radius:10px;
+  box-shadow:0 10px 30px rgba(1,42,107,.14);
+  padding:6px; z-index:2000;
+}
+.header-user-wrap.open .header-user-menu { display:block; }
+.header-user-menu-item {
+  display:flex; align-items:center; gap:9px;
+  padding:9px 12px; border-radius:7px;
+  font-size:12.5px; color:var(--w1);
+  cursor:pointer; white-space:nowrap;
+}
+.header-user-menu-item:hover { background:#F5F7FA; }
+.header-user-menu-item i { font-size:15px; color:var(--navy); width:16px; text-align:center; }
+.header-user-menu-item.danger { color:#DC2626; }
+.header-user-menu-item.danger i { color:#DC2626; }
+.header-user-menu-sep { height:1px; background:rgba(1,42,107,.08); margin:5px 4px; }
+.header-user-av {
+  width:26px; height:26px; border-radius:50%;
+  background:linear-gradient(135deg,var(--navy),#3B82F6);
+  color:#fff; font-family:'Barlow Condensed',sans-serif;
+  font-weight:700; font-size:11px;
+  display:flex; align-items:center; justify-content:center;
+}
+.header-user-info { display:flex; flex-direction:column; gap:1px; }
+.header-user-name { font-size:11px; font-weight:500; color:var(--w1); line-height:1.2; }
+.header-user-rol {
+  font-family:'JetBrains Mono',monospace;
+  font-size:8px; color:var(--w4);
+  text-transform:uppercase; letter-spacing:.1em;
+}
+
+/* ═══════════════════════════════════════
+   FILTER BAR
+   ═══════════════════════════════════════ */
+.week-row {
+  background:#fff;
+  border-bottom:1px solid var(--line);
+  padding:9px 22px;
+  gap:10px;
+  display:flex; align-items:center;
+  flex-wrap:wrap;
+  flex-shrink:0;
+}
+
+.filt-label {
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; letter-spacing:.18em;
+  color:#9CA3AF; text-transform:uppercase; font-weight:500;
+}
+
+.week-row select {
+  background:#fff;
+  border:1px solid var(--line2);
+  border-radius:6px;
+  padding:5px 28px 5px 10px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px; color:#374151;
+  cursor:pointer;
+  appearance:none; -webkit-appearance:none;
+  outline:none; transition:.15s;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236B7280'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 10px center;
+  background-size:8px;
+}
+.week-row select:hover { border-color:var(--line3); }
+.week-row select:focus {
+  border-color:var(--navy);
+  box-shadow:0 0 0 2px rgba(1,42,107,0.08);
+}
+
+.filt-clear-btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:5px 12px;
+  border-radius:6px;
+  background:#fff;
+  border:1px solid var(--line2);
+  color:var(--w4);
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:11px; font-weight:700;
+  letter-spacing:.1em; text-transform:uppercase;
+  cursor:pointer; transition:all .15s;
+  margin-left:4px;
+}
+.filt-clear-btn i.ti { font-size:14px; }
+.filt-clear-btn:hover {
+  border-color:var(--danger);
+  color:var(--danger);
+  background:rgba(220,38,38,.03);
+}
+
+.period-badge {
+  margin-left:auto;
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700; font-size:11px;
+  letter-spacing:.12em;
+  padding:5px 12px; border-radius:5px;
+  background:var(--navy); color:#fff;
+  box-shadow:0 1px 4px rgba(1,42,107,.2);
+}
+
+/* ═══════════════════════════════════════
+   PAGE CONTENT
+   ═══════════════════════════════════════ */
+.page {
+  flex:1;
+  min-width:0;
+  overflow-y:auto;
+  padding:22px 24px 40px;
+  background:var(--c0);
+}
+.page::-webkit-scrollbar { width:6px; }
+.page::-webkit-scrollbar-track { background:transparent; }
+.page::-webkit-scrollbar-thumb { background:rgba(1,42,107,.15); border-radius:3px; }
+.page::-webkit-scrollbar-thumb:hover { background:rgba(1,42,107,.3); }
+
+/* Section heading */
+.sh { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+.sh-bar { width:3px; height:16px; border-radius:2px; flex-shrink:0; background:var(--red); }
+.sh-txt {
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:11px; font-weight:700;
+  letter-spacing:.18em; text-transform:uppercase;
+  color:var(--navy);
+}
+.sh-line { flex:1; height:1px; background:var(--line); }
+
+/* Dashboard status header */
+.dash-status-header {
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:20px 24px;
+  margin-bottom:20px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:12px;
+}
+.dsh-left { display:flex; flex-direction:column; gap:4px; }
+.dsh-title {
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  font-size:22px;
+  letter-spacing:.05em;
+  color:var(--navy);
+  text-transform:uppercase;
+  line-height:1;
+}
+.dsh-sub {
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px;
+  color:var(--w4);
+  letter-spacing:.08em;
+}
+.dsh-right { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.dsh-kpi {
+  text-align:center;
+  padding:0 16px;
+  border-right:1px solid var(--line);
+}
+.dsh-kpi:last-child { border-right:none; }
+.dsh-kpi-val {
+  font-family:'Anton',sans-serif;
+  font-size:24px;
+  color:var(--navy);
+  line-height:1;
+}
+.dsh-kpi-lbl {
+  font-family:'JetBrains Mono',monospace;
+  font-size:8px;
+  color:var(--w4);
+  text-transform:uppercase;
+  letter-spacing:.1em;
+  margin-top:2px;
+}
+.status-pill {
+  display:flex; align-items:center; gap:8px;
+  padding:7px 16px;
+  border-radius:100px;
+  border:1px solid;
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:12px; font-weight:700;
+  letter-spacing:.1em; text-transform:uppercase;
+}
+.pill-ok { background:rgba(0,135,95,.08); border-color:rgba(0,135,95,.3); color:var(--green); }
+.pill-warn { background:rgba(217,119,6,.08); border-color:rgba(217,119,6,.3); color:var(--amber); }
+.pill-crit { background:rgba(220,38,38,.08); border-color:rgba(220,38,38,.3); color:var(--danger); }
+.pill-dot { width:7px; height:7px; border-radius:50%; background:currentColor; animation:blink 2s infinite; }
+
+/* ─── KPI CARDS ─── */
+.kpi-grid {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:12px;
+  margin-bottom:20px;
+}
+.kpi-grid-5 {
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:12px;
+  margin-bottom:20px;
+}
+.kpi {
+  background:#fff;
+  border:1px solid var(--line);
+  border-left:3px solid var(--kpi-accent,var(--blue));
+  border-radius:12px;
+  padding:14px 16px;
+  display:flex; flex-direction:column; gap:6px;
+  position:relative;
+  transition:.18s;
+  box-shadow:0 1px 3px rgba(1,42,107,.04);
+}
+.kpi:hover {
+  border-color:var(--line2);
+  box-shadow:0 4px 14px rgba(1,42,107,.08);
+  transform:translateY(-2px);
+}
+.kpi.k1 { --kpi-accent:var(--blue); }
+.kpi.k2 { --kpi-accent:var(--green); }
+.kpi.k3 { --kpi-accent:var(--danger); }
+.kpi.k4 { --kpi-accent:var(--amber); }
+.kpi.k5 { --kpi-accent:var(--purple); }
+.kpi.k6 { --kpi-accent:var(--teal); }
+.kpi.k7 { --kpi-accent:var(--w4); }
+
+.kpi-lbl {
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; font-weight:500;
+  letter-spacing:.12em; text-transform:uppercase;
+  color:var(--w4); line-height:1.4;
+}
+.kpi-val {
+  font-family:'Anton',sans-serif;
+  font-size:32px; line-height:1;
+  letter-spacing:.01em;
+  color:var(--navy);
+}
+.kpi.k3 .kpi-val { color:var(--danger); }
+.kpi-delta { display:flex; align-items:center; gap:4px; }
+.kpi-sub { font-size:11px; color:var(--w4); line-height:1.4; }
+.d-up { color:var(--green); font-weight:600; font-size:11px; }
+.d-dn { color:var(--danger); font-weight:600; font-size:11px; }
+.d-eq { color:var(--w4); font-size:11px; }
+.kpi-bar { margin-top:8px; }
+.kpi-bg { height:3px; background:rgba(1,42,107,.08); border-radius:2px; overflow:hidden; }
+.kpi-fill { height:100%; border-radius:2px; transition:width .7s ease; }
+
+/* ─── CHART CARDS ─── */
+.charts-2 {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:20px;
+  margin-bottom:20px;
+}
+.charts-3 {
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:16px;
+  margin-bottom:20px;
+}
+.charts-13 {
+  display:grid;
+  grid-template-columns:1fr 340px;
+  gap:16px;
+  margin-bottom:20px;
+}
+.card {
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:12px;
+  overflow:hidden;
+  transition:border-color .2s;
+  box-shadow:0 1px 3px rgba(1,42,107,.04);
+}
+.card:hover { border-color:var(--line2); }
+.cp { padding:18px 20px; }
+.card-ttl {
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:11px; font-weight:700;
+  letter-spacing:.2em; text-transform:uppercase;
+  color:var(--navy); margin-bottom:14px;
+  display:flex; align-items:center; gap:8px;
+}
+.card-ttl i.ti { font-size:16px; opacity:.7; }
+.card-sub {
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; color:var(--w4);
+  letter-spacing:.08em; margin-top:-10px; margin-bottom:12px;
+}
+.leg-row { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:10px; }
+.leg { display:flex; align-items:center; gap:5px; font-size:10px; color:var(--w3); font-family:'JetBrains Mono',monospace; }
+.ld { width:8px; height:8px; border-radius:2px; flex-shrink:0; }
+
+/* ─── INSIGHT PANEL ─── */
+.insight-panel {
+  background:linear-gradient(135deg,rgba(2,132,199,.04) 0%,rgba(1,42,107,.06) 100%);
+  border:1px solid rgba(2,132,199,.2);
+  border-radius:12px;
+  padding:22px 24px;
+  margin-bottom:20px;
+  position:relative;
+  overflow:hidden;
+}
+.insight-panel::before {
+  content:'';
+  position:absolute;
+  top:0; left:0; right:0;
+  height:2px;
+  background:linear-gradient(90deg,var(--blue),var(--navy));
+}
+.ip-header {
+  display:flex; align-items:center; gap:10px;
+  margin-bottom:18px;
+}
+.ip-icon {
+  width:36px; height:36px;
+  border-radius:8px;
+  background:rgba(2,132,199,.12);
+  display:flex; align-items:center; justify-content:center;
+  font-size:18px;
+  flex-shrink:0;
+}
+.ip-title {
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:12px; font-weight:700;
+  letter-spacing:.22em; text-transform:uppercase;
+  color:var(--blue);
+}
+.ip-sub {
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; color:var(--w4);
+  letter-spacing:.08em; margin-top:2px;
+}
+.ip-badge {
+  margin-left:auto;
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; letter-spacing:.1em;
+  padding:3px 10px; border-radius:100px;
+  background:rgba(2,132,199,.1);
+  border:1px solid rgba(2,132,199,.25);
+  color:var(--blue);
+}
+.ip-grid {
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:16px;
+}
+.ip-item {
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:14px 16px;
+}
+.ip-item-icon {
+  width:28px; height:28px;
+  border-radius:6px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:14px;
+  margin-bottom:10px;
+  flex-shrink:0;
+}
+.ii-blue { background:rgba(2,132,199,.1); color:var(--blue); }
+.ii-amber { background:rgba(217,119,6,.1); color:var(--amber); }
+.ii-green { background:rgba(0,135,95,.1); color:var(--green); }
+.ii-purple { background:rgba(124,58,237,.1); color:var(--purple); }
+.ii-red { background:rgba(220,38,38,.1); color:var(--danger); }
+.ii-teal { background:rgba(13,148,136,.1); color:var(--teal); }
+.ip-item-title {
+  font-size:12px; font-weight:600;
+  color:var(--w2); margin-bottom:5px;
+  display:flex; align-items:center; gap:6px;
+}
+.ip-item-body { font-size:11.5px; color:var(--w3); line-height:1.65; }
+.ip-item-tag {
+  display:inline-block;
+  margin-top:8px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:8.5px; letter-spacing:.1em;
+  padding:2px 8px; border-radius:3px;
+  text-transform:uppercase;
+}
+.tag-warn { background:var(--amber3); color:var(--amber2); }
+.tag-ok { background:var(--green3); color:var(--green); }
+.tag-info { background:var(--blue3); color:var(--blue2); }
+.tag-crit { background:var(--danger3); color:var(--danger); }
+
+/* ─── ALERTS PANEL ─── */
+.alerts-section { margin-bottom:20px; }
+.alerts-grid {
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:12px;
+}
+.ac {
+  border-radius:10px;
+  padding:14px 16px;
+  border:1px solid;
+  position:relative;
+  overflow:hidden;
+}
+.ac-crit { background:rgba(220,38,38,.06); border-color:rgba(220,38,38,.3); }
+.ac-warn { background:rgba(217,119,6,.06); border-color:rgba(217,119,6,.25); }
+.ac-ok { background:rgba(0,135,95,.06); border-color:rgba(0,135,95,.22); }
+.ac-info { background:rgba(2,132,199,.06); border-color:rgba(2,132,199,.22); }
+.ac-top { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:6px; }
+.ac-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+.ac-crit .ac-dot { background:var(--danger); }
+.ac-warn .ac-dot { background:var(--amber); }
+.ac-ok .ac-dot { background:var(--green); }
+.ac-info .ac-dot { background:var(--blue); }
+.ac-badge {
+  font-family:'JetBrains Mono',monospace;
+  font-size:8px; letter-spacing:.1em;
+  text-transform:uppercase;
+  padding:2px 7px; border-radius:3px;
+  flex-shrink:0;
+}
+.ab-crit { background:var(--danger3); color:var(--danger); }
+.ab-warn { background:var(--amber3); color:var(--amber2); }
+.ab-ok { background:var(--green3); color:var(--green); }
+.ab-info { background:var(--blue3); color:var(--blue2); }
+.ac-title { font-size:12.5px; font-weight:600; color:var(--w1); margin-bottom:5px; }
+.ac-body { font-size:11.5px; color:var(--w2); line-height:1.55; }
+.ac-meta {
+  display:flex; align-items:center; gap:6px;
+  margin-top:8px; padding-top:8px;
+  border-top:1px solid rgba(1,42,107,.06);
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; color:var(--w4); letter-spacing:.06em;
+}
+.ac-crit .ac-meta { border-top-color:rgba(220,38,38,.12); }
+.ac-warn .ac-meta { border-top-color:rgba(217,119,6,.12); }
+.ac-ok .ac-meta { border-top-color:rgba(0,135,95,.1); }
+
+/* ─── BH BARS ─── */
+.bh-row { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+.bh-lbl {
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px; color:var(--w2);
+  width:110px; text-align:right; flex-shrink:0;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.bh-track { flex:1; height:8px; background:rgba(1,42,107,.08); border-radius:4px; overflow:hidden; }
+.bh-fill { height:100%; border-radius:4px; }
+.bh-val {
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px; color:var(--w3);
+  width:40px; text-align:right; flex-shrink:0;
+}
+
+/* ─── BADGES ─── */
+.badge {
+  display:inline-block; padding:3px 9px;
+  border-radius:3px; font-size:10px;
+  font-weight:600; letter-spacing:1.5px;
+  text-transform:uppercase;
+}
+.b-ok { background:rgba(0,135,95,.12); color:var(--green); border:.5px solid rgba(0,135,95,.3); }
+.b-warn { background:rgba(217,119,6,.12); color:var(--amber); border:.5px solid rgba(217,119,6,.3); }
+.b-crit { background:rgba(220,38,38,.12); color:var(--danger); border:.5px solid rgba(220,38,38,.3); }
+.b-info { background:rgba(2,132,199,.12); color:var(--blue); border:.5px solid rgba(2,132,199,.25); }
+.b-none { background:rgba(1,42,107,.06); color:var(--w4); border:.5px solid var(--line2); }
+
+/* ─── MINI STAT ROW ─── */
+.mini-stat-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 0;
+  border-bottom:1px solid var(--line);
+}
+.mini-stat-row:last-child { border-bottom:none; }
+.msr-lbl { font-size:12px; color:var(--w2); }
+.msr-val { font-family:'Barlow Condensed',sans-serif; font-size:16px; font-weight:700; color:var(--navy); }
+.msr-sub { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--w4); }
+
+/* ─── TOAST ─── */
+.toast {
+  position:fixed; bottom:22px; right:22px;
+  background:var(--navy); border-radius:8px;
+  padding:12px 18px; font-size:12px; line-height:1.5;
+  color:#fff; z-index:9999;
+  transform:translateY(80px); opacity:0;
+  transition:.3s; max-width:360px;
+  box-shadow:0 8px 24px rgba(1,42,107,.3);
+}
+.toast.show { transform:translateY(0); opacity:1; }
+.toast.ok { background:var(--green); }
+.toast.err { background:var(--danger); }
+.toast.info { background:var(--navy); }
+
+/* ─── FOOTER ─── */
+footer {
+  background:#fff;
+  border-top:1px solid var(--line);
+  padding:10px 22px;
+  display:flex; align-items:center; justify-content:space-between;
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; color:var(--w4);
+  letter-spacing:.12em; text-transform:uppercase;
+  flex-wrap:wrap; gap:6px;
+  flex-shrink:0;
+}
+footer b { color:var(--red); font-weight:700; }
+footer span.footer-live {
+  display:flex; align-items:center; gap:5px;
+  color:var(--green);
+}
+
+/* ─── ANIMATION ─── */
+.fade { animation:fu .38s ease both; }
+@keyframes fu{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ─── MODULE COMING SOON OVERLAY ─── */
+.coming-soon-badge {
+  display:inline-flex; align-items:center; gap:5px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; letter-spacing:.12em;
+  text-transform:uppercase;
+  padding:3px 9px; border-radius:4px;
+  background:rgba(124,58,237,.1);
+  border:1px solid rgba(124,58,237,.2);
+  color:var(--purple);
+}
+
+/* ─── RESPONSIVE ─── */
+@media(max-width:1200px) {
+  .kpi-grid { grid-template-columns:repeat(3,1fr); }
+  .kpi-grid-5 { grid-template-columns:repeat(3,1fr); }
+  .ip-grid { grid-template-columns:1fr 1fr; }
+}
+@media(max-width:1024px) {
+  .charts-2 { grid-template-columns:1fr; }
+  .charts-3 { grid-template-columns:1fr 1fr; }
+  .charts-13 { grid-template-columns:1fr; }
+  .alerts-grid { grid-template-columns:1fr 1fr; }
+}
+@media(max-width:900px) {
+  .header { padding:8px 14px; }
+  .header-clock, .header-user-info { display:none; }
+  .week-row { padding:8px 14px; }
+  :root { --sb-width:200px; }
+}
+@media(max-width:768px) {
+  .kpi-grid, .kpi-grid-5 { grid-template-columns:1fr 1fr; }
+  .charts-3 { grid-template-columns:1fr; }
+  .alerts-grid { grid-template-columns:1fr; }
+  .ip-grid { grid-template-columns:1fr; }
+  .dsh-right { display:none; }
+  .page { padding:14px 14px 32px; }
+}
+@media(max-width:480px) {
+  .kpi-grid, .kpi-grid-5 { grid-template-columns:1fr; }
+}
+</style>
+</head>
+
+<body>
+<div class="shell">
+<div class="ops-body-row" id="opsBodyRow">
+
+<!-- ════════════════════════════════════════════════════
+     SIDEBAR — Talento Humano BI
+     ════════════════════════════════════════════════════ -->
+<div class="tab-row">
+
+  <div class="sb-brand">
+    <div class="sb-brand-mark">
+      <span>IN</span>
+    </div>
+    <div>
+      <div class="sb-brand-name">INLOP</div>
+      <div class="sb-brand-sub">Talento Humano</div>
+    </div>
+  </div>
+
+  <div class="sb-section-label">Business Intelligence</div>
+
+  <button class="tb on" id="tab-dashboard" onclick="showSection('dashboard')" data-label="Dashboard Ejecutivo">
+    <i class="ti ti-layout-dashboard" aria-hidden="true"></i>Dashboard Ejecutivo
+  </button>
+
+  <div class="sb-section-label mt">Módulos — Fase 2</div>
+
+  <button class="tb soon" data-label="Capital Humano" onclick="toastProx('Capital Humano')">
+    <i class="ti ti-users" aria-hidden="true"></i>Capital Humano
+    <span class="tb-soon-badge">Pronto</span>
+  </button>
+  <button class="tb soon" data-label="Reclutamiento" onclick="toastProx('Reclutamiento')">
+    <i class="ti ti-user-search" aria-hidden="true"></i>Reclutamiento
+    <span class="tb-soon-badge">Pronto</span>
+  </button>
+  <button class="tb soon" data-label="Rotación & Retención" onclick="toastProx('Rotación')">
+    <i class="ti ti-arrows-exchange" aria-hidden="true"></i>Rotación
+    <span class="tb-soon-badge">Pronto</span>
+  </button>
+  <button class="tb soon" data-label="Ausentismo" onclick="toastProx('Ausentismo')">
+    <i class="ti ti-calendar-off" aria-hidden="true"></i>Ausentismo
+    <span class="tb-soon-badge">Pronto</span>
+  </button>
+  <button class="tb soon" data-label="Vacaciones" onclick="toastProx('Vacaciones')">
+    <i class="ti ti-beach" aria-hidden="true"></i>Vacaciones
+    <span class="tb-soon-badge">Pronto</span>
+  </button>
+  <button class="tb soon" data-label="Capacitaciones" onclick="toastProx('Capacitaciones')">
+    <i class="ti ti-school" aria-hidden="true"></i>Capacitaciones
+    <span class="tb-soon-badge">Pronto</span>
+  </button>
+  <button class="tb soon" data-label="Evaluaciones" onclick="toastProx('Evaluaciones')">
+    <i class="ti ti-clipboard-check" aria-hidden="true"></i>Evaluaciones
+    <span class="tb-soon-badge">Pronto</span>
+  </button>
+  <button class="tb soon" data-label="SST" onclick="toastProx('SST')">
+    <i class="ti ti-shield-check" aria-hidden="true"></i>SST
+    <span class="tb-soon-badge">Pronto</span>
+  </button>
+
+  <div class="sb-section-label mt">Módulos — Fase 3</div>
+
+  <button class="tb soon" data-label="Nómina & Costos" onclick="toastProx('Nómina')">
+    <i class="ti ti-cash" aria-hidden="true"></i>Nómina &amp; Costos
+    <span class="tb-soon-badge">Fase 3</span>
+  </button>
+  <button class="tb soon" data-label="Reportes" onclick="toastProx('Reportes')">
+    <i class="ti ti-report-analytics" aria-hidden="true"></i>Reportes
+    <span class="tb-soon-badge">Fase 3</span>
+  </button>
+
+  <div class="sb-footer">
+    <button class="tb" onclick="toggleSidebar()" type="button" id="sbCollapseBtn" data-label="Colapsar">
+      <i class="ti ti-layout-sidebar-left-collapse" aria-hidden="true"></i>Colapsar
+    </button>
+    <div class="sb-version">TH-BI v1.0 · FASE 1 · ENTERPRISE</div>
+  </div>
+
+</div><!-- /tab-row -->
+
+<!-- ════════════════════════════════════════════════════
+     COLUMNA PRINCIPAL
+     ════════════════════════════════════════════════════ -->
+<div class="ops-body-col">
+
+<!-- HEADER -->
+<header class="header">
+  <div class="hdr-r" style="width:100%">
+    <div class="header-module-title">
+      <div class="hmt-main">Talento Humano · Business Intelligence</div>
+      <div class="hmt-sub">Centro Ejecutivo de Inteligencia — Gerencia General · INLOP SAS</div>
+    </div>
+
+    <div class="live-pip">
+      <span class="live-d"></span>Datos al <span id="hdrFecha">—</span>
+    </div>
+
+    <div class="header-clock" id="headerClock">—</div>
+
+    <a href="erp/index.html" class="btn-portada-header">
+      <i class="ti ti-arrow-left" aria-hidden="true"></i>Portada
+    </a>
+
+    <div class="header-user-wrap" id="headerUserWrap">
+      <div class="header-user" id="headerUserBtn" onclick="toggleHeaderUserMenu(event)">
+        <div class="header-user-av">GG</div>
+        <div class="header-user-info">
+          <div class="header-user-name">Gerencia General</div>
+          <div class="header-user-rol">INLOP SAS · Bogotá</div>
+        </div>
+        <i class="ti ti-chevron-down header-user-chevron" aria-hidden="true"></i>
+      </div>
+      <div class="header-user-menu" id="headerUserMenu">
+        <div class="header-user-menu-item" onclick="toast('Próximamente disponible','info')">
+          <i class="ti ti-user-circle" aria-hidden="true"></i>Mi Perfil
+        </div>
+        <div class="header-user-menu-item" onclick="toast('Próximamente disponible','info')">
+          <i class="ti ti-settings" aria-hidden="true"></i>Configuración
+        </div>
+        <div class="header-user-menu-sep"></div>
+        <div class="header-user-menu-item danger" onclick="toast('Sesión cerrada','ok')">
+          <i class="ti ti-logout" aria-hidden="true"></i>Cerrar sesión
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- FILTER BAR -->
+<div class="week-row">
+  <span class="filt-label">Período</span>
+  <select id="periodoFilter" onchange="applyFilters()">
+    <option value="jul-2026" selected>Julio 2026</option>
+    <option value="jun-2026">Junio 2026</option>
+    <option value="may-2026">Mayo 2026</option>
+    <option value="q2-2026">Q2 2026</option>
+    <option value="ytd-2026">Acumulado 2026</option>
+  </select>
+
+  <span class="filt-label">Área</span>
+  <select id="areaFilter" onchange="applyFilters()">
+    <option value="">Todas las áreas</option>
+    <option value="ops">Operaciones</option>
+    <option value="log">Logística</option>
+    <option value="adm">Administración</option>
+    <option value="com">Comercial</option>
+    <option value="rrhh">RRHH</option>
+    <option value="tec">Tecnología</option>
+  </select>
+
+  <span class="filt-label">Empresa</span>
+  <select id="empresaFilter" onchange="applyFilters()">
+    <option value="">Todas</option>
+    <option value="inlop">INLOP SAS</option>
+    <option value="temporal">Personal Temporal</option>
+  </select>
+
+  <button class="filt-clear-btn" onclick="clearFilters()">
+    <i class="ti ti-refresh" aria-hidden="true"></i>
+    <span>Limpiar</span>
+  </button>
+
+  <span class="period-badge" id="periodBadge">Julio 2026 · Acumulado YTD</span>
+</div>
+
+<!-- CONTENT -->
+<div class="page">
+
+<!-- ══════════════════════════════════════════════
+     STATUS HEADER
+     ══════════════════════════════════════════════ -->
+<div class="dash-status-header fade">
+  <div class="dsh-left">
+    <div class="dsh-title">Dashboard Ejecutivo · Talento Humano</div>
+    <div class="dsh-sub">Gerencia General · Plataforma Empresarial Integrada INLOP · Corte: 31 Jul 2026</div>
+  </div>
+  <div class="dsh-right">
+    <div class="dsh-kpi">
+      <div class="dsh-kpi-val" id="dsh-plantilla">847</div>
+      <div class="dsh-kpi-lbl">Plantilla</div>
+    </div>
+    <div class="dsh-kpi">
+      <div class="dsh-kpi-val" id="dsh-rotacion">1.65%</div>
+      <div class="dsh-kpi-lbl">Rotación</div>
+    </div>
+    <div class="dsh-kpi">
+      <div class="dsh-kpi-val" id="dsh-aus">3.8%</div>
+      <div class="dsh-kpi-lbl">Ausentismo</div>
+    </div>
+    <div class="dsh-kpi">
+      <div class="dsh-kpi-val" id="dsh-sst">3</div>
+      <div class="dsh-kpi-lbl">Incidentes SST</div>
+    </div>
+    <div class="status-pill pill-warn">
+      <span class="pill-dot"></span>Atención
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     KPI TIER 1 — Indicadores Principales (4)
+     ══════════════════════════════════════════════ -->
+<div class="sh">
+  <div class="sh-bar"></div>
+  <span class="sh-txt">Indicadores Principales</span>
+  <div class="sh-line"></div>
+</div>
+
+<div class="kpi-grid fade">
+
+  <div class="kpi k1">
+    <div class="kpi-lbl">Plantilla Activa</div>
+    <div class="kpi-val">847</div>
+    <div class="kpi-delta">
+      <span class="d-up">▲ 2.3%</span>
+      <span class="kpi-sub">vs mes anterior (+19)</span>
+    </div>
+    <div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:84.7%;background:var(--blue)"></div></div></div>
+    <div class="kpi-sub">Meta plantilla: 1,000 · Ocupación 84.7%</div>
+  </div>
+
+  <div class="kpi k4">
+    <div class="kpi-lbl">Índice de Rotación</div>
+    <div class="kpi-val">1.65%</div>
+    <div class="kpi-delta">
+      <span class="d-up">▼ 0.06pp</span>
+      <span class="kpi-sub">vs jun 2026</span>
+    </div>
+    <div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:82.5%;background:var(--amber)"></div></div></div>
+    <div class="kpi-sub">Meta mensual: ≤ 2.0% · YTD promedio 1.71%</div>
+  </div>
+
+  <div class="kpi k3">
+    <div class="kpi-lbl">Tasa de Ausentismo</div>
+    <div class="kpi-val">3.8%</div>
+    <div class="kpi-delta">
+      <span class="d-dn">▲ 0.1pp</span>
+      <span class="kpi-sub">vs mes anterior</span>
+    </div>
+    <div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:76%;background:var(--danger)"></div></div></div>
+    <div class="kpi-sub">Meta: ≤ 3.5% · 142 días perdidos en el mes</div>
+  </div>
+
+  <div class="kpi k2">
+    <div class="kpi-lbl">Costo Total Nómina</div>
+    <div class="kpi-val" style="font-size:24px">$2.84B</div>
+    <div class="kpi-delta">
+      <span class="d-dn">▲ 2.1%</span>
+      <span class="kpi-sub">sobre presupuesto YTD</span>
+    </div>
+    <div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:71%;background:var(--green)"></div></div></div>
+    <div class="kpi-sub">COP · Presupuesto mensual: $2.78B</div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════
+     KPI TIER 2 — Movimiento de Personal (4)
+     ══════════════════════════════════════════════ -->
+<div class="sh">
+  <div class="sh-bar" style="background:var(--blue)"></div>
+  <span class="sh-txt">Movimiento de Personal</span>
+  <div class="sh-line"></div>
+</div>
+
+<div class="kpi-grid fade">
+
+  <div class="kpi k2">
+    <div class="kpi-lbl">Nuevas Contrataciones</div>
+    <div class="kpi-val">23</div>
+    <div class="kpi-delta">
+      <span class="d-up">▲ 4</span>
+      <span class="kpi-sub">vs jun 2026 · YTD: 87</span>
+    </div>
+    <div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:76.7%;background:var(--green)"></div></div></div>
+    <div class="kpi-sub">18 permanentes · 5 temporales</div>
+  </div>
+
+  <div class="kpi k3">
+    <div class="kpi-lbl">Desvinculaciones</div>
+    <div class="kpi-val">14</div>
+    <div class="kpi-delta">
+      <span class="d-up">▼ 2</span>
+      <span class="kpi-sub">vs jun 2026 · YTD: 58</span>
+    </div>
+    <div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:46.7%;background:var(--danger)"></div></div></div>
+    <div class="kpi-sub">6 voluntarias · 5 liquidaciones · 3 vencidas</div>
+  </div>
+
+  <div class="kpi k4">
+    <div class="kpi-lbl">Vacantes Activas</div>
+    <div class="kpi-val">18</div>
+    <div class="kpi-delta">
+      <span class="d-dn">▲ 3</span>
+      <span class="kpi-sub">vs mes anterior</span>
+    </div>
+    <div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:60%;background:var(--amber)"></div></div></div>
+    <div class="kpi-sub">3 críticas · 15 en proceso · Meta: ≤ 10</div>
+  </div>
+
+  <div class="kpi k1">
+    <div class="kpi-lbl">Satisfacción Laboral</div>
+    <div class="kpi-val">78<span style="font-size:18px;color:var(--w4)">/100</span></div>
+    <div class="kpi-delta">
+      <span class="d-up">▲ 2pts</span>
+      <span class="kpi-sub">vs encuesta anterior</span>
+    </div>
+    <div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:78%;background:var(--blue)"></div></div></div>
+    <div class="kpi-sub">Meta: ≥ 80 · n=642 colaboradores</div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════
+     KPI TIER 3 — Indicadores Complementarios (6+1)
+     ══════════════════════════════════════════════ -->
+<div class="sh">
+  <div class="sh-bar" style="background:var(--purple)"></div>
+  <span class="sh-txt">Indicadores Complementarios</span>
+  <div class="sh-line"></div>
+</div>
+
+<div class="kpi-grid-5 fade">
+
+  <div class="kpi k6">
+    <div class="kpi-lbl">Días Perdidos</div>
+    <div class="kpi-val">142</div>
+    <div class="kpi-delta">
+      <span class="d-dn">▲ 11</span>
+      <span class="kpi-sub">vs jun 2026</span>
+    </div>
+    <div class="kpi-sub">71 IEG · 43 ILK · 28 otros</div>
+  </div>
+
+  <div class="kpi k4">
+    <div class="kpi-lbl">Promedio Antigüedad</div>
+    <div class="kpi-val">4.2<span style="font-size:16px;color:var(--w4)">a</span></div>
+    <div class="kpi-delta">
+      <span class="d-eq">—</span>
+      <span class="kpi-sub">mediana 2.8 años</span>
+    </div>
+    <div class="kpi-sub">57% lleva menos de 3 años</div>
+  </div>
+
+  <div class="kpi k2">
+    <div class="kpi-lbl">Evaluaciones al Día</div>
+    <div class="kpi-val">87<span style="font-size:18px;color:var(--w4)">%</span></div>
+    <div class="kpi-delta">
+      <span class="d-up">▲ 3pp</span>
+      <span class="kpi-sub">vs mes anterior</span>
+    </div>
+    <div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:87%;background:var(--green)"></div></div></div>
+    <div class="kpi-sub">127 vencidas · Meta ≥ 95%</div>
+  </div>
+
+  <div class="kpi k1">
+    <div class="kpi-lbl">Hrs Capacitación</div>
+    <div class="kpi-val">1,240</div>
+    <div class="kpi-delta">
+      <span class="d-up">▲ 24%</span>
+      <span class="kpi-sub">vs meta mensual</span>
+    </div>
+    <div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:100%;background:var(--blue)"></div></div></div>
+    <div class="kpi-sub">Meta: 1,000 hrs · 847 colaboradores</div>
+  </div>
+
+  <div class="kpi k3">
+    <div class="kpi-lbl">Incidentes SST</div>
+    <div class="kpi-val">3</div>
+    <div class="kpi-delta">
+      <span class="d-up">▼ 1</span>
+      <span class="kpi-sub">vs jun 2026</span>
+    </div>
+    <div class="kpi-sub">45 días sin accidentes graves</div>
+  </div>
+
+</div>
+
+<div class="kpi-grid-5 fade" style="margin-top:-8px">
+
+  <div class="kpi k5">
+    <div class="kpi-lbl">Time to Fill</div>
+    <div class="kpi-val">22<span style="font-size:16px;color:var(--w4)">d</span></div>
+    <div class="kpi-delta">
+      <span class="d-up">▼ 3 días</span>
+      <span class="kpi-sub">vs mes anterior</span>
+    </div>
+    <div class="kpi-sub">Meta: ≤ 30 días promedio</div>
+  </div>
+
+  <div class="kpi k6">
+    <div class="kpi-lbl">Cobertura SST</div>
+    <div class="kpi-val">94<span style="font-size:18px;color:var(--w4)">%</span></div>
+    <div class="kpi-delta">
+      <span class="d-up">▲ 1.2pp</span>
+      <span class="kpi-sub">vs mes anterior</span>
+    </div>
+    <div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:94%;background:var(--teal)"></div></div></div>
+    <div class="kpi-sub">Meta ≥ 95% · 51 sin cobertura</div>
+  </div>
+
+  <div class="kpi k7">
+    <div class="kpi-lbl">Horas Extra</div>
+    <div class="kpi-val">3,481</div>
+    <div class="kpi-delta">
+      <span class="d-dn">▲ 8.4%</span>
+      <span class="kpi-sub">vs mes anterior</span>
+    </div>
+    <div class="kpi-sub">4.11 hrs/persona promedio</div>
+  </div>
+
+  <div class="kpi k4">
+    <div class="kpi-lbl">Gestión Disciplinaria</div>
+    <div class="kpi-val">7</div>
+    <div class="kpi-delta">
+      <span class="d-eq">—</span>
+      <span class="kpi-sub">vs 6 jun 2026</span>
+    </div>
+    <div class="kpi-sub">2 memorandos · 4 llamados · 1 suspensión</div>
+  </div>
+
+  <div class="kpi k2">
+    <div class="kpi-lbl">Retención Talento</div>
+    <div class="kpi-val">91<span style="font-size:18px;color:var(--w4)">%</span></div>
+    <div class="kpi-delta">
+      <span class="d-up">▲ 0.4pp</span>
+      <span class="kpi-sub">colaboradores clave</span>
+    </div>
+    <div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:91%;background:var(--green)"></div></div></div>
+    <div class="kpi-sub">Meta ≥ 90% · Segmento A1+A2</div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════
+     CHARTS ROW 1 — Evolución + Género
+     ══════════════════════════════════════════════ -->
+<div class="sh" style="margin-top:4px">
+  <div class="sh-bar" style="background:var(--navy)"></div>
+  <span class="sh-txt">Analítica Gráfica</span>
+  <div class="sh-line"></div>
+</div>
+
+<div class="charts-13 fade">
+
+  <div class="card">
+    <div class="cp">
+      <div class="card-ttl"><i class="ti ti-trending-up"></i>Evolución de Plantilla 2026</div>
+      <div class="card-sub">Headcount mensual · Enero — Julio 2026</div>
+      <div class="leg-row">
+        <span class="leg"><span class="ld" style="background:var(--navy)"></span>Plantilla total</span>
+        <span class="leg"><span class="ld" style="background:var(--green)"></span>Contrataciones</span>
+        <span class="leg"><span class="ld" style="background:var(--danger)"></span>Desvinculaciones</span>
+      </div>
+      <canvas id="chartPlantilla" height="200"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cp">
+      <div class="card-ttl"><i class="ti ti-gender-bigender"></i>Distribución por Género</div>
+      <div class="card-sub">847 colaboradores activos</div>
+      <canvas id="chartGenero" height="200"></canvas>
+      <div style="margin-top:14px">
+        <div class="mini-stat-row">
+          <span class="msr-lbl">Masculino</span>
+          <span class="msr-val" style="color:var(--navy)">576</span>
+          <span class="msr-sub">68.0%</span>
+        </div>
+        <div class="mini-stat-row">
+          <span class="msr-lbl">Femenino</span>
+          <span class="msr-val" style="color:var(--blue)">246</span>
+          <span class="msr-sub">29.0%</span>
+        </div>
+        <div class="mini-stat-row">
+          <span class="msr-lbl">Otro / N/E</span>
+          <span class="msr-val" style="color:var(--w4)">25</span>
+          <span class="msr-sub">3.0%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════
+     CHARTS ROW 2 — Ausentismo + Rotación
+     ══════════════════════════════════════════════ -->
+<div class="charts-2 fade">
+
+  <div class="card">
+    <div class="cp">
+      <div class="card-ttl"><i class="ti ti-calendar-off"></i>Ausentismo Mensual (%)</div>
+      <div class="card-sub">Tasa de ausentismo · Enero — Julio 2026 · Meta ≤ 3.5%</div>
+      <div class="leg-row">
+        <span class="leg"><span class="ld" style="background:var(--danger);border-radius:50%"></span>Ausentismo real</span>
+        <span class="leg"><span class="ld" style="background:var(--amber);border-radius:50%"></span>Meta (3.5%)</span>
+      </div>
+      <canvas id="chartAusentismo" height="220"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cp">
+      <div class="card-ttl"><i class="ti ti-arrows-exchange"></i>Rotación por Área</div>
+      <div class="card-sub">Índice mensual · Julio 2026 · Meta ≤ 2.0%</div>
+      <canvas id="chartRotacion" height="220"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════
+     CHARTS ROW 3 — Motivos + Capacitación
+     ══════════════════════════════════════════════ -->
+<div class="charts-2 fade">
+
+  <div class="card">
+    <div class="cp">
+      <div class="card-ttl"><i class="ti ti-door-exit"></i>Motivos de Desvinculación</div>
+      <div class="card-sub">14 desvinculaciones · Julio 2026</div>
+      <canvas id="chartMotivos" height="220"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cp">
+      <div class="card-ttl"><i class="ti ti-school"></i>Capacitación por Área</div>
+      <div class="card-sub">Horas ejecutadas · Julio 2026 · Total: 1,240 hrs</div>
+      <canvas id="chartCapacitacion" height="220"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════
+     CHART ROW 4 — Distribución por Área (full)
+     ══════════════════════════════════════════════ -->
+<div class="card fade" style="margin-bottom:20px">
+  <div class="cp">
+    <div class="card-ttl"><i class="ti ti-building-community"></i>Distribución de Plantilla por Área</div>
+    <div class="card-sub">Headcount actual · 847 colaboradores · Julio 2026</div>
+    <div class="leg-row" style="margin-bottom:14px">
+      <span class="leg"><span class="ld" style="background:var(--navy)"></span>Operaciones</span>
+      <span class="leg"><span class="ld" style="background:var(--blue)"></span>Logística</span>
+      <span class="leg"><span class="ld" style="background:var(--teal)"></span>Administración</span>
+      <span class="leg"><span class="ld" style="background:var(--amber)"></span>Comercial</span>
+      <span class="leg"><span class="ld" style="background:var(--purple)"></span>RRHH</span>
+      <span class="leg"><span class="ld" style="background:var(--green)"></span>Tecnología</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 260px;gap:24px;align-items:center">
+      <canvas id="chartDistribucion" height="160"></canvas>
+      <div>
+        <div class="bh-row"><div class="bh-lbl">Operaciones</div><div class="bh-track"><div class="bh-fill" style="width:100%;background:var(--navy)"></div></div><div class="bh-val">412</div></div>
+        <div class="bh-row"><div class="bh-lbl">Logística</div><div class="bh-track"><div class="bh-fill" style="width:48%;background:var(--blue)"></div></div><div class="bh-val">198</div></div>
+        <div class="bh-row"><div class="bh-lbl">Administración</div><div class="bh-track"><div class="bh-fill" style="width:32.5%;background:var(--teal)"></div></div><div class="bh-val">134</div></div>
+        <div class="bh-row"><div class="bh-lbl">Comercial</div><div class="bh-track"><div class="bh-fill" style="width:16.3%;background:var(--amber)"></div></div><div class="bh-val">67</div></div>
+        <div class="bh-row"><div class="bh-lbl">RRHH</div><div class="bh-track"><div class="bh-fill" style="width:5.3%;background:var(--purple)"></div></div><div class="bh-val">22</div></div>
+        <div class="bh-row"><div class="bh-lbl">Tecnología</div><div class="bh-track"><div class="bh-fill" style="width:3.4%;background:var(--green)"></div></div><div class="bh-val">14</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     INSIGHTS EJECUTIVOS
+     ══════════════════════════════════════════════ -->
+<div class="sh">
+  <div class="sh-bar" style="background:var(--blue)"></div>
+  <span class="sh-txt">Insights Ejecutivos</span>
+  <div class="sh-line"></div>
+</div>
+
+<div class="insight-panel fade">
+  <div class="ip-header">
+    <div class="ip-icon">✦</div>
+    <div>
+      <div class="ip-title">Centro de Inteligencia Ejecutiva — Talento Humano</div>
+      <div class="ip-sub">Análisis estratégico automatizado · Corte Julio 2026 · INLOP SAS</div>
+    </div>
+    <div class="ip-badge">6 hallazgos</div>
+  </div>
+
+  <div class="ip-grid">
+
+    <div class="ip-item">
+      <div class="ip-item-icon ii-amber">⚠</div>
+      <div class="ip-item-title">Rotación Operaciones vs Corporativo</div>
+      <div class="ip-item-body">El área de Operaciones registra una tasa de rotación de 2.4% mensual, 45% por encima del promedio corporativo (1.65%). El segmento de conductores con licencia C2 concentra el 68% de las salidas voluntarias. Se recomienda revisión del programa de bienestar y esquema salarial del personal de campo.</div>
+      <span class="ip-item-tag tag-warn">Acción requerida</span>
+    </div>
+
+    <div class="ip-item">
+      <div class="ip-item-icon ii-green">↗</div>
+      <div class="ip-item-title">Contrataciones Q3 Superan Meta</div>
+      <div class="ip-item-body">Las contrataciones del Q3 2026 acumulan 87 ingresos, superando la meta trimestral en un 8.7% (meta: 80). El perfil de conductor con licencia C2 presenta la mayor velocidad de atracción (promedio 18 días desde publicación). El pipeline de Barranquilla para agosto presenta 34 candidatos activos.</div>
+      <span class="ip-item-tag tag-ok">Objetivo superado</span>
+    </div>
+
+    <div class="ip-item">
+      <div class="ip-item-icon ii-red">!</div>
+      <div class="ip-item-title">Pico Ausentismo Mayo — Análisis</div>
+      <div class="ip-item-body">El ausentismo de mayo fue atípicamente alto (4.5%, +25% vs promedio YTD). El análisis por motivo indica predominancia de Incapacidad por Enfermedad General (IEG) en el cluster de Cartagena. Se sugiere auditoría de medicina laboral y revisión del clima organizacional en esa sede durante el período.</div>
+      <span class="ip-item-tag tag-crit">Investigar</span>
+    </div>
+
+    <div class="ip-item">
+      <div class="ip-item-icon ii-blue">📊</div>
+      <div class="ip-item-title">Nómina: Desviación Presupuestal</div>
+      <div class="ip-item-body">El costo de nómina acumula una desviación del 2.1% sobre el presupuesto YTD, equivalente a aprox. $58.8M COP. La principal causa es el incremento de horas extra (+8.4% en julio) asociado a la operación de temporada alta. Se proyecta cierre de año con desvío controlado si se mantiene la tendencia actual.</div>
+      <span class="ip-item-tag tag-warn">Monitorear</span>
+    </div>
+
+    <div class="ip-item">
+      <div class="ip-item-icon ii-purple">🎓</div>
+      <div class="ip-item-title">Capacitación: Récord Histórico</div>
+      <div class="ip-item-body">Julio 2026 registra el mayor número de horas de capacitación del año (1,240 hrs), superando la meta mensual en un 24%. El programa de seguridad vial para conductores aportó 420 horas. Este resultado mejora el indicador de habilidades críticas y reduce el riesgo SST en operaciones de campo.</div>
+      <span class="ip-item-tag tag-ok">Meta superada</span>
+    </div>
+
+    <div class="ip-item">
+      <div class="ip-item-icon ii-teal">🛡</div>
+      <div class="ip-item-title">SST: 45 Días Sin Accidentes Graves</div>
+      <div class="ip-item-body">La operación cumple 45 días consecutivos sin accidentes laborales graves — el mejor registro histórico del área de Operaciones. Los 3 incidentes del mes son de categoría leve (sin incapacidad). La cobertura del programa SST alcanza 94.3%, 0.7pp bajo la meta. Se identifican 51 colaboradores sin actualización de ARL.</div>
+      <span class="ip-item-tag tag-ok">Récord histórico</span>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     ALERTAS GERENCIALES
+     ══════════════════════════════════════════════ -->
+<div class="sh" style="margin-top:4px">
+  <div class="sh-bar" style="background:var(--danger)"></div>
+  <span class="sh-txt">Alertas Gerenciales</span>
+  <div class="sh-line"></div>
+</div>
+
+<div class="alerts-grid fade">
+
+  <div class="ac ac-crit">
+    <div class="ac-top">
+      <div style="display:flex;align-items:flex-start;gap:8px">
+        <div class="ac-dot"></div>
+        <div class="ac-title">Vacantes Críticas sin Cubrir</div>
+      </div>
+      <div class="ac-badge ab-crit">Crítica</div>
+    </div>
+    <div class="ac-body">3 vacantes de conductor C2 en ruta Bogotá–Medellín llevan <strong>más de 45 días</strong> sin cubrir. El déficit operativo genera presión sobre los conductores activos e impacto potencial directo en el indicador <strong>OTIF</strong> de Q3 2026.</div>
+    <div class="ac-meta"><i class="ti ti-clock" style="font-size:11px"></i> Máx. 45 días sin cubrir · Área: Operaciones · Prioridad: ALTA</div>
+  </div>
+
+  <div class="ac ac-warn">
+    <div class="ac-top">
+      <div style="display:flex;align-items:flex-start;gap:8px">
+        <div class="ac-dot"></div>
+        <div class="ac-title">Desviación Presupuestal Nómina</div>
+      </div>
+      <div class="ac-badge ab-warn">Atención</div>
+    </div>
+    <div class="ac-body">El costo de nómina acumula una desviación del <strong>2.1% sobre presupuesto YTD</strong> (~$58.8M COP). El incremento de horas extra en julio (3,481 hrs) es el principal driver. Se requiere análisis de dotación vs demanda operativa para Q3.</div>
+    <div class="ac-meta"><i class="ti ti-cash" style="font-size:11px"></i> YTD 2026 · Responsable: RRHH + Finanzas · En revisión</div>
+  </div>
+
+  <div class="ac ac-warn">
+    <div class="ac-top">
+      <div style="display:flex;align-items:flex-start;gap:8px">
+        <div class="ac-dot"></div>
+        <div class="ac-title">127 Evaluaciones Vencidas</div>
+      </div>
+      <div class="ac-badge ab-warn">Atención</div>
+    </div>
+    <div class="ac-body"><strong>127 colaboradores</strong> tienen evaluación de desempeño con más de 90 días de vencimiento. El cumplimiento actual es 87% vs meta ≥ 95%. Las áreas con mayor rezago son Operaciones (68 casos) y Logística (31 casos).</div>
+    <div class="ac-meta"><i class="ti ti-clipboard-check" style="font-size:11px"></i> Plazo límite: 31 Ago 2026 · Responsable: Líderes de área</div>
+  </div>
+
+  <div class="ac ac-warn">
+    <div class="ac-top">
+      <div style="display:flex;align-items:flex-start;gap:8px">
+        <div class="ac-dot"></div>
+        <div class="ac-title">Rotación Operaciones Zona Roja</div>
+      </div>
+      <div class="ac-badge ab-warn">Monitorear</div>
+    </div>
+    <div class="ac-body">El índice de rotación en Operaciones (2.4%) <strong>supera el umbral de alerta</strong> corporativo (2.0%) por tercer mes consecutivo. Sin intervención, el costo acumulado de reposición estimado para Q3 supera los $120M COP (selección + inducción + curva de aprendizaje).</div>
+    <div class="ac-meta"><i class="ti ti-arrows-exchange" style="font-size:11px"></i> 3er mes consecutivo · Plan de retención requerido</div>
+  </div>
+
+  <div class="ac ac-ok">
+    <div class="ac-top">
+      <div style="display:flex;align-items:flex-start;gap:8px">
+        <div class="ac-dot"></div>
+        <div class="ac-title">Programa Bienestar "INLOP Activo"</div>
+      </div>
+      <div class="ac-badge ab-ok">Logro</div>
+    </div>
+    <div class="ac-body">La campaña de bienestar corporativo <strong>"INLOP Activo"</strong> alcanzó el <strong>89% de participación</strong> — 6 puntos por encima del objetivo (83%). El indicador de satisfacción subió 2 puntos (76→78/100). Próxima fase: programa de salud mental Q4 2026.</div>
+    <div class="ac-meta"><i class="ti ti-heart" style="font-size:11px"></i> 754/847 colaboradores · Julio 2026 · Objetivo superado</div>
+  </div>
+
+  <div class="ac ac-info">
+    <div class="ac-top">
+      <div style="display:flex;align-items:flex-start;gap:8px">
+        <div class="ac-dot"></div>
+        <div class="ac-title">Expansión Barranquilla — Agosto 2026</div>
+      </div>
+      <div class="ac-badge ab-info">Informativo</div>
+    </div>
+    <div class="ac-body">El proceso de reclutamiento para la <strong>expansión operativa en Barranquilla</strong> inicia en agosto 2026. Se proyectan <strong>34 nuevas posiciones</strong> (28 conductores, 4 auxiliares logísticos, 2 supervisores). El cronograma estima incorporación gradual entre agosto y octubre 2026.</div>
+    <div class="ac-meta"><i class="ti ti-map-pin" style="font-size:11px"></i> Barranquilla · Inicio: 01 Ago 2026 · Responsable: RRHH</div>
+  </div>
+
+</div>
+
+</div><!-- /page -->
+
+<footer>
+  <span>INLOP · <b>Integral Logistics Operations SAS</b> · Talento Humano</span>
+  <span id="footDate" class="footer-live"><span class="live-d" style="width:5px;height:5px"></span><span id="footDateTxt">—</span></span>
+  <span>Talento Humano BI · v1.0 · Fase 1 · Enterprise</span>
+</footer>
+
+</div><!-- /ops-body-col -->
+</div><!-- /ops-body-row -->
+</div><!-- /shell -->
+
+<div class="toast" id="toast"></div>
+
+<!-- ════════════════════════════════════════════════════════════
+     JAVASCRIPT — Talento Humano BI Dashboard
+     ════════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+/* ═══════════════════════════════════════
+   DATOS SIMULADOS — Julio 2026
+   ═══════════════════════════════════════ */
+const TH = {
+  meses: ['Ene','Feb','Mar','Abr','May','Jun','Jul'],
+  plantilla: [798, 812, 825, 831, 838, 843, 847],
+  contrataciones: [12, 18, 15, 9, 11, 19, 23],
+  desvinculaciones: [8, 6, 10, 14, 10, 16, 14],
+  ausentismo: [4.2, 3.9, 4.5, 3.6, 4.1, 3.7, 3.8],
+  rotacion: [1.8, 2.1, 1.7, 1.5, 1.9, 1.6, 1.65],
+  areas: {
+    nombres: ['Operaciones','Logística','Administración','Comercial','RRHH','Tecnología'],
+    plantilla: [412, 198, 134, 67, 22, 14],
+    rotacion: [2.4, 1.9, 1.1, 1.5, 0.8, 1.3],
+    capacitacion: [420, 280, 160, 190, 120, 70],
+  },
+  motivosDesv: {
+    labels: ['Renuncia voluntaria','Liquidación','Contrato vencido','Abandono','Otro'],
+    valores: [6, 4, 2, 1, 1],
+  },
+  genero: [576, 246, 25],
+};
+
+/* Paleta corporativa para Chart.js */
+const PAL = {
+  navy:   '#012A6B', navyA: 'rgba(1,42,107,.12)',
+  blue:   '#0284C7', blueA: 'rgba(2,132,199,.12)',
+  green:  '#00875F', greenA:'rgba(0,135,95,.12)',
+  amber:  '#D97706', amberA:'rgba(217,119,6,.12)',
+  danger: '#DC2626', dangerA:'rgba(220,38,38,.12)',
+  purple: '#7C3AED', purpleA:'rgba(124,58,237,.12)',
+  teal:   '#0D9488', tealA: 'rgba(13,148,136,.12)',
+  w4:     '#6B7280',
+  grid:   'rgba(1,42,107,.06)',
+};
+
+Chart.defaults.font.family = "'DM Sans', sans-serif";
+Chart.defaults.color = PAL.w4;
+Chart.defaults.borderColor = PAL.grid;
+
+/* ═══════════════════════════════════════
+   GRÁFICOS
+   ═══════════════════════════════════════ */
+
+function initChartPlantilla() {
+  const ctx = document.getElementById('chartPlantilla').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: TH.meses,
+      datasets: [
+        {
+          label: 'Plantilla',
+          data: TH.plantilla,
+          borderColor: PAL.navy,
+          backgroundColor: PAL.navyA,
+          borderWidth: 2.5,
+          tension: .35,
+          fill: true,
+          pointRadius: 4,
+          pointBackgroundColor: '#fff',
+          pointBorderColor: PAL.navy,
+          pointBorderWidth: 2,
+          yAxisID: 'y',
+        },
+        {
+          label: 'Contrataciones',
+          data: TH.contrataciones,
+          borderColor: PAL.green,
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          borderDash: [],
+          tension: .35,
+          pointRadius: 3,
+          pointBackgroundColor: PAL.green,
+          yAxisID: 'y2',
+        },
+        {
+          label: 'Desvinculaciones',
+          data: TH.desvinculaciones,
+          borderColor: PAL.danger,
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          tension: .35,
+          pointRadius: 3,
+          pointBackgroundColor: PAL.danger,
+          yAxisID: 'y2',
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor: '#fff', borderColor: PAL.grid, borderWidth: 1, titleColor: PAL.navy, bodyColor: PAL.w4, padding: 10 },
+      },
+      scales: {
+        y: {
+          position: 'left',
+          grid: { color: PAL.grid },
+          ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 } },
+          title: { display: true, text: 'Plantilla', color: PAL.w4, font: { size: 9 } },
+        },
+        y2: {
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 } },
+          title: { display: true, text: 'Movimientos', color: PAL.w4, font: { size: 9 } },
+        },
+        x: {
+          grid: { color: PAL.grid },
+          ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 } },
+        },
+      },
+    },
+  });
+}
+
+function initChartGenero() {
+  const ctx = document.getElementById('chartGenero').getContext('2d');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Masculino','Femenino','Otro / N/E'],
+      datasets: [{
+        data: TH.genero,
+        backgroundColor: [PAL.navy, PAL.blue, PAL.w4],
+        borderColor: '#fff',
+        borderWidth: 3,
+        hoverOffset: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      cutout: '68%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#fff',
+          borderColor: PAL.grid,
+          borderWidth: 1,
+          titleColor: PAL.navy,
+          bodyColor: PAL.w4,
+          callbacks: {
+            label: (c) => ` ${c.label}: ${c.raw} (${((c.raw/847)*100).toFixed(1)}%)`,
+          },
+        },
+      },
+    },
+  });
+}
+
+function initChartAusentismo() {
+  const ctx = document.getElementById('chartAusentismo').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: TH.meses,
+      datasets: [
+        {
+          label: 'Ausentismo (%)',
+          data: TH.ausentismo,
+          backgroundColor: TH.ausentismo.map(v => v > 3.5 ? 'rgba(220,38,38,.75)' : 'rgba(0,135,95,.6)'),
+          borderColor: TH.ausentismo.map(v => v > 3.5 ? PAL.danger : PAL.green),
+          borderWidth: 1.5,
+          borderRadius: 5,
+        },
+        {
+          label: 'Meta (3.5%)',
+          data: Array(7).fill(3.5),
+          type: 'line',
+          borderColor: PAL.amber,
+          borderWidth: 2,
+          borderDash: [5, 4],
+          pointRadius: 0,
+          fill: false,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#fff', borderColor: PAL.grid, borderWidth: 1,
+          titleColor: PAL.navy, bodyColor: PAL.w4, padding: 10,
+          callbacks: { label: c => ` ${c.dataset.label}: ${c.raw}%` },
+        },
+      },
+      scales: {
+        y: {
+          grid: { color: PAL.grid },
+          ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 }, callback: v => v + '%' },
+          min: 0, max: 6,
+        },
+        x: { grid: { color: PAL.grid }, ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 } } },
+      },
+    },
+  });
+}
+
+function initChartRotacion() {
+  const ctx = document.getElementById('chartRotacion').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: TH.areas.nombres,
+      datasets: [
+        {
+          label: 'Rotación (%)',
+          data: TH.areas.rotacion,
+          backgroundColor: TH.areas.rotacion.map(v => v > 2.0 ? 'rgba(220,38,38,.7)' : v > 1.5 ? 'rgba(217,119,6,.65)' : 'rgba(0,135,95,.6)'),
+          borderColor: TH.areas.rotacion.map(v => v > 2.0 ? PAL.danger : v > 1.5 ? PAL.amber : PAL.green),
+          borderWidth: 1.5,
+          borderRadius: 5,
+          indexAxis: 'y',
+        },
+        {
+          label: 'Meta (2.0%)',
+          data: Array(6).fill(2.0),
+          type: 'line',
+          borderColor: PAL.amber,
+          borderWidth: 2,
+          borderDash: [5, 4],
+          pointRadius: 0,
+          fill: false,
+          indexAxis: 'y',
+        },
+      ],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#fff', borderColor: PAL.grid, borderWidth: 1,
+          titleColor: PAL.navy, bodyColor: PAL.w4, padding: 10,
+          callbacks: { label: c => ` ${c.dataset.label}: ${c.raw}%` },
+        },
+      },
+      scales: {
+        x: {
+          grid: { color: PAL.grid },
+          ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 }, callback: v => v + '%' },
+          min: 0, max: 3.5,
+        },
+        y: {
+          grid: { display: false },
+          ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 } },
+        },
+      },
+    },
+  });
+}
+
+function initChartMotivos() {
+  const ctx = document.getElementById('chartMotivos').getContext('2d');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: TH.motivosDesv.labels,
+      datasets: [{
+        data: TH.motivosDesv.valores,
+        backgroundColor: [PAL.amber, PAL.danger, PAL.navy, PAL.purple, PAL.w4],
+        borderColor: '#fff',
+        borderWidth: 3,
+        hoverOffset: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      cutout: '62%',
+      plugins: {
+        legend: {
+          display: true, position: 'right',
+          labels: {
+            font: { family: "'JetBrains Mono', monospace", size: 10 },
+            boxWidth: 10, boxHeight: 10, padding: 10, color: PAL.w4,
+          },
+        },
+        tooltip: {
+          backgroundColor: '#fff', borderColor: PAL.grid, borderWidth: 1,
+          titleColor: PAL.navy, bodyColor: PAL.w4,
+          callbacks: { label: c => ` ${c.raw} casos (${((c.raw/14)*100).toFixed(0)}%)` },
+        },
+      },
+    },
+  });
+}
+
+function initChartCapacitacion() {
+  const ctx = document.getElementById('chartCapacitacion').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: TH.areas.nombres,
+      datasets: [{
+        label: 'Horas ejecutadas',
+        data: TH.areas.capacitacion,
+        backgroundColor: [PAL.navy, PAL.blue, PAL.teal, PAL.amber, PAL.purple, PAL.green].map(c => c + 'CC'),
+        backgroundColor: [
+          'rgba(1,42,107,.75)', 'rgba(2,132,199,.7)', 'rgba(13,148,136,.7)',
+          'rgba(217,119,6,.7)', 'rgba(124,58,237,.7)', 'rgba(0,135,95,.7)'
+        ],
+        borderColor: [PAL.navy, PAL.blue, PAL.teal, PAL.amber, PAL.purple, PAL.green],
+        borderWidth: 1.5,
+        borderRadius: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#fff', borderColor: PAL.grid, borderWidth: 1,
+          titleColor: PAL.navy, bodyColor: PAL.w4, padding: 10,
+          callbacks: { label: c => ` ${c.raw} hrs` },
+        },
+      },
+      scales: {
+        y: {
+          grid: { color: PAL.grid },
+          ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 }, callback: v => v + ' hrs' },
+          beginAtZero: true,
+        },
+        x: {
+          grid: { display: false },
+          ticks: { font: { family: "'JetBrains Mono', monospace", size: 9 }, maxRotation: 30 },
+        },
+      },
+    },
+  });
+}
+
+function initChartDistribucion() {
+  const ctx = document.getElementById('chartDistribucion').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: TH.areas.nombres,
+      datasets: [{
+        label: 'Colaboradores',
+        data: TH.areas.plantilla,
+        backgroundColor: [
+          'rgba(1,42,107,.8)', 'rgba(2,132,199,.75)', 'rgba(13,148,136,.7)',
+          'rgba(217,119,6,.7)', 'rgba(124,58,237,.7)', 'rgba(0,135,95,.7)'
+        ],
+        borderColor: [PAL.navy, PAL.blue, PAL.teal, PAL.amber, PAL.purple, PAL.green],
+        borderWidth: 1.5,
+        borderRadius: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#fff', borderColor: PAL.grid, borderWidth: 1,
+          titleColor: PAL.navy, bodyColor: PAL.w4, padding: 10,
+          callbacks: {
+            label: c => ` ${c.raw} colaboradores (${((c.raw/847)*100).toFixed(1)}%)`,
+          },
+        },
+      },
+      scales: {
+        y: {
+          grid: { color: PAL.grid },
+          ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 } },
+          beginAtZero: true,
+        },
+        x: {
+          grid: { display: false },
+          ticks: { font: { family: "'JetBrains Mono', monospace", size: 9 }, maxRotation: 30 },
+        },
+      },
+    },
+  });
+}
+
+/* ═══════════════════════════════════════
+   SIDEBAR
+   ═══════════════════════════════════════ */
+function toggleSidebar() {
+  const row = document.getElementById('opsBodyRow');
+  const btn = document.getElementById('sbCollapseBtn');
+  row.classList.toggle('sb-collapsed');
+  const c = row.classList.contains('sb-collapsed');
+  btn.querySelector('i').className = c
+    ? 'ti ti-layout-sidebar-left-expand'
+    : 'ti ti-layout-sidebar-left-collapse';
+  /* Update text node */
+  const nodes = [...btn.childNodes];
+  const textNode = nodes.find(n => n.nodeType === 3 && n.textContent.trim());
+  if (textNode) textNode.textContent = c ? 'Expandir' : 'Colapsar';
+  try { localStorage.setItem('th-bi-sidebar', c ? '1' : '0'); } catch(e){}
+}
+
+function showSection(id) {
+  /* Fase 1: solo dashboard activo — placeholder para fases futuras */
+  document.querySelectorAll('.tb').forEach(b => b.classList.remove('on'));
+  const btn = document.getElementById('tab-' + id);
+  if (btn) btn.classList.add('on');
+}
+
+/* ═══════════════════════════════════════
+   HEADER USER MENU
+   ═══════════════════════════════════════ */
+function toggleHeaderUserMenu(e) {
+  const wrap = document.getElementById('headerUserWrap');
+  const menu = document.getElementById('headerUserMenu');
+  wrap.classList.toggle('open');
+  if (wrap.classList.contains('open')) {
+    const rect = document.getElementById('headerUserBtn').getBoundingClientRect();
+    menu.style.top = (rect.bottom + 6) + 'px';
+    menu.style.right = (window.innerWidth - rect.right) + 'px';
+  }
+  e.stopPropagation();
+}
+
+/* ═══════════════════════════════════════
+   CLOCK
+   ═══════════════════════════════════════ */
+function updateClock() {
+  const now = new Date();
+  const opts = { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: false };
+  const time = now.toLocaleTimeString('es-CO', opts);
+  const dateOpts = { timeZone: 'America/Bogota', day: '2-digit', month: 'short', year: 'numeric' };
+  const date = now.toLocaleDateString('es-CO', dateOpts);
+  document.getElementById('headerClock').textContent = time + ' · ' + date;
+}
+
+/* ═══════════════════════════════════════
+   FILTERS
+   ═══════════════════════════════════════ */
+function applyFilters() {
+  const periodo = document.getElementById('periodoFilter').value;
+  const area = document.getElementById('areaFilter').value;
+  const empresa = document.getElementById('empresaFilter').value;
+
+  const labelMap = {
+    'jul-2026': 'Julio 2026',
+    'jun-2026': 'Junio 2026',
+    'may-2026': 'Mayo 2026',
+    'q2-2026': 'Q2 2026',
+    'ytd-2026': 'Acumulado 2026',
+  };
+
+  let badge = labelMap[periodo] || 'Julio 2026';
+  if (area) badge += ' · ' + document.getElementById('areaFilter').selectedOptions[0].text;
+
+  document.getElementById('periodBadge').textContent = badge;
+  toast('Filtros aplicados: ' + badge, 'info');
+}
+
+function clearFilters() {
+  document.getElementById('periodoFilter').value = 'jul-2026';
+  document.getElementById('areaFilter').value = '';
+  document.getElementById('empresaFilter').value = '';
+  document.getElementById('periodBadge').textContent = 'Julio 2026 · Acumulado YTD';
+  toast('Filtros restablecidos', 'ok');
+}
+
+/* ═══════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════ */
+function toast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type || 'info');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.className = 'toast'; }, 3400);
+}
+
+function toastProx(modulo) {
+  toast(modulo + ' estará disponible en la Fase 2 del proyecto.', 'info');
+}
+
+/* ═══════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+
+  /* Clock */
+  updateClock();
+  setInterval(updateClock, 30000);
+
+  /* Header live date */
+  const hdrFecha = document.getElementById('hdrFecha');
+  if (hdrFecha) {
+    hdrFecha.textContent = new Date().toLocaleDateString('es-CO', {
+      day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Bogota'
+    });
+  }
+
+  /* Footer date */
+  const footTxt = document.getElementById('footDateTxt');
+  if (footTxt) {
+    footTxt.textContent = 'Actualizado: ' + new Date().toLocaleDateString('es-CO', {
+      day: '2-digit', month: 'short', year: 'numeric', timeZone: 'America/Bogota'
+    });
+  }
+
+  /* Restore sidebar state */
+  try {
+    if (localStorage.getItem('th-bi-sidebar') === '1') toggleSidebar();
+  } catch(e) {}
+
+  /* Close user menu on outside click */
+  document.addEventListener('click', e => {
+    const wrap = document.getElementById('headerUserWrap');
+    if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
+  });
+
+  /* Init all charts */
+  initChartPlantilla();
+  initChartGenero();
+  initChartAusentismo();
+  initChartRotacion();
+  initChartMotivos();
+  initChartCapacitacion();
+  initChartDistribucion();
+
+});
+</script>
+</body>
+</html>
