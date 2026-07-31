@@ -1849,12 +1849,14 @@ async function syncSolicitudes() {
       '&select=id,codigo_solicitud,external_ref,estado,controlt_trip_number,' +
               'creado_por,empresa_cliente_id,fecha_requerida,' +
               'observacion_coordinadora,manifiesto'
-    );
-    if (!solicitudes?.length) {
-      console.log('📋 syncSolicitudes: sin solicitudes activas.');
-      return;
+    ) || [];
+    // No retornar en 0 filas: el bloque de reconciliación (más abajo) debe
+    // ejecutarse siempre, aunque no haya solicitudes pendiente/confirmado/en_ruta.
+    if (!solicitudes.length) {
+      console.log('📋 syncSolicitudes: sin solicitudes activas — continúa a reconciliación.');
+    } else {
+      console.log(`📋 syncSolicitudes: evaluando ${solicitudes.length} solicitudes.`);
     }
-    console.log(`📋 syncSolicitudes: evaluando ${solicitudes.length} solicitudes.`);
 
     const ahora        = new Date().toISOString();
     const orphanCutoff = new Date(Date.now() - ORPHAN_HOURS * 3600 * 1000).toISOString();
