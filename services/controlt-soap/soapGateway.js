@@ -68,27 +68,20 @@ async function fetchWithTimeout(url, options, timeoutMs) {
  * @returns {string}
  */
 function buildLoginEnvelope(user, pass) {
-  // SecuredToken header is required even for Login — the .NET service accesses
-  // this.securedToken inside CurrentToken() before checking the token value.
-  // Omitting the header leaves the field null and causes NullReferenceException.
   return `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
-               xmlns:ns="http://controlt.com.co/">
-  <soap:Header>
-    <ns:SecuredToken>
-      <ns:AuthenticationToken></ns:AuthenticationToken>
-      <ns:user>${escapeXml(user)}</ns:user>
-      <ns:password>${escapeXml(pass)}</ns:password>
-    </ns:SecuredToken>
-  </soap:Header>
-  <soap:Body>
-    <ns:Login>
-      <ns:user>${escapeXml(user)}</ns:user>
-      <ns:password>${escapeXml(pass)}</ns:password>
-    </ns:Login>
-  </soap:Body>
-</soap:Envelope>`;
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:con="http://controlt.com.co/">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <con:Login>
+         <con:username>${escapeXml(user)}</con:username>
+         <con:password>${escapeXml(pass)}</con:password>
+      </con:Login>
+   </soapenv:Body>
+</soapenv:Envelope>`;
 }
+
+// Company code required by ControlT for all GetDetailMonitoringOrder calls.
+const CODE_COMPANY = '57INLOP';
 
 /**
  * @param {string} token
@@ -97,23 +90,24 @@ function buildLoginEnvelope(user, pass) {
  * @param {string} codigoViaje
  * @returns {string}
  */
+
 function buildGetDetailEnvelope(token, user, pass, codigoViaje) {
   return `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
-               xmlns:ns="http://controlt.com.co/">
-  <soap:Header>
-    <ns:SecuredToken>
-      <ns:AuthenticationToken>${escapeXml(token)}</ns:AuthenticationToken>
-      <ns:user>${escapeXml(user)}</ns:user>
-      <ns:password>${escapeXml(pass)}</ns:password>
-    </ns:SecuredToken>
-  </soap:Header>
-  <soap:Body>
-    <ns:GetDetailMonitoringOrder>
-      <ns:number_travel_main>${escapeXml(codigoViaje)}</ns:number_travel_main>
-    </ns:GetDetailMonitoringOrder>
-  </soap:Body>
-</soap:Envelope>`;
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:con="http://controlt.com.co/">
+   <soapenv:Header>
+      <con:SecuredToken>
+         <con:UserName>${escapeXml(user)}</con:UserName>
+         <con:Password>${escapeXml(pass)}</con:Password>
+         <con:AuthenticationToken>${escapeXml(token)}</con:AuthenticationToken>
+      </con:SecuredToken>
+   </soapenv:Header>
+   <soapenv:Body>
+      <con:GetDetailMonitoringOrder>
+         <con:code_company>${CODE_COMPANY}</con:code_company>
+         <con:number_travel_main>${escapeXml(codigoViaje)}</con:number_travel_main>
+      </con:GetDetailMonitoringOrder>
+   </soapenv:Body>
+</soapenv:Envelope>`;
 }
 
 function escapeXml(str) {
@@ -283,8 +277,9 @@ export function makeLoginFn(config) {
     const { endpoint, timeoutMs, user, pass } = config;
     const envelope = buildLoginEnvelope(user, pass);
 
-    // Never log the Login envelope — it contains the password.
-    logSoapPayload('Login', 'request', '[SUPPRESSED — contains credentials]');
+    // The console audit (_logReqAudit) already logs this with credentials redacted.
+    // The pino-level payload log is suppressed to avoid double-logging in production.
+    logSoapPayload('Login', 'request', '[logged by audit instrumentation]');
 
     const xml = await sendSoap(endpoint, 'Login', envelope, timeoutMs);
     logSoapPayload('Login', 'response', xml);
