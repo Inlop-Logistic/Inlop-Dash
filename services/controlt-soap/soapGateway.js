@@ -68,9 +68,19 @@ async function fetchWithTimeout(url, options, timeoutMs) {
  * @returns {string}
  */
 function buildLoginEnvelope(user, pass) {
+  // SecuredToken header is required even for Login — the .NET service accesses
+  // this.securedToken inside CurrentToken() before checking the token value.
+  // Omitting the header leaves the field null and causes NullReferenceException.
   return `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
                xmlns:ns="http://controlt.com.co/">
+  <soap:Header>
+    <ns:SecuredToken>
+      <ns:AuthenticationToken></ns:AuthenticationToken>
+      <ns:user>${escapeXml(user)}</ns:user>
+      <ns:password>${escapeXml(pass)}</ns:password>
+    </ns:SecuredToken>
+  </soap:Header>
   <soap:Body>
     <ns:Login>
       <ns:user>${escapeXml(user)}</ns:user>
