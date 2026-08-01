@@ -13,25 +13,24 @@ import { z } from 'zod';
  * index.js, produciendo fail-fast durante el startup si falta alguna var.
  *
  * Variables de entorno:
- *   CONTROLT_SOAP_USER        {string} REQUERIDA — usuario del servicio SOAP
- *   CONTROLT_SOAP_PASS        {string} REQUERIDA — contraseña (nunca se loga)
+ *   CONTROLT_USER             {string} REQUERIDA — usuario (compartida con REST y SOAP)
+ *   CONTROLT_PASS             {string} REQUERIDA — contraseña (nunca se loga)
  *   CONTROLT_SOAP_TIMEOUT_MS  {number} OPCIONAL  — timeout en ms (default: 10 000)
  *
- * ⚠ Advertencia de seguridad (R-10 — Arquitectura v1.0):
- *   El endpoint SOAP de ControlT opera sobre HTTP (sin TLS). Las credenciales
- *   y los datos de carga viajan en texto plano. Este módulo NO debe activarse
- *   en producción sin confirmación de que el canal está protegido a nivel de
- *   red (VPN site-to-site o habilitación de HTTPS por parte de ControlT).
+ * Endpoint: el módulo usa HTTPS por defecto
+ * (https://app.controlt.com.co/WS/service.asmx), validado durante las pruebas
+ * de integración de la Fase 2. El endpoint HTTP queda documentado solo como
+ * fallback de referencia — no debe usarse en producción.
  */
 
 const ConfigSchema = z.object({
-  CONTROLT_SOAP_USER: z
-    .string({ required_error: 'CONTROLT_SOAP_USER es requerida' })
-    .min(1, 'CONTROLT_SOAP_USER no puede estar vacía'),
+  CONTROLT_USER: z
+    .string({ required_error: 'CONTROLT_USER es requerida' })
+    .min(1, 'CONTROLT_USER no puede estar vacía'),
 
-  CONTROLT_SOAP_PASS: z
-    .string({ required_error: 'CONTROLT_SOAP_PASS es requerida' })
-    .min(1, 'CONTROLT_SOAP_PASS no puede estar vacía'),
+  CONTROLT_PASS: z
+    .string({ required_error: 'CONTROLT_PASS es requerida' })
+    .min(1, 'CONTROLT_PASS no puede estar vacía'),
 
   CONTROLT_SOAP_TIMEOUT_MS: z
     .preprocess(
@@ -49,8 +48,8 @@ let _config = null;
 
 function buildConfig() {
   const result = ConfigSchema.safeParse({
-    CONTROLT_SOAP_USER: process.env.CONTROLT_SOAP_USER,
-    CONTROLT_SOAP_PASS: process.env.CONTROLT_SOAP_PASS,
+    CONTROLT_USER: process.env.CONTROLT_USER,
+    CONTROLT_PASS: process.env.CONTROLT_PASS,
     CONTROLT_SOAP_TIMEOUT_MS: process.env.CONTROLT_SOAP_TIMEOUT_MS,
   });
 
@@ -65,16 +64,16 @@ function buildConfig() {
 
   return Object.freeze({
     /** Usuario SOAP. Usar solo en authManager para el Login. Nunca logar. */
-    user: result.data.CONTROLT_SOAP_USER,
+    user: result.data.CONTROLT_USER,
 
     /** Contraseña SOAP. NUNCA logar. NUNCA incluir en audit logs. */
-    pass: result.data.CONTROLT_SOAP_PASS,
+    pass: result.data.CONTROLT_PASS,
 
-    /** Timeout de cada llamada HTTP al SOAP en milisegundos. */
+    /** Timeout de cada llamada SOAP en milisegundos. */
     timeoutMs: result.data.CONTROLT_SOAP_TIMEOUT_MS,
 
-    /** URL del WSDL / endpoint SOAP de ControlT. ⚠ HTTP — sin TLS (R-10). */
-    endpoint: 'http://app.controlt.com.co/WS/service.asmx',
+    /** Endpoint SOAP de ControlT — HTTPS validado en Fase 2. */
+    endpoint: 'https://app.controlt.com.co/WS/service.asmx',
 
     /** SOAPAction base y xmlns del servicio. */
     namespace: 'http://controlt.com.co/',

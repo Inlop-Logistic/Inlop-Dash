@@ -2,12 +2,13 @@
  * Integration smoke-test — validates Phase 2 against the real ControlT endpoint.
  *
  * Prerequisites:
- *   CONTROLT_SOAP_USER and CONTROLT_SOAP_PASS must be set in the environment.
+ *   CONTROLT_USER and CONTROLT_PASS must be set in the environment (shared with REST).
  *   Optionally set CONTROLT_TEST_VIAJE to a real trip code (default: IN018108).
  *
  * Usage:
- *   CONTROLT_SOAP_USER=u CONTROLT_SOAP_PASS=p node services/controlt-soap/integration-test.js
- *   CONTROLT_SOAP_USER=u CONTROLT_SOAP_PASS=p CONTROLT_TEST_VIAJE=IN018108 node services/controlt-soap/integration-test.js
+ *   CONTROLT_USER=u CONTROLT_PASS=p node services/controlt-soap/integration-test.js
+ *   CONTROLT_USER=u CONTROLT_PASS=p CONTROLT_TEST_VIAJE=IN018108 node services/controlt-soap/integration-test.js
+ *   node --env-file=.env services/controlt-soap/integration-test.js
  *
  * This script does NOT run as part of `npm test` — it requires real credentials.
  * Run it manually once after configuring .env to validate the integration.
@@ -25,7 +26,7 @@ function section(title) { console.log(`\n── ${title} ──`); }
 
 async function run() {
   console.log('ControlT SOAP — Integration smoke-test');
-  console.log(`Endpoint: http://app.controlt.com.co/WS/service.asmx`);
+  console.log(`Endpoint: https://app.controlt.com.co/WS/service.asmx`);
   console.log(`Viaje de prueba: ${VIAJE}`);
 
   // ── 1. Config ──────────────────────────────────────────────────────────────
