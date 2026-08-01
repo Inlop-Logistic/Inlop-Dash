@@ -125,6 +125,63 @@ function escapeXml(str) {
     .replace(/'/g, '&apos;');
 }
 
+// ── AUDIT INSTRUMENTATION (temporary — remove after Fase 2 validation) ───────
+
+const _SEP = '=========================================================';
+
+/**
+ * Redact <password> and <AuthenticationToken> values from XML strings.
+ * Any namespace prefix is handled (e.g. ns:password, soap:password).
+ * Only these two fields are redacted — nothing else.
+ */
+function _redactXml(xml) {
+  return xml
+    .replace(/(<(?:[\w]+:)?password>)[^<]*/gi,              '$1[REDACTED]')
+    .replace(/(<(?:[\w]+:)?AuthenticationToken>)[^<]*/gi,   '$1[REDACTED]');
+}
+
+function _logReqAudit(label, endpoint, headers, body) {
+  console.log(`\n${_SEP}`);
+  console.log(`${label} REQUEST`);
+  console.log(_SEP);
+  console.log(`URL: ${endpoint}`);
+  console.log(`Método HTTP: POST`);
+  console.log(`Headers HTTP completos (explícitos — fetch puede agregar Content-Length, Host, Accept-Encoding):`);
+  for (const [k, v] of Object.entries(headers)) {
+    console.log(`  ${k}: ${v}`);
+  }
+  console.log(`SOAPAction: ${headers['SOAPAction']}`);
+  console.log(`Content-Type: ${headers['Content-Type']}`);
+  console.log(`Body XML (${Buffer.byteLength(body, 'utf8')} bytes UTF-8):`);
+  console.log(_redactXml(body));
+  console.log(_SEP);
+}
+
+function _logResAudit(label, response, xml) {
+  const resHeaders = {};
+  response.headers.forEach((v, k) => { resHeaders[k] = v; });
+
+  console.log(`\n${_SEP}`);
+  console.log(`${label} RESPONSE`);
+  console.log(_SEP);
+  console.log(`Status HTTP: ${response.status} ${response.statusText}`);
+  console.log(`Headers HTTP completos:`);
+  for (const [k, v] of Object.entries(resHeaders)) {
+    console.log(`  ${k}: ${v}`);
+  }
+  console.log(`Body XML (${Buffer.byteLength(xml, 'utf8')} bytes UTF-8):`);
+  console.log(_redactXml(xml));
+  console.log(_SEP);
+}
+
+function _logNetErrAudit(label, err) {
+  console.log(`\n${_SEP}`);
+  console.log(`${label} RESPONSE — ERROR DE RED`);
+  console.log(_SEP);
+  console.log(`Error: ${err.name}: ${err.message}`);
+  console.log(_SEP);
+}
+
 // ── HTTP send ─────────────────────────────────────────────────────────────────
 
 /**
@@ -138,21 +195,23 @@ function escapeXml(str) {
  * @returns {Promise<string>}
  */
 async function sendSoap(endpoint, soapAction, body, timeoutMs) {
+  const label = soapAction === 'Login' ? 'LOGIN' : 'GETDETAIL';
+  const requestHeaders = {
+    'Content-Type': 'text/xml; charset=utf-8',
+    SOAPAction: `"http://controlt.com.co/${soapAction}"`,
+  };
+
+  _logReqAudit(label, endpoint, requestHeaders, body);
+
   let response;
   try {
     response = await fetchWithTimeout(
       endpoint,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/xml; charset=utf-8',
-          SOAPAction: `"http://controlt.com.co/${soapAction}"`,
-        },
-        body,
-      },
+      { method: 'POST', headers: requestHeaders, body },
       timeoutMs
     );
   } catch (err) {
+    _logNetErrAudit(label, err);
     if (err.name === 'AbortError') {
       throw new TimeoutError(timeoutMs);
     }
@@ -160,6 +219,7 @@ async function sendSoap(endpoint, soapAction, body, timeoutMs) {
   }
 
   const xml = await response.text();
+  _logResAudit(label, response, xml);
   return xml;
 }
 
