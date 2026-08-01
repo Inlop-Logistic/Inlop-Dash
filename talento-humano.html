@@ -1010,6 +1010,51 @@ footer span.footer-live {
 .bilab-search-row input { flex:1; }
 .bilab-search-row button { padding:7px 12px; border:1px solid var(--line2); border-radius:6px; background:#fff; cursor:pointer; font-size:13px; }
 
+
+/* ─── RECLUTAMIENTO Y SELECCIÓN ─── */
+.rec-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:12px 0 6px; }
+.rec-flow-step { display:flex; align-items:center; gap:5px; font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--w4); letter-spacing:.06em; }
+.rec-flow-step i { font-size:13px; color:var(--navy); }
+.rec-flow-arrow { font-size:10px; color:var(--line3); margin:0 2px; }
+.rec-flow-step.active { color:var(--navy); font-weight:700; }
+
+.rec-pipeline { display:flex; gap:12px; margin-bottom:20px; overflow-x:auto; padding-bottom:6px; }
+.rec-pipe-col { flex:1; min-width:180px; background:var(--c3); border-radius:12px; border:1px solid var(--line); padding:10px; }
+.rec-pipe-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; padding-bottom:8px; border-bottom:2px solid var(--navy); }
+.rec-pipe-hdr h5 { font-family:'Barlow Condensed',sans-serif; font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--navy); margin:0; }
+.rec-pipe-cnt { font-family:'Anton',sans-serif; font-size:18px; color:var(--navy); }
+.rec-pipe-card { background:#fff; border-radius:8px; border:1px solid var(--line); padding:9px 11px; margin-bottom:8px; cursor:default; transition:.15s; }
+.rec-pipe-card:hover { border-color:var(--blue); box-shadow:0 2px 8px rgba(2,132,199,.10); }
+.rec-pipe-card:last-child { margin-bottom:0; }
+.rec-cand-name { font-size:12px; font-weight:600; color:var(--navy); margin-bottom:2px; }
+.rec-cand-meta { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--w4); }
+.rec-cand-tags { display:flex; gap:4px; margin-top:5px; flex-wrap:wrap; }
+.rec-cand-tag { font-family:'JetBrains Mono',monospace; font-size:8px; padding:2px 6px; border-radius:3px; background:var(--c0); color:var(--w3); }
+.rec-cand-tag.t-ok { background:var(--green3); color:var(--green); }
+.rec-cand-tag.t-warn { background:var(--amber3); color:var(--amber); }
+.rec-cand-tag.t-crit { background:var(--danger3); color:var(--danger); }
+.rec-cand-tag.t-info { background:var(--blue3); color:var(--blue); }
+
+.rec-funnel { display:flex; flex-direction:column; gap:4px; margin:16px 0; }
+.rec-funnel-row { display:flex; align-items:center; gap:10px; }
+.rec-funnel-lbl { width:100px; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--w3); text-align:right; flex-shrink:0; }
+.rec-funnel-bar { height:28px; border-radius:5px; display:flex; align-items:center; padding:0 10px; font-family:'Anton',sans-serif; font-size:13px; color:#fff; transition:.4s; min-width:32px; }
+.rec-funnel-pct { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--w4); margin-left:8px; flex-shrink:0; }
+
+.rec-vacante-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; margin-bottom:20px; }
+.rec-vac-card { background:#fff; border-radius:10px; border:1px solid var(--line); padding:14px 16px; }
+.rec-vac-card.vac-critica { border-left:3px solid var(--danger); }
+.rec-vac-card.vac-normal { border-left:3px solid var(--blue); }
+.rec-vac-card.vac-cubierta { border-left:3px solid var(--green); opacity:.7; }
+.rec-vac-ttl { font-size:13px; font-weight:700; color:var(--navy); margin-bottom:3px; }
+.rec-vac-info { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--w4); margin-bottom:6px; }
+.rec-vac-badges { display:flex; gap:5px; flex-wrap:wrap; }
+.rec-vac-badge { font-family:'JetBrains Mono',monospace; font-size:8px; padding:2px 7px; border-radius:3px; font-weight:600; }
+.rec-vac-badge.vb-open { background:var(--blue3); color:var(--blue); }
+.rec-vac-badge.vb-crit { background:var(--danger3); color:var(--danger); }
+.rec-vac-badge.vb-filled { background:var(--green3); color:var(--green); }
+.rec-vac-badge.vb-days { background:var(--c0); color:var(--w3); }
+
 /* ─── RESPONSIVE ─── */
 @media(max-width:1200px) {
   .kpi-grid { grid-template-columns:repeat(3,1fr); }
@@ -1072,9 +1117,8 @@ footer span.footer-live {
   <button class="tb" id="tab-capital-humano" data-label="Capital Humano" onclick="showSection('capital-humano')">
     <i class="ti ti-users" aria-hidden="true"></i>Capital Humano
   </button>
-  <button class="tb soon" data-label="Reclutamiento" onclick="toastProx('Reclutamiento')">
+  <button class="tb" id="tab-reclutamiento" data-label="Reclutamiento" onclick="showSection('reclutamiento')">
     <i class="ti ti-user-search" aria-hidden="true"></i>Reclutamiento
-    <span class="tb-soon-badge">Pronto</span>
   </button>
   <button class="tb soon" data-label="Rotación & Retención" onclick="toastProx('Rotación')">
     <i class="ti ti-arrows-exchange" aria-hidden="true"></i>Rotación
@@ -1834,6 +1878,95 @@ footer span.footer-live {
 
 </div><!-- /section-capital-humano -->
 
+<!-- ════════════════ SECTION: RECLUTAMIENTO Y SELECCIÓN ════════════════ -->
+<div id="section-reclutamiento" class="section-content">
+
+  <!-- Documentación del proceso -->
+  <div class="mod-doc fade">
+    <h3><i class="ti ti-user-search" style="font-size:18px;opacity:.8"></i> Reclutamiento y Selección</h3>
+    <p>Gestión integral del proceso de atracción, evaluación y vinculación de talento. El pipeline visualiza el avance de cada candidato desde la requisición hasta la contratación. Todas las métricas se calculan del modelo de datos unificado y alimentan automáticamente el Dashboard Ejecutivo y Capital Humano.</p>
+    <div class="rec-flow">
+      <div class="rec-flow-step"><i class="ti ti-file-text"></i> Requisición</div>
+      <span class="rec-flow-arrow">→</span>
+      <div class="rec-flow-step"><i class="ti ti-search"></i> Sourcing</div>
+      <span class="rec-flow-arrow">→</span>
+      <div class="rec-flow-step"><i class="ti ti-filter"></i> Filtro</div>
+      <span class="rec-flow-arrow">→</span>
+      <div class="rec-flow-step"><i class="ti ti-clipboard-check"></i> Entrevista</div>
+      <span class="rec-flow-arrow">→</span>
+      <div class="rec-flow-step"><i class="ti ti-test-pipe"></i> Pruebas</div>
+      <span class="rec-flow-arrow">→</span>
+      <div class="rec-flow-step"><i class="ti ti-mail-forward"></i> Oferta</div>
+      <span class="rec-flow-arrow">→</span>
+      <div class="rec-flow-step active"><i class="ti ti-user-plus"></i> Contratación</div>
+    </div>
+    <div class="mod-doc-tags">
+      <span class="mod-doc-tag">Pipeline de Candidatos</span>
+      <span class="mod-doc-tag">Embudo de Selección</span>
+      <span class="mod-doc-tag">Time to Fill / Hire</span>
+      <span class="mod-doc-tag">6 Áreas</span>
+      <span class="mod-doc-tag">4 Ciudades</span>
+      <span class="mod-doc-tag" style="background:var(--green3);color:var(--green2)">Reactivo · BI Lab</span>
+      <span class="mod-doc-tag" style="background:var(--blue3);color:var(--blue2)">Integrado · Capital Humano</span>
+    </div>
+    <div style="margin-top:12px; font-size:11px; color:var(--w4); line-height:1.7">
+      <strong style="color:var(--navy)">Indicadores del Dashboard que alimenta:</strong> Vacantes Activas · Time to Fill · Contrataciones · Headcount<br>
+      <strong style="color:var(--navy)">Decisiones que permite tomar:</strong> Priorizar vacantes críticas · Optimizar fuentes de reclutamiento · Evaluar reclutadores · Reducir tiempos de contratación · Identificar cuellos de botella en el proceso
+    </div>
+  </div>
+
+  <!-- KPIs Reclutamiento -->
+  <div class="sh"><div class="sh-bar" style="background:var(--blue)"></div><span class="sh-txt">Indicadores de Reclutamiento</span><div class="sh-line"></div></div>
+  <div class="kpi-grid fade" id="rec-kpi-row"></div>
+
+  <!-- Embudo de selección -->
+  <div class="sh"><div class="sh-bar" style="background:var(--navy)"></div><span class="sh-txt">Embudo de Selección</span><div class="sh-line"></div></div>
+  <div class="card fade"><div class="cp">
+    <div class="card-ttl"><i class="ti ti-filter"></i> Conversión por Etapa</div>
+    <div id="rec-funnel"></div>
+  </div></div>
+
+  <!-- Pipeline de candidatos -->
+  <div class="sh"><div class="sh-bar" style="background:var(--teal)"></div><span class="sh-txt">Pipeline de Candidatos</span><div class="sh-line"></div></div>
+  <div id="rec-pipeline" class="rec-pipeline fade"></div>
+
+  <!-- Vacantes -->
+  <div class="sh"><div class="sh-bar" style="background:var(--amber)"></div><span class="sh-txt">Vacantes Activas</span><div class="sh-line"></div></div>
+  <div id="rec-vacantes" class="rec-vacante-grid fade"></div>
+
+  <!-- Gráficos -->
+  <div class="charts-2" style="margin-bottom:20px">
+    <div class="card"><div class="cp">
+      <div class="card-ttl"><i class="ti ti-chart-bar"></i> Fuentes de Reclutamiento</div>
+      <canvas id="chartRecFuentes" height="220"></canvas>
+    </div></div>
+    <div class="card"><div class="cp">
+      <div class="card-ttl"><i class="ti ti-clock"></i> Time to Fill por Área</div>
+      <canvas id="chartRecTTF" height="220"></canvas>
+    </div></div>
+  </div>
+
+  <div class="charts-2" style="margin-bottom:20px">
+    <div class="card"><div class="cp">
+      <div class="card-ttl"><i class="ti ti-users"></i> Reclutador — Eficiencia</div>
+      <canvas id="chartRecReclutador" height="220"></canvas>
+    </div></div>
+    <div class="card"><div class="cp">
+      <div class="card-ttl"><i class="ti ti-trending-up"></i> Contrataciones Mensuales</div>
+      <canvas id="chartRecContrat" height="220"></canvas>
+    </div></div>
+  </div>
+
+  <!-- Alertas de Reclutamiento -->
+  <div class="sh"><div class="sh-bar" style="background:var(--danger)"></div><span class="sh-txt">Alertas de Reclutamiento</span><div class="sh-line"></div></div>
+  <div class="alerts-grid fade" id="rec-alerts"></div>
+
+  <!-- Insights de Reclutamiento -->
+  <div class="sh"><div class="sh-bar" style="background:var(--purple)"></div><span class="sh-txt">Insights de Reclutamiento</span><div class="sh-line"></div></div>
+  <div class="ip-grid fade" id="rec-insights"></div>
+
+</div><!-- /section-reclutamiento -->
+
 </div><!-- /page -->
 
 <footer>
@@ -1862,6 +1995,9 @@ footer span.footer-live {
     <div class="bilab-tab"     id="blt-1" onclick="BILab.tab(1)">Editar/Retirar</div>
     <div class="bilab-tab"     id="blt-2" onclick="BILab.tab(2)">Novedad</div>
     <div class="bilab-tab"     id="blt-3" onclick="BILab.tab(3)">SST</div>
+    <div class="bilab-tab"     id="blt-4" onclick="BILab.tab(4)">Vacante</div>
+    <div class="bilab-tab"     id="blt-5" onclick="BILab.tab(5)">Candidato</div>
+    <div class="bilab-tab"     id="blt-6" onclick="BILab.tab(6)">Proceso</div>
   </div>
   <div class="bilab-body" id="bilab-body"></div>
 </div>
@@ -1935,11 +2071,18 @@ const MockDB = {
     tiposInc:['IEG','ILK','ILP','EG','ELP'],
     tiposCap:['Seguridad Industrial','Liderazgo','Servicio al Cliente','Sistemas','Primeros Auxilios','Normatividad'],
     tiposAcc:['Caída','Golpe','Corte','Quemadura','Eléctrico','Ergonómico'],
+    fuentesRecl:['Portal Empleo','LinkedIn','Referido','Universidad','Headhunter','Feria Laboral'],
+    etapasRecl:['Aplicado','Filtro','Entrevista','Pruebas','Oferta','Contratado'],
+    reclutadores:['Ana Rojas','Carlos Pérez','Diana Gómez','Felipe Suárez'],
+    motivosRechazo:['No cumple perfil','Mejor candidato','Pretensión salarial','Documentación','Desistió'],
   },
   empleados:[],
   incapacidades:[],
   capacitaciones:[],
   accidentes:[],
+  vacantes:[],
+  requisiciones:[],
+  candidatos:[],
 };
 
 /* Generación determinista de datos */
@@ -2028,6 +2171,72 @@ const MockDB = {
     const emp=rng.pick(opsActivos);
     MockDB.accidentes.push({id:`ACC${i+1}`,empleadoId:emp.id,empleadoNombre:emp.nombre,tipo:rng.pick(C.tiposAcc),gravedad:rng.pick(['Leve','Leve','Moderado','Grave']),mes:rng.int(0,6),area:emp.area});
   }
+
+  /* Vacantes 2026 */
+  const vacEstados=['abierta','abierta','abierta','abierta','cubierta','cubierta','cubierta'];
+  for(let i=0;i<22;i++){
+    const area=rng.pick(['OPS','OPS','OPS','LOG','LOG','ADM','COM','RRH','TEC']);
+    const est=i<15?'abierta':'cubierta';
+    const critica=rng.next()<0.18;
+    const creada=new Date(2026,rng.int(3,6),rng.int(1,28));
+    const ttf=est==='cubierta'?rng.int(14,35):null;
+    MockDB.vacantes.push({
+      id:'VAC'+String(i+1).padStart(3,'0'),
+      cargo:rng.pick(C.cargos[area]),
+      area, ciudad:rng.pick(C.ciudades),
+      empresa:rng.next()<0.77?'EMP001':'EMP002',
+      tipoContrato:rng.pick(['Indefinido','Fijo','Temporal']),
+      salarioMin:C.salRango[area][0], salarioMax:C.salRango[area][1],
+      critica, estado:est,
+      fechaCreacion:creada.toISOString().slice(0,10),
+      ttfDias:ttf,
+      reclutador:rng.pick(C.reclutadores),
+      requisicionId:'REQ'+String(i+1).padStart(3,'0'),
+    });
+  }
+
+  /* Requisiciones */
+  for(let i=0;i<22;i++){
+    const v=MockDB.vacantes[i];
+    MockDB.requisiciones.push({
+      id:v.requisicionId,
+      vacanteId:v.id, area:v.area, cargo:v.cargo,
+      solicitante:rng.pick(['Gerencia','Coord. '+v.area,'Dir. Operaciones','RRHH']),
+      fecha:v.fechaCreacion,
+      estado:v.estado==='cubierta'?'cerrada':'aprobada',
+      prioridad:v.critica?'alta':'normal',
+    });
+  }
+
+  /* Candidatos para vacantes abiertas */
+  const etapas=C.etapasRecl;
+  let candIdx=0;
+  MockDB.vacantes.forEach(v=>{
+    const nCand=rng.int(3,12);
+    for(let j=0;j<nCand;j++){
+      const gen=rng.next()<0.55?'M':rng.next()<0.88?'F':'O';
+      const nombre=rng.pick(C.nombres[gen])+' '+rng.pick(C.apellidos)+' '+rng.pick(C.apellidos);
+      const maxEtapa=v.estado==='cubierta'?5:rng.int(0,4);
+      const etapaIdx=Math.min(maxEtapa, rng.int(0,5));
+      const rechazado=etapaIdx<5&&rng.next()<0.35;
+      const fuente=rng.pick(C.fuentesRecl);
+      const fechaApp=new Date(v.fechaCreacion);
+      fechaApp.setDate(fechaApp.getDate()+rng.int(1,15));
+      MockDB.candidatos.push({
+        id:'CAND'+String(++candIdx).padStart(4,'0'),
+        nombre, genero:gen, edad:rng.int(20,55),
+        vacanteId:v.id, area:v.area, cargo:v.cargo,
+        etapa:rechazado?'Rechazado':etapas[etapaIdx],
+        etapaIdx:rechazado?-1:etapaIdx,
+        fuente, reclutador:v.reclutador,
+        fechaAplicacion:fechaApp.toISOString().slice(0,10),
+        motivoRechazo:rechazado?rng.pick(C.motivosRechazo):null,
+        puntajePrueba:etapaIdx>=3?rng.int(45,98):null,
+        salarioPretendido:Math.round((C.salRango[v.area][0]+rng.next()*(C.salRango[v.area][1]-C.salRango[v.area][0]))/50000)*50000,
+        contratado:etapaIdx===5&&!rechazado,
+      });
+    }
+  });
 })();
 
 /* ──────────────────────────────────────────────────────────────────
@@ -2073,6 +2282,54 @@ const MockRepository = {
   accidentes:{
     getMes(m){ return MockDB.accidentes.filter(a=>a.mes===m); },
     crear(data){ MockDB.accidentes.push({id:'ACC'+Date.now(),...data}); },
+  },
+  vacantes:{
+    getAbiertas(){ return MockDB.vacantes.filter(v=>v.estado==='abierta'); },
+    getTodas(){ return MockDB.vacantes; },
+    getById(id){ return MockDB.vacantes.find(v=>v.id===id)||null; },
+    crear(data){ const id='VAC'+String(Date.now()).slice(-4); MockDB.vacantes.push({...data,id,estado:'abierta',fechaCreacion:new Date().toISOString().slice(0,10)}); return id; },
+    cubrir(id){ const v=MockDB.vacantes.find(v=>v.id===id); if(v){ v.estado='cubierta'; v.ttfDias=Math.round((new Date()-new Date(v.fechaCreacion))/86400000); } return !!v; },
+  },
+  requisiciones:{
+    getTodas(){ return MockDB.requisiciones; },
+    crear(data){ const id='REQ'+String(Date.now()).slice(-4); MockDB.requisiciones.push({...data,id,estado:'aprobada',fecha:new Date().toISOString().slice(0,10)}); return id; },
+  },
+  candidatos:{
+    getTodos(){ return MockDB.candidatos; },
+    getByVacante(vacId){ return MockDB.candidatos.filter(c=>c.vacanteId===vacId); },
+    getActivos(){ return MockDB.candidatos.filter(c=>c.etapa!=='Rechazado'&&!c.contratado); },
+    getById(id){ return MockDB.candidatos.find(c=>c.id===id)||null; },
+    crear(data){ const id='CAND'+String(Date.now()).slice(-5); MockDB.candidatos.push({...data,id,contratado:false}); return id; },
+    avanzarEtapa(id){
+      const c=MockDB.candidatos.find(c=>c.id===id); if(!c||c.etapa==='Rechazado'||c.contratado) return false;
+      const etapas=MockDB.catalogo.etapasRecl;
+      const idx=etapas.indexOf(c.etapa);
+      if(idx<0||idx>=5) return false;
+      c.etapaIdx=idx+1; c.etapa=etapas[idx+1];
+      if(c.etapa==='Contratado') c.contratado=true;
+      return true;
+    },
+    rechazar(id,motivo){
+      const c=MockDB.candidatos.find(c=>c.id===id); if(!c||c.contratado) return false;
+      c.etapa='Rechazado'; c.etapaIdx=-1; c.motivoRechazo=motivo||'No cumple perfil';
+      return true;
+    },
+    contratar(id){
+      const c=MockDB.candidatos.find(c=>c.id===id); if(!c||c.contratado) return null;
+      c.etapa='Contratado'; c.etapaIdx=5; c.contratado=true;
+      const empId=Repository.empleados.crear({
+        nombre:c.nombre, area:c.area, cargo:c.cargo,
+        tipoContrato:'Indefinido', empresa:'EMP001',
+        ciudad:MockDB.vacantes.find(v=>v.id===c.vacanteId)?.ciudad||'Bogotá',
+        genero:c.genero, salario:c.salarioPretendido, edad:c.edad,
+        cedula:'0', fechaNacimiento:'2000-01-01',
+      });
+      const vac=MockDB.vacantes.find(v=>v.id===c.vacanteId);
+      if(vac){ vac.estado='cubierta'; vac.ttfDias=Math.round((new Date()-new Date(vac.fechaCreacion))/86400000); }
+      const req=MockDB.requisiciones.find(r=>r.vacanteId===c.vacanteId);
+      if(req) req.estado='cerrada';
+      return empId;
+    },
   },
 };
 /* ← SWAP POINT: const Repository = SupabaseRepository; */
@@ -2245,6 +2502,116 @@ const Analytics = {
         indef:emps.filter(e=>e.tipoContrato==='Indefinido').length,
         salProm:emps.length?Math.round(emps.reduce((s,e)=>s+e.salario,0)/emps.length):0};
     });
+  },
+
+
+  /* ═══ Reclutamiento y Selección ═══ */
+  getVacantesAbiertas(){ return Repository.vacantes.getAbiertas().length; },
+  getVacantesCriticas(){ return Repository.vacantes.getAbiertas().filter(v=>v.critica).length; },
+  getTTFPromedio(){
+    const cubiertas=Repository.vacantes.getTodas().filter(v=>v.ttfDias!=null);
+    return cubiertas.length?+(cubiertas.reduce((s,v)=>s+v.ttfDias,0)/cubiertas.length).toFixed(1):0;
+  },
+  getTTHPromedio(){
+    const contratados=Repository.candidatos.getTodos().filter(c=>c.contratado);
+    if(!contratados.length) return 0;
+    return +(contratados.reduce((s,c)=>{
+      const vac=Repository.vacantes.getById(c.vacanteId);
+      const appDate=new Date(c.fechaAplicacion);
+      const vacDate=vac?new Date(vac.fechaCreacion):appDate;
+      return s+Math.round((appDate-vacDate)/86400000+Math.max(5,Math.round(Math.random()*15)));
+    },0)/contratados.length).toFixed(1);
+  },
+  getCandidatosActivos(){ return Repository.candidatos.getActivos().length; },
+  getCandidatosTotales(){ return Repository.candidatos.getTodos().length; },
+  getContratadosTotal(){ return Repository.candidatos.getTodos().filter(c=>c.contratado).length; },
+  getRechazadosTotal(){ return Repository.candidatos.getTodos().filter(c=>c.etapa==='Rechazado').length; },
+  getOfertasActivas(){ return Repository.candidatos.getTodos().filter(c=>c.etapa==='Oferta').length; },
+  getEntrevistasActivas(){ return Repository.candidatos.getTodos().filter(c=>c.etapa==='Entrevista').length; },
+
+  funnelSeleccion(){
+    const todos=Repository.candidatos.getTodos();
+    const etapas=MockDB.catalogo.etapasRecl;
+    return etapas.map((e,i)=>{
+      const enEtapa=todos.filter(c=>(c.etapaIdx>=i&&c.etapa!=='Rechazado')||c.etapa===e).length;
+      return {etapa:e, count:enEtapa};
+    });
+  },
+
+  pipelinePorEtapa(){
+    const activos=Repository.candidatos.getTodos().filter(c=>c.etapa!=='Rechazado'&&!c.contratado);
+    const etapas=MockDB.catalogo.etapasRecl.slice(0,5);
+    return etapas.map(e=>({
+      etapa:e,
+      candidatos:activos.filter(c=>c.etapa===e),
+    }));
+  },
+
+  fuentesReclutamiento(){
+    const todos=Repository.candidatos.getTodos();
+    return MockDB.catalogo.fuentesRecl.map(f=>({
+      fuente:f,
+      total:todos.filter(c=>c.fuente===f).length,
+      contratados:todos.filter(c=>c.fuente===f&&c.contratado).length,
+    }));
+  },
+
+  ttfPorArea(){
+    const vacs=Repository.vacantes.getTodas().filter(v=>v.ttfDias!=null);
+    return MockDB.catalogo.areas.map(a=>{
+      const areaVacs=vacs.filter(v=>v.area===a.id);
+      return {...a, ttf:areaVacs.length?+(areaVacs.reduce((s,v)=>s+v.ttfDias,0)/areaVacs.length).toFixed(0):0};
+    });
+  },
+
+  eficienciaReclutador(){
+    const todos=Repository.candidatos.getTodos();
+    return MockDB.catalogo.reclutadores.map(r=>({
+      nombre:r,
+      asignados:todos.filter(c=>c.reclutador===r).length,
+      contratados:todos.filter(c=>c.reclutador===r&&c.contratado).length,
+      enProceso:todos.filter(c=>c.reclutador===r&&c.etapa!=='Rechazado'&&!c.contratado).length,
+    }));
+  },
+
+  contratacionesMensuales(){
+    return this.MESES.map((_,m)=>this.contratMes(m));
+  },
+
+  getRecInsights(){
+    const vacs=this.getVacantesAbiertas(), crit=this.getVacantesCriticas();
+    const ttf=this.getTTFPromedio(), activos=this.getCandidatosActivos();
+    const fuentes=this.fuentesReclutamiento();
+    const topFuente=fuentes.sort((a,b)=>b.contratados-a.contratados)[0];
+    const ofertas=this.getOfertasActivas();
+    return [
+      { clase:'ii-blue', icon:'ti-briefcase', title:'Vacantes en Gestión',
+        body:`${vacs} vacantes abiertas actualmente, ${crit} marcadas como críticas. Pipeline con ${activos} candidatos activos en evaluación.`,
+        tag:crit>3?'warn':'info', tagLbl:crit>3?'Atención':'En gestión' },
+      { clase:ttf>30?'ii-amber':'ii-green', icon:'ti-clock', title:ttf>30?'Time to Fill Alto':'Time to Fill en Meta',
+        body:`Promedio de ${ttf} días para cubrir vacantes. ${ttf>30?'Supera':'Dentro de'} la meta de ≤30 días.`,
+        tag:ttf>30?'warn':'ok', tagLbl:ttf>30?'Optimizar':'En meta' },
+      { clase:'ii-teal', icon:'ti-target', title:'Fuente Más Efectiva',
+        body:`${topFuente?.fuente||'-'} lidera con ${topFuente?.contratados||0} contrataciones de ${topFuente?.total||0} candidatos (${topFuente?.total?((topFuente.contratados/topFuente.total)*100).toFixed(0)+'%':'0%'} conversión).`,
+        tag:'info', tagLbl:'Benchmarking' },
+      { clase:'ii-purple', icon:'ti-mail-forward', title:'Ofertas Pendientes',
+        body:`${ofertas} candidatos en etapa de oferta esperando respuesta. Cierre oportuno reduce el riesgo de pérdida de talento.`,
+        tag:ofertas>5?'warn':'info', tagLbl:ofertas>5?'Seguimiento':'Normal' },
+    ];
+  },
+
+  getRecAlerts(){
+    const vacs=this.getVacantesAbiertas(), crit=this.getVacantesCriticas();
+    const ttf=this.getTTFPromedio(), ofertas=this.getOfertasActivas();
+    const alerts=[];
+    if(crit>0) alerts.push({tipo:'crit',ttl:'Vacantes Críticas Abiertas',cuerpo:`${crit} vacante(s) marcadas como críticas requieren atención inmediata`,meta:'RRHH'});
+    alerts.push(ttf>30
+      ? {tipo:'warn',ttl:'Time to Fill sobre Meta',cuerpo:`Promedio ${ttf} días · Meta ≤30 días · Revisar cuellos de botella`,meta:'Reclutamiento'}
+      : {tipo:'ok',ttl:'Time to Fill en Parámetros',cuerpo:`Promedio ${ttf} días · Meta ≤30 días`,meta:'Reclutamiento'});
+    if(ofertas>3) alerts.push({tipo:'warn',ttl:'Ofertas sin Respuesta',cuerpo:`${ofertas} ofertas pendientes · Riesgo de pérdida de candidatos`,meta:'Reclutamiento'});
+    if(vacs>15) alerts.push({tipo:'crit',ttl:'Alta Carga de Vacantes',cuerpo:`${vacs} vacantes abiertas simultáneamente · Evaluar capacidad del equipo`,meta:'Gerencia'});
+    else alerts.push({tipo:'info',ttl:'Carga de Vacantes Normal',cuerpo:`${vacs} vacantes en gestión · Capacidad adecuada`,meta:'Reclutamiento'});
+    return alerts.slice(0,6);
   },
 
   /* Insights y alertas — calculados del modelo */
@@ -2447,6 +2814,84 @@ const Charts = {
     const cctr=this.reg.contrato;
     if(cctr){ const ctr=Analytics.distContrato(); cctr.data.datasets[0].data=ctr.map(c=>c.count); cctr.update('active'); }
   },
+
+  initReclutamiento(){
+    /* Fuentes de reclutamiento */
+    const fuentes=Analytics.fuentesReclutamiento();
+    if(document.getElementById('chartRecFuentes')){
+      this.reg.recFuentes=new Chart(document.getElementById('chartRecFuentes').getContext('2d'),{
+        type:'bar',
+        data:{labels:fuentes.map(f=>f.fuente),datasets:[
+          {label:'Total',data:fuentes.map(f=>f.total),backgroundColor:'rgba(1,42,107,.7)',borderColor:PAL.navy,borderWidth:1.5,borderRadius:5},
+          {label:'Contratados',data:fuentes.map(f=>f.contratados),backgroundColor:'rgba(0,135,95,.7)',borderColor:PAL.green,borderWidth:1.5,borderRadius:5},
+        ]},
+        options:this._base({plugins:{legend:{display:true,position:'top',labels:{font:this._axisMono(),boxWidth:10,padding:8}},tooltip:this._tooltip()},
+          scales:{y:{grid:{color:PAL.grid},ticks:{font:this._axisMono()},beginAtZero:true},x:{grid:{display:false},ticks:{font:{...this._axisMono(),size:8},maxRotation:35}}}})
+      });
+    }
+
+    /* TTF por área */
+    const ttfA=Analytics.ttfPorArea();
+    if(document.getElementById('chartRecTTF')){
+      this.reg.recTTF=new Chart(document.getElementById('chartRecTTF').getContext('2d'),{
+        type:'bar',
+        data:{labels:ttfA.map(a=>a.nombre),datasets:[
+          {label:'TTF (días)',data:ttfA.map(a=>a.ttf),indexAxis:'y',
+           backgroundColor:ttfA.map(a=>a.ttf>30?'rgba(220,38,38,.7)':a.ttf>20?'rgba(217,119,6,.65)':'rgba(0,135,95,.6)'),
+           borderColor:ttfA.map(a=>a.ttf>30?PAL.danger:a.ttf>20?PAL.amber:PAL.green),borderWidth:1.5,borderRadius:5},
+          {label:'Meta (30d)',data:Array(6).fill(30),type:'line',indexAxis:'y',borderColor:PAL.amber,borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false},
+        ]},
+        options:this._base({indexAxis:'y',plugins:{legend:{display:false},tooltip:this._tooltip()},
+          scales:{x:{grid:{color:PAL.grid},ticks:{font:this._axisMono(),callback:v=>v+'d'},min:0},y:{grid:{display:false},ticks:{font:this._axisMono()}}}})
+      });
+    }
+
+    /* Eficiencia reclutador */
+    const recr=Analytics.eficienciaReclutador();
+    if(document.getElementById('chartRecReclutador')){
+      this.reg.recReclutador=new Chart(document.getElementById('chartRecReclutador').getContext('2d'),{
+        type:'bar',
+        data:{labels:recr.map(r=>r.nombre),datasets:[
+          {label:'Asignados',data:recr.map(r=>r.asignados),backgroundColor:'rgba(1,42,107,.6)',borderRadius:5,borderWidth:0},
+          {label:'Contratados',data:recr.map(r=>r.contratados),backgroundColor:'rgba(0,135,95,.7)',borderRadius:5,borderWidth:0},
+          {label:'En proceso',data:recr.map(r=>r.enProceso),backgroundColor:'rgba(2,132,199,.6)',borderRadius:5,borderWidth:0},
+        ]},
+        options:this._base({plugins:{legend:{display:true,position:'top',labels:{font:this._axisMono(),boxWidth:10,padding:8}},tooltip:this._tooltip()},
+          scales:{y:{grid:{color:PAL.grid},ticks:{font:this._axisMono()},beginAtZero:true},x:{grid:{display:false},ticks:{font:this._axisMono()}}}})
+      });
+    }
+
+    /* Contrataciones mensuales */
+    const contMes=Analytics.contratacionesMensuales();
+    if(document.getElementById('chartRecContrat')){
+      this.reg.recContrat=new Chart(document.getElementById('chartRecContrat').getContext('2d'),{
+        type:'bar',
+        data:{labels:Analytics.MESES,datasets:[
+          {label:'Contrataciones',data:contMes,backgroundColor:'rgba(0,135,95,.65)',borderColor:PAL.green,borderWidth:1.5,borderRadius:5},
+        ]},
+        options:this._base({plugins:{legend:{display:false},tooltip:this._tooltip()},
+          scales:{y:{grid:{color:PAL.grid},ticks:{font:this._axisMono()},beginAtZero:true},x:{grid:{color:PAL.grid},ticks:{font:this._axisMono()}}}})
+      });
+    }
+  },
+
+  updateReclutamiento(){
+    const fuentes=Analytics.fuentesReclutamiento();
+    const rf=this.reg.recFuentes;
+    if(rf){ rf.data.labels=fuentes.map(f=>f.fuente); rf.data.datasets[0].data=fuentes.map(f=>f.total); rf.data.datasets[1].data=fuentes.map(f=>f.contratados); rf.update('active'); }
+
+    const ttfA=Analytics.ttfPorArea();
+    const rt=this.reg.recTTF;
+    if(rt){ rt.data.datasets[0].data=ttfA.map(a=>a.ttf); rt.data.datasets[0].backgroundColor=ttfA.map(a=>a.ttf>30?'rgba(220,38,38,.7)':a.ttf>20?'rgba(217,119,6,.65)':'rgba(0,135,95,.6)'); rt.update('active'); }
+
+    const recr=Analytics.eficienciaReclutador();
+    const rr=this.reg.recReclutador;
+    if(rr){ rr.data.datasets[0].data=recr.map(r=>r.asignados); rr.data.datasets[1].data=recr.map(r=>r.contratados); rr.data.datasets[2].data=recr.map(r=>r.enProceso); rr.update('active'); }
+
+    const contMes=Analytics.contratacionesMensuales();
+    const rc=this.reg.recContrat;
+    if(rc){ rc.data.datasets[0].data=contMes; rc.update('active'); }
+  },
 };
 
 /* ──────────────────────────────────────────────────────────────────
@@ -2512,9 +2957,10 @@ const UI = {
       `<span class="${mov.desvin<=10?'d-up':'d-dn'}">${mov.desvin<=10?'▼':'▲'} jul 2026 · YTD: ${mov.ytdDesvin}</span>`,
       mov.desvin/30*100,'var(--danger)',`YTD: ${mov.ytdDesvin} · ${Analytics.motivosDesvinMes()[0].label} lidera`);
 
-    this._kpi('kpi-t2-vacantes','Vacantes Activas','18',
-      `<span class="d-dn">▲ 3</span><span class="kpi-sub"> vs mes anterior</span>`,
-      60,'var(--amber)','3 críticas · 15 en proceso · Meta: ≤10');
+    const vacAbiertas=Analytics.getVacantesAbiertas(), vacCrit=Analytics.getVacantesCriticas();
+    this._kpi('kpi-t2-vacantes','Vacantes Activas',fmt(vacAbiertas),
+      `<span class="${vacAbiertas>10?'d-dn':'d-up'}">${vacAbiertas>10?'▲':'▼'} ${vacCrit} críticas</span><span class="kpi-sub"> en proceso</span>`,
+      vacAbiertas/25*100,'var(--amber)',`${vacCrit} críticas · ${vacAbiertas-vacCrit} normales · Meta: ≤10`);
 
     this._kpi('kpi-t2-satisf','Satisfacción Laboral','78<span style="font-size:18px;color:var(--w4)">/100</span>',
       `<span class="d-up">▲ 2pts</span><span class="kpi-sub"> vs encuesta anterior</span>`,
@@ -2628,6 +3074,108 @@ const UI = {
     this._html('ch-prueba', ppHtml);
   },
 
+
+  renderReclutamiento(){
+    const vacs=Repository.vacantes.getAbiertas();
+    const todos=Repository.candidatos.getTodos();
+    const activos=Repository.candidatos.getActivos();
+    const contratados=todos.filter(c=>c.contratado);
+    const rechazados=todos.filter(c=>c.etapa==='Rechazado');
+    const ttf=Analytics.getTTFPromedio();
+    const tth=Analytics.getTTHPromedio();
+    const crit=Analytics.getVacantesCriticas();
+
+    /* KPIs */
+    const kpiRow=document.getElementById('rec-kpi-row'); if(!kpiRow) return;
+    kpiRow.innerHTML=
+      this._kpiHtml('k1','Vacantes Abiertas',fmt(vacs.length),
+        `<span class="${vacs.length>10?'d-dn':'d-up'}">${crit} críticas · ${vacs.length-crit} normales</span>`,
+        vacs.length/25*100,'var(--blue)',`Meta: ≤10 vacantes abiertas simultáneamente`)+
+      this._kpiHtml('k2','Candidatos Activos',fmt(activos.length),
+        `<span class="d-eq">${todos.length} totales · ${rechazados.length} rechazados</span>`,
+        null,null,`Tasa conversión: ${todos.length?(contratados.length/todos.length*100).toFixed(1)+'%':'0%'}`)+
+      this._kpiHtml('k4','Time to Fill',ttf+'<span style="font-size:16px;color:var(--w4)">d</span>',
+        `<span class="${ttf>30?'d-dn':'d-up'}">${ttf>30?'▲ Sobre meta':'✓ En meta'}</span>`,
+        Math.min(ttf/45*100,100),ttf>30?'var(--amber)':'var(--green)',`Meta: ≤30 días · Promedio vacantes cubiertas`)+
+      this._kpiHtml('k5','Time to Hire',tth+'<span style="font-size:16px;color:var(--w4)">d</span>',
+        `<span class="d-eq">Desde aplicación hasta contratación</span>`,
+        null,null,`${contratados.length} contrataciones completadas`);
+
+    /* Funnel */
+    const funnel=Analytics.funnelSeleccion();
+    const maxF=Math.max(...funnel.map(f=>f.count))||1;
+    const fColors=[PAL.navy,PAL.blue,PAL.teal,PAL.amber,PAL.purple,PAL.green];
+    const funnelHtml=funnel.map((f,i)=>{
+      const w=Math.max(f.count/maxF*100,8);
+      const pct=i>0&&funnel[i-1].count>0?((f.count/funnel[i-1].count)*100).toFixed(0)+'%':'100%';
+      return `<div class="rec-funnel-row"><div class="rec-funnel-lbl">${f.etapa}</div><div class="rec-funnel-bar" style="width:${w}%;background:${fColors[i]}">${f.count}</div><div class="rec-funnel-pct">${pct} conv.</div></div>`;
+    }).join('');
+    this._html('rec-funnel', `<div class="rec-funnel">${funnelHtml}</div>`);
+
+    /* Pipeline */
+    const pipeline=Analytics.pipelinePorEtapa();
+    const pipeHtml=pipeline.map(col=>{
+      const cards=col.candidatos.slice(0,6).map(c=>{
+        const tagCls=c.puntajePrueba!=null?(c.puntajePrueba>=70?'t-ok':c.puntajePrueba>=50?'t-warn':'t-crit'):'';
+        return `<div class="rec-pipe-card">
+          <div class="rec-cand-name">${c.nombre.split(' ').slice(0,2).join(' ')}</div>
+          <div class="rec-cand-meta">${c.id} · ${c.area} · ${c.fuente}</div>
+          <div class="rec-cand-tags">
+            <span class="rec-cand-tag t-info">${c.cargo}</span>
+            ${c.puntajePrueba!=null?`<span class="rec-cand-tag ${tagCls}">Prueba: ${c.puntajePrueba}%</span>`:''}
+          </div>
+        </div>`;
+      }).join('');
+      const extra=col.candidatos.length>6?`<div style="text-align:center;font-size:10px;color:var(--w4);margin-top:4px">+${col.candidatos.length-6} más</div>`:'';
+      return `<div class="rec-pipe-col">
+        <div class="rec-pipe-hdr"><h5>${col.etapa}</h5><div class="rec-pipe-cnt">${col.candidatos.length}</div></div>
+        ${cards}${extra}
+      </div>`;
+    }).join('');
+    this._html('rec-pipeline', pipeHtml);
+
+    /* Vacantes */
+    const allVacs=Repository.vacantes.getTodas();
+    const vacHtml=allVacs.map(v=>{
+      const cls=v.estado==='cubierta'?'vac-cubierta':v.critica?'vac-critica':'vac-normal';
+      const badgeCls=v.estado==='cubierta'?'vb-filled':v.critica?'vb-crit':'vb-open';
+      const badgeLbl=v.estado==='cubierta'?'Cubierta':v.critica?'Crítica':'Abierta';
+      const cands=Repository.candidatos.getByVacante(v.id);
+      const diasAbierta=v.estado==='cubierta'?v.ttfDias:Math.round((new Date()-new Date(v.fechaCreacion))/86400000);
+      return `<div class="rec-vac-card ${cls}">
+        <div class="rec-vac-ttl">${v.cargo}</div>
+        <div class="rec-vac-info">${v.id} · ${v.area} · ${v.ciudad} · ${v.reclutador}</div>
+        <div class="rec-vac-badges">
+          <span class="rec-vac-badge ${badgeCls}">${badgeLbl}</span>
+          <span class="rec-vac-badge vb-days">${diasAbierta}d</span>
+          <span class="rec-vac-badge vb-open">${cands.filter(c=>c.etapa!=='Rechazado'&&!c.contratado).length} activos</span>
+        </div>
+      </div>`;
+    }).join('');
+    this._html('rec-vacantes', vacHtml);
+
+    /* Alerts */
+    const recAlerts=Analytics.getRecAlerts();
+    const amap={crit:{cls:'ac-crit',bc:'ab-crit',lbl:'Crítico'},warn:{cls:'ac-warn',bc:'ab-warn',lbl:'Alerta'},ok:{cls:'ac-ok',bc:'ab-ok',lbl:'Normal'},info:{cls:'ac-info',bc:'ab-info',lbl:'Info'}};
+    const alertHtml=recAlerts.map(a=>{
+      const t=amap[a.tipo]||amap.info;
+      return `<div class="ac ${t.cls}"><div class="ac-top"><div style="display:flex;align-items:flex-start;gap:8px"><div class="ac-dot"></div><div class="ac-title">${a.ttl}</div></div><div class="ac-badge ${t.bc}">${t.lbl}</div></div><div class="ac-body">${a.cuerpo}</div><div class="ac-meta"><i class="ti ti-clock" style="font-size:11px"></i> Jul 2026 · Responsable: ${a.meta}</div></div>`;
+    }).join('');
+    this._html('rec-alerts', alertHtml);
+
+    /* Insights */
+    const recIns=Analytics.getRecInsights();
+    const tagClass={'info':'tag-info','warn':'tag-warn','ok':'tag-ok','crit':'tag-crit'};
+    const insHtml=recIns.map(i=>`
+      <div class="ip-item">
+        <div class="ip-item-icon ${i.clase}"><i class="ti ${i.icon}"></i></div>
+        <div class="ip-item-title">${i.title}</div>
+        <div class="ip-item-body">${i.body}</div>
+        <div class="ip-item-tag ${tagClass[i.tag]||'tag-info'}">${i.tagLbl}</div>
+      </div>`).join('');
+    this._html('rec-insights', insHtml);
+  },
+
   renderAll(){
     this.renderDashHeader();
     this.renderKPIs();
@@ -2635,6 +3183,7 @@ const UI = {
     this.renderAlerts();
     Charts.updateAll();
     if(AppState.section==='capital-humano') this.renderCapitalHumano();
+    if(AppState.section==='reclutamiento') this.renderReclutamiento();
   },
 };
 
@@ -2697,6 +3246,30 @@ const BILab = {
         <div class="bilab-fg"><label>Gravedad</label><select id="bl-sst-grav"><option>Leve</option><option>Moderado</option><option>Grave</option></select></div>
         <button class="bilab-btn bilab-btn-p" onclick="BILab.sst()">Registrar Accidente SST</button>
         <div id="bl-res-sst" class="bilab-res"></div>`,
+      /* 4: Crear Vacante */`
+        <div class="bilab-fg"><label>Cargo</label><input id="bl-vac-cargo" placeholder="Cargo de la vacante"></div>
+        <div class="bilab-fg"><label>Área</label><select id="bl-vac-area">${areaOpts}</select></div>
+        <div class="bilab-fg"><label>Ciudad</label><select id="bl-vac-ciudad">${ciuOpts}</select></div>
+        <div class="bilab-fg"><label>Tipo Contrato</label><select id="bl-vac-contrato">${ctrOpts}</select></div>
+        <div class="bilab-fg"><label>Prioridad</label><select id="bl-vac-critica"><option value="0">Normal</option><option value="1">Crítica</option></select></div>
+        <div class="bilab-fg"><label>Reclutador</label><select id="bl-vac-recl">${MockDB.catalogo.reclutadores.map(r=>'<option>'+r+'</option>').join('')}</select></div>
+        <button class="bilab-btn bilab-btn-p" onclick="BILab.crearVacante()">Crear Vacante</button>
+        <div id="bl-res-vacante" class="bilab-res"></div>`,
+      /* 5: Candidato */`
+        <div class="bilab-fg"><label>Nombre completo</label><input id="bl-cand-nombre" placeholder="Nombre del candidato"></div>
+        <div class="bilab-fg"><label>Vacante (ID)</label><input id="bl-cand-vac" placeholder="VAC001"></div>
+        <div class="bilab-fg"><label>Fuente</label><select id="bl-cand-fuente">${MockDB.catalogo.fuentesRecl.map(f=>'<option>'+f+'</option>').join('')}</select></div>
+        <div class="bilab-fg"><label>Género</label><select id="bl-cand-gen"><option value="M">Masculino</option><option value="F">Femenino</option><option value="O">Otro</option></select></div>
+        <div class="bilab-fg"><label>Edad</label><input id="bl-cand-edad" type="number" min="18" max="65" value="28"></div>
+        <div class="bilab-fg"><label>Salario pretendido (COP)</label><input id="bl-cand-sal" type="number" min="1300000" step="50000" placeholder="2000000"></div>
+        <button class="bilab-btn bilab-btn-p" onclick="BILab.registrarCandidato()">Registrar Candidato</button>
+        <div id="bl-res-candidato" class="bilab-res"></div>`,
+      /* 6: Proceso (Avanzar/Rechazar/Contratar) */`
+        <div class="bilab-fg"><label>ID Candidato</label>
+          <div class="bilab-search-row"><input id="bl-proc-id" placeholder="CAND0001"><button onclick="BILab.buscarCandidato()">🔍</button></div>
+        </div>
+        <div id="bl-proc-card"></div>
+        <div id="bl-res-proceso" class="bilab-res"></div>`,
     ];
     body.innerHTML=bodies[n]||'';
   },
@@ -2782,6 +3355,113 @@ const BILab = {
     toast('Accidente SST registrado','ok');
     EventBus.emit('data:changed');
   },
+
+  crearVacante(){
+    const cargo=(document.getElementById('bl-vac-cargo')||{}).value||'';
+    const area=(document.getElementById('bl-vac-area')||{}).value||'OPS';
+    const ciudad=(document.getElementById('bl-vac-ciudad')||{}).value||'Bogotá';
+    const contrato=(document.getElementById('bl-vac-contrato')||{}).value||'Indefinido';
+    const critica=(document.getElementById('bl-vac-critica')||{}).value==='1';
+    const reclutador=(document.getElementById('bl-vac-recl')||{}).value||'Ana Rojas';
+    if(!cargo.trim()){ this._res('bl-res-vacante','⚠ Ingrese el cargo',false); return; }
+    const C=MockDB.catalogo;
+    const salMin=C.salRango[area]?C.salRango[area][0]:1300000;
+    const salMax=C.salRango[area]?C.salRango[area][1]:3000000;
+    const vacId=Repository.vacantes.crear({cargo,area,ciudad,empresa:'EMP001',tipoContrato:contrato,salarioMin:salMin,salarioMax:salMax,critica,reclutador,requisicionId:'REQ-'+Date.now()});
+    Repository.requisiciones.crear({vacanteId:vacId,area,cargo,solicitante:'BI Lab',prioridad:critica?'alta':'normal'});
+    this._res('bl-res-vacante',`✓ Vacante ${vacId} creada: ${cargo} (${area})`,true);
+    toast(`Vacante creada: ${cargo}`,'ok');
+    EventBus.emit('data:changed');
+  },
+
+  registrarCandidato(){
+    const nombre=(document.getElementById('bl-cand-nombre')||{}).value||'';
+    const vacId=(document.getElementById('bl-cand-vac')||{}).value||'';
+    const fuente=(document.getElementById('bl-cand-fuente')||{}).value||'Portal Empleo';
+    const genero=(document.getElementById('bl-cand-gen')||{}).value||'M';
+    const edad=parseInt((document.getElementById('bl-cand-edad')||{}).value)||28;
+    const salario=parseInt((document.getElementById('bl-cand-sal')||{}).value)||2000000;
+    if(!nombre.trim()){ this._res('bl-res-candidato','⚠ Ingrese el nombre',false); return; }
+    const vac=Repository.vacantes.getById(vacId.toUpperCase());
+    if(!vac){ this._res('bl-res-candidato','⚠ Vacante no encontrada',false); return; }
+    const candId=Repository.candidatos.crear({
+      nombre,genero,edad,vacanteId:vac.id,area:vac.area,cargo:vac.cargo,
+      etapa:'Aplicado',etapaIdx:0,fuente,reclutador:vac.reclutador,
+      fechaAplicacion:new Date().toISOString().slice(0,10),
+      motivoRechazo:null,puntajePrueba:null,salarioPretendido:salario,
+    });
+    this._res('bl-res-candidato',`✓ ${nombre} registrado como candidato (${candId}) para ${vac.cargo}`,true);
+    toast(`Candidato registrado: ${nombre}`,'ok');
+    EventBus.emit('data:changed');
+  },
+
+  buscarCandidato(){
+    const q=(document.getElementById('bl-proc-id')||{}).value||'';
+    const cand=Repository.candidatos.getTodos().find(c=>c.id.toLowerCase()===q.toLowerCase()||c.nombre.toLowerCase().includes(q.toLowerCase()));
+    const card=document.getElementById('bl-proc-card');
+    if(!cand||!card){ if(card) card.innerHTML='<div style="padding:10px;color:var(--danger);font-size:12px">Candidato no encontrado</div>'; return; }
+    const etapas=MockDB.catalogo.etapasRecl;
+    const etapaActual=cand.etapa;
+    card.innerHTML=`
+      <div style="background:var(--c0);border-radius:8px;padding:12px;margin-bottom:10px;font-size:12px">
+        <div style="font-weight:700;color:var(--navy);margin-bottom:4px">${cand.nombre}</div>
+        <div style="color:var(--w4);font-family:'JetBrains Mono',monospace;font-size:10px">${cand.id} · ${cand.area} · ${cand.cargo}</div>
+        <div style="margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:10px">
+          Etapa: <strong style="color:${cand.contratado?'var(--green)':cand.etapa==='Rechazado'?'var(--danger)':'var(--navy)'}">${etapaActual}</strong>
+          · Fuente: ${cand.fuente} · Vacante: ${cand.vacanteId}
+          ${cand.puntajePrueba!=null?' · Prueba: '+cand.puntajePrueba+'%':''}
+        </div>
+      </div>
+      ${!cand.contratado&&cand.etapa!=='Rechazado'?`
+        <button class="bilab-btn bilab-btn-p" onclick="BILab.avanzarEtapa('${cand.id}')">▶ Avanzar a Siguiente Etapa</button>
+        <div class="bilab-sep"></div>
+        <div class="bilab-fg"><label>Motivo de rechazo</label><select id="bl-proc-motivo">${MockDB.catalogo.motivosRechazo.map(m=>'<option>'+m+'</option>').join('')}</select></div>
+        <button class="bilab-btn bilab-btn-d" onclick="BILab.rechazarCandidato('${cand.id}')">✕ Rechazar Candidato</button>
+        <div class="bilab-sep"></div>
+        <button class="bilab-btn" style="background:var(--green);color:#fff" onclick="BILab.contratarCandidato('${cand.id}')">✓ Contratar Directamente</button>
+      `:`<div style="color:${cand.contratado?'var(--green)':'var(--danger)'};font-size:12px;padding:8px;font-weight:600">${cand.contratado?'✓ Candidato ya fue contratado':'✕ Candidato rechazado: '+cand.motivoRechazo}</div>`}`;
+  },
+
+  avanzarEtapa(id){
+    const ok=Repository.candidatos.avanzarEtapa(id);
+    const cand=Repository.candidatos.getById(id);
+    if(ok&&cand){
+      if(cand.contratado){
+        const empId=Repository.candidatos.contratar(id);
+        this._res('bl-res-proceso',`✓ ${cand.nombre} CONTRATADO · Nuevo empleado: ${empId||'creado'}`,true);
+        toast(`¡${cand.nombre} contratado!`,'ok');
+      } else {
+        this._res('bl-res-proceso',`✓ ${cand.nombre} avanzó a: ${cand.etapa}`,true);
+        toast(`Candidato avanzó a ${cand.etapa}`,'ok');
+      }
+      EventBus.emit('data:changed');
+      this.buscarCandidato();
+    } else {
+      this._res('bl-res-proceso','No se pudo avanzar la etapa',false);
+    }
+  },
+
+  rechazarCandidato(id){
+    const motivo=(document.getElementById('bl-proc-motivo')||{}).value||'No cumple perfil';
+    const cand=Repository.candidatos.getById(id);
+    const ok=Repository.candidatos.rechazar(id,motivo);
+    this._res('bl-res-proceso',ok?`✕ ${cand?.nombre||id} rechazado: ${motivo}`:'No se pudo rechazar',ok);
+    if(ok){ toast(`Candidato rechazado: ${cand?.nombre||id}`,'ok'); EventBus.emit('data:changed'); this.buscarCandidato(); }
+  },
+
+  contratarCandidato(id){
+    const cand=Repository.candidatos.getById(id);
+    if(!cand){ this._res('bl-res-proceso','Candidato no encontrado',false); return; }
+    const empId=Repository.candidatos.contratar(id);
+    if(empId){
+      this._res('bl-res-proceso',`✓ ${cand.nombre} CONTRATADO · Empleado: ${empId}`,true);
+      toast(`¡${cand.nombre} contratado como ${cand.cargo}!`,'ok');
+      EventBus.emit('data:changed');
+      this.buscarCandidato();
+    } else {
+      this._res('bl-res-proceso','No se pudo contratar',false);
+    }
+  },
 };
 
 /* ──────────────────────────────────────────────────────────────────
@@ -2797,11 +3477,12 @@ function showSection(id){
   if(btn) btn.classList.add('on');
 
   AppState.section=id;
-  const titles={'dashboard':'Dashboard Ejecutivo · Talento Humano','capital-humano':'Capital Humano · Plantilla'};
-  const subs={'dashboard':'Gerencia General · Centro Ejecutivo de Inteligencia','capital-humano':'Análisis de Fuerza Laboral · Julio 2026'};
+  const titles={'dashboard':'Dashboard Ejecutivo · Talento Humano','capital-humano':'Capital Humano · Plantilla','reclutamiento':'Reclutamiento y Selección'};
+  const subs={'dashboard':'Gerencia General · Centro Ejecutivo de Inteligencia','capital-humano':'Análisis de Fuerza Laboral · Julio 2026','reclutamiento':'Pipeline de Talento · Julio 2026'};
   const mtMain=document.querySelector('.hmt-main'); if(mtMain) mtMain.textContent=titles[id]||titles.dashboard;
   const mtSub=document.querySelector('.hmt-sub'); if(mtSub) mtSub.textContent=subs[id]||subs.dashboard;
   if(id==='capital-humano') UI.renderCapitalHumano();
+  if(id==='reclutamiento') UI.renderReclutamiento();
   document.querySelector('.page').scrollTop=0;
 }
 
@@ -2891,10 +3572,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
   EventBus.on('data:changed', ()=>{
     UI.renderAll();
     if(AppState.section==='capital-humano') UI.renderCapitalHumano();
+    if(AppState.section==='reclutamiento'){ UI.renderReclutamiento(); Charts.updateReclutamiento(); }
   });
 
   /* Init charts (Layer 4) */
   Charts.init();
+  Charts.initReclutamiento();
 
   /* Render dinámico de KPIs, insights, alertas — (Layer 4) */
   UI.renderDashHeader();
