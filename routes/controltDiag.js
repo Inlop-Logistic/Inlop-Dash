@@ -40,9 +40,17 @@ const router = Router();
  */
 router.get('/diag', async (req, res) => {
   const t0 = Date.now();
-  const codigoViaje = req.query.viaje
-    || process.env.CONTROLT_DIAG_VIAJE
-    || 'IN018108';
+  const codigoViaje = req.query.viaje || process.env.CONTROLT_DIAG_VIAJE || null;
+  if (!codigoViaje) {
+    return res.status(400).json({
+      ok: false,
+      error: {
+        etapa: 'input',
+        tipo: 'MissingViaje',
+        mensaje: 'Se requiere un código de viaje. Envíalo como ?viaje=XXXXXXXX o configura CONTROLT_DIAG_VIAJE en las variables de entorno.',
+      },
+    });
+  }
   const forceReset = req.query.reset === '1';
 
   const etapas = {
