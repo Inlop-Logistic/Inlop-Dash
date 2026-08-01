@@ -7,6 +7,7 @@ import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } f
 import { getUserPreferences, updatePreference, KNOWN_CHANNELS } from './services/preferenceResolver.js';
 import { normalizeExternalRef } from './services/normalizeExternalRef.js';
 import { fechaHoyColombia, parseFechaTMS, extraerFechaColombia } from './utils/fechas.js';
+import controltDiagRouter from './routes/controltDiag.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -4276,6 +4277,9 @@ app.delete('/push/suscripcion', requireClienteAuth, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// ─── DIAGNÓSTICO CONTROLT SOAP ───────────────────────────────────────────────
+app.use('/api/controlt', requireInternalApiKey, controltDiagRouter);
 
 // ─── INICIO ─────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
