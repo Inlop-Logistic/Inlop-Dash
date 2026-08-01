@@ -4,11 +4,15 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.18.2",
+    "fast-xml-parser": "^4.5.0",
     "node-fetch": "^3.3.2",
+    "pino": "^9.0.0",
     "resend": "^6.17.2",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "zod": "^3.23.0"
   },
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node --test"
   }
 }
