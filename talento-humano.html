@@ -930,6 +930,86 @@ footer span.footer-live {
   color:var(--purple);
 }
 
+/* ─── SECTION SWITCHER ─── */
+.section-content { display:none; }
+.section-content.active { display:block; }
+
+/* ─── CAPITAL HUMANO ─── */
+.mod-doc { background:var(--c1); border-radius:14px; border:1px solid var(--line); padding:20px 24px; margin-bottom:20px; }
+.mod-doc h3 { font-family:'Barlow Condensed',sans-serif; font-size:16px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--navy); margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+.mod-doc p { font-size:12.5px; color:var(--w3); margin:0 0 12px; line-height:1.65; }
+.mod-doc-tags { display:flex; gap:7px; flex-wrap:wrap; }
+.mod-doc-tag { font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; padding:3px 9px; border-radius:3px; background:var(--c0); color:var(--navy); font-weight:500; }
+
+.ch-filter-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+.ch-filter-btn { padding:5px 13px; border:1px solid var(--line2); background:transparent; color:var(--w3); border-radius:6px; cursor:pointer; font-family:'Barlow Condensed',sans-serif; font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; transition:.15s; }
+.ch-filter-btn.active, .ch-filter-btn:hover { background:var(--navy); color:#fff; border-color:var(--navy); }
+
+.hc-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+.hc-table th { background:var(--c0); color:var(--navy); font-family:'Barlow Condensed',sans-serif; font-weight:700; letter-spacing:.1em; text-transform:uppercase; font-size:10px; padding:10px 14px; text-align:left; border-bottom:2px solid var(--line2); }
+.hc-table td { padding:9px 14px; border-bottom:1px solid var(--line); }
+.hc-table tr:last-child td { border-bottom:none; }
+.hc-table tr:hover td { background:#F8FAFC; }
+.hc-table .num { text-align:right; font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums; }
+.hc-table .hc-area { font-weight:600; color:var(--navy); }
+
+.py-row { display:flex; align-items:center; gap:6px; margin-bottom:8px; }
+.py-label { width:54px; text-align:center; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:600; color:var(--navy); flex-shrink:0; }
+.py-side { display:flex; flex:1; }
+.py-m-wrap { flex:1; display:flex; justify-content:flex-end; }
+.py-f-wrap { flex:1; }
+.py-bar-m { height:20px; background:var(--navy); border-radius:3px 0 0 3px; min-width:2px; transition:.4s; }
+.py-bar-f { height:20px; background:var(--danger); border-radius:0 3px 3px 0; min-width:2px; transition:.4s; }
+.py-cnt { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--w4); min-width:28px; text-align:center; }
+
+.ret-item { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); }
+.ret-item:last-child { border-bottom:none; }
+.ret-av { width:32px; height:32px; border-radius:50%; background:var(--blue3); display:flex; align-items:center; justify-content:center; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:12px; color:var(--navy); flex-shrink:0; }
+.ret-info { flex:1; min-width:0; }
+.ret-name { font-size:12.5px; font-weight:600; color:var(--navy); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ret-detail { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--w4); margin-top:1px; }
+.ret-badge { font-family:'JetBrains Mono',monospace; font-size:9px; padding:3px 9px; border-radius:3px; font-weight:600; flex-shrink:0; }
+.ret-soon { background:var(--amber3); color:var(--amber2); }
+.ret-near { background:var(--danger3); color:var(--danger); }
+
+.pp-item { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); }
+.pp-item:last-child { border-bottom:none; }
+.pp-num { font-family:'Anton',sans-serif; font-size:20px; color:var(--navy); width:40px; flex-shrink:0; line-height:1; }
+.pp-info { flex:1; }
+.pp-name { font-size:12.5px; font-weight:600; color:var(--w1); }
+.pp-meta { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--w4); margin-top:2px; }
+.pp-days { font-family:'Barlow Condensed',sans-serif; font-size:12px; font-weight:700; flex-shrink:0; }
+
+/* ─── BI LAB ─── */
+#bilab-fab { position:fixed; bottom:26px; right:26px; width:50px; height:50px; border-radius:50%; background:var(--navy); color:#fff; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 18px rgba(1,42,107,.35); z-index:900; transition:.2s; font-size:21px; }
+#bilab-fab:hover { background:var(--blue); transform:scale(1.08); }
+#bilab-panel { position:fixed; bottom:90px; right:26px; width:370px; max-height:580px; background:#fff; border-radius:16px; box-shadow:0 8px 40px rgba(1,42,107,.22); z-index:901; overflow:hidden; border:1px solid var(--line2); display:none; flex-direction:column; }
+#bilab-panel.open { display:flex; }
+.bilab-hdr { background:var(--navy); color:#fff; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.bilab-hdr h4 { margin:0; font-family:'Barlow Condensed',sans-serif; font-size:15px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; display:flex; align-items:center; gap:8px; }
+.bilab-x { background:none; border:none; color:rgba(255,255,255,.7); cursor:pointer; font-size:20px; line-height:1; padding:0; }
+.bilab-x:hover { color:#fff; }
+.bilab-tabs { display:flex; background:#F8FAFC; border-bottom:1px solid var(--line); flex-shrink:0; }
+.bilab-tab { flex:1; padding:9px 4px; text-align:center; font-family:'Barlow Condensed',sans-serif; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; color:var(--w4); border-bottom:2px solid transparent; transition:.15s; }
+.bilab-tab.on { color:var(--navy); border-bottom-color:var(--navy); background:#fff; }
+.bilab-body { padding:18px; overflow-y:auto; flex:1; }
+.bilab-fg { margin-bottom:13px; }
+.bilab-fg label { display:block; font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:var(--w4); margin-bottom:5px; }
+.bilab-fg input, .bilab-fg select { width:100%; padding:7px 10px; border:1px solid var(--line2); border-radius:6px; font-size:12.5px; font-family:inherit; box-sizing:border-box; outline:none; transition:.15s; }
+.bilab-fg input:focus, .bilab-fg select:focus { border-color:var(--navy); box-shadow:0 0 0 2px rgba(1,42,107,.08); }
+.bilab-btn { width:100%; padding:9px; border:none; border-radius:7px; font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:13px; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; transition:.15s; margin-top:4px; }
+.bilab-btn-p { background:var(--navy); color:#fff; }
+.bilab-btn-p:hover { background:var(--blue); }
+.bilab-btn-d { background:var(--danger); color:#fff; margin-top:8px; }
+.bilab-btn-d:hover { background:var(--danger2); }
+.bilab-res { margin-top:11px; padding:9px 13px; border-radius:7px; font-size:12px; display:none; }
+.bilab-res.ok { background:var(--green3); color:var(--green2); display:block; }
+.bilab-res.err { background:var(--danger3); color:var(--danger2); display:block; }
+.bilab-sep { height:1px; background:var(--line); margin:14px 0; }
+.bilab-search-row { display:flex; gap:8px; }
+.bilab-search-row input { flex:1; }
+.bilab-search-row button { padding:7px 12px; border:1px solid var(--line2); border-radius:6px; background:#fff; cursor:pointer; font-size:13px; }
+
 /* ─── RESPONSIVE ─── */
 @media(max-width:1200px) {
   .kpi-grid { grid-template-columns:repeat(3,1fr); }
@@ -989,9 +1069,8 @@ footer span.footer-live {
 
   <div class="sb-section-label mt">Módulos — Fase 2</div>
 
-  <button class="tb soon" data-label="Capital Humano" onclick="toastProx('Capital Humano')">
+  <button class="tb" id="tab-capital-humano" data-label="Capital Humano" onclick="showSection('capital-humano')">
     <i class="ti ti-users" aria-hidden="true"></i>Capital Humano
-    <span class="tb-soon-badge">Pronto</span>
   </button>
   <button class="tb soon" data-label="Reclutamiento" onclick="toastProx('Reclutamiento')">
     <i class="ti ti-user-search" aria-hidden="true"></i>Reclutamiento
@@ -1037,7 +1116,7 @@ footer span.footer-live {
     <button class="tb" onclick="toggleSidebar()" type="button" id="sbCollapseBtn" data-label="Colapsar">
       <i class="ti ti-layout-sidebar-left-collapse" aria-hidden="true"></i>Colapsar
     </button>
-    <div class="sb-version">TH-BI v1.0 · FASE 1 · ENTERPRISE</div>
+    <div class="sb-version">TH-BI v2.0 · FASE 2 · ENTERPRISE</div>
   </div>
 
 </div><!-- /tab-row -->
@@ -1130,6 +1209,9 @@ footer span.footer-live {
 <!-- CONTENT -->
 <div class="page">
 
+<!-- ════════════════ SECTION: DASHBOARD ════════════════ -->
+<div id="section-dashboard" class="section-content active">
+
 <!-- ══════════════════════════════════════════════
      STATUS HEADER
      ══════════════════════════════════════════════ -->
@@ -1170,9 +1252,9 @@ footer span.footer-live {
   <div class="sh-line"></div>
 </div>
 
-<div class="kpi-grid fade">
+<div class="kpi-grid fade" id="kpi-tier1">
 
-  <div class="kpi k1">
+  <div class="kpi k1" id="kpi-t1-plantilla">
     <div class="kpi-lbl">Plantilla Activa</div>
     <div class="kpi-val">847</div>
     <div class="kpi-delta">
@@ -1183,7 +1265,7 @@ footer span.footer-live {
     <div class="kpi-sub">Meta plantilla: 1,000 · Ocupación 84.7%</div>
   </div>
 
-  <div class="kpi k4">
+  <div class="kpi k4" id="kpi-t1-rotacion">
     <div class="kpi-lbl">Índice de Rotación</div>
     <div class="kpi-val">1.65%</div>
     <div class="kpi-delta">
@@ -1194,7 +1276,7 @@ footer span.footer-live {
     <div class="kpi-sub">Meta mensual: ≤ 2.0% · YTD promedio 1.71%</div>
   </div>
 
-  <div class="kpi k3">
+  <div class="kpi k3" id="kpi-t1-ausentismo">
     <div class="kpi-lbl">Tasa de Ausentismo</div>
     <div class="kpi-val">3.8%</div>
     <div class="kpi-delta">
@@ -1205,7 +1287,7 @@ footer span.footer-live {
     <div class="kpi-sub">Meta: ≤ 3.5% · 142 días perdidos en el mes</div>
   </div>
 
-  <div class="kpi k2">
+  <div class="kpi k2" id="kpi-t1-costo">
     <div class="kpi-lbl">Costo Total Nómina</div>
     <div class="kpi-val" style="font-size:24px">$2.84B</div>
     <div class="kpi-delta">
@@ -1227,9 +1309,9 @@ footer span.footer-live {
   <div class="sh-line"></div>
 </div>
 
-<div class="kpi-grid fade">
+<div class="kpi-grid fade" id="kpi-tier2">
 
-  <div class="kpi k2">
+  <div class="kpi k2" id="kpi-t2-contrat">
     <div class="kpi-lbl">Nuevas Contrataciones</div>
     <div class="kpi-val">23</div>
     <div class="kpi-delta">
@@ -1240,7 +1322,7 @@ footer span.footer-live {
     <div class="kpi-sub">18 permanentes · 5 temporales</div>
   </div>
 
-  <div class="kpi k3">
+  <div class="kpi k3" id="kpi-t2-desvin">
     <div class="kpi-lbl">Desvinculaciones</div>
     <div class="kpi-val">14</div>
     <div class="kpi-delta">
@@ -1251,7 +1333,7 @@ footer span.footer-live {
     <div class="kpi-sub">6 voluntarias · 5 liquidaciones · 3 vencidas</div>
   </div>
 
-  <div class="kpi k4">
+  <div class="kpi k4" id="kpi-t2-vacantes">
     <div class="kpi-lbl">Vacantes Activas</div>
     <div class="kpi-val">18</div>
     <div class="kpi-delta">
@@ -1262,7 +1344,7 @@ footer span.footer-live {
     <div class="kpi-sub">3 críticas · 15 en proceso · Meta: ≤ 10</div>
   </div>
 
-  <div class="kpi k1">
+  <div class="kpi k1" id="kpi-t2-satisf">
     <div class="kpi-lbl">Satisfacción Laboral</div>
     <div class="kpi-val">78<span style="font-size:18px;color:var(--w4)">/100</span></div>
     <div class="kpi-delta">
@@ -1284,9 +1366,9 @@ footer span.footer-live {
   <div class="sh-line"></div>
 </div>
 
-<div class="kpi-grid-5 fade">
+<div class="kpi-grid-5 fade" id="kpi-tier3">
 
-  <div class="kpi k6">
+  <div class="kpi k6" id="kpi-t3-dias">
     <div class="kpi-lbl">Días Perdidos</div>
     <div class="kpi-val">142</div>
     <div class="kpi-delta">
@@ -1317,7 +1399,7 @@ footer span.footer-live {
     <div class="kpi-sub">127 vencidas · Meta ≥ 95%</div>
   </div>
 
-  <div class="kpi k1">
+  <div class="kpi k1" id="kpi-t3-cap">
     <div class="kpi-lbl">Hrs Capacitación</div>
     <div class="kpi-val">1,240</div>
     <div class="kpi-delta">
@@ -1328,7 +1410,7 @@ footer span.footer-live {
     <div class="kpi-sub">Meta: 1,000 hrs · 847 colaboradores</div>
   </div>
 
-  <div class="kpi k3">
+  <div class="kpi k3" id="kpi-t3-acc">
     <div class="kpi-lbl">Incidentes SST</div>
     <div class="kpi-val">3</div>
     <div class="kpi-delta">
@@ -1545,7 +1627,7 @@ footer span.footer-live {
     <div class="ip-badge">6 hallazgos</div>
   </div>
 
-  <div class="ip-grid">
+  <div class="ip-grid" id="ip-grid-container">
 
     <div class="ip-item">
       <div class="ip-item-icon ii-amber">⚠</div>
@@ -1601,7 +1683,7 @@ footer span.footer-live {
   <div class="sh-line"></div>
 </div>
 
-<div class="alerts-grid fade">
+<div class="alerts-grid fade" id="alerts-dynamic">
 
   <div class="ac ac-crit">
     <div class="ac-top">
@@ -1677,12 +1759,87 @@ footer span.footer-live {
 
 </div>
 
+</div><!-- /section-dashboard -->
+
+<!-- ════════════════ SECTION: CAPITAL HUMANO ════════════════ -->
+<div id="section-capital-humano" class="section-content">
+
+  <!-- Módulo doc -->
+  <div class="mod-doc fade">
+    <h3><i class="ti ti-users" style="font-size:18px;opacity:.8"></i> Capital Humano</h3>
+    <p>Análisis integral de la fuerza laboral activa: estructura demográfica, distribuciones por área, ciudad, empresa, tipo de contrato, género y antigüedad. Todos los indicadores reaccionan en tiempo real al Laboratorio BI.</p>
+    <div class="mod-doc-tags">
+      <span class="mod-doc-tag" id="chtag-total">847 Colaboradores</span>
+      <span class="mod-doc-tag">6 Áreas</span>
+      <span class="mod-doc-tag">4 Ciudades</span>
+      <span class="mod-doc-tag">2 Empresas</span>
+      <span class="mod-doc-tag" style="background:var(--green3);color:var(--green2)">Reactivo · BI Lab</span>
+    </div>
+  </div>
+
+  <!-- Filtro vista -->
+  <div class="ch-filter-row">
+    <span class="filt-label">Ver por:</span>
+    <button class="ch-filter-btn active" id="chv-area"    onclick="CHView.set('area')">Área</button>
+    <button class="ch-filter-btn"        id="chv-ciudad"  onclick="CHView.set('ciudad')">Ciudad</button>
+    <button class="ch-filter-btn"        id="chv-empresa" onclick="CHView.set('empresa')">Empresa</button>
+    <button class="ch-filter-btn"        id="chv-genero"  onclick="CHView.set('genero')">Género</button>
+    <button class="ch-filter-btn"        id="chv-contrato" onclick="CHView.set('contrato')">Contrato</button>
+  </div>
+
+  <!-- KPIs Capital Humano -->
+  <div class="kpi-grid fade" id="ch-kpi-row"></div>
+
+  <!-- Distribuciones -->
+  <div class="sh"><div class="sh-bar" style="background:var(--blue)"></div><span class="sh-txt">Distribución de Plantilla</span><div class="sh-line"></div></div>
+
+  <div class="charts-2" style="margin-bottom:20px">
+    <div class="card"><div class="cp">
+      <div class="card-ttl"><i class="ti ti-map-pin"></i> Por Ciudad</div>
+      <canvas id="chartCiudad" height="180"></canvas>
+    </div></div>
+    <div class="card"><div class="cp">
+      <div class="card-ttl"><i class="ti ti-building"></i> Por Empresa &amp; Tipo Contrato</div>
+      <canvas id="chartContrato" height="180"></canvas>
+    </div></div>
+  </div>
+
+  <!-- Headcount por área -->
+  <div class="sh"><div class="sh-bar" style="background:var(--navy)"></div><span class="sh-txt">Headcount por Área</span><div class="sh-line"></div></div>
+  <div class="card fade" style="margin-bottom:20px;overflow:auto">
+    <div id="ch-headcount-table" style="padding:0"></div>
+  </div>
+
+  <!-- Pirámide + Contratos por vencer -->
+  <div class="charts-2" style="margin-bottom:20px">
+    <div class="card"><div class="cp">
+      <div class="card-ttl"><i class="ti ti-chart-bar"></i> Pirámide Poblacional por Edad y Género</div>
+      <div style="display:flex;justify-content:center;gap:16px;margin-bottom:10px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--w4)">
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:var(--navy);border-radius:2px;display:inline-block"></span>Masculino</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;background:var(--danger);border-radius:2px;display:inline-block"></span>Femenino</span>
+      </div>
+      <div id="ch-pyramid"></div>
+    </div></div>
+    <div class="card"><div class="cp">
+      <div class="card-ttl"><i class="ti ti-calendar-event"></i> Contratos por Vencer (180 días)</div>
+      <div id="ch-retiros" style="max-height:260px;overflow-y:auto"></div>
+    </div></div>
+  </div>
+
+  <!-- Período de prueba -->
+  <div class="sh"><div class="sh-bar" style="background:var(--amber)"></div><span class="sh-txt">En Período de Prueba (≤ 60 días)</span><div class="sh-line"></div></div>
+  <div class="card fade" style="margin-bottom:28px"><div class="cp">
+    <div id="ch-prueba"></div>
+  </div></div>
+
+</div><!-- /section-capital-humano -->
+
 </div><!-- /page -->
 
 <footer>
   <span>INLOP · <b>Integral Logistics Operations SAS</b> · Talento Humano</span>
   <span id="footDate" class="footer-live"><span class="live-d" style="width:5px;height:5px"></span><span id="footDateTxt">—</span></span>
-  <span>Talento Humano BI · v1.0 · Fase 1 · Enterprise</span>
+  <span>Talento Humano BI · v2.0 · Fase 2 · Enterprise</span>
 </footer>
 
 </div><!-- /ops-body-col -->
@@ -1691,537 +1848,1067 @@ footer span.footer-live {
 
 <div class="toast" id="toast"></div>
 
+<!-- BI LAB -->
+<button id="bilab-fab" title="Laboratorio BI" onclick="BILab.toggle()">
+  <i class="ti ti-flask" aria-hidden="true"></i>
+</button>
+<div id="bilab-panel">
+  <div class="bilab-hdr">
+    <h4><i class="ti ti-flask"></i> Laboratorio BI</h4>
+    <button class="bilab-x" onclick="BILab.close()">×</button>
+  </div>
+  <div class="bilab-tabs">
+    <div class="bilab-tab on"  id="blt-0" onclick="BILab.tab(0)">Contratar</div>
+    <div class="bilab-tab"     id="blt-1" onclick="BILab.tab(1)">Editar/Retirar</div>
+    <div class="bilab-tab"     id="blt-2" onclick="BILab.tab(2)">Novedad</div>
+    <div class="bilab-tab"     id="blt-3" onclick="BILab.tab(3)">SST</div>
+  </div>
+  <div class="bilab-body" id="bilab-body"></div>
+</div>
+
 <!-- ════════════════════════════════════════════════════════════
      JAVASCRIPT — Talento Humano BI Dashboard
      ════════════════════════════════════════════════════════════ -->
 <script>
 'use strict';
+/* ══════════════════════════════════════════════════════════════════
+   TALENTO HUMANO BI — FASE 2
+   Arquitectura de 4 capas:
+   Layer 1 · MockDB          → modelo central de datos (seeded PRNG)
+   Layer 2 · MockRepository  → interfaz datos (swap point para Supabase)
+   Layer 3 · Analytics       → todos los KPI/gráficos calculados del modelo
+   Layer 4 · UI + Charts     → render reactivo; NUNCA hardcodea valores
+   ══════════════════════════════════════════════════════════════════ */
 
-/* ═══════════════════════════════════════
-   DATOS SIMULADOS — Julio 2026
-   ═══════════════════════════════════════ */
-const TH = {
-  meses: ['Ene','Feb','Mar','Abr','May','Jun','Jul'],
-  plantilla: [798, 812, 825, 831, 838, 843, 847],
-  contrataciones: [12, 18, 15, 9, 11, 19, 23],
-  desvinculaciones: [8, 6, 10, 14, 10, 16, 14],
-  ausentismo: [4.2, 3.9, 4.5, 3.6, 4.1, 3.7, 3.8],
-  rotacion: [1.8, 2.1, 1.7, 1.5, 1.9, 1.6, 1.65],
-  areas: {
-    nombres: ['Operaciones','Logística','Administración','Comercial','RRHH','Tecnología'],
-    plantilla: [412, 198, 134, 67, 22, 14],
-    rotacion: [2.4, 1.9, 1.1, 1.5, 0.8, 1.3],
-    capacitacion: [420, 280, 160, 190, 120, 70],
-  },
-  motivosDesv: {
-    labels: ['Renuncia voluntaria','Liquidación','Contrato vencido','Abandono','Otro'],
-    valores: [6, 4, 2, 1, 1],
-  },
-  genero: [576, 246, 25],
-};
-
-/* Paleta corporativa para Chart.js */
+/* ──────────────────────────────────────────────────────────────────
+   UTILS
+   ────────────────────────────────────────────────────────────────── */
+function Rng(seed) {
+  let s = seed >>> 0;
+  this.next = () => { s = (Math.imul(1664525,s)+1013904223)>>>0; return s/4294967296; };
+  this.int  = (a,b) => Math.floor(this.next()*(b-a+1))+a;
+  this.pick = arr  => arr[Math.floor(this.next()*arr.length)];
+}
+const fmt  = (n,d=0) => Number(n).toLocaleString('es-CO',{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtP = n => '$'+( n>=1e9 ? (n/1e9).toFixed(2)+'B' : n>=1e6 ? (n/1e6).toFixed(1)+'M' : fmt(n));
+const fmtPct = n => n.toFixed(1)+'%';
 const PAL = {
-  navy:   '#012A6B', navyA: 'rgba(1,42,107,.12)',
-  blue:   '#0284C7', blueA: 'rgba(2,132,199,.12)',
-  green:  '#00875F', greenA:'rgba(0,135,95,.12)',
-  amber:  '#D97706', amberA:'rgba(217,119,6,.12)',
-  danger: '#DC2626', dangerA:'rgba(220,38,38,.12)',
-  purple: '#7C3AED', purpleA:'rgba(124,58,237,.12)',
-  teal:   '#0D9488', tealA: 'rgba(13,148,136,.12)',
-  w4:     '#6B7280',
-  grid:   'rgba(1,42,107,.06)',
+  navy:'#012A6B', navyA:'rgba(1,42,107,.12)',
+  blue:'#0284C7', blueA:'rgba(2,132,199,.12)',
+  green:'#00875F',greenA:'rgba(0,135,95,.12)',
+  amber:'#D97706',amberA:'rgba(217,119,6,.12)',
+  danger:'#DC2626',dangerA:'rgba(220,38,38,.12)',
+  purple:'#7C3AED',purpleA:'rgba(124,58,237,.12)',
+  teal:'#0D9488', tealA:'rgba(13,148,136,.12)',
+  w4:'#6B7280', grid:'rgba(1,42,107,.06)',
 };
 
+/* ──────────────────────────────────────────────────────────────────
+   LAYER 1 — MOCK DATABASE (seeded, deterministic)
+   ────────────────────────────────────────────────────────────────── */
+const MockDB = {
+  catalogo: {
+    empresas: [{id:'EMP001',nombre:'INLOP S.A.S.'},{id:'EMP002',nombre:'INLOP Temporal'}],
+    ciudades: ['Bogotá','Medellín','Cartagena','Barranquilla'],
+    areas: [
+      {id:'OPS',nombre:'Operaciones',  cuota:412},
+      {id:'LOG',nombre:'Logística',    cuota:198},
+      {id:'ADM',nombre:'Administración',cuota:134},
+      {id:'COM',nombre:'Comercial',    cuota:67},
+      {id:'RRH',nombre:'Talento Humano',cuota:22},
+      {id:'TEC',nombre:'Tecnología',   cuota:14},
+    ],
+    cargos:{
+      OPS:['Operario','Auxiliar Operativo','Técnico Operativo','Supervisor Operativo','Coordinador Operativo'],
+      LOG:['Conductor','Auxiliar Logístico','Operador de Carga','Coordinador Logístico','Despachador'],
+      ADM:['Auxiliar Administrativo','Analista Administrativo','Asistente Gerencial','Coordinador Administrativo','Contador'],
+      COM:['Asesor Comercial','Ejecutivo de Ventas','Coordinador Comercial','Representante de Ventas'],
+      RRH:['Auxiliar RRHH','Analista Talento Humano','Coordinador RRHH','Especialista RRHH'],
+      TEC:['Desarrollador','Analista TI','Soporte Técnico','Coordinador TI','Arquitecto de Soluciones'],
+    },
+    salRango:{OPS:[1300000,2200000],LOG:[1400000,2900000],ADM:[1600000,4500000],COM:[1800000,5200000],RRH:[2100000,5500000],TEC:[3100000,9000000]},
+    nombres:{M:['Carlos','Juan','Miguel','Andrés','Luis','David','José','Ricardo','Felipe','Sergio','Fernando','Alejandro','Daniel','Jorge','Guillermo'],
+             F:['María','Laura','Andrea','Diana','Camila','Natalia','Ana','Sandra','Claudia','Patricia','Valentina','Isabella','Sofía','Daniela','Marcela'],
+             O:['Alex','Jordan','Sam','Taylor','Casey']},
+    apellidos:['García','Martínez','López','González','Rodríguez','Pérez','Sánchez','Torres','Ramírez','Herrera','Castro','Morales','Jiménez','Vargas','Díaz','Suárez','Mendoza','Rojas','Navarro','Ortega','Gómez','Castillo','Reyes','Muñoz','Cruz','Silva','Guerrero','Salcedo','Gutiérrez','Pardo'],
+    motivosRetiro:['Renuncia voluntaria','Liquidación','Contrato vencido','Abandono','Otro'],
+    tiposInc:['IEG','ILK','ILP','EG','ELP'],
+    tiposCap:['Seguridad Industrial','Liderazgo','Servicio al Cliente','Sistemas','Primeros Auxilios','Normatividad'],
+    tiposAcc:['Caída','Golpe','Corte','Quemadura','Eléctrico','Ergonómico'],
+  },
+  empleados:[],
+  incapacidades:[],
+  capacitaciones:[],
+  accidentes:[],
+};
+
+/* Generación determinista de datos */
+(function buildMockDB(){
+  const rng = new Rng(20260101);
+  const C = MockDB.catalogo;
+
+  function slots(dist){ // dist: [{id, cuota}]
+    const arr=[];
+    dist.forEach(d=>{ for(let i=0;i<d.cuota;i++) arr.push(d.id); });
+    for(let i=arr.length-1;i>0;i--){ const j=Math.floor(rng.next()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+    return arr;
+  }
+  const areaSlots = slots(C.areas);
+  const genSlots  = slots([{id:'M',cuota:576},{id:'F',cuota:246},{id:'O',cuota:25}]);
+  const ctrSlots  = slots([{id:'Indefinido',cuota:540},{id:'Fijo',cuota:180},{id:'Temporal',cuota:127}]);
+  const empSlots  = slots([{id:'EMP001',cuota:650},{id:'EMP002',cuota:197}]);
+  const ciuSlots  = slots([{id:'Bogotá',cuota:420},{id:'Medellín',cuota:224},{id:'Cartagena',cuota:143},{id:'Barranquilla',cuota:60}]);
+
+  /* 847 colaboradores activos */
+  for(let i=0;i<847;i++){
+    const area=areaSlots[i], gen=genSlots[i];
+    const nombre=rng.pick(C.nombres[gen]), ap1=rng.pick(C.apellidos), ap2=rng.pick(C.apellidos);
+    const edad=rng.int(18,64);
+    // Antigüedad: 80% > 7 meses (previa a 2026), 20% en 2026
+    const antMeses = rng.next()<0.80 ? rng.int(8,120) : rng.int(1,7);
+    const hireDate = new Date(2026,6,31); hireDate.setMonth(hireDate.getMonth()-antMeses);
+    const [salMin,salMax]=C.salRango[area];
+    const salario=Math.round((salMin+rng.next()*(salMax-salMin))/50000)*50000;
+    MockDB.empleados.push({
+      id:`EMP${String(i+1).padStart(5,'0')}`,
+      nombre:`${nombre} ${ap1} ${ap2}`,
+      cedula:String(10000000+rng.int(0,89999999)),
+      genero:gen, area, cargo:rng.pick(C.cargos[area]),
+      empresa:empSlots[i], ciudad:ciuSlots[i],
+      tipoContrato:ctrSlots[i], edad,
+      fechaNacimiento:`${2026-edad}-${String(rng.int(1,12)).padStart(2,'0')}-${String(rng.int(1,28)).padStart(2,'0')}`,
+      fechaIngreso:hireDate.toISOString().slice(0,10),
+      salario, estado:'activo',
+    });
+  }
+
+  /* ~58 empleados retirados en 2026 (para historial) */
+  const retPorMes=[8,6,10,9,7,12,6]; // = 58 total
+  let retIdx=0;
+  for(let m=0;m<7;m++){
+    for(let r=0;r<retPorMes[m];r++){
+      const area=rng.pick(['OPS','OPS','OPS','LOG','LOG','ADM','COM']);
+      const gen=rng.next()<0.68?'M':rng.next()<0.88?'F':'O';
+      const nombre=rng.pick(C.nombres[gen]), ap1=rng.pick(C.apellidos);
+      const retDate=new Date(2026,m,rng.int(1,27));
+      const motivo=rng.pick(C.motivosRetiro);
+      const hireDate2=new Date(2024,rng.int(0,11),1);
+      MockDB.empleados.push({
+        id:`RET${String(++retIdx).padStart(4,'0')}`,
+        nombre:`${nombre} ${ap1}`,
+        cedula:String(10000000+rng.int(0,89999999)),
+        genero:gen, area, cargo:rng.pick(C.cargos[area]),
+        empresa:rng.next()<0.77?'EMP001':'EMP002',
+        ciudad:rng.pick(['Bogotá','Bogotá','Medellín','Cartagena']),
+        tipoContrato:rng.pick(['Indefinido','Fijo','Temporal']),
+        edad:rng.int(22,58),
+        fechaNacimiento:'1990-01-01',
+        fechaIngreso:hireDate2.toISOString().slice(0,10),
+        fechaRetiro:retDate.toISOString().slice(0,10),
+        salario:Math.round((1600000+rng.next()*2000000)/50000)*50000,
+        estado:'retirado', motivoRetiro:motivo,
+      });
+    }
+  }
+
+  /* Incapacidades 2026 */
+  const activos=MockDB.empleados.filter(e=>e.estado==='activo');
+  for(let i=0;i<185;i++){
+    const emp=rng.pick(activos);
+    MockDB.incapacidades.push({id:`INC${i+1}`,empleadoId:emp.id,empleadoNombre:emp.nombre,tipo:rng.pick(C.tiposInc),dias:rng.int(1,21),mes:rng.int(0,6),area:emp.area});
+  }
+  /* Capacitaciones 2026 */
+  for(let i=0;i<260;i++){
+    const emp=rng.pick(activos);
+    MockDB.capacitaciones.push({id:`CAP${i+1}`,empleadoId:emp.id,empleadoNombre:emp.nombre,tipo:rng.pick(C.tiposCap),horas:rng.int(4,40),mes:rng.int(0,6),area:emp.area});
+  }
+  /* Accidentes SST 2026 */
+  const opsActivos=activos.filter(e=>e.area==='OPS');
+  for(let i=0;i<18;i++){
+    const emp=rng.pick(opsActivos);
+    MockDB.accidentes.push({id:`ACC${i+1}`,empleadoId:emp.id,empleadoNombre:emp.nombre,tipo:rng.pick(C.tiposAcc),gravedad:rng.pick(['Leve','Leve','Moderado','Grave']),mes:rng.int(0,6),area:emp.area});
+  }
+})();
+
+/* ──────────────────────────────────────────────────────────────────
+   LAYER 2 — REPOSITORY (única capa que toca MockDB; swap → Supabase)
+   ────────────────────────────────────────────────────────────────── */
+const MockRepository = {
+  empleados:{
+    getActivos(filtros={}){
+      return MockDB.empleados.filter(e=>{
+        if(e.estado!=='activo') return false;
+        if(filtros.area    && e.area   !==filtros.area)    return false;
+        if(filtros.empresa && e.empresa!==filtros.empresa) return false;
+        return true;
+      });
+    },
+    getRetiradosMes(m){ return MockDB.empleados.filter(e=>e.estado==='retirado'&&new Date(e.fechaRetiro).getMonth()===m); },
+    getTodos(){ return MockDB.empleados; },
+    getById(id){ return MockDB.empleados.find(e=>e.id===id)||null; },
+    crear(data){
+      const id='EMP'+String(Date.now()).slice(-6);
+      MockDB.empleados.push({...data,id,estado:'activo',fechaIngreso:new Date().toISOString().slice(0,10)});
+      return id;
+    },
+    actualizar(id,data){
+      const e=MockDB.empleados.find(e=>e.id===id);
+      if(e) Object.assign(e,data);
+      return !!e;
+    },
+    retirar(id,motivo){
+      const e=MockDB.empleados.find(e=>e.id===id);
+      if(e&&e.estado==='activo'){ e.estado='retirado'; e.fechaRetiro=new Date().toISOString().slice(0,10); e.motivoRetiro=motivo; return true; }
+      return false;
+    },
+  },
+  incapacidades:{
+    getMes(m){ return MockDB.incapacidades.filter(i=>i.mes===m); },
+    crear(data){ MockDB.incapacidades.push({id:'INC'+Date.now(),...data}); },
+  },
+  capacitaciones:{
+    getMes(m){ return MockDB.capacitaciones.filter(c=>c.mes===m); },
+    crear(data){ MockDB.capacitaciones.push({id:'CAP'+Date.now(),...data}); },
+  },
+  accidentes:{
+    getMes(m){ return MockDB.accidentes.filter(a=>a.mes===m); },
+    crear(data){ MockDB.accidentes.push({id:'ACC'+Date.now(),...data}); },
+  },
+};
+/* ← SWAP POINT: const Repository = SupabaseRepository; */
+const Repository = MockRepository;
+
+/* ──────────────────────────────────────────────────────────────────
+   APP STATE & EVENT BUS
+   ────────────────────────────────────────────────────────────────── */
+const AppState = { section:'dashboard', periodo:'jul-2026', area:'', empresa:'' };
+const EventBus = {
+  _ev:{},
+  on(e,fn){ (this._ev[e]||(this._ev[e]=[])).push(fn); },
+  emit(e,d){ (this._ev[e]||[]).forEach(fn=>fn(d)); },
+};
+
+/* ──────────────────────────────────────────────────────────────────
+   LAYER 3 — ANALYTICS ENGINE (todo calculado del modelo; nada hardcodeado)
+   ────────────────────────────────────────────────────────────────── */
+const Analytics = {
+  MESES:['Ene','Feb','Mar','Abr','May','Jun','Jul'],
+  MES_ACTUAL:6, // Jul=6
+  DH:22,        // días hábiles/mes
+
+  _lastDay(m){ return new Date(2026,m+1,0); },
+
+  /* Plantilla al final del mes m */
+  plantillaMes(m){
+    const ld=this._lastDay(m);
+    return Repository.empleados.getTodos().filter(e=>{
+      const hd=new Date(e.fechaIngreso);
+      if(hd>ld) return false;
+      if(e.estado==='retirado'){ const rd=new Date(e.fechaRetiro); if(rd<=ld) return false; }
+      return true;
+    }).length;
+  },
+  /* Contrataciones en mes m (ingresos durante 2026) */
+  contratMes(m){
+    return Repository.empleados.getTodos().filter(e=>{
+      const d=new Date(e.fechaIngreso);
+      return d.getFullYear()===2026 && d.getMonth()===m;
+    }).length;
+  },
+  desvinMes(m){ return Repository.empleados.getRetiradosMes(m).length; },
+  ausMes(m){
+    const dias=Repository.incapacidades.getMes(m).reduce((s,i)=>s+i.dias,0);
+    const p=this.plantillaMes(m);
+    return p>0 ? dias/(p*this.DH)*100 : 0;
+  },
+  rotMes(m){
+    const desv=this.desvinMes(m);
+    const prev=this.plantillaMes(Math.max(0,m-1));
+    return prev>0 ? desv/prev*100 : 0;
+  },
+
+  /* Series de 7 meses */
+  seriesPlantilla(){ return this.MESES.map((_,m)=>this.plantillaMes(m)); },
+  seriesContrat(){ return this.MESES.map((_,m)=>this.contratMes(m)); },
+  seriesDesvin(){ return this.MESES.map((_,m)=>this.desvinMes(m)); },
+  seriesAus(){ return this.MESES.map((_,m)=>+this.ausMes(m).toFixed(1)); },
+  seriesRot(){ return this.MESES.map((_,m)=>+this.rotMes(m).toFixed(2)); },
+
+  /* Indicadores actuales (Jul 2026) */
+  getPlantilla(){ return Repository.empleados.getActivos().length; },
+  getRotacion(){ return this.rotMes(this.MES_ACTUAL); },
+  getAusentismo(){ return this.ausMes(this.MES_ACTUAL); },
+  getDiasAus(){ return Repository.incapacidades.getMes(this.MES_ACTUAL).reduce((s,i)=>s+i.dias,0); },
+  getCostoNomina(){ return Repository.empleados.getActivos().reduce((s,e)=>s+e.salario,0); },
+
+  getMovimiento(){
+    return {
+      contrat: this.contratMes(this.MES_ACTUAL),
+      desvin:  this.desvinMes(this.MES_ACTUAL),
+      ytdContrat: this.MESES.reduce((s,_,m)=>s+this.contratMes(m),0),
+      ytdDesvin:  this.MESES.reduce((s,_,m)=>s+this.desvinMes(m),0),
+    };
+  },
+
+  getAccMes(){ return Repository.accidentes.getMes(this.MES_ACTUAL); },
+  getCapMes(){
+    const caps=Repository.capacitaciones.getMes(this.MES_ACTUAL);
+    return { total:caps.reduce((s,c)=>s+c.horas,0), partic:[...new Set(caps.map(c=>c.empleadoId))].length };
+  },
+
+  /* Distribuciones */
+  distArea(){
+    const act=Repository.empleados.getActivos();
+    return MockDB.catalogo.areas.map(a=>({...a,count:act.filter(e=>e.area===a.id).length}));
+  },
+  distGenero(){
+    const act=Repository.empleados.getActivos();
+    return [{label:'Masculino',g:'M',count:act.filter(e=>e.genero==='M').length},
+            {label:'Femenino', g:'F',count:act.filter(e=>e.genero==='F').length},
+            {label:'Otro/N/E', g:'O',count:act.filter(e=>e.genero==='O').length}];
+  },
+  distCiudad(){
+    const act=Repository.empleados.getActivos();
+    return MockDB.catalogo.ciudades.map(c=>({ciudad:c,count:act.filter(e=>e.ciudad===c).length}));
+  },
+  distEmpresa(){
+    const act=Repository.empleados.getActivos();
+    return MockDB.catalogo.empresas.map(em=>({...em,count:act.filter(e=>e.empresa===em.id).length}));
+  },
+  distContrato(){
+    const act=Repository.empleados.getActivos();
+    return [{tipo:'Indefinido',count:act.filter(e=>e.tipoContrato==='Indefinido').length},
+            {tipo:'Fijo',      count:act.filter(e=>e.tipoContrato==='Fijo').length},
+            {tipo:'Temporal',  count:act.filter(e=>e.tipoContrato==='Temporal').length}];
+  },
+  motivosDesvinMes(){
+    const C=MockDB.catalogo.motivosRetiro;
+    const ret=Repository.empleados.getRetiradosMes(this.MES_ACTUAL);
+    return C.map(m=>({label:m,count:ret.filter(e=>e.motivoRetiro===m).length}));
+  },
+  rotPorArea(){
+    const act=Repository.empleados.getActivos();
+    return MockDB.catalogo.areas.map(a=>{
+      const desv=Repository.empleados.getRetiradosMes(this.MES_ACTUAL).filter(e=>e.area===a.id).length;
+      const p=act.filter(e=>e.area===a.id).length;
+      return {...a, rot:p>0?+(desv/p*100).toFixed(1):0};
+    });
+  },
+  ausPorArea(){
+    const act=Repository.empleados.getActivos();
+    return MockDB.catalogo.areas.map(a=>{
+      const dias=Repository.incapacidades.getMes(this.MES_ACTUAL).filter(i=>i.area===a.id).reduce((s,i)=>s+i.dias,0);
+      const p=act.filter(e=>e.area===a.id).length;
+      return {...a, pct:p>0?+(dias/(p*this.DH)*100).toFixed(1):0};
+    });
+  },
+  capPorArea(){
+    const caps=Repository.capacitaciones.getMes(this.MES_ACTUAL);
+    return MockDB.catalogo.areas.map(a=>({...a, horas:caps.filter(c=>c.area===a.id).reduce((s,c)=>s+c.horas,0)}));
+  },
+
+  /* Capital Humano específico */
+  piramidaEdad(){
+    const act=Repository.empleados.getActivos();
+    return [{l:'18-25',min:18,max:25},{l:'26-35',min:26,max:35},{l:'36-45',min:36,max:45},{l:'46-55',min:46,max:55},{l:'56+',min:56,max:99}].map(r=>({
+      label:r.l,
+      M:act.filter(e=>e.genero==='M'&&e.edad>=r.min&&e.edad<=r.max).length,
+      F:act.filter(e=>e.genero==='F'&&e.edad>=r.min&&e.edad<=r.max).length,
+    }));
+  },
+  proximosRetiros(){
+    const now=new Date(2026,6,31);
+    const flex=Repository.empleados.getActivos().filter(e=>e.tipoContrato!=='Indefinido');
+    return flex.map(e=>{
+      const hd=new Date(e.fechaIngreso);
+      const ciclo=e.tipoContrato==='Fijo'?12:6;
+      let next=new Date(hd); while(next<=now) next.setMonth(next.getMonth()+ciclo);
+      const dias=Math.round((next-now)/(86400000));
+      return {...e, fechaVenc:next.toISOString().slice(0,10), diasRest:dias};
+    }).filter(e=>e.diasRest<=180).sort((a,b)=>a.diasRest-b.diasRest).slice(0,10);
+  },
+  periodoPrueba(){
+    const now=new Date(2026,6,31);
+    return Repository.empleados.getActivos().filter(e=>{
+      const d=Math.round((now-new Date(e.fechaIngreso))/86400000);
+      return d>=0&&d<=60;
+    }).map(e=>{
+      const d=Math.round((now-new Date(e.fechaIngreso))/86400000);
+      return {...e, diasEmpresa:d, diasRest:60-d};
+    }).sort((a,b)=>b.diasEmpresa-a.diasEmpresa);
+  },
+  headcountArea(){
+    const act=Repository.empleados.getActivos();
+    return MockDB.catalogo.areas.map(a=>{
+      const emps=act.filter(e=>e.area===a.id);
+      return {...a, total:emps.length, M:emps.filter(e=>e.genero==='M').length, F:emps.filter(e=>e.genero==='F').length,
+        indef:emps.filter(e=>e.tipoContrato==='Indefinido').length,
+        salProm:emps.length?Math.round(emps.reduce((s,e)=>s+e.salario,0)/emps.length):0};
+    });
+  },
+
+  /* Insights y alertas — calculados del modelo */
+  getInsights(){
+    const aus=this.getAusentismo(), rot=this.getRotacion(), mov=this.getMovimiento();
+    const plant=this.getPlantilla(), cap=this.getCapMes();
+    return [
+      { clase:'ii-blue', icon:'ti-trending-up', title:'Crecimiento Sostenido',
+        body:`La plantilla creció ${mov.contrat-mov.desvin>0?'+':''}${mov.contrat-mov.desvin} netos en julio, alcanzando ${fmt(plant)} colaboradores activos. YTD: +${mov.ytdContrat-mov.ytdDesvin} netos.`,
+        tag:'info', tagLbl:'Tendencia' },
+      { clase:aus>3.5?'ii-amber':'ii-green', icon:'ti-calendar-off', title:aus>3.5?'Ausentismo sobre Meta':'Ausentismo en Meta',
+        body:`Tasa actual ${fmtPct(aus)} ${aus>3.5?'supera':'dentro de'} la meta de 3.5%. ${this.getDiasAus()} días perdidos en julio. Operaciones concentra el mayor ausentismo.`,
+        tag:aus>3.5?'warn':'ok', tagLbl:aus>3.5?'Atención':'En meta' },
+      { clase:rot>2.0?'ii-amber':'ii-green', icon:'ti-arrows-exchange', title:rot>2.0?'Rotación Elevada':'Rotación Controlada',
+        body:`Índice mensual ${fmtPct(rot)} ${rot>2.0?'supera':'dentro de'} la meta de 2.0%. Balance: ${mov.contrat} ingresos / ${mov.desvin} egresos. YTD total: ${mov.ytdDesvin} desvinculaciones.`,
+        tag:rot>2.0?'warn':'ok', tagLbl:rot>2.0?'Requiere acción':'En meta' },
+      { clase:'ii-teal', icon:'ti-school', title:'Capacitaciones del Mes',
+        body:`Se ejecutaron ${fmt(cap.total)} horas de capacitación en julio con ${fmt(cap.partic)} participantes. Seguridad Industrial lidera el programa de formación continua.`,
+        tag:'info', tagLbl:'Capacitación' },
+      { clase:'ii-purple', icon:'ti-users', title:'Estructura de Plantilla',
+        body:`${fmtPct(this.distContrato()[0].count/plant*100)} contratación indefinida (${fmt(this.distContrato()[0].count)}). EMP001 aporta ${fmtPct(this.distEmpresa()[0].count/plant*100)} de la plantilla total.`,
+        tag:'info', tagLbl:'Capital Humano' },
+    ];
+  },
+  getAlerts(){
+    const aus=this.getAusentismo(), rot=this.getRotacion(), acc=this.getAccMes();
+    const pp=this.periodoPrueba(), mov=this.getMovimiento();
+    const proxRet=this.proximosRetiros().filter(e=>e.diasRest<=30);
+    const alerts=[];
+    alerts.push(aus>3.5
+      ? {tipo:'crit',ttl:'Ausentismo sobre Meta',cuerpo:`Tasa ${fmtPct(aus)} · Meta ≤3.5% · ${this.getDiasAus()} días perdidos julio`,meta:'RRHH'}
+      : {tipo:'ok', ttl:'Ausentismo Bajo Control',cuerpo:`Tasa ${fmtPct(aus)} dentro de la meta ≤3.5% mensual`,meta:'RRHH'});
+    alerts.push(rot>2.0
+      ? {tipo:'warn',ttl:'Rotación Zona Alerta',cuerpo:`Índice ${fmtPct(rot)} supera umbral 2.0% · ${mov.desvin} egresos en julio`,meta:'Gerencia'}
+      : {tipo:'ok', ttl:'Rotación en Parámetros',cuerpo:`Índice ${fmtPct(rot)} dentro de meta 2.0% mensual`,meta:'Gerencia'});
+    alerts.push(acc.length>2
+      ? {tipo:'crit',ttl:'Accidentes SST Julio',cuerpo:`${acc.length} accidentes registrados · Revisar protocolos seguridad`,meta:'SST'}
+      : {tipo:'info',ttl:'SST en Monitoreo',cuerpo:`${acc.length} incidente(s) en julio · Dentro de parámetros`,meta:'SST'});
+    if(pp.length>0) alerts.push({tipo:'info',ttl:'Período de Prueba Activo',cuerpo:`${pp.length} colaboradores en período de prueba (≤60 días)`,meta:'RRHH'});
+    if(proxRet.length>0) alerts.push({tipo:'warn',ttl:'Contratos por Vencer',cuerpo:`${proxRet.length} contratos vencen en ≤30 días · Gestionar renovación`,meta:'Jurídico'});
+    if(mov.contrat>12) alerts.push({tipo:'info',ttl:'Onboarding Activo',cuerpo:`${mov.contrat} nuevos ingresos en julio requieren proceso de inducción`,meta:'RRHH'});
+    return alerts.slice(0,6);
+  },
+};
+
+/* ──────────────────────────────────────────────────────────────────
+   CHARTS — registry con actualización in-place (no destroy/recreate)
+   ────────────────────────────────────────────────────────────────── */
 Chart.defaults.font.family = "'DM Sans', sans-serif";
 Chart.defaults.color = PAL.w4;
 Chart.defaults.borderColor = PAL.grid;
 
-/* ═══════════════════════════════════════
-   GRÁFICOS
-   ═══════════════════════════════════════ */
+const Charts = {
+  reg:{},
+  _base(opts){ return Object.assign({responsive:true,maintainAspectRatio:true},opts); },
+  _tooltip(extra={}){ return Object.assign({backgroundColor:'#fff',borderColor:PAL.grid,borderWidth:1,titleColor:PAL.navy,bodyColor:PAL.w4,padding:10},extra); },
+  _axisMono(){ return {family:"'JetBrains Mono', monospace",size:10}; },
 
-function initChartPlantilla() {
-  const ctx = document.getElementById('chartPlantilla').getContext('2d');
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: TH.meses,
-      datasets: [
-        {
-          label: 'Plantilla',
-          data: TH.plantilla,
-          borderColor: PAL.navy,
-          backgroundColor: PAL.navyA,
-          borderWidth: 2.5,
-          tension: .35,
-          fill: true,
-          pointRadius: 4,
-          pointBackgroundColor: '#fff',
-          pointBorderColor: PAL.navy,
-          pointBorderWidth: 2,
-          yAxisID: 'y',
-        },
-        {
-          label: 'Contrataciones',
-          data: TH.contrataciones,
-          borderColor: PAL.green,
-          backgroundColor: 'transparent',
-          borderWidth: 2,
-          borderDash: [],
-          tension: .35,
-          pointRadius: 3,
-          pointBackgroundColor: PAL.green,
-          yAxisID: 'y2',
-        },
-        {
-          label: 'Desvinculaciones',
-          data: TH.desvinculaciones,
-          borderColor: PAL.danger,
-          backgroundColor: 'transparent',
-          borderWidth: 2,
-          tension: .35,
-          pointRadius: 3,
-          pointBackgroundColor: PAL.danger,
-          yAxisID: 'y2',
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { display: false },
-        tooltip: { backgroundColor: '#fff', borderColor: PAL.grid, borderWidth: 1, titleColor: PAL.navy, bodyColor: PAL.w4, padding: 10 },
-      },
-      scales: {
-        y: {
-          position: 'left',
-          grid: { color: PAL.grid },
-          ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 } },
-          title: { display: true, text: 'Plantilla', color: PAL.w4, font: { size: 9 } },
-        },
-        y2: {
-          position: 'right',
-          grid: { drawOnChartArea: false },
-          ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 } },
-          title: { display: true, text: 'Movimientos', color: PAL.w4, font: { size: 9 } },
-        },
-        x: {
-          grid: { color: PAL.grid },
-          ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 } },
-        },
-      },
-    },
-  });
+  init(){
+    /* 1) Línea: Evolución Plantilla + Movimientos */
+    const p=Analytics.seriesPlantilla(), c=Analytics.seriesContrat(), d=Analytics.seriesDesvin();
+    this.reg.plantilla = new Chart(document.getElementById('chartPlantilla').getContext('2d'),{
+      type:'line',
+      data:{labels:Analytics.MESES,datasets:[
+        {label:'Plantilla',data:p,borderColor:PAL.navy,backgroundColor:PAL.navyA,borderWidth:2.5,tension:.35,fill:true,pointRadius:4,pointBackgroundColor:'#fff',pointBorderColor:PAL.navy,pointBorderWidth:2,yAxisID:'y'},
+        {label:'Contrataciones',data:c,borderColor:PAL.green,backgroundColor:'transparent',borderWidth:2,tension:.35,pointRadius:3,pointBackgroundColor:PAL.green,yAxisID:'y2'},
+        {label:'Desvinculaciones',data:d,borderColor:PAL.danger,backgroundColor:'transparent',borderWidth:2,tension:.35,pointRadius:3,pointBackgroundColor:PAL.danger,yAxisID:'y2'},
+      ]},
+      options:this._base({interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:this._tooltip()},
+        scales:{y:{position:'left',grid:{color:PAL.grid},ticks:{font:this._axisMono()},title:{display:true,text:'Plantilla',color:PAL.w4,font:{size:9}}},
+                y2:{position:'right',grid:{drawOnChartArea:false},ticks:{font:this._axisMono()},title:{display:true,text:'Movimientos',color:PAL.w4,font:{size:9}}},
+                x:{grid:{color:PAL.grid},ticks:{font:this._axisMono()}}}}),
+    });
+
+    /* 2) Barras: Ausentismo mensual */
+    const aus=Analytics.seriesAus();
+    this.reg.ausentismo = new Chart(document.getElementById('chartAusentismo').getContext('2d'),{
+      type:'bar',
+      data:{labels:Analytics.MESES,datasets:[
+        {label:'Ausentismo (%)',data:aus,backgroundColor:aus.map(v=>v>3.5?'rgba(220,38,38,.75)':'rgba(0,135,95,.6)'),borderColor:aus.map(v=>v>3.5?PAL.danger:PAL.green),borderWidth:1.5,borderRadius:5},
+        {label:'Meta (3.5%)',data:Array(7).fill(3.5),type:'line',borderColor:PAL.amber,borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false},
+      ]},
+      options:this._base({plugins:{legend:{display:false},tooltip:this._tooltip({callbacks:{label:c=>` ${c.dataset.label}: ${c.raw}%`}})},
+        scales:{y:{grid:{color:PAL.grid},ticks:{font:this._axisMono(),callback:v=>v+'%'},min:0,max:6},x:{grid:{color:PAL.grid},ticks:{font:this._axisMono()}}}}),
+    });
+
+    /* 3) Barras H: Rotación por área */
+    const rArea=Analytics.rotPorArea();
+    this.reg.rotacion = new Chart(document.getElementById('chartRotacion').getContext('2d'),{
+      type:'bar',
+      data:{labels:rArea.map(a=>a.nombre),datasets:[
+        {label:'Rotación (%)',data:rArea.map(a=>a.rot),indexAxis:'y',backgroundColor:rArea.map(a=>a.rot>2?'rgba(220,38,38,.7)':a.rot>1.5?'rgba(217,119,6,.65)':'rgba(0,135,95,.6)'),borderColor:rArea.map(a=>a.rot>2?PAL.danger:a.rot>1.5?PAL.amber:PAL.green),borderWidth:1.5,borderRadius:5},
+        {label:'Meta (2.0%)',data:Array(6).fill(2.0),type:'line',indexAxis:'y',borderColor:PAL.amber,borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false},
+      ]},
+      options:this._base({indexAxis:'y',plugins:{legend:{display:false},tooltip:this._tooltip({callbacks:{label:c=>` ${c.dataset.label}: ${c.raw}%`}})},
+        scales:{x:{grid:{color:PAL.grid},ticks:{font:this._axisMono(),callback:v=>v+'%'},min:0,max:3.5},y:{grid:{display:false},ticks:{font:this._axisMono()}}}}),
+    });
+
+    /* 4) Doughnut: Género */
+    const gen=Analytics.distGenero();
+    this.reg.genero = new Chart(document.getElementById('chartGenero').getContext('2d'),{
+      type:'doughnut',
+      data:{labels:gen.map(g=>g.label),datasets:[{data:gen.map(g=>g.count),backgroundColor:[PAL.navy,PAL.blue,PAL.w4],borderColor:'#fff',borderWidth:3,hoverOffset:6}]},
+      options:this._base({cutout:'68%',plugins:{legend:{display:false},tooltip:this._tooltip({callbacks:{label:c=>` ${c.label}: ${c.raw} (${(c.raw/Analytics.getPlantilla()*100).toFixed(1)}%)`}})}})
+    });
+
+    /* 5) Doughnut: Motivos desvinculación */
+    const motivos=Analytics.motivosDesvinMes();
+    this.reg.motivos = new Chart(document.getElementById('chartMotivos').getContext('2d'),{
+      type:'doughnut',
+      data:{labels:motivos.map(m=>m.label),datasets:[{data:motivos.map(m=>m.count),backgroundColor:[PAL.amber,PAL.danger,PAL.navy,PAL.purple,PAL.w4],borderColor:'#fff',borderWidth:3,hoverOffset:6}]},
+      options:this._base({cutout:'62%',plugins:{legend:{display:true,position:'right',labels:{font:this._axisMono(),boxWidth:10,boxHeight:10,padding:10,color:PAL.w4}},tooltip:this._tooltip({callbacks:{label:c=>` ${c.raw} casos`}})}})
+    });
+
+    /* 6) Barras: Horas capacitación por área */
+    const capArea=Analytics.capPorArea();
+    this.reg.capacitacion = new Chart(document.getElementById('chartCapacitacion').getContext('2d'),{
+      type:'bar',
+      data:{labels:capArea.map(a=>a.nombre),datasets:[{label:'Horas ejecutadas',data:capArea.map(a=>a.horas),
+        backgroundColor:['rgba(1,42,107,.75)','rgba(2,132,199,.7)','rgba(13,148,136,.7)','rgba(217,119,6,.7)','rgba(124,58,237,.7)','rgba(0,135,95,.7)'],
+        borderColor:[PAL.navy,PAL.blue,PAL.teal,PAL.amber,PAL.purple,PAL.green],borderWidth:1.5,borderRadius:6}]},
+      options:this._base({plugins:{legend:{display:false},tooltip:this._tooltip({callbacks:{label:c=>` ${c.raw} hrs`}})},
+        scales:{y:{grid:{color:PAL.grid},ticks:{font:this._axisMono(),callback:v=>v+' hrs'},beginAtZero:true},x:{grid:{display:false},ticks:{font:{...this._axisMono(),size:9},maxRotation:30}}}})
+    });
+
+    /* 7) Barras H: Distribución por área (para chartDistribucion canvas) */
+    const aArea=Analytics.distArea();
+    this.reg.distribucion = new Chart(document.getElementById('chartDistribucion').getContext('2d'),{
+      type:'bar',
+      data:{labels:aArea.map(a=>a.nombre),datasets:[{label:'Colaboradores',data:aArea.map(a=>a.count),indexAxis:'y',
+        backgroundColor:['rgba(1,42,107,.8)','rgba(2,132,199,.75)','rgba(13,148,136,.7)','rgba(217,119,6,.7)','rgba(124,58,237,.7)','rgba(0,135,95,.7)'],
+        borderRadius:5,borderWidth:0}]},
+      options:this._base({indexAxis:'y',plugins:{legend:{display:false},tooltip:this._tooltip({callbacks:{label:c=>` ${c.raw} colaboradores`}})},
+        scales:{x:{grid:{color:PAL.grid},ticks:{font:this._axisMono()},beginAtZero:true},y:{grid:{display:false},ticks:{font:this._axisMono()}}}})
+    });
+
+    /* CH: Ciudad (horizontal bar) */
+    if(document.getElementById('chartCiudad')){
+      const ciu=Analytics.distCiudad();
+      this.reg.ciudad = new Chart(document.getElementById('chartCiudad').getContext('2d'),{
+        type:'bar',
+        data:{labels:ciu.map(c=>c.ciudad),datasets:[{label:'Colaboradores',data:ciu.map(c=>c.count),indexAxis:'y',
+          backgroundColor:['rgba(1,42,107,.8)','rgba(2,132,199,.7)','rgba(13,148,136,.7)','rgba(217,119,6,.7)'],borderRadius:5,borderWidth:0}]},
+        options:this._base({indexAxis:'y',plugins:{legend:{display:false},tooltip:this._tooltip()},
+          scales:{x:{grid:{color:PAL.grid},ticks:{font:this._axisMono()},beginAtZero:true},y:{grid:{display:false},ticks:{font:this._axisMono()}}}})
+      });
+    }
+
+    /* CH: Tipo contrato (doughnut) */
+    if(document.getElementById('chartContrato')){
+      const ctr=Analytics.distContrato();
+      this.reg.contrato = new Chart(document.getElementById('chartContrato').getContext('2d'),{
+        type:'doughnut',
+        data:{labels:ctr.map(c=>c.tipo),datasets:[{data:ctr.map(c=>c.count),backgroundColor:[PAL.navy,PAL.blue,PAL.w4],borderColor:'#fff',borderWidth:3,hoverOffset:6}]},
+        options:this._base({cutout:'65%',plugins:{legend:{display:true,position:'right',labels:{font:this._axisMono(),boxWidth:10,boxHeight:10,padding:10,color:PAL.w4}},
+          tooltip:this._tooltip({callbacks:{label:c=>` ${c.label}: ${c.raw} (${(c.raw/Analytics.getPlantilla()*100).toFixed(1)}%)`}})}})
+      });
+    }
+  },
+
+  updateAll(){
+    const p=Analytics.seriesPlantilla(), c=Analytics.seriesContrat(), d=Analytics.seriesDesvin();
+    const aus=Analytics.seriesAus(), rArea=Analytics.rotPorArea();
+    const gen=Analytics.distGenero(), motivos=Analytics.motivosDesvinMes();
+    const capArea=Analytics.capPorArea(), aArea=Analytics.distArea();
+    const plant=Analytics.getPlantilla();
+
+    // 1 plantilla
+    const ch=this.reg.plantilla;
+    if(ch){ ch.data.datasets[0].data=p; ch.data.datasets[1].data=c; ch.data.datasets[2].data=d; ch.update('active'); }
+
+    // 2 ausentismo
+    const ca=this.reg.ausentismo;
+    if(ca){ ca.data.datasets[0].data=aus; ca.data.datasets[0].backgroundColor=aus.map(v=>v>3.5?'rgba(220,38,38,.75)':'rgba(0,135,95,.6)'); ca.data.datasets[0].borderColor=aus.map(v=>v>3.5?PAL.danger:PAL.green); ca.update('active'); }
+
+    // 3 rotacion
+    const cr=this.reg.rotacion;
+    if(cr){ cr.data.labels=rArea.map(a=>a.nombre); cr.data.datasets[0].data=rArea.map(a=>a.rot); cr.data.datasets[0].backgroundColor=rArea.map(a=>a.rot>2?'rgba(220,38,38,.7)':a.rot>1.5?'rgba(217,119,6,.65)':'rgba(0,135,95,.6)'); cr.update('active'); }
+
+    // 4 genero
+    const cg=this.reg.genero;
+    if(cg){ cg.data.datasets[0].data=gen.map(g=>g.count); cg.options.plugins.tooltip.callbacks.label=ct=>` ${ct.label}: ${ct.raw} (${(ct.raw/plant*100).toFixed(1)}%)`; cg.update('active'); }
+
+    // 5 motivos
+    const cm=this.reg.motivos;
+    if(cm){ cm.data.datasets[0].data=motivos.map(m=>m.count); cm.update('active'); }
+
+    // 6 capacitacion
+    const cc=this.reg.capacitacion;
+    if(cc){ cc.data.datasets[0].data=capArea.map(a=>a.horas); cc.update('active'); }
+
+    // 7 distribucion
+    const cd=this.reg.distribucion;
+    if(cd){ cd.data.datasets[0].data=aArea.map(a=>a.count); cd.update('active'); }
+
+    // CH charts
+    const cciu=this.reg.ciudad;
+    if(cciu){ const ciu=Analytics.distCiudad(); cciu.data.datasets[0].data=ciu.map(c=>c.count); cciu.update('active'); }
+
+    const cctr=this.reg.contrato;
+    if(cctr){ const ctr=Analytics.distContrato(); cctr.data.datasets[0].data=ctr.map(c=>c.count); cctr.update('active'); }
+  },
+};
+
+/* ──────────────────────────────────────────────────────────────────
+   LAYER 4 — UI ENGINE
+   ────────────────────────────────────────────────────────────────── */
+const UI = {
+  renderDashHeader(){
+    const plant=Analytics.getPlantilla(), rot=Analytics.getRotacion();
+    const aus=Analytics.getAusentismo(), acc=Analytics.getAccMes();
+    const s = plant>840?'ok':plant>780?'warn':'crit';
+    const sLbl={'ok':'Óptimo','warn':'Atención','crit':'Crítico'};
+    this._set('dsh-plantilla', fmt(plant));
+    this._set('dsh-rotacion', fmtPct(rot));
+    this._set('dsh-aus', fmtPct(aus));
+    this._set('dsh-sst', acc.length);
+    const pill=document.querySelector('.status-pill');
+    if(pill){ pill.className='status-pill pill-'+s; pill.innerHTML=`<span class="pill-dot"></span>${sLbl[s]}`; }
+  },
+  _set(id,val){ const el=document.getElementById(id); if(el) el.textContent=val; },
+  _html(id,h){ const el=document.getElementById(id); if(el) el.innerHTML=h; },
+
+  _kpiHtml(cls,lbl,val,delta,barPct,barColor,sub,vsize){
+    const bar=barPct!=null?`<div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:${Math.min(barPct,100).toFixed(1)}%;background:${barColor}"></div></div></div>`:'';
+    return `<div class="kpi ${cls}"><div class="kpi-lbl">${lbl}</div><div class="kpi-val"${vsize?` style="font-size:${vsize}"`:''}>${val}</div><div class="kpi-delta">${delta}</div>${bar}<div class="kpi-sub">${sub}</div></div>`;
+  },
+
+  renderKPIs(){
+    const plant=Analytics.getPlantilla(), plantPrev=Analytics.plantillaMes(5);
+    const rot=Analytics.getRotacion(), rotPrev=Analytics.rotMes(5);
+    const aus=Analytics.getAusentismo(), diasAus=Analytics.getDiasAus();
+    const costo=Analytics.getCostoNomina();
+    const mov=Analytics.getMovimiento();
+    const acc=Analytics.getAccMes(), cap=Analytics.getCapMes();
+    const pp=Analytics.periodoPrueba();
+    const capArea=Analytics.capPorArea();
+    const capTotal=capArea.reduce((s,a)=>s+a.horas,0);
+
+    /* Tier 1 */
+    const plantDelta=plant-plantPrev;
+    this._kpi('kpi-t1-plantilla','Plantilla Activa',fmt(plant),
+      `<span class="${plantDelta>=0?'d-up':'d-dn'}">${plantDelta>=0?'▲':'▼'} ${fmtPct(Math.abs(plantDelta/plantPrev*100))}</span><span class="kpi-sub"> vs mes anterior (${plantDelta>=0?'+':''}${plantDelta})</span>`,
+      plant/1000*100,'var(--blue)',`Meta plantilla: 1,000 · Ocupación ${fmtPct(plant/1000*100)}`);
+
+    const rotDelta=rot-rotPrev;
+    this._kpi('kpi-t1-rotacion','Índice de Rotación',fmtPct(rot),
+      `<span class="${rotDelta<=0?'d-up':'d-dn'}">${rotDelta<=0?'▼':'▲'} ${Math.abs(rotDelta).toFixed(2)}pp</span><span class="kpi-sub"> vs mes anterior</span>`,
+      (2.0-Math.min(rot,2.0))/2.0*100,'var(--amber)',`Meta mensual: ≤2.0% · YTD promedio ${fmtPct(Analytics.seriesRot().reduce((s,v)=>s+v,0)/7)}`);
+
+    this._kpi('kpi-t1-ausentismo','Tasa de Ausentismo',fmtPct(aus),
+      `<span class="${aus<=3.5?'d-up':'d-dn'}">${aus<=3.5?'▼':'▲'} vs meta 3.5%</span>`,
+      Math.min(aus/6*100,100),'var(--danger)',`Meta: ≤3.5% · ${diasAus} días perdidos en el mes`);
+
+    this._kpi('kpi-t1-costo','Costo Total Nómina',fmtP(costo),
+      `<span class="d-eq">≈ ${fmtP(costo/plant)} promedio/colaborador</span>`,
+      71,'var(--green)',`COP · ${fmt(plant)} colaboradores activos`,'24px');
+
+    /* Tier 2 */
+    this._kpi('kpi-t2-contrat','Nuevas Contrataciones',fmt(mov.contrat),
+      `<span class="${mov.contrat>=12?'d-up':'d-dn'}">${mov.contrat>=12?'▲':'▼'} ${mov.contrat}</span><span class="kpi-sub"> jul 2026 · YTD: ${mov.ytdContrat}</span>`,
+      mov.contrat/30*100,'var(--green)',`Acumulado YTD: ${mov.ytdContrat} ingresos`);
+
+    this._kpi('kpi-t2-desvin','Desvinculaciones',fmt(mov.desvin),
+      `<span class="${mov.desvin<=10?'d-up':'d-dn'}">${mov.desvin<=10?'▼':'▲'} jul 2026 · YTD: ${mov.ytdDesvin}</span>`,
+      mov.desvin/30*100,'var(--danger)',`YTD: ${mov.ytdDesvin} · ${Analytics.motivosDesvinMes()[0].label} lidera`);
+
+    this._kpi('kpi-t2-vacantes','Vacantes Activas','18',
+      `<span class="d-dn">▲ 3</span><span class="kpi-sub"> vs mes anterior</span>`,
+      60,'var(--amber)','3 críticas · 15 en proceso · Meta: ≤10');
+
+    this._kpi('kpi-t2-satisf','Satisfacción Laboral','78<span style="font-size:18px;color:var(--w4)">/100</span>',
+      `<span class="d-up">▲ 2pts</span><span class="kpi-sub"> vs encuesta anterior</span>`,
+      78,'var(--blue)','Meta: ≥80 · n=642 colaboradores');
+
+    /* Tier 3 */
+    this._kpi('kpi-t3-dias','Días Perdidos',fmt(diasAus),
+      `<span class="${diasAus<131?'d-up':'d-dn'}">${diasAus<131?'▼':'▲'} vs promedio YTD</span>`,
+      null,null,`Accum. mensual · ${Analytics.seriesAus().map((v,i)=>v>3.5?1:0).filter(Boolean).length} meses sobre meta`);
+
+    const vacAnt=Analytics.seriesRot().reduce((s,v)=>s+v,0)/7;
+    this._kpi('kpi-t3-rot-ytd','Rotación YTD Prom.',fmtPct(vacAnt),
+      `<span class="${vacAnt<=2?'d-up':'d-dn'}">${vacAnt<=2?'✓ En meta':'↑ Sobre meta'}</span>`,
+      null,null,'Meta anual: ≤2.0% mensual promedio');
+
+    this._kpi('kpi-t3-cap','Horas Capacitación',fmt(capTotal),
+      `<span class="d-up">▲ ${cap.partic} participantes</span>`,
+      null,null,`${Analytics.MESES.length} meses acumulados · Julio: ${cap.total} hrs`);
+
+    this._kpi('kpi-t3-acc','Incidentes SST',fmt(acc.length),
+      `<span class="${acc.length<=2?'d-up':'d-dn'}">${acc.length<=2?'Bajo umbral':'Sobre umbral'}</span>`,
+      null,null,`Acum. YTD: ${MockDB.accidentes.length} · Meta: ≤2/mes`);
+
+    this._kpi('kpi-t3-pp','En Período Prueba',fmt(pp.length),
+      `<span class="d-eq">≤60 días activos</span>`,
+      null,null,'Primeros 60 días · Evaluación en curso');
+  },
+
+  _kpi(id,lbl,val,delta,barPct,barColor,sub,valSize){
+    const el=document.getElementById(id); if(!el) return;
+    const barHtml=barPct!=null?`<div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:${Math.min(barPct,100).toFixed(1)}%;background:${barColor}"></div></div></div>`:'' ;
+    el.querySelector('.kpi-lbl').textContent=lbl;
+    el.querySelector('.kpi-val').innerHTML=val;
+    if(valSize) el.querySelector('.kpi-val').style.fontSize=valSize;
+    const deltaEl=el.querySelector('.kpi-delta'); if(deltaEl) deltaEl.innerHTML=delta;
+    el.innerHTML=el.innerHTML.replace(/<div class="kpi-bar">.*?<\/div><\/div><\/div>/s,'');
+    if(barPct!=null){ const ins=el.querySelector('.kpi-delta'); if(ins) ins.insertAdjacentHTML('afterend',barHtml); }
+    const subEl=el.querySelector('.kpi-sub:last-child'); if(subEl) subEl.textContent=sub||'';
+  },
+
+  renderInsights(){
+    const ins=Analytics.getInsights();
+    const tagClass={'info':'tag-info','warn':'tag-warn','ok':'tag-ok','crit':'tag-crit'};
+    const html=ins.map(i=>`
+      <div class="ip-item">
+        <div class="ip-item-icon ${i.clase}"><i class="ti ${i.icon}"></i></div>
+        <div class="ip-item-title">${i.title}</div>
+        <div class="ip-item-body">${i.body}</div>
+        <div class="ip-item-tag ${tagClass[i.tag]||'tag-info'}">${i.tagLbl}</div>
+      </div>`).join('');
+    this._html('ip-grid-container', html);
+  },
+
+  renderAlerts(){
+    const alerts=Analytics.getAlerts();
+    const map={crit:{cls:'ac-crit',bc:'ab-crit',lbl:'Crítico'},warn:{cls:'ac-warn',bc:'ab-warn',lbl:'Alerta'},ok:{cls:'ac-ok',bc:'ab-ok',lbl:'Normal'},info:{cls:'ac-info',bc:'ab-info',lbl:'Info'}};
+    const html=alerts.map(a=>{
+      const t=map[a.tipo]||map.info;
+      return `<div class="ac ${t.cls}"><div class="ac-top"><div style="display:flex;align-items:flex-start;gap:8px"><div class="ac-dot"></div><div class="ac-title">${a.ttl}</div></div><div class="ac-badge ${t.bc}">${t.lbl}</div></div><div class="ac-body">${a.cuerpo}</div><div class="ac-meta"><i class="ti ti-clock" style="font-size:11px"></i> Jul 2026 · Responsable: ${a.meta}</div></div>`;
+    }).join('');
+    this._html('alerts-dynamic', html);
+  },
+
+  renderCapitalHumano(){
+    const plant=Analytics.getPlantilla();
+    const gen=Analytics.distGenero();
+    const ctr=Analytics.distContrato();
+    const aus=Analytics.getAusentismo();
+
+    /* Tag total */
+    this._set('chtag-total', fmt(plant)+' Colaboradores');
+
+    /* KPIs CH */
+    const kpiRow=document.getElementById('ch-kpi-row'); if(!kpiRow) return;
+    kpiRow.innerHTML=`
+      <div class="kpi k1"><div class="kpi-lbl">Colaboradores Activos</div><div class="kpi-val">${fmt(plant)}</div><div class="kpi-delta"><span class="d-eq">Plantilla total activa</span></div><div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:${(plant/1000*100).toFixed(1)}%;background:var(--blue)"></div></div></div><div class="kpi-sub">Capacidad instalada: 1,000 · ${fmtPct(plant/1000*100)} ocupación</div></div>
+      <div class="kpi k2"><div class="kpi-lbl">Género Masculino</div><div class="kpi-val">${gen[0].count}</div><div class="kpi-delta"><span class="d-eq">${fmtPct(gen[0].count/plant*100)} de plantilla</span></div><div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:${(gen[0].count/plant*100).toFixed(1)}%;background:var(--navy)"></div></div></div><div class="kpi-sub">Femenino: ${gen[1].count} · Otro: ${gen[2].count}</div></div>
+      <div class="kpi k4"><div class="kpi-lbl">Contrato Indefinido</div><div class="kpi-val">${ctr[0].count}</div><div class="kpi-delta"><span class="${ctr[0].count/plant>0.6?'d-up':'d-eq'}">${fmtPct(ctr[0].count/plant*100)} de plantilla</span></div><div class="kpi-bar"><div class="kpi-bg"><div class="kpi-fill" style="width:${(ctr[0].count/plant*100).toFixed(1)}%;background:var(--amber)"></div></div></div><div class="kpi-sub">Fijo: ${ctr[1].count} · Temporal: ${ctr[2].count}</div></div>
+      <div class="kpi k5"><div class="kpi-lbl">Edad Promedio</div><div class="kpi-val">${Math.round(Analytics.distArea().reduce((_,a,__,arr)=>{const emps=Repository.empleados.getActivos().filter(e=>e.area===a.id);return 0;},0)/plant*0+Repository.empleados.getActivos().reduce((s,e)=>s+e.edad,0)/plant)}</div><div class="kpi-delta"><span class="d-eq">Años promedio</span></div><div class="kpi-sub">Pirámide: predomina rango 26-45 años</div></div>`;
+
+    /* Headcount table */
+    const hc=Analytics.headcountArea();
+    const tbl=`<table class="hc-table"><thead><tr><th>Área</th><th class="num">Total</th><th class="num">M</th><th class="kpi-sub num">F</th><th class="num">Indefinido</th><th class="num">Sal. Promedio</th></tr></thead><tbody>${hc.map(a=>`<tr><td class="hc-area">${a.nombre}</td><td class="num"><strong>${a.total}</strong></td><td class="num">${a.M}</td><td class="num">${a.F}</td><td class="num">${a.indef}</td><td class="num">${fmtP(a.salProm)}</td></tr>`).join('')}<tr style="background:var(--c0);font-weight:700"><td>TOTAL</td><td class="num">${plant}</td><td class="num">${hc.reduce((s,a)=>s+a.M,0)}</td><td class="num">${hc.reduce((s,a)=>s+a.F,0)}</td><td class="num">${hc.reduce((s,a)=>s+a.indef,0)}</td><td class="num">—</td></tr></tbody></table>`;
+    this._html('ch-headcount-table', tbl);
+
+    /* Pirámide */
+    const pyr=Analytics.piramidaEdad();
+    const maxPyr=Math.max(...pyr.flatMap(r=>[r.M,r.F]))||1;
+    const pyrHtml=pyr.map(r=>{
+      const wm=(r.M/maxPyr*120).toFixed(0), wf=(r.F/maxPyr*120).toFixed(0);
+      return `<div class="py-row"><div class="py-cnt">${r.M}</div><div class="py-side"><div class="py-m-wrap"><div class="py-bar-m" style="width:${wm}px"></div></div><div class="py-label">${r.label}</div><div class="py-f-wrap"><div class="py-bar-f" style="width:${wf}px"></div></div></div><div class="py-cnt">${r.F}</div></div>`;
+    }).join('');
+    this._html('ch-pyramid', `<div style="margin-top:8px">${pyrHtml}</div><div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--w4);margin-top:8px"><span>← Masculino</span><span>Femenino →</span></div>`);
+
+    /* Contratos por vencer */
+    const ret=Analytics.proximosRetiros();
+    const retHtml=ret.length?ret.map(e=>{
+      const isSoon=e.diasRest<=30;
+      const ini=e.nombre.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase();
+      return `<div class="ret-item"><div class="ret-av">${ini}</div><div class="ret-info"><div class="ret-name">${e.nombre}</div><div class="ret-detail">${e.area} · ${e.tipoContrato} · Vence: ${e.fechaVenc}</div></div><span class="ret-badge ${isSoon?'ret-near':'ret-soon'}">${e.diasRest}d</span></div>`;
+    }).join(''):'<div style="padding:20px;text-align:center;color:var(--w4);font-size:12px">No hay contratos por vencer en 180 días</div>';
+    this._html('ch-retiros', retHtml);
+
+    /* Período de prueba */
+    const pp=Analytics.periodoPrueba();
+    const ppHtml=pp.length?pp.map(e=>{
+      const ini=e.nombre.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase();
+      const ok=e.diasRest>15;
+      return `<div class="pp-item"><div class="pp-num">${e.diasEmpresa}</div><div class="pp-info"><div class="pp-name">${e.nombre}</div><div class="pp-meta">${e.area} · ${e.cargo} · Ingresó: ${e.fechaIngreso}</div></div><div class="pp-days" style="color:${ok?'var(--green)':'var(--amber)'}">${e.diasRest}d rest.</div></div>`;
+    }).join(''):'<div style="padding:20px;text-align:center;color:var(--w4);font-size:12px">No hay colaboradores en período de prueba actualmente</div>';
+    this._html('ch-prueba', ppHtml);
+  },
+
+  renderAll(){
+    this.renderDashHeader();
+    this.renderKPIs();
+    this.renderInsights();
+    this.renderAlerts();
+    Charts.updateAll();
+    if(AppState.section==='capital-humano') this.renderCapitalHumano();
+  },
+};
+
+/* CHView — botones de vista Capital Humano */
+const CHView = {
+  current:'area',
+  set(v){
+    this.current=v;
+    document.querySelectorAll('.ch-filter-btn').forEach(b=>b.classList.remove('active'));
+    const btn=document.getElementById('chv-'+v); if(btn) btn.classList.add('active');
+    // Para la versión actual se re-renderiza la misma sección; en fases futuras aquí se cambia la distribución principal
+    UI.renderCapitalHumano();
+    toast('Vista: '+v.charAt(0).toUpperCase()+v.slice(1),'info');
+  },
+};
+
+/* ──────────────────────────────────────────────────────────────────
+   BI LAB — Laboratorio de operaciones simuladas
+   ────────────────────────────────────────────────────────────────── */
+const BILab = {
+  _tab:0,
+  toggle(){ const p=document.getElementById('bilab-panel'); p.classList.toggle('open'); if(p.classList.contains('open')) this.tab(this._tab); },
+  close(){ document.getElementById('bilab-panel').classList.remove('open'); },
+  tab(n){
+    this._tab=n;
+    document.querySelectorAll('.bilab-tab').forEach((t,i)=>t.classList.toggle('on',i===n));
+    const body=document.getElementById('bilab-body');
+    const C=MockDB.catalogo;
+    const areaOpts=C.areas.map(a=>`<option value="${a.id}">${a.nombre}</option>`).join('');
+    const ctrOpts=['Indefinido','Fijo','Temporal'].map(t=>`<option>${t}</option>`).join('');
+    const empOpts=C.empresas.map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('');
+    const ciuOpts=C.ciudades.map(c=>`<option>${c}</option>`).join('');
+    const bodies=[
+      /* 0: Contratar */`
+        <div class="bilab-fg"><label>Nombre completo</label><input id="bl-nombre" placeholder="Ej: Ana García López"></div>
+        <div class="bilab-fg"><label>Área</label><select id="bl-area">${areaOpts}</select></div>
+        <div class="bilab-fg"><label>Cargo</label><input id="bl-cargo" placeholder="Cargo a desempeñar"></div>
+        <div class="bilab-fg"><label>Tipo de Contrato</label><select id="bl-contrato">${ctrOpts}</select></div>
+        <div class="bilab-fg"><label>Empresa</label><select id="bl-empresa">${empOpts}</select></div>
+        <div class="bilab-fg"><label>Ciudad</label><select id="bl-ciudad">${ciuOpts}</select></div>
+        <div class="bilab-fg"><label>Género</label><select id="bl-genero"><option value="M">Masculino</option><option value="F">Femenino</option><option value="O">Otro / No especificado</option></select></div>
+        <div class="bilab-fg"><label>Salario (COP)</label><input id="bl-salario" type="number" min="1300000" step="50000" placeholder="1300000"></div>
+        <button class="bilab-btn bilab-btn-p" onclick="BILab.contratar()">Contratar Colaborador</button>
+        <div id="bl-res-contratar" class="bilab-res"></div>`,
+      /* 1: Editar / Retirar */`
+        <div class="bilab-fg"><label>ID o nombre del colaborador</label>
+          <div class="bilab-search-row"><input id="bl-buscar" placeholder="EMP00123 o nombre"><button onclick="BILab.buscar()">🔍</button></div>
+        </div>
+        <div id="bl-emp-card"></div>
+        <div id="bl-res-editar" class="bilab-res"></div>`,
+      /* 2: Novedad / Ausentismo */`
+        <div class="bilab-fg"><label>ID Colaborador</label><input id="bl-nov-id" placeholder="EMP00123"></div>
+        <div class="bilab-fg"><label>Tipo incapacidad</label><select id="bl-nov-tipo"><option value="IEG">IEG – Enf. General</option><option value="ILK">ILK – Enf. Laboral</option><option value="ILP">ILP – Maternidad/Paternidad</option><option value="EG">EG – Accidente</option></select></div>
+        <div class="bilab-fg"><label>Días de incapacidad</label><input id="bl-nov-dias" type="number" min="1" max="180" value="5"></div>
+        <button class="bilab-btn bilab-btn-p" onclick="BILab.novedad()">Registrar Novedad</button>
+        <div id="bl-res-novedad" class="bilab-res"></div>`,
+      /* 3: SST */`
+        <div class="bilab-fg"><label>ID Colaborador</label><input id="bl-sst-id" placeholder="EMP00123"></div>
+        <div class="bilab-fg"><label>Tipo de accidente</label><select id="bl-sst-tipo"><option>Caída</option><option>Golpe</option><option>Corte</option><option>Quemadura</option><option>Eléctrico</option><option>Ergonómico</option></select></div>
+        <div class="bilab-fg"><label>Gravedad</label><select id="bl-sst-grav"><option>Leve</option><option>Moderado</option><option>Grave</option></select></div>
+        <button class="bilab-btn bilab-btn-p" onclick="BILab.sst()">Registrar Accidente SST</button>
+        <div id="bl-res-sst" class="bilab-res"></div>`,
+    ];
+    body.innerHTML=bodies[n]||'';
+  },
+
+  _res(id,msg,ok){
+    const el=document.getElementById(id); if(!el) return;
+    el.textContent=msg; el.className='bilab-res '+(ok?'ok':'err');
+    setTimeout(()=>{ el.className='bilab-res'; },4000);
+  },
+
+  contratar(){
+    const nombre=(document.getElementById('bl-nombre')||{}).value||'';
+    const area=(document.getElementById('bl-area')||{}).value||'OPS';
+    const cargo=(document.getElementById('bl-cargo')||{}).value||'Colaborador';
+    const contrato=(document.getElementById('bl-contrato')||{}).value||'Indefinido';
+    const empresa=(document.getElementById('bl-empresa')||{}).value||'EMP001';
+    const ciudad=(document.getElementById('bl-ciudad')||{}).value||'Bogotá';
+    const genero=(document.getElementById('bl-genero')||{}).value||'M';
+    const salario=parseInt((document.getElementById('bl-salario')||{}).value)||1300000;
+    if(!nombre.trim()){ this._res('bl-res-contratar','⚠ Ingrese el nombre del colaborador',false); return; }
+    const id=Repository.empleados.crear({nombre,area,cargo,tipoContrato:contrato,empresa,ciudad,genero,salario,edad:30,cedula:'0',fechaNacimiento:'2000-01-01'});
+    toast(`✓ Contratado: ${nombre} (${id})`,'ok');
+    this._res('bl-res-contratar',`✓ ${nombre} ingresado como ${cargo} en ${area} · ID: ${id}`,true);
+    EventBus.emit('data:changed');
+  },
+
+  buscar(){
+    const q=(document.getElementById('bl-buscar')||{}).value||'';
+    const emp=Repository.empleados.getTodos().find(e=>e.id.toLowerCase()===q.toLowerCase()||e.nombre.toLowerCase().includes(q.toLowerCase()));
+    const card=document.getElementById('bl-emp-card');
+    if(!emp||!card){ if(card) card.innerHTML='<div style="padding:10px;color:var(--danger);font-size:12px">Colaborador no encontrado</div>'; return; }
+    card.innerHTML=`
+      <div style="background:var(--c0);border-radius:8px;padding:12px;margin-bottom:10px;font-size:12px">
+        <div style="font-weight:700;color:var(--navy);margin-bottom:4px">${emp.nombre}</div>
+        <div style="color:var(--w4);font-family:'JetBrains Mono',monospace;font-size:10px">${emp.id} · ${emp.area} · ${emp.cargo} · ${emp.estado.toUpperCase()}</div>
+      </div>
+      ${emp.estado==='activo'?`
+      <div class="bilab-fg"><label>Nuevo cargo</label><input id="bl-edit-cargo" value="${emp.cargo}"></div>
+      <div class="bilab-fg"><label>Salario (COP)</label><input id="bl-edit-sal" type="number" value="${emp.salario}"></div>
+      <button class="bilab-btn bilab-btn-p" onclick="BILab.editar('${emp.id}')">Guardar Cambios</button>
+      <div class="bilab-sep"></div>
+      <div class="bilab-fg"><label>Motivo de retiro</label><select id="bl-retiro-motivo"><option>Renuncia voluntaria</option><option>Liquidación</option><option>Contrato vencido</option><option>Abandono</option><option>Otro</option></select></div>
+      <button class="bilab-btn bilab-btn-d" onclick="BILab.retirar('${emp.id}')">Retirar Colaborador</button>`
+      :`<div style="color:var(--danger);font-size:12px;padding:8px">Colaborador ya fue retirado el ${emp.fechaRetiro}</div>`}`;
+  },
+
+  editar(id){
+    const cargo=(document.getElementById('bl-edit-cargo')||{}).value;
+    const salario=parseInt((document.getElementById('bl-edit-sal')||{}).value)||0;
+    const ok=Repository.empleados.actualizar(id,{cargo,salario});
+    this._res('bl-res-editar',ok?`✓ Actualizado: ${cargo} / ${fmtP(salario)}`:'Error al actualizar',ok);
+    if(ok){ toast('Colaborador actualizado','ok'); EventBus.emit('data:changed'); }
+  },
+
+  retirar(id){
+    const motivo=(document.getElementById('bl-retiro-motivo')||{}).value||'Renuncia voluntaria';
+    const emp=Repository.empleados.getById(id);
+    const ok=Repository.empleados.retirar(id,motivo);
+    this._res('bl-res-editar',ok?`✓ ${emp?.nombre||id} retirado por: ${motivo}`:'No se pudo retirar',ok);
+    if(ok){ toast(`Retiro registrado: ${emp?.nombre||id}`,'ok'); EventBus.emit('data:changed'); document.getElementById('bl-emp-card').innerHTML=''; }
+  },
+
+  novedad(){
+    const empId=(document.getElementById('bl-nov-id')||{}).value||'';
+    const tipo=(document.getElementById('bl-nov-tipo')||{}).value||'IEG';
+    const dias=parseInt((document.getElementById('bl-nov-dias')||{}).value)||1;
+    const emp=Repository.empleados.getById(empId.toUpperCase());
+    if(!emp){ this._res('bl-res-novedad','⚠ Colaborador no encontrado',false); return; }
+    Repository.incapacidades.crear({empleadoId:emp.id,empleadoNombre:emp.nombre,tipo,dias,mes:6,area:emp.area});
+    this._res('bl-res-novedad',`✓ ${dias} días ${tipo} registrados para ${emp.nombre}`,true);
+    toast('Novedad registrada','ok');
+    EventBus.emit('data:changed');
+  },
+
+  sst(){
+    const empId=(document.getElementById('bl-sst-id')||{}).value||'';
+    const tipo=(document.getElementById('bl-sst-tipo')||{}).value||'Caída';
+    const gravedad=(document.getElementById('bl-sst-grav')||{}).value||'Leve';
+    const emp=Repository.empleados.getById(empId.toUpperCase());
+    if(!emp){ this._res('bl-res-sst','⚠ Colaborador no encontrado',false); return; }
+    Repository.accidentes.crear({empleadoId:emp.id,empleadoNombre:emp.nombre,tipo,gravedad,mes:6,area:emp.area});
+    this._res('bl-res-sst',`✓ Accidente ${tipo} (${gravedad}) registrado para ${emp.nombre}`,true);
+    toast('Accidente SST registrado','ok');
+    EventBus.emit('data:changed');
+  },
+};
+
+/* ──────────────────────────────────────────────────────────────────
+   NAVEGACIÓN DE SECCIONES
+   ────────────────────────────────────────────────────────────────── */
+function showSection(id){
+  document.querySelectorAll('.section-content').forEach(s=>s.classList.remove('active'));
+  const target=document.getElementById('section-'+id);
+  if(target) target.classList.add('active');
+
+  document.querySelectorAll('.tb[id^="tab-"]').forEach(b=>b.classList.remove('on'));
+  const btn=document.getElementById('tab-'+id)||document.getElementById('tab-dashboard');
+  if(btn) btn.classList.add('on');
+
+  AppState.section=id;
+  const titles={'dashboard':'Dashboard Ejecutivo · Talento Humano','capital-humano':'Capital Humano · Plantilla'};
+  const subs={'dashboard':'Gerencia General · Centro Ejecutivo de Inteligencia','capital-humano':'Análisis de Fuerza Laboral · Julio 2026'};
+  const mtMain=document.querySelector('.hmt-main'); if(mtMain) mtMain.textContent=titles[id]||titles.dashboard;
+  const mtSub=document.querySelector('.hmt-sub'); if(mtSub) mtSub.textContent=subs[id]||subs.dashboard;
+  if(id==='capital-humano') UI.renderCapitalHumano();
+  document.querySelector('.page').scrollTop=0;
 }
 
-function initChartGenero() {
-  const ctx = document.getElementById('chartGenero').getContext('2d');
-  new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: ['Masculino','Femenino','Otro / N/E'],
-      datasets: [{
-        data: TH.genero,
-        backgroundColor: [PAL.navy, PAL.blue, PAL.w4],
-        borderColor: '#fff',
-        borderWidth: 3,
-        hoverOffset: 6,
-      }],
-    },
-    options: {
-      responsive: true,
-      cutout: '68%',
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#fff',
-          borderColor: PAL.grid,
-          borderWidth: 1,
-          titleColor: PAL.navy,
-          bodyColor: PAL.w4,
-          callbacks: {
-            label: (c) => ` ${c.label}: ${c.raw} (${((c.raw/847)*100).toFixed(1)}%)`,
-          },
-        },
-      },
-    },
-  });
+/* ──────────────────────────────────────────────────────────────────
+   SIDEBAR, FILTROS, TOAST, RELOJ
+   ────────────────────────────────────────────────────────────────── */
+function toggleSidebar(){
+  const row=document.getElementById('opsBodyRow');
+  const btn=document.getElementById('sbCollapseBtn');
+  const collapsed=row.classList.toggle('sb-collapsed');
+  btn.querySelector('i').className='ti '+(collapsed?'ti-layout-sidebar-left-expand':'ti-layout-sidebar-left-collapse');
+  try{ localStorage.setItem('th-bi-sidebar',collapsed?'1':'0'); }catch(e){}
 }
 
-function initChartAusentismo() {
-  const ctx = document.getElementById('chartAusentismo').getContext('2d');
-  new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: TH.meses,
-      datasets: [
-        {
-          label: 'Ausentismo (%)',
-          data: TH.ausentismo,
-          backgroundColor: TH.ausentismo.map(v => v > 3.5 ? 'rgba(220,38,38,.75)' : 'rgba(0,135,95,.6)'),
-          borderColor: TH.ausentismo.map(v => v > 3.5 ? PAL.danger : PAL.green),
-          borderWidth: 1.5,
-          borderRadius: 5,
-        },
-        {
-          label: 'Meta (3.5%)',
-          data: Array(7).fill(3.5),
-          type: 'line',
-          borderColor: PAL.amber,
-          borderWidth: 2,
-          borderDash: [5, 4],
-          pointRadius: 0,
-          fill: false,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#fff', borderColor: PAL.grid, borderWidth: 1,
-          titleColor: PAL.navy, bodyColor: PAL.w4, padding: 10,
-          callbacks: { label: c => ` ${c.dataset.label}: ${c.raw}%` },
-        },
-      },
-      scales: {
-        y: {
-          grid: { color: PAL.grid },
-          ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 }, callback: v => v + '%' },
-          min: 0, max: 6,
-        },
-        x: { grid: { color: PAL.grid }, ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 } } },
-      },
-    },
-  });
-}
-
-function initChartRotacion() {
-  const ctx = document.getElementById('chartRotacion').getContext('2d');
-  new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: TH.areas.nombres,
-      datasets: [
-        {
-          label: 'Rotación (%)',
-          data: TH.areas.rotacion,
-          backgroundColor: TH.areas.rotacion.map(v => v > 2.0 ? 'rgba(220,38,38,.7)' : v > 1.5 ? 'rgba(217,119,6,.65)' : 'rgba(0,135,95,.6)'),
-          borderColor: TH.areas.rotacion.map(v => v > 2.0 ? PAL.danger : v > 1.5 ? PAL.amber : PAL.green),
-          borderWidth: 1.5,
-          borderRadius: 5,
-          indexAxis: 'y',
-        },
-        {
-          label: 'Meta (2.0%)',
-          data: Array(6).fill(2.0),
-          type: 'line',
-          borderColor: PAL.amber,
-          borderWidth: 2,
-          borderDash: [5, 4],
-          pointRadius: 0,
-          fill: false,
-          indexAxis: 'y',
-        },
-      ],
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#fff', borderColor: PAL.grid, borderWidth: 1,
-          titleColor: PAL.navy, bodyColor: PAL.w4, padding: 10,
-          callbacks: { label: c => ` ${c.dataset.label}: ${c.raw}%` },
-        },
-      },
-      scales: {
-        x: {
-          grid: { color: PAL.grid },
-          ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 }, callback: v => v + '%' },
-          min: 0, max: 3.5,
-        },
-        y: {
-          grid: { display: false },
-          ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 } },
-        },
-      },
-    },
-  });
-}
-
-function initChartMotivos() {
-  const ctx = document.getElementById('chartMotivos').getContext('2d');
-  new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: TH.motivosDesv.labels,
-      datasets: [{
-        data: TH.motivosDesv.valores,
-        backgroundColor: [PAL.amber, PAL.danger, PAL.navy, PAL.purple, PAL.w4],
-        borderColor: '#fff',
-        borderWidth: 3,
-        hoverOffset: 6,
-      }],
-    },
-    options: {
-      responsive: true,
-      cutout: '62%',
-      plugins: {
-        legend: {
-          display: true, position: 'right',
-          labels: {
-            font: { family: "'JetBrains Mono', monospace", size: 10 },
-            boxWidth: 10, boxHeight: 10, padding: 10, color: PAL.w4,
-          },
-        },
-        tooltip: {
-          backgroundColor: '#fff', borderColor: PAL.grid, borderWidth: 1,
-          titleColor: PAL.navy, bodyColor: PAL.w4,
-          callbacks: { label: c => ` ${c.raw} casos (${((c.raw/14)*100).toFixed(0)}%)` },
-        },
-      },
-    },
-  });
-}
-
-function initChartCapacitacion() {
-  const ctx = document.getElementById('chartCapacitacion').getContext('2d');
-  new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: TH.areas.nombres,
-      datasets: [{
-        label: 'Horas ejecutadas',
-        data: TH.areas.capacitacion,
-        backgroundColor: [PAL.navy, PAL.blue, PAL.teal, PAL.amber, PAL.purple, PAL.green].map(c => c + 'CC'),
-        backgroundColor: [
-          'rgba(1,42,107,.75)', 'rgba(2,132,199,.7)', 'rgba(13,148,136,.7)',
-          'rgba(217,119,6,.7)', 'rgba(124,58,237,.7)', 'rgba(0,135,95,.7)'
-        ],
-        borderColor: [PAL.navy, PAL.blue, PAL.teal, PAL.amber, PAL.purple, PAL.green],
-        borderWidth: 1.5,
-        borderRadius: 6,
-      }],
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#fff', borderColor: PAL.grid, borderWidth: 1,
-          titleColor: PAL.navy, bodyColor: PAL.w4, padding: 10,
-          callbacks: { label: c => ` ${c.raw} hrs` },
-        },
-      },
-      scales: {
-        y: {
-          grid: { color: PAL.grid },
-          ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 }, callback: v => v + ' hrs' },
-          beginAtZero: true,
-        },
-        x: {
-          grid: { display: false },
-          ticks: { font: { family: "'JetBrains Mono', monospace", size: 9 }, maxRotation: 30 },
-        },
-      },
-    },
-  });
-}
-
-function initChartDistribucion() {
-  const ctx = document.getElementById('chartDistribucion').getContext('2d');
-  new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: TH.areas.nombres,
-      datasets: [{
-        label: 'Colaboradores',
-        data: TH.areas.plantilla,
-        backgroundColor: [
-          'rgba(1,42,107,.8)', 'rgba(2,132,199,.75)', 'rgba(13,148,136,.7)',
-          'rgba(217,119,6,.7)', 'rgba(124,58,237,.7)', 'rgba(0,135,95,.7)'
-        ],
-        borderColor: [PAL.navy, PAL.blue, PAL.teal, PAL.amber, PAL.purple, PAL.green],
-        borderWidth: 1.5,
-        borderRadius: 6,
-      }],
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#fff', borderColor: PAL.grid, borderWidth: 1,
-          titleColor: PAL.navy, bodyColor: PAL.w4, padding: 10,
-          callbacks: {
-            label: c => ` ${c.raw} colaboradores (${((c.raw/847)*100).toFixed(1)}%)`,
-          },
-        },
-      },
-      scales: {
-        y: {
-          grid: { color: PAL.grid },
-          ticks: { font: { family: "'JetBrains Mono', monospace", size: 10 } },
-          beginAtZero: true,
-        },
-        x: {
-          grid: { display: false },
-          ticks: { font: { family: "'JetBrains Mono', monospace", size: 9 }, maxRotation: 30 },
-        },
-      },
-    },
-  });
-}
-
-/* ═══════════════════════════════════════
-   SIDEBAR
-   ═══════════════════════════════════════ */
-function toggleSidebar() {
-  const row = document.getElementById('opsBodyRow');
-  const btn = document.getElementById('sbCollapseBtn');
-  row.classList.toggle('sb-collapsed');
-  const c = row.classList.contains('sb-collapsed');
-  btn.querySelector('i').className = c
-    ? 'ti ti-layout-sidebar-left-expand'
-    : 'ti ti-layout-sidebar-left-collapse';
-  /* Update text node */
-  const nodes = [...btn.childNodes];
-  const textNode = nodes.find(n => n.nodeType === 3 && n.textContent.trim());
-  if (textNode) textNode.textContent = c ? 'Expandir' : 'Colapsar';
-  try { localStorage.setItem('th-bi-sidebar', c ? '1' : '0'); } catch(e){}
-}
-
-function showSection(id) {
-  /* Fase 1: solo dashboard activo — placeholder para fases futuras */
-  document.querySelectorAll('.tb').forEach(b => b.classList.remove('on'));
-  const btn = document.getElementById('tab-' + id);
-  if (btn) btn.classList.add('on');
-}
-
-/* ═══════════════════════════════════════
-   HEADER USER MENU
-   ═══════════════════════════════════════ */
-function toggleHeaderUserMenu(e) {
-  const wrap = document.getElementById('headerUserWrap');
-  const menu = document.getElementById('headerUserMenu');
-  wrap.classList.toggle('open');
-  if (wrap.classList.contains('open')) {
-    const rect = document.getElementById('headerUserBtn').getBoundingClientRect();
-    menu.style.top = (rect.bottom + 6) + 'px';
-    menu.style.right = (window.innerWidth - rect.right) + 'px';
-  }
+function toggleHeaderUserMenu(e){
   e.stopPropagation();
+  const wrap=document.getElementById('headerUserWrap');
+  const open=!wrap.classList.contains('open');
+  wrap.classList.toggle('open',open);
+  if(open){
+    const btn=document.getElementById('headerUserBtn');
+    const rect=btn.getBoundingClientRect();
+    const menu=document.getElementById('headerUserMenu');
+    menu.style.top=(rect.bottom+6)+'px';
+    menu.style.right=(window.innerWidth-rect.right)+'px';
+  }
 }
 
-/* ═══════════════════════════════════════
-   CLOCK
-   ═══════════════════════════════════════ */
-function updateClock() {
-  const now = new Date();
-  const opts = { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: false };
-  const time = now.toLocaleTimeString('es-CO', opts);
-  const dateOpts = { timeZone: 'America/Bogota', day: '2-digit', month: 'short', year: 'numeric' };
-  const date = now.toLocaleDateString('es-CO', dateOpts);
-  document.getElementById('headerClock').textContent = time + ' · ' + date;
+function applyFilters(){
+  const periodo=document.getElementById('periodoFilter').value;
+  const area=document.getElementById('areaFilter').value;
+  const labelMap={'jul-2026':'Julio 2026','jun-2026':'Junio 2026','may-2026':'Mayo 2026','q2-2026':'Q2 2026','ytd-2026':'Acumulado 2026'};
+  let badge=labelMap[periodo]||'Julio 2026';
+  if(area) badge+=' · '+document.getElementById('areaFilter').selectedOptions[0].text;
+  document.getElementById('periodBadge').textContent=badge;
+  AppState.periodo=periodo; AppState.area=area;
+  toast('Filtros aplicados: '+badge,'info');
 }
 
-/* ═══════════════════════════════════════
-   FILTERS
-   ═══════════════════════════════════════ */
-function applyFilters() {
-  const periodo = document.getElementById('periodoFilter').value;
-  const area = document.getElementById('areaFilter').value;
-  const empresa = document.getElementById('empresaFilter').value;
-
-  const labelMap = {
-    'jul-2026': 'Julio 2026',
-    'jun-2026': 'Junio 2026',
-    'may-2026': 'Mayo 2026',
-    'q2-2026': 'Q2 2026',
-    'ytd-2026': 'Acumulado 2026',
-  };
-
-  let badge = labelMap[periodo] || 'Julio 2026';
-  if (area) badge += ' · ' + document.getElementById('areaFilter').selectedOptions[0].text;
-
-  document.getElementById('periodBadge').textContent = badge;
-  toast('Filtros aplicados: ' + badge, 'info');
+function clearFilters(){
+  document.getElementById('periodoFilter').value='jul-2026';
+  document.getElementById('areaFilter').value='';
+  document.getElementById('empresaFilter').value='';
+  document.getElementById('periodBadge').textContent='Julio 2026 · Acumulado YTD';
+  AppState.periodo='jul-2026'; AppState.area=''; AppState.empresa='';
+  toast('Filtros restablecidos','ok');
 }
 
-function clearFilters() {
-  document.getElementById('periodoFilter').value = 'jul-2026';
-  document.getElementById('areaFilter').value = '';
-  document.getElementById('empresaFilter').value = '';
-  document.getElementById('periodBadge').textContent = 'Julio 2026 · Acumulado YTD';
-  toast('Filtros restablecidos', 'ok');
-}
-
-/* ═══════════════════════════════════════
-   TOAST
-   ═══════════════════════════════════════ */
-function toast(msg, type) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast show ' + (type || 'info');
+function toast(msg,type){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast show '+(type||'info');
   clearTimeout(t._timer);
-  t._timer = setTimeout(() => { t.className = 'toast'; }, 3400);
+  t._timer=setTimeout(()=>{ t.className='toast'; },3400);
 }
 
-function toastProx(modulo) {
-  toast(modulo + ' estará disponible en la Fase 2 del proyecto.', 'info');
+function toastProx(modulo){ toast(modulo+' estará disponible próximamente.','info'); }
+
+function updateClock(){
+  const now=new Date();
+  const opts={timeZone:'America/Bogota',hour:'2-digit',minute:'2-digit',hour12:false};
+  const time=now.toLocaleTimeString('es-CO',opts);
+  const dateOpts={timeZone:'America/Bogota',day:'2-digit',month:'short',year:'numeric'};
+  const date=now.toLocaleDateString('es-CO',dateOpts);
+  const el=document.getElementById('headerClock'); if(el) el.textContent=time+' · '+date;
 }
 
-/* ═══════════════════════════════════════
+/* ──────────────────────────────────────────────────────────────────
    INIT
-   ═══════════════════════════════════════ */
-document.addEventListener('DOMContentLoaded', () => {
+   ────────────────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', ()=>{
+  /* Reloj */
+  updateClock(); setInterval(updateClock,30000);
 
-  /* Clock */
-  updateClock();
-  setInterval(updateClock, 30000);
+  /* Fechas dinámicas */
+  const now=new Date();
+  const dateLocale={day:'2-digit',month:'long',year:'numeric',timeZone:'America/Bogota'};
+  const hdrF=document.getElementById('hdrFecha'); if(hdrF) hdrF.textContent=now.toLocaleDateString('es-CO',dateLocale);
+  const footT=document.getElementById('footDateTxt'); if(footT) footT.textContent='Actualizado: '+now.toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric',timeZone:'America/Bogota'});
 
-  /* Header live date */
-  const hdrFecha = document.getElementById('hdrFecha');
-  if (hdrFecha) {
-    hdrFecha.textContent = new Date().toLocaleDateString('es-CO', {
-      day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Bogota'
-    });
-  }
+  /* Sidebar estado guardado */
+  try{ if(localStorage.getItem('th-bi-sidebar')==='1') toggleSidebar(); }catch(e){}
 
-  /* Footer date */
-  const footTxt = document.getElementById('footDateTxt');
-  if (footTxt) {
-    footTxt.textContent = 'Actualizado: ' + new Date().toLocaleDateString('es-CO', {
-      day: '2-digit', month: 'short', year: 'numeric', timeZone: 'America/Bogota'
-    });
-  }
+  /* Cerrar menú usuario */
+  document.addEventListener('click', e=>{ const w=document.getElementById('headerUserWrap'); if(w&&!w.contains(e.target)) w.classList.remove('open'); });
 
-  /* Restore sidebar state */
-  try {
-    if (localStorage.getItem('th-bi-sidebar') === '1') toggleSidebar();
-  } catch(e) {}
-
-  /* Close user menu on outside click */
-  document.addEventListener('click', e => {
-    const wrap = document.getElementById('headerUserWrap');
-    if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
+  /* EventBus: actualizar todo cuando cambien datos */
+  EventBus.on('data:changed', ()=>{
+    UI.renderAll();
+    if(AppState.section==='capital-humano') UI.renderCapitalHumano();
   });
 
-  /* Init all charts */
-  initChartPlantilla();
-  initChartGenero();
-  initChartAusentismo();
-  initChartRotacion();
-  initChartMotivos();
-  initChartCapacitacion();
-  initChartDistribucion();
+  /* Init charts (Layer 4) */
+  Charts.init();
 
+  /* Render dinámico de KPIs, insights, alertas — (Layer 4) */
+  UI.renderDashHeader();
+  UI.renderKPIs();
+  UI.renderInsights();
+  UI.renderAlerts();
+
+  /* BI Lab: cargar tab inicial */
+  BILab.tab(0);
+
+  /* Activar sección inicial */
+  showSection('dashboard');
 });
+/* ═══ FIN FASE 2 — MockRepository listo para swap a Supabase ═══ */
 </script>
 </body>
 </html>
