@@ -153,6 +153,10 @@ function toTimestamptz(value) {
  * @throws {ServiceUnavailableError} on network / timeout failures
  */
 export async function upsertViaje(viajeRow, { sbFetch }) {
+  // [FASE6-AUDIT-TEMP] Etapa 5 — objeto exacto que recibe upsertViaje().
+  // Remover tras confirmar causa raíz (auditoría Fase 6).
+  console.log('[FASE6-AUDIT-TEMP] Etapa5_viajeRow_recibido_por_upsertViaje', JSON.stringify(viajeRow));
+
   if (!viajeRow || typeof viajeRow !== 'object') {
     throw new MappingError('viajeRow must be a non-null object');
   }

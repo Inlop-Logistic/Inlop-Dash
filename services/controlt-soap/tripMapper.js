@@ -209,7 +209,7 @@ export function mapToViajeRow(soapResult, codigoViaje) {
     latestHoraReal(paradas)
   );
 
-  return {
+  const viajeRow = {
     codigo_controlt: codigoViaje.trim(),
     estado_viaje,
     conductor_cedula,
@@ -228,6 +228,18 @@ export function mapToViajeRow(soapResult, codigoViaje) {
     paradas,
     fecha_evento,
   };
+
+  // [FASE6-AUDIT-TEMP] Etapa 4 — objeto completo que devuelve mapToViajeRow(),
+  // junto con el `detail` post-unwrapDetail para ver exactamente qué claves de
+  // primer nivel encontró el mapper en el objeto real. Remover tras confirmar
+  // causa raíz (auditoría Fase 6).
+  console.log(
+    '[FASE6-AUDIT-TEMP] Etapa4_detail_unwrapped_claves',
+    codigoViaje, JSON.stringify(detail && Object.keys(detail))
+  );
+  console.log('[FASE6-AUDIT-TEMP] Etapa4_viajeRow_output', codigoViaje, JSON.stringify(viajeRow));
+
+  return viajeRow;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

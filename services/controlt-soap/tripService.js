@@ -176,6 +176,9 @@ export async function getTripDetail(codigoViaje, {
   // ── 1. Verificar caché ────────────────────────────────────────────────────
   const cached = await doFetchViaje(codigoTrimmed, { sbFetch });
   if (cached && !isStale(cached.soap_sincronizado_en, now, resolvedTtl)) {
+    // [FASE6-AUDIT-TEMP] Etapa 6 (camino cache-hit) — objeto final devuelto sin
+    // llamar SOAP. Remover tras confirmar causa raíz (auditoría Fase 6).
+    console.log('[FASE6-AUDIT-TEMP] Etapa6_cache_hit_sin_SOAP', codigoTrimmed, JSON.stringify(cached));
     return cached;
   }
 
@@ -208,6 +211,10 @@ export async function getTripDetail(codigoViaje, {
       `[tripService] persistencia fallida para ${codigoTrimmed}: ${persistErr.message}`
     );
   }
+
+  // [FASE6-AUDIT-TEMP] Etapa 6 — objeto final que tripService devuelve al
+  // endpoint (camino SOAP fresco). Remover tras confirmar causa raíz (auditoría Fase 6).
+  console.log('[FASE6-AUDIT-TEMP] Etapa6_viajeRow_final_a_endpoint', codigoTrimmed, JSON.stringify(viajeRow));
 
   return viajeRow;
 }

@@ -359,6 +359,10 @@ export async function getDetailMonitoringOrder(codigoViaje, config) {
   let doc;
   try {
     doc = parseXml(xml);
+    // [FASE6-AUDIT-TEMP] Etapa 2 — objeto JS inmediatamente después del parseo XML
+    // (antes de navegar Envelope→Body y antes de deepFixMojibake). Remover tras
+    // confirmar causa raíz del bug de mapeo de campos (auditoría Fase 6).
+    console.log('[FASE6-AUDIT-TEMP] Etapa2_doc_post_parseXml', codigoViaje, JSON.stringify(doc));
   } catch (err) {
     if (err instanceof SoapFaultError) {
       // Heuristic: faultstrings mentioning "token" / "session" / "auth" indicate
@@ -421,6 +425,11 @@ export async function getDetailMonitoringOrder(codigoViaje, config) {
   }
 
   const fixed = deepFixMojibake(responseNode);
+
+  // [FASE6-AUDIT-TEMP] Etapa 3 — objeto exacto que recibirá tripMapper.mapToViajeRow()
+  // (idéntico a lo que getDetailMonitoringOrder retorna: tripService lo pasa sin
+  // transformar). Remover tras confirmar causa raíz (auditoría Fase 6).
+  console.log('[FASE6-AUDIT-TEMP] Etapa3_soapResult_para_tripMapper', codigoViaje, JSON.stringify(fixed));
 
   logOperacion({
     operacion: 'GetDetailMonitoringOrder',
