@@ -1233,6 +1233,85 @@ app.get('/api/viajes', requireInternalApiKey, (req, res) => {
   res.json(viajes);
 });
 
+// ─── API CANÓNICA DEL VIAJE (Fase 6) ────────────────────────────────────────
+// GET /api/viajes/:tripNumber — único punto de entrada al dominio operacional
+// Viaje. Entrada exclusiva: el Trip Number de ControlT. El consumidor NO
+// conoce ni necesita UUIDs internos ni identificadores de `solicitudes`.
+//
+// Coexiste con GET /servicios/:id (dominio Solicitud/ERP, no lo reemplaza).
+// Reutilizable por ERP, Portal Cliente (backend), App Conductor, Torre de
+// Control, BI e integraciones futuras — todas system-to-system, de ahí
+// requireInternalApiKey (mismo mecanismo que el resto de /api/*).
+//
+// Toda comunicación con ControlT pasa por tripService.getTripDetail — este
+// endpoint no reimplementa Login, SOAP, caché ni persistencia. A diferencia
+// de construirControltEnriquecido() (Fase 5, que absorbe errores porque ahí
+// ControlT es un enriquecimiento secundario de una Solicitud), aquí el Viaje
+// ES el recurso principal: un error tipado de tripService (ver errors.js)
+// se traduce 1:1 al status HTTP correspondiente (404, 502, 503, 504, etc.).
+//
+// vehiculo/telefono/ubicacion_actual: mismos campos en tiempo real que ya
+// usa mapSolicitud()/construirControltEnriquecido() vía cache.viajes (Resume
+// API) — no es una fuente nueva, es la misma ya establecida en Fase 5.
+app.get('/api/viajes/:tripNumber', requireInternalApiKey, async (req, res) => {
+  const tripNumber = String(req.params.tripNumber || '').trim();
+  if (!tripNumber) {
+    return res.status(400).json({ error: { code: 'INVALID_TRIP_NUMBER', mensaje: 'Trip Number requerido' } });
+  }
+
+  let detalle;
+  try {
+    detalle = await getTripDetail(tripNumber, { sbFetch: controltSbFetch });
+  } catch (err) {
+    const statusCode = typeof err.statusCode === 'number' ? err.statusCode : 500;
+    const code = err.code || 'INTERNAL_ERROR';
+    console.error(`❌ GET /api/viajes/${tripNumber}:`, err.message);
+    return res.status(statusCode).json({ error: { code, mensaje: err.message } });
+  }
+
+  const viajeActivo = cache.viajes.data.find(v => String(v.trip_number) === tripNumber) || null;
+
+  const ubicacion_actual = (() => {
+    if (!viajeActivo) return null;
+    const lat = parseFloat(viajeActivo.latitude ?? viajeActivo.lat ?? '');
+    const lng = parseFloat(viajeActivo.longitude ?? viajeActivo.lng ?? '');
+    if (!lat || !lng) return null;
+    return { lat, lng, ultima_actualizacion: viajeActivo.latest_gps_report || null };
+  })();
+
+  res.json({
+    trip_number: detalle.codigo_controlt,
+    orden_operacional: {
+      number_order:         viajeActivo?.number_order        || null,
+      id_monitoring_order:  viajeActivo?.id_monitoring_order  || null,
+    },
+    estado_viaje: detalle.estado_viaje,
+    conductor: (detalle.conductor_cedula || detalle.conductor_nombre || viajeActivo) ? {
+      cedula:   detalle.conductor_cedula || null,
+      nombre:   detalle.conductor_nombre || null,
+      telefono: viajeActivo ? (extraerTelefono(viajeActivo.driver_phone, viajeActivo.full_driver) || null) : null,
+    } : null,
+    vehiculo: viajeActivo ? { placa: viajeActivo.license_plate || null } : null,
+    tipo_operacion_codigo: detalle.tipo_operacion_codigo,
+    tipo_viaje_codigo:     detalle.tipo_viaje_codigo,
+    tipo_carga_codigo:     detalle.tipo_carga_codigo,
+    carga: {
+      valor_mercancia: detalle.valor_mercancia,
+      moneda:          detalle.moneda,
+      valor_flete:     detalle.valor_flete,
+      peso_total_ton:  detalle.peso_total_ton,
+      volumen_total:   detalle.volumen_total,
+      temperatura_min: detalle.temperatura_min,
+      temperatura_max: detalle.temperatura_max,
+    },
+    instrucciones:    detalle.instrucciones,
+    paradas:          detalle.paradas || [],
+    ubicacion_actual,
+    fecha_evento:     detalle.fecha_evento,
+    sincronizado_en:  detalle.soap_sincronizado_en || null,
+  });
+});
+
 // GET /api/cumplidos — viajes finalizados desde Supabase (tabla cumplidos).
 // Fuente: Supabase, nunca desde cache en memoria.
 // Paginación interna para soportar crecimiento indefinido de la tabla.
