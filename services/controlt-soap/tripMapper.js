@@ -13,6 +13,9 @@
  */
 
 import { MappingError } from './errors.js';
+// [FASE6-AUDIT-TEMP] Ver services/controlt-soap/_fase6AuditTemp.js — eliminar
+// este import junto con el módulo tras confirmar causa raíz (auditoría Fase 6).
+import * as fase6Audit from './_fase6AuditTemp.js';
 
 // ── Estado derivation ─────────────────────────────────────────────────────────
 
@@ -229,15 +232,13 @@ export function mapToViajeRow(soapResult, codigoViaje) {
     fecha_evento,
   };
 
-  // [FASE6-AUDIT-TEMP] Etapa 4 — objeto completo que devuelve mapToViajeRow(),
-  // junto con el `detail` post-unwrapDetail para ver exactamente qué claves de
-  // primer nivel encontró el mapper en el objeto real. Remover tras confirmar
-  // causa raíz (auditoría Fase 6).
-  console.log(
-    '[FASE6-AUDIT-TEMP] Etapa4_detail_unwrapped_claves',
-    codigoViaje, JSON.stringify(detail && Object.keys(detail))
-  );
-  console.log('[FASE6-AUDIT-TEMP] Etapa4_viajeRow_output', codigoViaje, JSON.stringify(viajeRow));
+  // [FASE6-AUDIT-TEMP] Etapa 4 — salida de mapToViajeRow(), junto con las
+  // claves de primer nivel de `detail` (post-unwrapDetail) para ver
+  // exactamente qué encontró el mapper en el objeto real.
+  fase6Audit.record(codigoViaje, 'Etapa 4 - Salida tripMapper', {
+    detail_claves_primer_nivel: detail && Object.keys(detail),
+    viajeRow,
+  });
 
   return viajeRow;
 }

@@ -41,6 +41,9 @@ import { mapToViajeRow }            from './tripMapper.js';
 import { upsertViaje, fetchViaje }  from './persistenceLayer.js';
 import { getConfig }                from './config.js';
 import { SoapFaultError }           from './errors.js';
+// [FASE6-AUDIT-TEMP] Ver services/controlt-soap/_fase6AuditTemp.js — eliminar
+// este import junto con el módulo tras confirmar causa raíz (auditoría Fase 6).
+import * as fase6Audit from './_fase6AuditTemp.js';
 
 // TTL por defecto: 5 minutos
 const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1_000;
@@ -177,8 +180,9 @@ export async function getTripDetail(codigoViaje, {
   const cached = await doFetchViaje(codigoTrimmed, { sbFetch });
   if (cached && !isStale(cached.soap_sincronizado_en, now, resolvedTtl)) {
     // [FASE6-AUDIT-TEMP] Etapa 6 (camino cache-hit) — objeto final devuelto sin
-    // llamar SOAP. Remover tras confirmar causa raíz (auditoría Fase 6).
-    console.log('[FASE6-AUDIT-TEMP] Etapa6_cache_hit_sin_SOAP', codigoTrimmed, JSON.stringify(cached));
+    // llamar SOAP.
+    fase6Audit.record(codigoTrimmed, 'Etapa 6 - Respuesta final al endpoint (cache-hit, sin llamar SOAP)', cached);
+    fase6Audit.flush(codigoTrimmed);
     return cached;
   }
 
@@ -213,8 +217,9 @@ export async function getTripDetail(codigoViaje, {
   }
 
   // [FASE6-AUDIT-TEMP] Etapa 6 — objeto final que tripService devuelve al
-  // endpoint (camino SOAP fresco). Remover tras confirmar causa raíz (auditoría Fase 6).
-  console.log('[FASE6-AUDIT-TEMP] Etapa6_viajeRow_final_a_endpoint', codigoTrimmed, JSON.stringify(viajeRow));
+  // endpoint (camino SOAP fresco).
+  fase6Audit.record(codigoTrimmed, 'Etapa 6 - Respuesta final al endpoint (camino SOAP fresco)', viajeRow);
+  fase6Audit.flush(codigoTrimmed);
 
   return viajeRow;
 }
