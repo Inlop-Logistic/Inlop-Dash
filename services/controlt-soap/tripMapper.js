@@ -10,12 +10,32 @@
  *   - Estado derivation is deterministic from paradas timestamps.
  *   - Does NOT call fixMojibake — soapGateway.deepFixMojibake has already
  *     been applied before this function receives the data.
+ *
+ * Contrato REAL confirmado por auditoría Fase 6 (evidencia Railway, IN018159,
+ * 2026-08-02) — el envelope de GetDetailMonitoringOrder no usa
+ * GetDetailMonitoringOrderResult/Response como se asumía originalmente. Usa:
+ *   { success, errors, messages, data: {
+ *       code_type_operation, code_type_trip, code_type_cargo,
+ *       username, fullname, price_commodity, prices_freight,
+ *       temperature_min, temperature_max,
+ *       stops: { eMonitoringOrderPointStop: [ {
+ *         number_order, shipment_number, description_company_client,
+ *         description_location_destiny, type_location,
+ *         datetime_in_place, datetime_out_place, latitude, longitude,
+ *         address, products: { eMonitoringOrderProductWS: [...] }
+ *       } ] },
+ *   } }
+ * Los nombres antiguos (PascalCase en español) se conservan como fallback
+ * — no hay evidencia de que ControlT los use, pero tampoco de que nunca los
+ * use en otro endpoint/ambiente, y mantenerlos no tiene costo bajo el patrón
+ * Tolerant Reader. Campos sin ninguna evidencia real (moneda/currency,
+ * peso_total_ton/volumen_total a nivel de viaje, instrucciones, estado por
+ * parada, eta, y los campos internos de cada producto) permanecen con sus
+ * candidatos antiguos únicamente — quedan null bajo el contrato real hasta
+ * que una futura auditoría confirme sus nombres.
  */
 
 import { MappingError } from './errors.js';
-// [FASE6-AUDIT-TEMP] Ver services/controlt-soap/_fase6AuditTemp.js — eliminar
-// este import junto con el módulo tras confirmar causa raíz (auditoría Fase 6).
-import * as fase6Audit from './_fase6AuditTemp.js';
 
 // ── Estado derivation ─────────────────────────────────────────────────────────
 
@@ -82,30 +102,40 @@ export function deriveEstado(paradas) {
 /**
  * Normalise a raw SOAP stop node into a Parada domain object.
  *
- * ControlT stop fields observed in wild:
+ * Nombres reales confirmados (auditoría Fase 6, evidencia Railway IN018159):
+ *   number_order, description_location_destiny, type_location,
+ *   datetime_in_place, datetime_out_place, latitude, longitude, address,
+ *   products.eMonitoringOrderProductWS
+ * Nombres antiguos (nunca confirmados contra una respuesta real, se
+ * conservan como fallback sin costo bajo Tolerant Reader):
  *   NumeroParada, NombreParada, Direccion, Latitud, Longitud,
  *   EstadoParada, FechaProgramada, FechaReal, FechaETA, TipoParada,
  *   Productos / Producto
+ * Sin evidencia real todavía (quedan null bajo el contrato real):
+ *   estado de la parada, eta.
  *
  * @param {object} raw
  * @param {number} index — 0-based fallback orden when NumeroParada absent
  * @returns {Parada}
  */
 function mapParada(raw, index) {
-  const productos = normalizeArray(raw.Productos?.Producto ?? raw.Producto)
-    .map(mapProducto);
+  const productos = normalizeArray(
+    raw.products?.eMonitoringOrderProductWS ??
+    raw.Productos?.Producto ??
+    raw.Producto
+  ).map(mapProducto);
 
   return {
-    orden:            toInt(raw.NumeroParada) ?? index + 1,
-    nombre:           toStr(raw.NombreParada),
-    direccion:        toStr(raw.Direccion),
-    lat:              toFloat(raw.Latitud),
-    lng:              toFloat(raw.Longitud),
+    orden:            toInt(raw.NumeroParada ?? raw.number_order) ?? index + 1,
+    nombre:           toStr(raw.NombreParada ?? raw.description_location_destiny),
+    direccion:        toStr(raw.Direccion ?? raw.address),
+    lat:              toFloat(raw.Latitud ?? raw.latitude),
+    lng:              toFloat(raw.Longitud ?? raw.longitude),
     estado:           toStr(raw.EstadoParada),
-    hora_programada:  toStr(raw.FechaProgramada),
-    hora_real:        toStr(raw.FechaReal),
+    hora_programada:  toStr(raw.FechaProgramada ?? raw.datetime_in_place),
+    hora_real:        toStr(raw.FechaReal ?? raw.datetime_out_place),
     eta:              toStr(raw.FechaETA),
-    tipo:             toStr(raw.TipoParada),
+    tipo:             toStr(raw.TipoParada ?? raw.type_location),
     productos,
   };
 }
@@ -113,6 +143,11 @@ function mapParada(raw, index) {
 /**
  * @param {object} raw
  * @returns {Producto}
+ *
+ * NOTA: la auditoría Fase 6 solo confirmó el nombre del contenedor
+ * (products.eMonitoringOrderProductWS), no los campos internos de cada
+ * producto. Se mantienen únicamente los candidatos antiguos hasta que una
+ * auditoría futura confirme los nombres reales.
  */
 function mapProducto(raw) {
   return {
@@ -167,6 +202,7 @@ export function mapToViajeRow(soapResult, codigoViaje) {
 
   // ── paradas ──────────────────────────────────────────────────────────────
   const rawParadas = normalizeArray(
+    detail?.stops?.eMonitoringOrderPointStop ??   // real (auditoría Fase 6)
     detail?.Paradas?.Parada ??
     detail?.paradas?.Parada ??
     detail?.Paradas ??
@@ -178,27 +214,43 @@ export function mapToViajeRow(soapResult, codigoViaje) {
   const estado_viaje = deriveEstado(paradas);
 
   // ── conductor ─────────────────────────────────────────────────────────────
+  // username/fullname: nombres reales confirmados (auditoría Fase 6) — el
+  // servicio de conductor usa las mismas convenciones que la app de login.
   const conductor = detail?.Conductor ?? detail?.conductor ?? detail?.DatosConductor ?? {};
-  const conductor_cedula = toStr(conductor.Cedula ?? conductor.cedula ?? conductor.NumeroDocumento ?? detail?.CedulaConductor);
-  const conductor_nombre = toStr(conductor.Nombre ?? conductor.nombre ?? conductor.NombreCompleto ?? detail?.NombreConductor);
+  const conductor_cedula = toStr(
+    detail?.username ??
+    conductor.Cedula ?? conductor.cedula ?? conductor.NumeroDocumento ?? detail?.CedulaConductor
+  );
+  const conductor_nombre = toStr(
+    detail?.fullname ??
+    conductor.Nombre ?? conductor.nombre ?? conductor.NombreCompleto ?? detail?.NombreConductor
+  );
 
   // ── tipo / clasificación ──────────────────────────────────────────────────
-  const tipo_operacion_codigo = toInt(detail?.TipoOperacion ?? detail?.CodigoTipoOperacion);
-  const tipo_viaje_codigo     = toInt(detail?.TipoViaje ?? detail?.CodigoTipoViaje);
-  const tipo_carga_codigo     = toInt(detail?.TipoCarga ?? detail?.CodigoTipoCarga);
+  const tipo_operacion_codigo = toInt(detail?.code_type_operation ?? detail?.TipoOperacion ?? detail?.CodigoTipoOperacion);
+  const tipo_viaje_codigo     = toInt(detail?.code_type_trip      ?? detail?.TipoViaje     ?? detail?.CodigoTipoViaje);
+  const tipo_carga_codigo     = toInt(detail?.code_type_cargo     ?? detail?.TipoCarga     ?? detail?.CodigoTipoCarga);
 
   // ── valores económicos ────────────────────────────────────────────────────
-  const valor_mercancia = toFloat(detail?.ValorMercancia ?? detail?.valorMercancia);
+  // price_commodity/prices_freight: nombres reales confirmados (auditoría
+  // Fase 6). El plural de "prices_freight" no está documentado como arreglo
+  // en la evidencia disponible — se admite ambas formas por robustez.
+  const valor_mercancia = toFloatMaybeArray(detail?.price_commodity  ?? detail?.ValorMercancia ?? detail?.valorMercancia);
+  const valor_flete     = toFloatMaybeArray(detail?.prices_freight   ?? detail?.ValorFlete      ?? detail?.valorFlete);
+  // moneda: sin nombre real confirmado por la auditoría — permanece null
+  // bajo el contrato real hasta una futura confirmación.
   const moneda          = toStr(detail?.Moneda ?? detail?.moneda);
-  const valor_flete     = toFloat(detail?.ValorFlete ?? detail?.valorFlete);
 
   // ── valores físicos ───────────────────────────────────────────────────────
+  // Sin nombre real confirmado por la auditoría — permanecen null bajo el
+  // contrato real hasta una futura confirmación.
   const peso_total_ton  = toFloat(detail?.PesoTotal ?? detail?.pesoTotal ?? detail?.PesoToneladas);
   const volumen_total   = toFloat(detail?.VolumenTotal ?? detail?.volumenTotal ?? detail?.Volumen);
 
   // ── temperatura ───────────────────────────────────────────────────────────
-  const temperatura_min = toFloat(detail?.TemperaturaMinima ?? detail?.temperaturaMin ?? detail?.TempMinima);
-  const temperatura_max = toFloat(detail?.TemperaturaMaxima ?? detail?.temperaturaMax ?? detail?.TempMaxima);
+  // temperature_min/temperature_max: nombres reales confirmados (auditoría Fase 6).
+  const temperatura_min = toFloat(detail?.temperature_min ?? detail?.TemperaturaMinima ?? detail?.temperaturaMin ?? detail?.TempMinima);
+  const temperatura_max = toFloat(detail?.temperature_max ?? detail?.TemperaturaMaxima ?? detail?.temperaturaMax ?? detail?.TempMaxima);
 
   // ── instrucciones ─────────────────────────────────────────────────────────
   const instrucciones = toStr(detail?.Instrucciones ?? detail?.instrucciones ?? detail?.InstruccionesEspeciales);
@@ -212,7 +264,7 @@ export function mapToViajeRow(soapResult, codigoViaje) {
     latestHoraReal(paradas)
   );
 
-  const viajeRow = {
+  return {
     codigo_controlt: codigoViaje.trim(),
     estado_viaje,
     conductor_cedula,
@@ -231,16 +283,6 @@ export function mapToViajeRow(soapResult, codigoViaje) {
     paradas,
     fecha_evento,
   };
-
-  // [FASE6-AUDIT-TEMP] Etapa 4 — salida de mapToViajeRow(), junto con las
-  // claves de primer nivel de `detail` (post-unwrapDetail) para ver
-  // exactamente qué encontró el mapper en el objeto real.
-  fase6Audit.record(codigoViaje, 'Etapa 4 - Salida tripMapper', {
-    detail_claves_primer_nivel: detail && Object.keys(detail),
-    viajeRow,
-  });
-
-  return viajeRow;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -252,12 +294,19 @@ export function mapToViajeRow(soapResult, codigoViaje) {
 function unwrapDetail(soapResult) {
   if (!soapResult || typeof soapResult !== 'object') return {};
 
-  // Pattern 1: { GetDetailMonitoringOrderResult: { ... } }
+  // Pattern 1 (legacy — nunca confirmado contra una respuesta real):
+  // { GetDetailMonitoringOrderResult: { ... } }
   if (soapResult.GetDetailMonitoringOrderResult) return soapResult.GetDetailMonitoringOrderResult;
 
-  // Pattern 2: { GetDetailMonitoringOrderResponse: { GetDetailMonitoringOrderResult: { ... } } }
+  // Pattern 2 (legacy — nunca confirmado contra una respuesta real):
+  // { GetDetailMonitoringOrderResponse: { GetDetailMonitoringOrderResult: { ... } } }
   const inner = soapResult.GetDetailMonitoringOrderResponse;
   if (inner?.GetDetailMonitoringOrderResult) return inner.GetDetailMonitoringOrderResult;
+
+  // Pattern 3 (REAL — confirmado por auditoría Fase 6, evidencia Railway
+  // IN018159, 2026-08-02): { success, errors, messages, data: { ... } }
+  if (soapResult.data && typeof soapResult.data === 'object') return soapResult.data;
+
   if (inner) return inner;
 
   return soapResult;
@@ -289,6 +338,16 @@ function toFloat(v) {
   if (v == null) return null;
   const n = parseFloat(String(v).trim().replace(',', '.'));
   return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Convert to float, unwrapping a single-level array first if present.
+ * Usado para campos cuyo nombre real es plural (price_commodity /
+ * prices_freight) sin evidencia documentada de si ControlT los envía como
+ * arreglo o como escalar — tolerante a ambas formas.
+ */
+function toFloatMaybeArray(v) {
+  return toFloat(Array.isArray(v) ? v[0] : v);
 }
 
 /** Return the latest non-null hora_real string from paradas, or null. */

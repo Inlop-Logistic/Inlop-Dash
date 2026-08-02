@@ -29,9 +29,6 @@ import {
   TimeoutError,
   ViajeNotFoundError,
 } from './errors.js';
-// [FASE6-AUDIT-TEMP] Ver services/controlt-soap/_fase6AuditTemp.js — eliminar
-// este import junto con el módulo tras confirmar causa raíz (auditoría Fase 6).
-import * as fase6Audit from './_fase6AuditTemp.js';
 
 // ── XML parser (shared instance) ──────────────────────────────────────────────
 
@@ -359,16 +356,9 @@ export async function getDetailMonitoringOrder(codigoViaje, config) {
 
   logSoapPayload('GetDetailMonitoringOrder', 'response', xml);
 
-  // [FASE6-AUDIT-TEMP] Etapa 1 — XML crudo de respuesta. Remover junto con el
-  // resto de la instrumentación tras confirmar causa raíz (auditoría Fase 6).
-  fase6Audit.record(codigoViaje, 'Etapa 1 - XML crudo', xml);
-
   let doc;
   try {
     doc = parseXml(xml);
-    // [FASE6-AUDIT-TEMP] Etapa 2 — objeto JS inmediatamente después del parseo XML
-    // (antes de navegar Envelope→Body y antes de deepFixMojibake).
-    fase6Audit.record(codigoViaje, 'Etapa 2 - Objeto post parseo XML', doc);
   } catch (err) {
     if (err instanceof SoapFaultError) {
       // Heuristic: faultstrings mentioning "token" / "session" / "auth" indicate
@@ -431,11 +421,6 @@ export async function getDetailMonitoringOrder(codigoViaje, config) {
   }
 
   const fixed = deepFixMojibake(responseNode);
-
-  // [FASE6-AUDIT-TEMP] Etapa 3 — objeto exacto que recibirá tripMapper.mapToViajeRow()
-  // (idéntico a lo que getDetailMonitoringOrder retorna: tripService lo pasa sin
-  // transformar).
-  fase6Audit.record(codigoViaje, 'Etapa 3 - Entrada tripMapper', fixed);
 
   logOperacion({
     operacion: 'GetDetailMonitoringOrder',

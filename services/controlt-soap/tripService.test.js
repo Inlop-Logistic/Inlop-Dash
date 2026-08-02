@@ -188,13 +188,22 @@ describe('getTripDetail — SOAP flow', () => {
   });
 
   it('returns the mapped ViajeRow from SOAP call', async () => {
+    // _now fijo — mapToViajeRow() nunca produce soap_sincronizado_en (ver
+    // bug fijado en auditoría Fase 6); tripService lo agrega usando `now`.
+    // Sin fijar _now, comparar contra un timestamp generado por separado en
+    // el fixture es una carrera de milisegundos.
+    const fixedNow = 1_700_000_000_000;
     const expectedRow = makeViajeRow();
 
     const result = await getTripDetail('IN018108', makeDeps({
       _mapper: () => expectedRow,
+      _now:    () => fixedNow,
     }));
 
-    assert.deepEqual(result, expectedRow);
+    assert.deepEqual(result, {
+      ...expectedRow,
+      soap_sincronizado_en: new Date(fixedNow).toISOString(),
+    });
   });
 });
 
@@ -299,14 +308,20 @@ describe('getTripDetail — auth fault retry', () => {
 
 describe('getTripDetail — best-effort persistence', () => {
   it('returns ViajeRow from SOAP even when upsert throws', async () => {
+    // _now fijo por la misma razón que el test anterior — ver comentario ahí.
+    const fixedNow = 1_700_000_000_000;
     const expectedRow = makeViajeRow();
 
     const result = await getTripDetail('IN018108', makeDeps({
       _mapper:      () => expectedRow,
       _upsertViaje: async () => { throw new Error('Supabase unavailable'); },
+      _now:         () => fixedNow,
     }));
 
-    assert.deepEqual(result, expectedRow, 'caller must still get the SOAP data');
+    assert.deepEqual(result, {
+      ...expectedRow,
+      soap_sincronizado_en: new Date(fixedNow).toISOString(),
+    }, 'caller must still get the SOAP data');
   });
 
   it('does not call upsert on cache hit', async () => {
@@ -319,6 +334,40 @@ describe('getTripDetail — best-effort persistence', () => {
     }));
 
     assert.equal(upsertCalled, false, 'upsert must not be called on cache hit');
+  });
+});
+
+// ── getTripDetail — sincronizado_en contract parity ──────────────────────────
+// Bug confirmado por auditoría Fase 6: mapToViajeRow() nunca produce
+// soap_sincronizado_en (solo persistenceLayer.fromSoapRow lo agrega al leer
+// de caché). El camino SOAP fresco devolvía siempre null en ese campo.
+
+describe('getTripDetail — sincronizado_en contract parity (bug fijado en auditoría Fase 6)', () => {
+  it('fresh SOAP path attaches a non-null soap_sincronizado_en', async () => {
+    const fixedNow = 1_700_000_000_000;
+    const mappedRow = makeViajeRow(); // simula la salida real de mapToViajeRow (sin el campo)
+
+    const result = await getTripDetail('IN018108', makeDeps({
+      _mapper: () => mappedRow,
+      _now:    () => fixedNow,
+    }));
+
+    assert.equal(result.soap_sincronizado_en, new Date(fixedNow).toISOString());
+  });
+
+  it('cache-hit and fresh-SOAP responses expose the same set of keys', async () => {
+    const cachedRow  = makeViajeRow(new Date().toISOString());
+    const freshMapped = makeViajeRow();
+
+    const cacheHitResult = await getTripDetail('IN018108', makeDeps({
+      _fetchViaje: async () => cachedRow,
+    }));
+    const freshResult = await getTripDetail('IN018109', makeDeps({
+      _mapper: () => freshMapped,
+    }));
+
+    assert.deepEqual(Object.keys(cacheHitResult).sort(), Object.keys(freshResult).sort());
+    assert.ok(freshResult.soap_sincronizado_en, 'fresh path must not lose sincronizado_en');
   });
 });
 

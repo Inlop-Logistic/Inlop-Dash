@@ -282,3 +282,167 @@ describe('mapToViajeRow', () => {
     assert.equal(row.conductor_nombre, 'María López');
   });
 });
+
+// ── Contrato REAL confirmado por auditoría Fase 6 ────────────────────────────
+//
+// Evidencia obtenida en Railway para el viaje IN018159 (2026-08-02): el
+// envelope de GetDetailMonitoringOrder NO usa GetDetailMonitoringOrderResult/
+// Response — usa { success, errors, messages, data: { ... } }, con nombres
+// de campo en inglés snake_case dentro de `data`, no las claves en español
+// PascalCase que se habían asumido sin validar contra una respuesta real.
+//
+// Estos fixtures reproducen la ESTRUCTURA/nombres de clave confirmados por
+// esa auditoría. Los valores de ejemplo son representativos — la auditoría
+// confirmó nombres de campo, no los valores concretos del viaje real.
+
+function makeRealStop(overrides = {}) {
+  return {
+    number_order:                 1,
+    shipment_number:              'SH-001',
+    description_company_client:  'Cliente Final S.A.S.',
+    description_location_destiny: 'Bodega Central',
+    type_location:                'CARGUE',
+    datetime_in_place:            '2026-07-15T08:00:00',
+    datetime_out_place:           '2026-07-15T08:30:00',
+    latitude:                     '4.6097',
+    longitude:                    '-74.0817',
+    address:                      'Calle 10 # 5-20, Bogotá',
+    products:                     { eMonitoringOrderProductWS: [] },
+    ...overrides,
+  };
+}
+
+function makeRealSoapResult(dataOverrides = {}) {
+  return {
+    success: true,
+    errors: [],
+    messages: [],
+    data: {
+      code_type_operation: '2',
+      code_type_trip:      '1',
+      code_type_cargo:     '3',
+      username:            '12345678',
+      fullname:            'Juan Pérez',
+      price_commodity:     '50000000',
+      prices_freight:      '3500000',
+      temperature_min:     null,
+      temperature_max:     null,
+      trackingFromNewUI:   true,
+      stops: {
+        eMonitoringOrderPointStop: [
+          makeRealStop({ number_order: 1, type_location: 'CARGUE' }),
+          makeRealStop({
+            number_order:                 2,
+            description_location_destiny: 'Cliente Final',
+            type_location:                'DESCARGUE',
+            datetime_out_place:            null,
+          }),
+        ],
+      },
+      ...dataOverrides,
+    },
+  };
+}
+
+describe('mapToViajeRow — contrato REAL (auditoría Fase 6, evidencia Railway IN018159)', () => {
+  it('unwraps the { success, data } envelope (Pattern 3)', () => {
+    const row = mapToViajeRow(makeRealSoapResult(), 'IN018159');
+    assert.equal(row.codigo_controlt, 'IN018159');
+    assert.equal(row.paradas.length, 2);
+  });
+
+  it('maps tipo_operacion/viaje/carga from code_type_operation/trip/cargo', () => {
+    const row = mapToViajeRow(makeRealSoapResult(), 'IN018159');
+    assert.equal(row.tipo_operacion_codigo, 2);
+    assert.equal(row.tipo_viaje_codigo, 1);
+    assert.equal(row.tipo_carga_codigo, 3);
+  });
+
+  it('maps conductor from username/fullname', () => {
+    const row = mapToViajeRow(makeRealSoapResult(), 'IN018159');
+    assert.equal(row.conductor_cedula, '12345678');
+    assert.equal(row.conductor_nombre, 'Juan Pérez');
+  });
+
+  it('maps valor_mercancia/valor_flete from price_commodity/prices_freight', () => {
+    const row = mapToViajeRow(makeRealSoapResult(), 'IN018159');
+    assert.equal(row.valor_mercancia, 50000000);
+    assert.equal(row.valor_flete, 3500000);
+  });
+
+  it('tolerates price_commodity/prices_freight as single-element arrays', () => {
+    const row = mapToViajeRow(
+      makeRealSoapResult({ price_commodity: ['50000000'], prices_freight: ['3500000'] }),
+      'IN018159'
+    );
+    assert.equal(row.valor_mercancia, 50000000);
+    assert.equal(row.valor_flete, 3500000);
+  });
+
+  it('maps temperature_min/temperature_max', () => {
+    const row = mapToViajeRow(
+      makeRealSoapResult({ temperature_min: '2.5', temperature_max: '8.0' }),
+      'IN018159'
+    );
+    assert.equal(row.temperatura_min, 2.5);
+    assert.equal(row.temperatura_max, 8.0);
+  });
+
+  it('maps parada fields from the real stop contract', () => {
+    const row = mapToViajeRow(makeRealSoapResult(), 'IN018159');
+    const p0 = row.paradas[0];
+
+    assert.equal(p0.orden, 1);
+    assert.equal(p0.nombre, 'Bodega Central');
+    assert.equal(p0.direccion, 'Calle 10 # 5-20, Bogotá');
+    assert.equal(p0.lat, 4.6097);
+    assert.equal(p0.lng, -74.0817);
+    assert.equal(p0.hora_programada, '2026-07-15T08:00:00');
+    assert.equal(p0.hora_real, '2026-07-15T08:30:00');
+    assert.equal(p0.tipo, 'CARGUE');
+  });
+
+  it('derives estado_viaje from datetime_out_place across real stops', () => {
+    const row = mapToViajeRow(makeRealSoapResult(), 'IN018159');
+    // Solo la primera parada tiene datetime_out_place → EN_CARGUE
+    assert.equal(row.estado_viaje, 'EN_CARGUE');
+  });
+
+  it('falls back to latest hora_real (datetime_out_place) for fecha_evento', () => {
+    const row = mapToViajeRow(makeRealSoapResult(), 'IN018159');
+    assert.equal(row.fecha_evento, '2026-07-15T08:30:00');
+  });
+
+  it('maps productos array from products.eMonitoringOrderProductWS', () => {
+    const soap = makeRealSoapResult();
+    soap.data.stops.eMonitoringOrderPointStop[0].products = {
+      eMonitoringOrderProductWS: [{ Descripcion: 'Cemento', Cantidad: '500' }],
+    };
+    const row = mapToViajeRow(soap, 'IN018159');
+    assert.equal(row.paradas[0].productos.length, 1);
+    assert.equal(row.paradas[0].productos[0].descripcion, 'Cemento');
+  });
+
+  it('handles single stop object (not array) under the real contract', () => {
+    const soap = makeRealSoapResult();
+    soap.data.stops = { eMonitoringOrderPointStop: makeRealStop() };
+    const row = mapToViajeRow(soap, 'IN018159');
+    assert.equal(row.paradas.length, 1);
+  });
+
+  it('still supports the legacy GetDetailMonitoringOrderResult contract (no regression)', () => {
+    const legacy = { GetDetailMonitoringOrderResult: { Moneda: 'COP' } };
+    const row = mapToViajeRow(legacy, 'IN018108');
+    assert.equal(row.moneda, 'COP');
+  });
+
+  it('still supports the legacy GetDetailMonitoringOrderResponse contract (no regression)', () => {
+    const legacy = {
+      GetDetailMonitoringOrderResponse: {
+        GetDetailMonitoringOrderResult: { Moneda: 'EUR' },
+      },
+    };
+    const row = mapToViajeRow(legacy, 'IN018108');
+    assert.equal(row.moneda, 'EUR');
+  });
+});

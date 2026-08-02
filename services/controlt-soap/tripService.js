@@ -41,9 +41,6 @@ import { mapToViajeRow }            from './tripMapper.js';
 import { upsertViaje, fetchViaje }  from './persistenceLayer.js';
 import { getConfig }                from './config.js';
 import { SoapFaultError }           from './errors.js';
-// [FASE6-AUDIT-TEMP] Ver services/controlt-soap/_fase6AuditTemp.js — eliminar
-// este import junto con el módulo tras confirmar causa raíz (auditoría Fase 6).
-import * as fase6Audit from './_fase6AuditTemp.js';
 
 // TTL por defecto: 5 minutos
 const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1_000;
@@ -179,10 +176,6 @@ export async function getTripDetail(codigoViaje, {
   // ── 1. Verificar caché ────────────────────────────────────────────────────
   const cached = await doFetchViaje(codigoTrimmed, { sbFetch });
   if (cached && !isStale(cached.soap_sincronizado_en, now, resolvedTtl)) {
-    // [FASE6-AUDIT-TEMP] Etapa 6 (camino cache-hit) — objeto final devuelto sin
-    // llamar SOAP.
-    fase6Audit.record(codigoTrimmed, 'Etapa 6 - Respuesta final al endpoint (cache-hit, sin llamar SOAP)', cached);
-    fase6Audit.flush(codigoTrimmed);
     return cached;
   }
 
@@ -216,10 +209,11 @@ export async function getTripDetail(codigoViaje, {
     );
   }
 
-  // [FASE6-AUDIT-TEMP] Etapa 6 — objeto final que tripService devuelve al
-  // endpoint (camino SOAP fresco).
-  fase6Audit.record(codigoTrimmed, 'Etapa 6 - Respuesta final al endpoint (camino SOAP fresco)', viajeRow);
-  fase6Audit.flush(codigoTrimmed);
-
-  return viajeRow;
+  // BUG CONFIRMADO (auditoría Fase 6): mapToViajeRow() nunca produce
+  // soap_sincronizado_en — ese campo solo lo agrega persistenceLayer al leer
+  // de caché (fromSoapRow). Sin esta línea, todo camino SOAP fresco devolvía
+  // sincronizado_en: null aunque el enriquecimiento sí ocurrió. Se fija aquí
+  // con el mismo `now` ya resuelto arriba (respeta el hook de test `_now`),
+  // para que el contrato de salida sea idéntico entre caché y SOAP fresco.
+  return { ...viajeRow, soap_sincronizado_en: new Date(now).toISOString() };
 }

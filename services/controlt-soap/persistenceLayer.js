@@ -29,9 +29,6 @@
  */
 
 import { MappingError, ServiceUnavailableError } from './errors.js';
-// [FASE6-AUDIT-TEMP] Ver services/controlt-soap/_fase6AuditTemp.js — eliminar
-// este import junto con el módulo tras confirmar causa raíz (auditoría Fase 6).
-import * as fase6Audit from './_fase6AuditTemp.js';
 
 const TABLE = 'cumplidos';
 const PATH  = `/rest/v1/${TABLE}`;
@@ -156,9 +153,6 @@ function toTimestamptz(value) {
  * @throws {ServiceUnavailableError} on network / timeout failures
  */
 export async function upsertViaje(viajeRow, { sbFetch }) {
-  // [FASE6-AUDIT-TEMP] Etapa 5 — objeto exacto que recibe upsertViaje().
-  fase6Audit.record(viajeRow?.codigo_controlt, 'Etapa 5 - Entrada persistenceLayer', viajeRow);
-
   if (!viajeRow || typeof viajeRow !== 'object') {
     throw new MappingError('viajeRow must be a non-null object');
   }
