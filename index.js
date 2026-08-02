@@ -8,6 +8,7 @@ import { getUserPreferences, updatePreference, KNOWN_CHANNELS } from './services
 import { normalizeExternalRef } from './services/normalizeExternalRef.js';
 import { fechaHoyColombia, parseFechaTMS, extraerFechaColombia } from './utils/fechas.js';
 import controltDiagRouter from './routes/controltDiag.js';
+import { getTripDetail, makeSbFetchAdapter } from './services/controlt-soap/tripService.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -58,6 +59,17 @@ const SB_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const SB_KEY = process.env.SUPABASE_SERVICE_KEY || SB_ANON_KEY;
 const SB_AUTH_URL    = 'https://gtyydandwcgoaratmnqh.supabase.co/auth/v1';
 const SB_STORAGE_URL = 'https://gtyydandwcgoaratmnqh.supabase.co/storage/v1';
+
+// ─── ControlT SOAP — adaptador para tripService (Fase 5) ────────────────────
+// tripService.js (única puerta de entrada certificada a ControlT — Fase 4.3)
+// espera un sbFetch con contrato { data, error, status }, distinto del
+// sbFetch() global de este archivo (que retorna datos directos, ver más
+// abajo). makeSbFetchAdapter() reutiliza las mismas credenciales de Supabase
+// ya definidas arriba. SB_URL incluye el sufijo /rest/v1 pero
+// persistenceLayer.js ya antepone /rest/v1/cumplidos a cada ruta — se retira
+// aquí para no duplicarlo.
+const SB_ROOT_URL = SB_URL.replace(/\/rest\/v1$/, '');
+const controltSbFetch = makeSbFetchAdapter(SB_ROOT_URL, SB_KEY);
 
 // Helper para Supabase Storage (bucket cumplidos).
 // body puede ser un Buffer (upload binario) u objeto JSON (list/sign/delete).
@@ -2316,6 +2328,97 @@ function mapSolicitud(sol, viaje = null, cumplido = null) {
   };
 }
 
+// ─── ENRIQUECIMIENTO CONTROLT (Fase 5) ──────────────────────────────────────
+// Único punto del backend que agrega la información SOAP de ControlT a una
+// respuesta de /servicios. Toda llamada a ControlT pasa por
+// tripService.getTripDetail — este backend NUNCA importa soapGateway ni
+// authManager directamente fuera del módulo controlt-soap.
+//
+// Contrato reutilizable: la forma de "controlt" es la misma sin importar el
+// consumidor (Portal Cliente, ERP, App Conductor, APIs internas) — no existen
+// variantes por cliente. `disponible` es el único indicador que el frontend
+// necesita revisar; el resto de campos siempre tiene la misma forma (null
+// cuando no hay dato, nunca ausente).
+//
+// Degradación: cualquier fallo de ControlT (timeout, red, viaje no
+// encontrado, fault SOAP) se absorbe aquí y retorna controltVacio() — el
+// endpoint jamás falla por una caída de ControlT.
+function controltVacio() {
+  return {
+    disponible:            false,
+    codigo_controlt:       null,
+    estado_viaje:          null,
+    conductor:             null,
+    tipo_operacion_codigo: null,
+    tipo_viaje_codigo:     null,
+    tipo_carga_codigo:     null,
+    carga: {
+      valor_mercancia: null,
+      moneda:          null,
+      valor_flete:     null,
+      peso_total_ton:  null,
+      volumen_total:   null,
+      temperatura_min: null,
+      temperatura_max: null,
+    },
+    instrucciones:    null,
+    paradas:          [],
+    ubicacion_actual: null,
+    fecha_evento:     null,
+    sincronizado_en:  null,
+  };
+}
+
+// viajeActivo: fila de cache.viajes (Resume API) — misma fuente que
+// GET /servicios/:id/vehiculo usa para la posición GPS en vivo. Los paradas
+// de ControlT (SOAP) son puntos fijos de la ruta; ubicacion_actual es la
+// posición del vehículo en tiempo real, dato distinto que solo Resume expone.
+async function construirControltEnriquecido(tripNumber, viajeActivo) {
+  if (!tripNumber) return controltVacio();
+
+  let detalle;
+  try {
+    detalle = await getTripDetail(String(tripNumber), { sbFetch: controltSbFetch });
+  } catch (e) {
+    console.error(`❌ tripService.getTripDetail(${tripNumber}):`, e.message);
+    return controltVacio();
+  }
+
+  const ubicacion_actual = (() => {
+    if (!viajeActivo) return null;
+    const lat = parseFloat(viajeActivo.latitude ?? viajeActivo.lat ?? '');
+    const lng = parseFloat(viajeActivo.longitude ?? viajeActivo.lng ?? '');
+    if (!lat || !lng) return null;
+    return { lat, lng, ultima_actualizacion: viajeActivo.latest_gps_report || null };
+  })();
+
+  return {
+    disponible:      true,
+    codigo_controlt: detalle.codigo_controlt,
+    estado_viaje:    detalle.estado_viaje,
+    conductor: (detalle.conductor_cedula || detalle.conductor_nombre)
+      ? { cedula: detalle.conductor_cedula, nombre: detalle.conductor_nombre }
+      : null,
+    tipo_operacion_codigo: detalle.tipo_operacion_codigo,
+    tipo_viaje_codigo:     detalle.tipo_viaje_codigo,
+    tipo_carga_codigo:     detalle.tipo_carga_codigo,
+    carga: {
+      valor_mercancia: detalle.valor_mercancia,
+      moneda:          detalle.moneda,
+      valor_flete:     detalle.valor_flete,
+      peso_total_ton:  detalle.peso_total_ton,
+      volumen_total:   detalle.volumen_total,
+      temperatura_min: detalle.temperatura_min,
+      temperatura_max: detalle.temperatura_max,
+    },
+    instrucciones: detalle.instrucciones,
+    paradas:       detalle.paradas || [],
+    ubicacion_actual,
+    fecha_evento:    detalle.fecha_evento,
+    sincronizado_en: detalle.soap_sincronizado_en || null,
+  };
+}
+
 // POST /auth/login
 app.post('/auth/login', async (req, res) => {
   const { email, password } = req.body || {};
@@ -2967,7 +3070,11 @@ serviciosRouter.get('/:id', async (req, res) => {
         cumplido = cs[0] || null;
       }
     }
-    res.json(mapSolicitud(sol, viaje, cumplido));
+    const respuesta = mapSolicitud(sol, viaje, cumplido);
+    // Fase 5: enriquecimiento ControlT — contrato reutilizable, ver
+    // construirControltEnriquecido(). Nunca lanza: degrada a controltVacio().
+    respuesta.controlt = await construirControltEnriquecido(sol.controlt_trip_number, viaje);
+    res.json(respuesta);
   } catch(e) {
     console.error('❌ GET /servicios/:id:', e.message);
     res.status(500).json({ error: e.message });
