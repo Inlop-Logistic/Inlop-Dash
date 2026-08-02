@@ -446,3 +446,175 @@ describe('mapToViajeRow — contrato REAL (auditoría Fase 6, evidencia Railway 
     assert.equal(row.moneda, 'EUR');
   });
 });
+
+// ── Volcado LITERAL capturado en Railway — IN018153 (segunda ronda) ──────────
+//
+// El primer volcado (solo Object.keys) permitió corregir el desenvolvimiento
+// del envelope, pero no reveló code_currency_commodity, weight/volume,
+// observations/doc_ref1, date_event, ni los campos internos de cada
+// producto — todos ausentes de esa lista de claves de primer nivel porque
+// están anidados. Este fixture es el JSON EXACTO capturado en Railway para
+// IN018153 (2026-08-02), pegado tal cual, sin editar valores.
+
+const REAL_DETAIL_IN018153 = {
+  messages: { string: 'Se consulto la información del viaje 7424232 correctamente' },
+  errors: '',
+  success: true,
+  data: {
+    code_company: '57INLOP',
+    number_travel_main: 'IN018153',
+    number_travel_secondary: 'IN018153',
+    code_type_operation: 11,
+    code_type_trip: 2,
+    code_type_cargo: 11,
+    username: 1007986227,
+    fullname: 'Valentina Moreno Albornoz',
+    date_event: '01/08/2026 00:24:48',
+    weight: 2,
+    volume: 2,
+    price_commodity: 25000000,
+    code_currency_commodity: 'COP',
+    prices_freight: 331700,
+    temperature_min: '',
+    temperature_max: '',
+    observations: '',
+    doc_ref1: 'HORARIO DE TRANSITO PERMITIDO SEGUN LO DIVULGADO POR PERSONAL DE INLOP, EN CASO DE CUALQUIER NOVEDAD O INQUIETUD, COMUNICARSE A LOS NUMEROS 3214640439 3014847549 3204212627 3243232893, NO OLVIDAR LOS PUESTOS DE CONTROL OBLIGATORIOS CON SOS CONTINGENCIAS. GRACIAS POR CARGAR CON INLOP.',
+    doc_ref2: '',
+    aux_fields: '',
+    stops: {
+      eMonitoringOrderPointStop: [
+        {
+          number_order: 'IN019093',
+          shipment_number: '',
+          remission: '',
+          code_location_seller: '',
+          id_company_client: 860003831,
+          description_company_client: 'PRODUCTOS RAMO S.A.S',
+          type_company_client: 'GC',
+          code_location_destiny: 'R639',
+          description_location_destiny: 'PRODUCTOS RAMO S.A.S',
+          type_location: 'Origen',
+          datetime_in_place: '01/08/2026 05:00:00',
+          datetime_out_place: '',
+          latitude: 4.1374887,
+          longitude: -73.6026752,
+          address: 'Villavicencio, Meta',
+          code_city: 50001,
+          code_deparment: 50,
+          mandate: 2,
+          aux: '',
+          code_type_commodity: 1,
+          Permanence_destinity: 0,
+          products: '',
+        },
+        {
+          number_order: 'IN019093',
+          shipment_number: 'IN020186',
+          remission: 'NHR-  VI-2796',
+          code_location_seller: 3,
+          id_company_client: 860003831,
+          description_company_client: 'PRODUCTOS RAMO S.A.S',
+          type_company_client: 'GC',
+          code_location_destiny: 'D968',
+          description_location_destiny: 'PRODUCTOS RAMO S.A.S',
+          type_location: 'Destino',
+          datetime_in_place: '01/08/2026 11:23:00',
+          datetime_out_place: '',
+          latitude: 4.1441214,
+          longitude: -73.6335673,
+          address: 'Cl. 31 Sur 3195, Villavicencio, Meta',
+          code_city: 50001,
+          code_deparment: 50,
+          mandate: 2,
+          aux: '',
+          code_type_commodity: 1,
+          Permanence_destinity: 0,
+          products: {
+            eMonitoringOrderProductWS: {
+              code_product: 3,
+              description_product: 'PRODUCTOS ALIMENTICIOS',
+              barcode: '',
+              amount_order: 2,
+              amount_deliver: 2,
+              unit: 'Paquetes',
+              weight: 2,
+              volumen: 2,
+              routing_variable: 'Peso',
+              amount_settled: 25000000,
+              aux_fields: '',
+            },
+          },
+        },
+      ],
+    },
+    trackingFromNewUI: false,
+  },
+};
+
+describe('mapToViajeRow — volcado literal Railway IN018153 (auditoría Fase 6, 2ª ronda)', () => {
+  it('maps every previously-null field correctly from the real captured payload', () => {
+    const row = mapToViajeRow(REAL_DETAIL_IN018153, 'IN018153');
+
+    assert.equal(row.codigo_controlt, 'IN018153');
+    assert.equal(row.conductor_cedula, '1007986227');
+    assert.equal(row.conductor_nombre, 'Valentina Moreno Albornoz');
+    assert.equal(row.tipo_operacion_codigo, 11);
+    assert.equal(row.tipo_viaje_codigo, 2);
+    assert.equal(row.tipo_carga_codigo, 11);
+    assert.equal(row.valor_mercancia, 25000000);
+    assert.equal(row.moneda, 'COP');
+    assert.equal(row.valor_flete, 331700);
+    assert.equal(row.peso_total_ton, 2);
+    assert.equal(row.volumen_total, 2);
+    assert.equal(row.temperatura_min, null); // "" real — sin control de temperatura en este viaje
+    assert.equal(row.temperatura_max, null);
+    assert.equal(row.fecha_evento, '01/08/2026 00:24:48');
+    assert.equal(row.paradas.length, 2);
+  });
+
+  it('prefers doc_ref1 as instrucciones when observations is empty', () => {
+    const row = mapToViajeRow(REAL_DETAIL_IN018153, 'IN018153');
+    assert.ok(row.instrucciones.includes('HORARIO DE TRANSITO PERMITIDO'));
+  });
+
+  it('maps parada fields from the real captured stops', () => {
+    const row = mapToViajeRow(REAL_DETAIL_IN018153, 'IN018153');
+    const [origen, destino] = row.paradas;
+
+    assert.equal(origen.tipo, 'Origen');
+    assert.equal(origen.direccion, 'Villavicencio, Meta');
+    assert.equal(origen.lat, 4.1374887);
+    assert.equal(origen.lng, -73.6026752);
+    assert.equal(origen.hora_programada, '01/08/2026 05:00:00');
+    assert.equal(origen.hora_real, null); // datetime_out_place: "" — parada aún no completada
+    assert.equal(origen.productos.length, 0); // products: "" — sin productos
+
+    assert.equal(destino.tipo, 'Destino');
+    assert.equal(destino.direccion, 'Cl. 31 Sur 3195, Villavicencio, Meta');
+  });
+
+  it('unwraps a single (non-array) product object per stop', () => {
+    const row = mapToViajeRow(REAL_DETAIL_IN018153, 'IN018153');
+    const destino = row.paradas[1];
+
+    assert.equal(destino.productos.length, 1);
+    assert.equal(destino.productos[0].descripcion, 'PRODUCTOS ALIMENTICIOS');
+    assert.equal(destino.productos[0].cantidad, 2);
+    assert.equal(destino.productos[0].unidad, 'Paquetes');
+    assert.equal(destino.productos[0].peso_ton, 2);
+    assert.equal(destino.productos[0].volumen, 2);
+  });
+
+  it('derives estado_viaje as PENDIENTE (no stop has datetime_out_place yet)', () => {
+    const row = mapToViajeRow(REAL_DETAIL_IN018153, 'IN018153');
+    assert.equal(row.estado_viaje, 'PENDIENTE');
+  });
+
+  it('does not treat number_order (order code, not a sequence) as orden', () => {
+    // number_order = "IN019093" en ambas paradas — no es numérico, así que
+    // orden cae a index+1, no al valor repetido de number_order.
+    const row = mapToViajeRow(REAL_DETAIL_IN018153, 'IN018153');
+    assert.equal(row.paradas[0].orden, 1);
+    assert.equal(row.paradas[1].orden, 2);
+  });
+});
