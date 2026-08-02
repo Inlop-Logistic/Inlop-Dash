@@ -154,7 +154,11 @@ export const COLUMNS: Column<Solicitud>[] = [
     key:    "conductor_nombre",
     header: "Responsable",
     width:  "110px",
-    render: (_s) => (
+    render: (s) => s.planificado_por_nombre ? (
+      <span className="text-[12px] truncate block" style={{ color: "var(--gray-700)" }}>
+        {s.planificado_por_nombre}
+      </span>
+    ) : (
       <span className="text-[12px]" style={{ color: "var(--gray-400)" }}>
         Sin asignar
       </span>
