@@ -73,3 +73,33 @@ test('retorna original ante secuencia de inicio sin continuación', () => {
   const broken = String.fromCharCode(0xE0) + 'A';
   assert.equal(fixMojibake(broken), broken);
 });
+
+// ── Recuperación parcial por tramos (certificación Fase 6, Objetivo 4) ────
+//
+// Evidencia real (auditoría Fase 6, doc_ref1 de IN018153): ControlT entrega
+// "... 3214640439 Â? 3014847549 ..." — el "Â?" es un byte ya irrecuperable
+// en el propio sistema de ControlT (un carácter reemplazado por "?" antes
+// de llegar a nosotros), pero el resto del texto sí es mojibake corregible.
+// Antes, un solo byte roto en cualquier parte de la cadena descartaba TODA
+// la corrección (el decode de la cadena completa fallaba y se retornaba sin
+// tocar). Ahora la recuperación es por tramos: lo corregible se corrige, lo
+// irrecuperable se conserva tal cual — sin inventar ni reemplazar contenido.
+
+test('corrige el resto de la cadena aunque contenga un byte irrecuperable en medio (evidencia real IN018153)', () => {
+  const input = 'TransportaciÃ³n Â? mercancÃ­a';
+  const result = fixMojibake(input);
+
+  assert.ok(result.includes('Transportación'), 'el tramo antes del byte roto debe corregirse');
+  assert.ok(result.includes('mercancía'), 'el tramo después del byte roto debe corregirse');
+  assert.ok(result.includes('Â?'), 'el byte irrecuperable se conserva tal cual — no se inventa contenido');
+});
+
+test('conserva "Â?" sin cambios cuando aparece aislado (dato ya perdido en ControlT, no inventamos reemplazo)', () => {
+  const input = 'COMUNICARSE A LOS NUMEROS 3214640439 Â? 3014847549';
+  assert.equal(fixMojibake(input), input);
+});
+
+test('corrige múltiples tramos mojibake independientes en la misma cadena', () => {
+  const input = 'CargaciÃ³n normal, sin bytes rotos, con Ã±apa al final';
+  assert.equal(fixMojibake(input), 'Cargación normal, sin bytes rotos, con ñapa al final');
+});

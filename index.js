@@ -1281,16 +1281,30 @@ app.get('/api/viajes/:tripNumber', requireInternalApiKey, async (req, res) => {
 
   res.json({
     trip_number: detalle.codigo_controlt,
+    codigo_controlt_secundario: detalle.codigo_controlt_secundario || null,
+    codigo_empresa:             detalle.codigo_empresa || null,
     orden_operacional: {
       number_order:         viajeActivo?.number_order        || null,
       id_monitoring_order:  viajeActivo?.id_monitoring_order  || null,
     },
+    codigo_ruta: detalle.codigo_ruta || null,
     estado_viaje: detalle.estado_viaje,
-    conductor: (detalle.conductor_cedula || detalle.conductor_nombre || viajeActivo) ? {
+    // CORRECCIÓN DE MODELO (Fase 6, certificación final, Objetivo 2):
+    // username/fullname del SOAP NO son datos del conductor — son el
+    // usuario del TMS que planilló la orden (ver "planificado_por" abajo).
+    // El nombre real del conductor, cuando existe, proviene de Resume
+    // (cache.viajes.driver_name) — misma fuente que ya usa mapSolicitud()
+    // en /servicios/:id. La cédula del conductor no tiene ninguna fuente
+    // confirmada todavía (ni SOAP ni Resume la exponen) y permanece null
+    // hasta que se confirme un origen real.
+    conductor: (viajeActivo?.driver_name || detalle.conductor_nombre || detalle.conductor_cedula || viajeActivo) ? {
       cedula:   detalle.conductor_cedula || null,
-      nombre:   detalle.conductor_nombre || null,
+      nombre:   viajeActivo?.driver_name || detalle.conductor_nombre || null,
       telefono: viajeActivo ? (extraerTelefono(viajeActivo.driver_phone, viajeActivo.full_driver) || null) : null,
     } : null,
+    // planificado_por: usuario de ControlT/TMS que creó/planilló la orden
+    // de monitoreo — NUNCA debe interpretarse como el conductor del viaje.
+    planificado_por: detalle.planificado_por || null,
     vehiculo: viajeActivo ? { placa: viajeActivo.license_plate || null } : null,
     tipo_operacion_codigo: detalle.tipo_operacion_codigo,
     tipo_viaje_codigo:     detalle.tipo_viaje_codigo,
@@ -1304,7 +1318,12 @@ app.get('/api/viajes/:tripNumber', requireInternalApiKey, async (req, res) => {
       temperatura_min: detalle.temperatura_min,
       temperatura_max: detalle.temperatura_max,
     },
-    instrucciones:    detalle.instrucciones,
+    instrucciones:      detalle.instrucciones,
+    observaciones:      detalle.observaciones || null,
+    referencia_doc1:    detalle.referencia_doc1 || null,
+    referencia_doc2:    detalle.referencia_doc2 || null,
+    campos_auxiliares:  detalle.campos_auxiliares || null,
+    rastreo_nueva_ui:   detalle.rastreo_nueva_ui ?? null,
     paradas:          detalle.paradas || [],
     ubicacion_actual,
     fecha_evento:     detalle.fecha_evento,

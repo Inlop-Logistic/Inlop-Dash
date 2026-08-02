@@ -358,10 +358,12 @@ describe('mapToViajeRow — contrato REAL (auditoría Fase 6, evidencia Railway 
     assert.equal(row.tipo_carga_codigo, 3);
   });
 
-  it('maps conductor from username/fullname', () => {
+  it('maps planificado_por (NOT conductor) from username/fullname (corrección de modelo, Objetivo 2)', () => {
     const row = mapToViajeRow(makeRealSoapResult(), 'IN018159');
-    assert.equal(row.conductor_cedula, '12345678');
-    assert.equal(row.conductor_nombre, 'Juan Pérez');
+    assert.deepEqual(row.planificado_por, { username: '12345678', fullname: 'Juan Pérez' });
+    // username/fullname NUNCA deben mezclarse con la identidad del conductor.
+    assert.equal(row.conductor_cedula, null);
+    assert.equal(row.conductor_nombre, null);
   });
 
   it('maps valor_mercancia/valor_flete from price_commodity/prices_freight', () => {
@@ -474,8 +476,9 @@ describe('mapToViajeRow — contrato REAL (auditoría Fase 6, evidencia Railway 
     assert.equal(row.tipo_operacion_codigo, 11);
     assert.equal(row.tipo_viaje_codigo, 2);
     assert.equal(row.tipo_carga_codigo, 11);
-    assert.equal(row.conductor_cedula, '1007986227');
-    assert.equal(row.conductor_nombre, 'Valentina Moreno Albornoz');
+    assert.deepEqual(row.planificado_por, { username: '1007986227', fullname: 'Valentina Moreno Albornoz' });
+    assert.equal(row.conductor_cedula, null);
+    assert.equal(row.conductor_nombre, null);
   });
 
   it('unwraps GetDetailMonitoringOrderResponse.GetDetailMonitoringOrderResult WRAPPING { success, data }', () => {
@@ -504,13 +507,15 @@ describe('mapToViajeRow — contrato REAL (auditoría Fase 6, evidencia Railway 
     assert.equal(row.tipo_operacion_codigo, 11);
     assert.equal(row.tipo_viaje_codigo, 2);
     assert.equal(row.tipo_carga_codigo, 11);
-    assert.equal(row.conductor_cedula, '1007986227');
-    assert.equal(row.conductor_nombre, 'Valentina Moreno Albornoz');
+    assert.deepEqual(row.planificado_por, { username: '1007986227', fullname: 'Valentina Moreno Albornoz' });
+    assert.equal(row.conductor_cedula, null);
+    assert.equal(row.conductor_nombre, null);
     assert.equal(row.valor_mercancia, 25000000);
     assert.equal(row.moneda, 'COP');
     assert.equal(row.valor_flete, 331700);
     assert.equal(row.paradas.length, 2);
-    assert.equal(row.fecha_evento, '01/08/2026 00:24:48');
+    // date_event = "01/08/2026 00:24:48" (Bogotá, UTC-05:00) → +5h → UTC
+    assert.equal(row.fecha_evento, '2026-08-01T05:24:48.000Z');
   });
 });
 
@@ -623,8 +628,9 @@ describe('mapToViajeRow — volcado literal Railway IN018153 (auditoría Fase 6,
     const row = mapToViajeRow(REAL_DETAIL_IN018153, 'IN018153');
 
     assert.equal(row.codigo_controlt, 'IN018153');
-    assert.equal(row.conductor_cedula, '1007986227');
-    assert.equal(row.conductor_nombre, 'Valentina Moreno Albornoz');
+    assert.deepEqual(row.planificado_por, { username: '1007986227', fullname: 'Valentina Moreno Albornoz' });
+    assert.equal(row.conductor_cedula, null);
+    assert.equal(row.conductor_nombre, null);
     assert.equal(row.tipo_operacion_codigo, 11);
     assert.equal(row.tipo_viaje_codigo, 2);
     assert.equal(row.tipo_carga_codigo, 11);
@@ -635,8 +641,16 @@ describe('mapToViajeRow — volcado literal Railway IN018153 (auditoría Fase 6,
     assert.equal(row.volumen_total, 2);
     assert.equal(row.temperatura_min, null); // "" real — sin control de temperatura en este viaje
     assert.equal(row.temperatura_max, null);
-    assert.equal(row.fecha_evento, '01/08/2026 00:24:48');
+    // date_event = "01/08/2026 00:24:48" (Bogotá, UTC-05:00) → ISO-8601 UTC
+    assert.equal(row.fecha_evento, '2026-08-01T05:24:48.000Z');
     assert.equal(row.paradas.length, 2);
+    // Nuevos campos preservados (Objetivo 1)
+    assert.equal(row.codigo_controlt_secundario, 'IN018153');
+    assert.equal(row.codigo_empresa, '57INLOP');
+    assert.equal(row.observaciones, null); // observations: "" en la evidencia real
+    assert.ok(row.referencia_doc1.includes('HORARIO DE TRANSITO PERMITIDO'));
+    assert.equal(row.referencia_doc2, null);
+    assert.equal(row.rastreo_nueva_ui, false);
   });
 
   it('prefers doc_ref1 as instrucciones when observations is empty', () => {
@@ -652,12 +666,46 @@ describe('mapToViajeRow — volcado literal Railway IN018153 (auditoría Fase 6,
     assert.equal(origen.direccion, 'Villavicencio, Meta');
     assert.equal(origen.lat, 4.1374887);
     assert.equal(origen.lng, -73.6026752);
-    assert.equal(origen.hora_programada, '01/08/2026 05:00:00');
+    // datetime_in_place = "01/08/2026 05:00:00" (Bogotá) → ISO-8601 UTC
+    assert.equal(origen.hora_programada, '2026-08-01T10:00:00.000Z');
     assert.equal(origen.hora_real, null); // datetime_out_place: "" — parada aún no completada
     assert.equal(origen.productos.length, 0); // products: "" — sin productos
 
     assert.equal(destino.tipo, 'Destino');
     assert.equal(destino.direccion, 'Cl. 31 Sur 3195, Villavicencio, Meta');
+  });
+
+  it('preserves every new parada-level field from the real captured stops (Objetivo 1)', () => {
+    const row = mapToViajeRow(REAL_DETAIL_IN018153, 'IN018153');
+    const [origen, destino] = row.paradas;
+
+    assert.equal(origen.codigo_orden, 'IN019093');
+    assert.equal(origen.numero_remesa, null); // shipment_number: "" en la primera parada
+    assert.equal(origen.remision, null);
+    assert.equal(origen.codigo_vendedor, null);
+    assert.deepEqual(origen.cliente, { id: '860003831', nombre: 'PRODUCTOS RAMO S.A.S', tipo: 'GC' });
+    assert.equal(origen.codigo_ubicacion, 'R639');
+    assert.equal(origen.ciudad_codigo, 50001);
+    assert.equal(origen.departamento_codigo, 50);
+    assert.equal(origen.mandato, 2);
+    assert.equal(origen.tipo_mercancia_codigo, 1);
+    assert.equal(origen.permanencia_destino, 0);
+
+    assert.equal(destino.numero_remesa, 'IN020186');
+    assert.equal(destino.remision, 'NHR-  VI-2796');
+    assert.equal(destino.codigo_vendedor, '3');
+    assert.equal(destino.codigo_ubicacion, 'D968');
+  });
+
+  it('preserves every new producto-level field from the real captured product (Objetivo 1)', () => {
+    const row = mapToViajeRow(REAL_DETAIL_IN018153, 'IN018153');
+    const prod = row.paradas[1].productos[0];
+
+    assert.equal(prod.codigo_producto, '3');
+    assert.equal(prod.codigo_barras, null); // barcode: "" en la evidencia
+    assert.equal(prod.cantidad_entregada, 2);
+    assert.equal(prod.variable_enrutamiento, 'Peso');
+    assert.equal(prod.valor_liquidado, 25000000);
   });
 
   it('unwraps a single (non-array) product object per stop', () => {
@@ -683,5 +731,61 @@ describe('mapToViajeRow — volcado literal Railway IN018153 (auditoría Fase 6,
     const row = mapToViajeRow(REAL_DETAIL_IN018153, 'IN018153');
     assert.equal(row.paradas[0].orden, 1);
     assert.equal(row.paradas[1].orden, 2);
+  });
+});
+
+// ── Normalización de fechas ISO-8601 UTC (Fase 6, certificación final, Objetivo 3) ──
+//
+// ControlT entrega "DD/MM/YYYY HH:mm:ss" sin zona horaria explícita. Se
+// asume Bogotá (UTC-05:00, fijo, sin DST) por el contexto operativo
+// (INLOP, Villavicencio/Meta, COP). La conversión es aritmética pura —
+// sin new Date(), sin depender del locale/TZ del proceso.
+
+describe('mapToViajeRow — normalización determinista de fechas (Objetivo 3)', () => {
+  function soapWithDate(date_event) {
+    return { success: true, data: { date_event } };
+  }
+
+  it('convierte "DD/MM/YYYY HH:mm:ss" (Bogotá) a ISO-8601 UTC sumando 5 horas', () => {
+    const row = mapToViajeRow(soapWithDate('15/07/2026 08:30:00'), 'IN1');
+    assert.equal(row.fecha_evento, '2026-07-15T13:30:00.000Z');
+  });
+
+  it('hace roll-over de día cuando sumar el offset UTC cruza medianoche', () => {
+    const row = mapToViajeRow(soapWithDate('15/07/2026 20:00:00'), 'IN1');
+    // 20:00 + 5h = 01:00 del día siguiente
+    assert.equal(row.fecha_evento, '2026-07-16T01:00:00.000Z');
+  });
+
+  it('hace roll-over de mes al cruzar el último día del mes', () => {
+    const row = mapToViajeRow(soapWithDate('31/07/2026 20:00:00'), 'IN1');
+    assert.equal(row.fecha_evento, '2026-08-01T01:00:00.000Z');
+  });
+
+  it('hace roll-over de año al cruzar el 31 de diciembre', () => {
+    const row = mapToViajeRow(soapWithDate('31/12/2026 20:00:00'), 'IN1');
+    assert.equal(row.fecha_evento, '2027-01-01T01:00:00.000Z');
+  });
+
+  it('calcula correctamente el 29 de febrero en año bisiesto', () => {
+    // 2028 es bisiesto — 28/02/2028 20:00 + 5h = 29/02/2028 01:00
+    const row = mapToViajeRow(soapWithDate('28/02/2028 20:00:00'), 'IN1');
+    assert.equal(row.fecha_evento, '2028-02-29T01:00:00.000Z');
+  });
+
+  it('no aplica roll-over de día en año NO bisiesto (28/02 es el último día de febrero)', () => {
+    // 2026 NO es bisiesto — 28/02/2026 20:00 + 5h = 01/03/2026 01:00
+    const row = mapToViajeRow(soapWithDate('28/02/2026 20:00:00'), 'IN1');
+    assert.equal(row.fecha_evento, '2026-03-01T01:00:00.000Z');
+  });
+
+  it('conserva sin modificar un valor que no matchea el patrón DD/MM/YYYY HH:mm:ss (Tolerant Reader)', () => {
+    const row = mapToViajeRow(soapWithDate('2026-07-15T08:30:00'), 'IN1');
+    assert.equal(row.fecha_evento, '2026-07-15T08:30:00');
+  });
+
+  it('retorna null para fecha vacía o ausente', () => {
+    assert.equal(mapToViajeRow(soapWithDate(''), 'IN1').fecha_evento, null);
+    assert.equal(mapToViajeRow(soapWithDate(undefined), 'IN1').fecha_evento, null);
   });
 });
