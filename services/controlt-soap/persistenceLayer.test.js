@@ -13,23 +13,32 @@ import { MappingError, ServiceUnavailableError } from './errors.js';
 /** A valid ViajeRow as produced by tripMapper.mapToViajeRow() */
 function makeRow(overrides = {}) {
   return {
-    codigo_controlt:       'IN018108',
-    estado_viaje:          'EN_TRANSITO',
-    conductor_cedula:      '12345678',
-    conductor_nombre:      'Juan Pérez',
-    tipo_operacion_codigo:  2,
-    tipo_viaje_codigo:      1,
-    tipo_carga_codigo:      3,
-    valor_mercancia:        50000000,
-    moneda:                'COP',
-    valor_flete:            3500000,
-    peso_total_ton:         12.5,
-    volumen_total:          8.0,
-    temperatura_min:        null,
-    temperatura_max:        null,
-    instrucciones:         'Manejo cuidadoso',
-    paradas:               [],
-    fecha_evento:          '2026-07-15T08:30:00',
+    codigo_controlt:               'IN018108',
+    estado_viaje:                  'EN_TRANSITO',
+    conductor_cedula:              '12345678',
+    conductor_nombre:              'Juan Pérez',
+    tipo_operacion_codigo:          2,
+    tipo_viaje_codigo:              1,
+    tipo_carga_codigo:              3,
+    valor_mercancia:                50000000,
+    moneda:                        'COP',
+    valor_flete:                    3500000,
+    peso_total_ton:                 12.5,
+    volumen_total:                  8.0,
+    temperatura_min:                null,
+    temperatura_max:                null,
+    instrucciones:                 'Manejo cuidadoso',
+    paradas:                       [],
+    fecha_evento:                  '2026-07-15T08:30:00',
+    codigo_controlt_secundario:    'SEC-001',
+    codigo_empresa:                '57INLOP',
+    planificado_por:               { username: '1007986227', fullname: 'Carlos Lopez' },
+    codigo_ruta:                   'RUTA-BOG-MED',
+    observaciones:                 'Carga refrigerada',
+    referencia_doc1:               'REF-DOC-001',
+    referencia_doc2:               'REF-DOC-002',
+    campos_auxiliares:             'aux1=val1',
+    rastreo_nueva_ui:              true,
     ...overrides,
   };
 }
@@ -40,23 +49,32 @@ function makeRow(overrides = {}) {
  */
 function makeSoapDbRow(overrides = {}) {
   return {
-    soap_estado_viaje:          'EN_TRANSITO',
-    soap_conductor_cedula:      '12345678',
-    soap_conductor_nombre:      'Juan Pérez',
-    soap_tipo_operacion_codigo:  2,
-    soap_tipo_viaje_codigo:      1,
-    soap_tipo_carga_codigo:      3,
-    soap_valor_mercancia:        50000000,
-    soap_moneda:                'COP',
-    soap_valor_flete:            3500000,
-    soap_peso_total_ton:         12.5,
-    soap_volumen_total:          8.0,
-    soap_temperatura_min:        null,
-    soap_temperatura_max:        null,
-    soap_instrucciones:         'Manejo cuidadoso',
-    soap_paradas:               [],
-    soap_fecha_evento:          '2026-07-15T08:30:00.000Z',
-    soap_sincronizado_en:       '2026-08-01T10:00:00.000Z',
+    soap_estado_viaje:                  'EN_TRANSITO',
+    soap_conductor_cedula:              '12345678',
+    soap_conductor_nombre:              'Juan Pérez',
+    soap_tipo_operacion_codigo:          2,
+    soap_tipo_viaje_codigo:              1,
+    soap_tipo_carga_codigo:              3,
+    soap_valor_mercancia:                50000000,
+    soap_moneda:                        'COP',
+    soap_valor_flete:                    3500000,
+    soap_peso_total_ton:                 12.5,
+    soap_volumen_total:                  8.0,
+    soap_temperatura_min:                null,
+    soap_temperatura_max:                null,
+    soap_instrucciones:                 'Manejo cuidadoso',
+    soap_paradas:                       [],
+    soap_fecha_evento:                  '2026-07-15T08:30:00.000Z',
+    soap_sincronizado_en:               '2026-08-01T10:00:00.000Z',
+    soap_codigo_controlt_secundario:    'SEC-001',
+    soap_codigo_empresa:                '57INLOP',
+    soap_planificado_por:               { username: '1007986227', fullname: 'Carlos Lopez' },
+    soap_codigo_ruta:                   'RUTA-BOG-MED',
+    soap_observaciones:                 'Carga refrigerada',
+    soap_referencia_doc1:               'REF-DOC-001',
+    soap_referencia_doc2:               'REF-DOC-002',
+    soap_campos_auxiliares:             'aux1=val1',
+    soap_rastreo_nueva_ui:              true,
     ...overrides,
   };
 }
@@ -358,5 +376,151 @@ describe('fetchViaje', () => {
 
     await fetchViaje('IN 018 108', { sbFetch });
     assert.ok(capturedPath.includes('IN%20018%20108'));
+  });
+});
+
+// ── New ViajeRow fields — contract parity (Fase 6) ───────────────────────────
+
+describe('upsertViaje — new fields (Fase 6)', () => {
+  it('sends all 9 new soap_* columns in the PATCH body', async () => {
+    let bodyParsed;
+    const sbFetch = async (_path, opts) => {
+      bodyParsed = JSON.parse(opts.body);
+      return { data: null, error: null, status: 200 };
+    };
+
+    await upsertViaje(makeRow(), { sbFetch });
+
+    assert.equal(bodyParsed.soap_codigo_controlt_secundario, 'SEC-001');
+    assert.equal(bodyParsed.soap_codigo_empresa,             '57INLOP');
+    assert.deepEqual(bodyParsed.soap_planificado_por, { username: '1007986227', fullname: 'Carlos Lopez' });
+    assert.equal(bodyParsed.soap_codigo_ruta,                'RUTA-BOG-MED');
+    assert.equal(bodyParsed.soap_observaciones,              'Carga refrigerada');
+    assert.equal(bodyParsed.soap_referencia_doc1,            'REF-DOC-001');
+    assert.equal(bodyParsed.soap_referencia_doc2,            'REF-DOC-002');
+    assert.equal(bodyParsed.soap_campos_auxiliares,          'aux1=val1');
+    assert.equal(bodyParsed.soap_rastreo_nueva_ui,           true);
+  });
+
+  it('sends null for new fields when absent from viajeRow', async () => {
+    const minimalRow = makeRow({
+      codigo_controlt_secundario: undefined,
+      codigo_empresa:             undefined,
+      planificado_por:            undefined,
+      codigo_ruta:                undefined,
+      observaciones:              undefined,
+      referencia_doc1:            undefined,
+      referencia_doc2:            undefined,
+      campos_auxiliares:          undefined,
+      rastreo_nueva_ui:           undefined,
+    });
+
+    let bodyParsed;
+    const sbFetch = async (_path, opts) => {
+      bodyParsed = JSON.parse(opts.body);
+      return { data: null, error: null, status: 200 };
+    };
+
+    await upsertViaje(minimalRow, { sbFetch });
+
+    assert.equal(bodyParsed.soap_codigo_controlt_secundario, null);
+    assert.equal(bodyParsed.soap_codigo_empresa,             null);
+    assert.equal(bodyParsed.soap_planificado_por,            null);
+    assert.equal(bodyParsed.soap_codigo_ruta,                null);
+    assert.equal(bodyParsed.soap_observaciones,              null);
+    assert.equal(bodyParsed.soap_referencia_doc1,            null);
+    assert.equal(bodyParsed.soap_referencia_doc2,            null);
+    assert.equal(bodyParsed.soap_campos_auxiliares,          null);
+    assert.equal(bodyParsed.soap_rastreo_nueva_ui,           null);
+  });
+
+  it('SOAP_SELECT includes all 9 new column names', async () => {
+    let capturedPath;
+    const sbFetch = async (path, _opts) => {
+      capturedPath = path;
+      return { data: [], error: null, status: 200 };
+    };
+
+    await fetchViaje('IN018108', { sbFetch });
+
+    const selectParam = capturedPath.split('select=')[1]?.split('&')[0] ?? '';
+    const cols = selectParam.split(',');
+
+    for (const col of [
+      'soap_codigo_controlt_secundario',
+      'soap_codigo_empresa',
+      'soap_planificado_por',
+      'soap_codigo_ruta',
+      'soap_observaciones',
+      'soap_referencia_doc1',
+      'soap_referencia_doc2',
+      'soap_campos_auxiliares',
+      'soap_rastreo_nueva_ui',
+    ]) {
+      assert.ok(cols.includes(col), `SOAP_SELECT must include ${col}`);
+    }
+  });
+});
+
+describe('fetchViaje — new fields (Fase 6)', () => {
+  it('remaps all 9 new soap_* columns to domain ViajeRow fields', async () => {
+    const dbRow = makeSoapDbRow();
+    const sbFetch = async () => ({ data: [dbRow], error: null, status: 200 });
+
+    const result = await fetchViaje('IN018108', { sbFetch });
+
+    assert.equal(result.codigo_controlt_secundario, 'SEC-001');
+    assert.equal(result.codigo_empresa,             '57INLOP');
+    assert.deepEqual(result.planificado_por, { username: '1007986227', fullname: 'Carlos Lopez' });
+    assert.equal(result.codigo_ruta,                'RUTA-BOG-MED');
+    assert.equal(result.observaciones,              'Carga refrigerada');
+    assert.equal(result.referencia_doc1,            'REF-DOC-001');
+    assert.equal(result.referencia_doc2,            'REF-DOC-002');
+    assert.equal(result.campos_auxiliares,          'aux1=val1');
+    assert.equal(result.rastreo_nueva_ui,           true);
+  });
+
+  it('new domain fields must not expose their soap_ prefixed names', async () => {
+    const dbRow = makeSoapDbRow();
+    const sbFetch = async () => ({ data: [dbRow], error: null, status: 200 });
+
+    const result = await fetchViaje('IN018108', { sbFetch });
+
+    assert.ok(!('soap_codigo_controlt_secundario' in result));
+    assert.ok(!('soap_codigo_empresa'             in result));
+    assert.ok(!('soap_planificado_por'            in result));
+    assert.ok(!('soap_codigo_ruta'                in result));
+    assert.ok(!('soap_observaciones'              in result));
+    assert.ok(!('soap_referencia_doc1'            in result));
+    assert.ok(!('soap_referencia_doc2'            in result));
+    assert.ok(!('soap_campos_auxiliares'          in result));
+    assert.ok(!('soap_rastreo_nueva_ui'           in result));
+  });
+
+  it('returns null for new fields when database columns are null', async () => {
+    const dbRow = makeSoapDbRow({
+      soap_codigo_controlt_secundario: null,
+      soap_codigo_empresa:             null,
+      soap_planificado_por:            null,
+      soap_codigo_ruta:                null,
+      soap_observaciones:              null,
+      soap_referencia_doc1:            null,
+      soap_referencia_doc2:            null,
+      soap_campos_auxiliares:          null,
+      soap_rastreo_nueva_ui:           null,
+    });
+    const sbFetch = async () => ({ data: [dbRow], error: null, status: 200 });
+
+    const result = await fetchViaje('IN018108', { sbFetch });
+
+    assert.equal(result.codigo_controlt_secundario, null);
+    assert.equal(result.codigo_empresa,             null);
+    assert.equal(result.planificado_por,            null);
+    assert.equal(result.codigo_ruta,                null);
+    assert.equal(result.observaciones,              null);
+    assert.equal(result.referencia_doc1,            null);
+    assert.equal(result.referencia_doc2,            null);
+    assert.equal(result.campos_auxiliares,          null);
+    assert.equal(result.rastreo_nueva_ui,           null);
   });
 });
