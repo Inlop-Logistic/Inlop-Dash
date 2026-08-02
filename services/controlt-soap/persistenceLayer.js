@@ -153,9 +153,9 @@ function toTimestamptz(value) {
  * @throws {ServiceUnavailableError} on network / timeout failures
  */
 export async function upsertViaje(viajeRow, { sbFetch }) {
-  // [TRACE-TEMP code_type_operation] Etapa 4 — entrada a upsertViaje().
+  // [TRACE-TEMP code_type_operation] Etapa 3 — entrada a upsertViaje().
   // Remover tras localizar la causa raíz (auditoría Fase 6 — 3ª ronda).
-  console.log('[TRACE code_type_operation] Etapa4 viajeRow.tipo_operacion_codigo (entrada upsertViaje) =', viajeRow?.tipo_operacion_codigo);
+  console.log(`[TRACE code_type_operation] Etapa 3 | Objeto: payload enviado a persistenceLayer (viajeRow recibido por upsertViaje) | Valor: ${viajeRow?.tipo_operacion_codigo}`);
 
   if (!viajeRow || typeof viajeRow !== 'object') {
     throw new MappingError('viajeRow must be a non-null object');
@@ -166,9 +166,9 @@ export async function upsertViaje(viajeRow, { sbFetch }) {
 
   const patch = toSoapPatch(viajeRow, new Date().toISOString());
 
-  // [TRACE-TEMP code_type_operation] Etapa 5 — payload REAL que se envía a
+  // [TRACE-TEMP code_type_operation] Etapa 4 — payload REAL que se envía a
   // Supabase. Remover tras localizar la causa raíz.
-  console.log('[TRACE code_type_operation] Etapa5 patch.soap_tipo_operacion_codigo (payload a Supabase) =', patch.soap_tipo_operacion_codigo);
+  console.log(`[TRACE code_type_operation] Etapa 4 | Objeto: payload SQL/Supabase (patch.soap_tipo_operacion_codigo) | Valor: ${patch.soap_tipo_operacion_codigo}`);
 
   const filterPath = `${PATH}?id=eq.${encodeURIComponent(viajeRow.codigo_controlt)}`;
 
@@ -247,14 +247,14 @@ export async function fetchViaje(codigoViaje, { sbFetch }) {
 
   const mapped = fromSoapRow(row, codigoViaje);
 
-  // [TRACE-TEMP code_type_operation] Etapa 6 — fila cruda de Supabase vs.
-  // objeto remapeado que fetchViaje() devuelve, más el timestamp de caché
-  // (clave para descartar/confirmar una fila cacheada obsoleta). Remover
-  // tras localizar la causa raíz (auditoría Fase 6 — 3ª ronda).
+  // [TRACE-TEMP code_type_operation] Etapa 5 — resultado de fetchViaje(),
+  // más la fila cruda de Supabase y soap_sincronizado_en (clave para
+  // descartar/confirmar una fila cacheada obsoleta). Remover tras localizar
+  // la causa raíz (auditoría Fase 6 — 3ª ronda).
   console.log(
-    '[TRACE code_type_operation] Etapa6 row.soap_tipo_operacion_codigo (Supabase crudo) =', row.soap_tipo_operacion_codigo,
-    '| mapped.tipo_operacion_codigo =', mapped.tipo_operacion_codigo,
-    '| soap_sincronizado_en =', row.soap_sincronizado_en
+    `[TRACE code_type_operation] Etapa 5 | Objeto: resultado fetchViaje() (mapped.tipo_operacion_codigo) | Valor: ${mapped.tipo_operacion_codigo}` +
+    ` | row.soap_tipo_operacion_codigo (Supabase crudo): ${row.soap_tipo_operacion_codigo}` +
+    ` | soap_sincronizado_en: ${row.soap_sincronizado_en}`
   );
 
   return mapped;

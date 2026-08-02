@@ -214,9 +214,8 @@ export function mapToViajeRow(soapResult, codigoViaje) {
   // [TRACE-TEMP code_type_operation] Etapa 1 — remover tras localizar la
   // causa raíz (rastreo de un único campo, auditoría Fase 6 — 3ª ronda).
   console.log(
-    '[TRACE code_type_operation] Etapa1 detail.code_type_operation =',
-    detail?.code_type_operation, '| typeof =', typeof detail?.code_type_operation,
-    '| codigoViaje =', codigoViaje
+    `[TRACE code_type_operation] Etapa 1 | Objeto: detail | Valor: ${detail?.code_type_operation}` +
+    ` | typeof: ${typeof detail?.code_type_operation} | codigoViaje: ${codigoViaje}`
   );
 
   // ── paradas ──────────────────────────────────────────────────────────────
@@ -246,20 +245,15 @@ export function mapToViajeRow(soapResult, codigoViaje) {
   );
 
   // ── tipo / clasificación ──────────────────────────────────────────────────
-  const _rawTipoOperacion = detail?.code_type_operation ?? detail?.TipoOperacion ?? detail?.CodigoTipoOperacion;
-  // [TRACE-TEMP code_type_operation] Etapa 2 — valor leído por mapToViajeRow
-  // antes de convertir con toInt(). Remover tras localizar la causa raíz.
-  console.log(
-    '[TRACE code_type_operation] Etapa2 valor leído (antes de toInt) =',
-    _rawTipoOperacion, '| typeof =', typeof _rawTipoOperacion
-  );
-  const tipo_operacion_codigo = toInt(_rawTipoOperacion);
+  const tipo_operacion_codigo = toInt(detail?.code_type_operation ?? detail?.TipoOperacion ?? detail?.CodigoTipoOperacion);
   const tipo_viaje_codigo     = toInt(detail?.code_type_trip      ?? detail?.TipoViaje     ?? detail?.CodigoTipoViaje);
   const tipo_carga_codigo     = toInt(detail?.code_type_cargo     ?? detail?.TipoCarga     ?? detail?.CodigoTipoCarga);
 
-  // [TRACE-TEMP code_type_operation] Etapa 3 — salida de mapToViajeRow.
-  // Remover tras localizar la causa raíz.
-  console.log('[TRACE code_type_operation] Etapa3 tipo_operacion_codigo (salida mapToViajeRow) =', tipo_operacion_codigo);
+  // [TRACE-TEMP code_type_operation] Etapa 2 — salida de mapToViajeRow (el
+  // objeto viajeRow aún no existe como tal hasta el return final, pero
+  // tipo_operacion_codigo ya es su valor definitivo desde aquí). Remover
+  // tras localizar la causa raíz.
+  console.log(`[TRACE code_type_operation] Etapa 2 | Objeto: viajeRow (salida mapToViajeRow) | Valor: ${tipo_operacion_codigo}`);
 
   // ── valores económicos ────────────────────────────────────────────────────
   // price_commodity/prices_freight/code_currency_commodity: nombres reales

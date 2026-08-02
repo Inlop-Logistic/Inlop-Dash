@@ -176,14 +176,13 @@ export async function getTripDetail(codigoViaje, {
   // ── 1. Verificar caché ────────────────────────────────────────────────────
   const cached = await doFetchViaje(codigoTrimmed, { sbFetch });
   if (cached && !isStale(cached.soap_sincronizado_en, now, resolvedTtl)) {
-    // [TRACE-TEMP code_type_operation] Etapa 7 (camino CACHE-HIT) — si esta
+    // [TRACE-TEMP code_type_operation] Etapa 6 (camino CACHE-HIT) — si esta
     // rama se ejecuta, tripService NUNCA llama a SOAP ni a mapToViajeRow en
     // este request; devuelve lo que ya estaba persistido. Remover tras
     // localizar la causa raíz (auditoría Fase 6 — 3ª ronda).
     console.log(
-      '[TRACE code_type_operation] Etapa7(CACHE-HIT) cached.tipo_operacion_codigo =', cached.tipo_operacion_codigo,
-      '| soap_sincronizado_en =', cached.soap_sincronizado_en,
-      '| now =', new Date(now).toISOString(), '| ttlMs =', resolvedTtl
+      `[TRACE code_type_operation] Etapa 6 | Objeto: objeto recibido por tripService (CACHE-HIT — cached.tipo_operacion_codigo) | Valor: ${cached.tipo_operacion_codigo}` +
+      ` | soap_sincronizado_en: ${cached.soap_sincronizado_en} | now: ${new Date(now).toISOString()} | ttlMs: ${resolvedTtl}`
     );
     return cached;
   }
@@ -218,9 +217,9 @@ export async function getTripDetail(codigoViaje, {
     );
   }
 
-  // [TRACE-TEMP code_type_operation] Etapa 7 (camino SOAP FRESCO) — remover
+  // [TRACE-TEMP code_type_operation] Etapa 6 (camino SOAP FRESCO) — remover
   // tras localizar la causa raíz (auditoría Fase 6 — 3ª ronda).
-  console.log('[TRACE code_type_operation] Etapa7(SOAP-FRESCO) viajeRow.tipo_operacion_codigo =', viajeRow.tipo_operacion_codigo);
+  console.log(`[TRACE code_type_operation] Etapa 6 | Objeto: objeto recibido por tripService (SOAP-FRESCO — viajeRow.tipo_operacion_codigo) | Valor: ${viajeRow.tipo_operacion_codigo}`);
 
   // BUG CONFIRMADO (auditoría Fase 6): mapToViajeRow() nunca produce
   // soap_sincronizado_en — ese campo solo lo agrega persistenceLayer al leer

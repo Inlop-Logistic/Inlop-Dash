@@ -1279,6 +1279,10 @@ app.get('/api/viajes/:tripNumber', requireInternalApiKey, async (req, res) => {
     return { lat, lng, ultima_actualizacion: viajeActivo.latest_gps_report || null };
   })();
 
+  // [TRACE-TEMP code_type_operation] Etapa 7 — respuesta final del endpoint.
+  // Remover tras localizar la causa raíz (auditoría Fase 6 — 3ª ronda).
+  console.log(`[TRACE code_type_operation] Etapa 7 | Objeto: respuesta final del endpoint (detalle.tipo_operacion_codigo) | Valor: ${detalle.tipo_operacion_codigo}`);
+
   res.json({
     trip_number: detalle.codigo_controlt,
     orden_operacional: {
