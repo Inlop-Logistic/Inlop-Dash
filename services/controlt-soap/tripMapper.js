@@ -200,6 +200,15 @@ export function mapToViajeRow(soapResult, codigoViaje) {
   // depending on the SOAP runtime version.
   const detail = unwrapDetail(soapResult);
 
+  // [FASE6-AUDIT-TEMP-2] Volcado completo (no solo claves) del objeto `detail`
+  // real recibido para este viaje. Remover en cuanto se capture la evidencia
+  // y se corrija el mapeo (auditoría Fase 6 — segunda ronda).
+  console.log('===========================================================');
+  console.log('DETAIL COMPLETO', codigoViaje);
+  console.log('===========================================================');
+  console.log(JSON.stringify(detail, null, 2));
+  console.log('===========================================================');
+
   // ── paradas ──────────────────────────────────────────────────────────────
   const rawParadas = normalizeArray(
     detail?.stops?.eMonitoringOrderPointStop ??   // real (auditoría Fase 6)
