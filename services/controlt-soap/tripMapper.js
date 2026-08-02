@@ -211,6 +211,14 @@ export function mapToViajeRow(soapResult, codigoViaje) {
   // depending on the SOAP runtime version.
   const detail = unwrapDetail(soapResult);
 
+  // [TRACE-TEMP code_type_operation] Etapa 1 — remover tras localizar la
+  // causa raíz (rastreo de un único campo, auditoría Fase 6 — 3ª ronda).
+  console.log(
+    '[TRACE code_type_operation] Etapa1 detail.code_type_operation =',
+    detail?.code_type_operation, '| typeof =', typeof detail?.code_type_operation,
+    '| codigoViaje =', codigoViaje
+  );
+
   // ── paradas ──────────────────────────────────────────────────────────────
   const rawParadas = normalizeArray(
     detail?.stops?.eMonitoringOrderPointStop ??   // real (auditoría Fase 6)
@@ -238,9 +246,20 @@ export function mapToViajeRow(soapResult, codigoViaje) {
   );
 
   // ── tipo / clasificación ──────────────────────────────────────────────────
-  const tipo_operacion_codigo = toInt(detail?.code_type_operation ?? detail?.TipoOperacion ?? detail?.CodigoTipoOperacion);
+  const _rawTipoOperacion = detail?.code_type_operation ?? detail?.TipoOperacion ?? detail?.CodigoTipoOperacion;
+  // [TRACE-TEMP code_type_operation] Etapa 2 — valor leído por mapToViajeRow
+  // antes de convertir con toInt(). Remover tras localizar la causa raíz.
+  console.log(
+    '[TRACE code_type_operation] Etapa2 valor leído (antes de toInt) =',
+    _rawTipoOperacion, '| typeof =', typeof _rawTipoOperacion
+  );
+  const tipo_operacion_codigo = toInt(_rawTipoOperacion);
   const tipo_viaje_codigo     = toInt(detail?.code_type_trip      ?? detail?.TipoViaje     ?? detail?.CodigoTipoViaje);
   const tipo_carga_codigo     = toInt(detail?.code_type_cargo     ?? detail?.TipoCarga     ?? detail?.CodigoTipoCarga);
+
+  // [TRACE-TEMP code_type_operation] Etapa 3 — salida de mapToViajeRow.
+  // Remover tras localizar la causa raíz.
+  console.log('[TRACE code_type_operation] Etapa3 tipo_operacion_codigo (salida mapToViajeRow) =', tipo_operacion_codigo);
 
   // ── valores económicos ────────────────────────────────────────────────────
   // price_commodity/prices_freight/code_currency_commodity: nombres reales
