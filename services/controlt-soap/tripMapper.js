@@ -211,13 +211,6 @@ export function mapToViajeRow(soapResult, codigoViaje) {
   // depending on the SOAP runtime version.
   const detail = unwrapDetail(soapResult);
 
-  // [TRACE-TEMP code_type_operation] Etapa 1 — remover tras localizar la
-  // causa raíz (rastreo de un único campo, auditoría Fase 6 — 3ª ronda).
-  console.log(
-    `[TRACE code_type_operation] Etapa 1 | Objeto: detail | Valor: ${detail?.code_type_operation}` +
-    ` | typeof: ${typeof detail?.code_type_operation} | codigoViaje: ${codigoViaje}`
-  );
-
   // ── paradas ──────────────────────────────────────────────────────────────
   const rawParadas = normalizeArray(
     detail?.stops?.eMonitoringOrderPointStop ??   // real (auditoría Fase 6)
@@ -248,12 +241,6 @@ export function mapToViajeRow(soapResult, codigoViaje) {
   const tipo_operacion_codigo = toInt(detail?.code_type_operation ?? detail?.TipoOperacion ?? detail?.CodigoTipoOperacion);
   const tipo_viaje_codigo     = toInt(detail?.code_type_trip      ?? detail?.TipoViaje     ?? detail?.CodigoTipoViaje);
   const tipo_carga_codigo     = toInt(detail?.code_type_cargo     ?? detail?.TipoCarga     ?? detail?.CodigoTipoCarga);
-
-  // [TRACE-TEMP code_type_operation] Etapa 2 — salida de mapToViajeRow (el
-  // objeto viajeRow aún no existe como tal hasta el return final, pero
-  // tipo_operacion_codigo ya es su valor definitivo desde aquí). Remover
-  // tras localizar la causa raíz.
-  console.log(`[TRACE code_type_operation] Etapa 2 | Objeto: viajeRow (salida mapToViajeRow) | Valor: ${tipo_operacion_codigo}`);
 
   // ── valores económicos ────────────────────────────────────────────────────
   // price_commodity/prices_freight/code_currency_commodity: nombres reales
@@ -325,22 +312,28 @@ export function mapToViajeRow(soapResult, codigoViaje) {
 function unwrapDetail(soapResult) {
   if (!soapResult || typeof soapResult !== 'object') return {};
 
-  // Pattern 1 (legacy — nunca confirmado contra una respuesta real):
-  // { GetDetailMonitoringOrderResult: { ... } }
-  if (soapResult.GetDetailMonitoringOrderResult) return soapResult.GetDetailMonitoringOrderResult;
+  // CAUSA RAÍZ (auditoría Fase 6, 3ª ronda — rastreo campo a campo de
+  // code_type_operation): el wrapper legacy (GetDetailMonitoringOrderResult/
+  // Response) y el envelope real ({ success, data }) NO son alternativas
+  // excluyentes — ambos niveles están presentes a la vez en la respuesta
+  // real de ControlT. Antes, el primer match retornaba inmediatamente y
+  // nunca se llegaba a desenvolver `.data`. Ahora se pelan ambos niveles en
+  // secuencia, cada uno solo si aplica.
+  let node = soapResult;
 
-  // Pattern 2 (legacy — nunca confirmado contra una respuesta real):
-  // { GetDetailMonitoringOrderResponse: { GetDetailMonitoringOrderResult: { ... } } }
-  const inner = soapResult.GetDetailMonitoringOrderResponse;
-  if (inner?.GetDetailMonitoringOrderResult) return inner.GetDetailMonitoringOrderResult;
+  if (node.GetDetailMonitoringOrderResult) {
+    node = node.GetDetailMonitoringOrderResult;
+  } else if (node.GetDetailMonitoringOrderResponse) {
+    node = node.GetDetailMonitoringOrderResponse;
+    if (node?.GetDetailMonitoringOrderResult) node = node.GetDetailMonitoringOrderResult;
+  }
 
-  // Pattern 3 (REAL — confirmado por auditoría Fase 6, evidencia Railway
-  // IN018159, 2026-08-02): { success, errors, messages, data: { ... } }
-  if (soapResult.data && typeof soapResult.data === 'object') return soapResult.data;
+  // Envelope real (auditoría Fase 6): { success, errors, messages, data: {...} }
+  if (node && typeof node === 'object' && node.data && typeof node.data === 'object') {
+    node = node.data;
+  }
 
-  if (inner) return inner;
-
-  return soapResult;
+  return node;
 }
 
 /** Ensure value is always an array. */

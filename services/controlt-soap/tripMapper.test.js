@@ -445,6 +445,73 @@ describe('mapToViajeRow — contrato REAL (auditoría Fase 6, evidencia Railway 
     const row = mapToViajeRow(legacy, 'IN018108');
     assert.equal(row.moneda, 'EUR');
   });
+
+  // ── Causa raíz confirmada (auditoría Fase 6, 3ª ronda) ──────────────────────
+  //
+  // El wrapper legacy (GetDetailMonitoringOrderResult) y el envelope real
+  // ({ success, data }) NO son alternativas excluyentes: ambos niveles están
+  // presentes A LA VEZ en la respuesta real de ControlT. unwrapDetail()
+  // retornaba inmediatamente al matchear GetDetailMonitoringOrderResult y
+  // nunca llegaba a desenvolver `.data` — por eso todo el mapeo posterior
+  // leía undefined pese a que el SOAP sí traía los datos completos.
+  it('unwraps GetDetailMonitoringOrderResult WRAPPING the real { success, data } envelope', () => {
+    const soap = {
+      GetDetailMonitoringOrderResult: {
+        messages: { string: 'ok' },
+        errors: '',
+        success: true,
+        data: {
+          code_type_operation: 11,
+          code_type_trip: 2,
+          code_type_cargo: 11,
+          username: 1007986227,
+          fullname: 'Valentina Moreno Albornoz',
+        },
+      },
+    };
+    const row = mapToViajeRow(soap, 'IN018153');
+
+    assert.equal(row.tipo_operacion_codigo, 11);
+    assert.equal(row.tipo_viaje_codigo, 2);
+    assert.equal(row.tipo_carga_codigo, 11);
+    assert.equal(row.conductor_cedula, '1007986227');
+    assert.equal(row.conductor_nombre, 'Valentina Moreno Albornoz');
+  });
+
+  it('unwraps GetDetailMonitoringOrderResponse.GetDetailMonitoringOrderResult WRAPPING { success, data }', () => {
+    const soap = {
+      GetDetailMonitoringOrderResponse: {
+        GetDetailMonitoringOrderResult: {
+          success: true,
+          data: { code_type_operation: 7 },
+        },
+      },
+    };
+    const row = mapToViajeRow(soap, 'IN018153');
+    assert.equal(row.tipo_operacion_codigo, 7);
+  });
+
+  it('reproduces the exact IN018153 nesting captured in Railway (full trace root cause)', () => {
+    // soapResult tal como lo entrega soapGateway.getDetailMonitoringOrder()
+    // en producción: un nivel GetDetailMonitoringOrderResult envolviendo el
+    // { success, data } que la auditoría anterior había confundido con el
+    // nivel más externo.
+    const soapResult = {
+      GetDetailMonitoringOrderResult: REAL_DETAIL_IN018153,
+    };
+    const row = mapToViajeRow(soapResult, 'IN018153');
+
+    assert.equal(row.tipo_operacion_codigo, 11);
+    assert.equal(row.tipo_viaje_codigo, 2);
+    assert.equal(row.tipo_carga_codigo, 11);
+    assert.equal(row.conductor_cedula, '1007986227');
+    assert.equal(row.conductor_nombre, 'Valentina Moreno Albornoz');
+    assert.equal(row.valor_mercancia, 25000000);
+    assert.equal(row.moneda, 'COP');
+    assert.equal(row.valor_flete, 331700);
+    assert.equal(row.paradas.length, 2);
+    assert.equal(row.fecha_evento, '01/08/2026 00:24:48');
+  });
 });
 
 // ── Volcado LITERAL capturado en Railway — IN018153 (segunda ronda) ──────────
