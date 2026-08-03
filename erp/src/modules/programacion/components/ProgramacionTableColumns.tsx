@@ -170,4 +170,18 @@ export const COLUMNS: Column<ViajeResumen>[] = [
     width: "120px",
     render: (v) => <EstadoBadge estado={v.estado_programacion} />,
   },
+  {
+    key: "planificado_por_nombre",
+    header: "Responsable INLOP",
+    width: "140px",
+    render: (v) => (
+      <div
+        className="text-[12px] truncate"
+        style={{ color: v.planificado_por_nombre ? "var(--gray-700)" : "var(--gray-300)" }}
+        title={v.planificado_por_nombre ?? undefined}
+      >
+        {v.planificado_por_nombre ?? "—"}
+      </div>
+    ),
+  },
 ];
