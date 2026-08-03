@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from "react";
 import { hoy, hace7dias, extraerFechaColombia } from "@/utils/date";
 import type { Solicitud, ActorAccion } from "../types";
 import { getSolicitudes, cambiarEstadoSolicitud } from "../services/api";
-import { getViajePorTripNumber } from "@/modules/viajes/services/api";
 import { useFiltrosComunes } from "@/hooks/useFiltrosComunes";
 
 export function useSolicitudes() {
@@ -23,30 +22,7 @@ export function useSolicitudes() {
     setError(null);
     try {
       const list = await getSolicitudes(fechaDesde || hace7dias(), fechaHasta || hoy());
-
-      // Enriquecimiento paralelo: obtener planificado_por.fullname para cada trip number único.
-      const tripNumbers = [...new Set(
-        list.map((s) => s.controlt_trip_number).filter(Boolean) as string[]
-      )];
-      const planMap: Record<string, string | null> = {};
-      if (tripNumbers.length > 0) {
-        const results = await Promise.allSettled(
-          tripNumbers.map((tn) => getViajePorTripNumber(tn))
-        );
-        tripNumbers.forEach((tn, i) => {
-          const r = results[i];
-          planMap[tn] = r.status === "fulfilled" ? (r.value.planificado_por?.fullname ?? null) : null;
-        });
-      }
-
-      setData(
-        list.map((s) => ({
-          ...s,
-          planificado_por_nombre: s.controlt_trip_number
-            ? (planMap[s.controlt_trip_number] ?? null)
-            : null,
-        }))
-      );
+      setData(list);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al cargar solicitudes");
     } finally {

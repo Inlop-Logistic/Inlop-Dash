@@ -8,7 +8,6 @@ import { SidePanel, PanelSection, InfoRow, Button } from "@/components/ui";
 import { useNavigationContext, navActions } from "@/core/navigation";
 import type { Solicitud, SolicitudDetalle as SolicitudDetalleType } from "../types";
 import { getSolicitudDetalle } from "../services/api";
-import { getViajePorTripNumber } from "@/modules/viajes/services/api";
 import { EstadoBadge } from "./EstadoBadge";
 import { CanalBadge } from "./CanalBadge";
 import { ProgressBar } from "@/modules/viajes/components/ProgressBar";
@@ -188,7 +187,6 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
   const [accionLoading, setAccionLoading]   = useState(false);
   const [errorDetalle, setErrorDetalle]     = useState<string | null>(null);
   const [accionError, setAccionError]       = useState<string | null>(null);
-  const [responsableInlop, setResponsableInlop] = useState<string | null>(null);
 
   useEffect(() => {
     setLoadingDetalle(true);
@@ -225,13 +223,6 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
 
   const d          = detalle;
   const tripNumber = d?.controlt_trip_number ?? null;
-
-  useEffect(() => {
-    if (!tripNumber) { setResponsableInlop(null); return; }
-    getViajePorTripNumber(tripNumber)
-      .then((v) => setResponsableInlop(v.planificado_por?.fullname ?? null))
-      .catch(() => setResponsableInlop(null));
-  }, [tripNumber]);
 
   const footer = (solicitud.estado === "pendiente" || solicitud.estado === "aprobado") ? (
     <div className="px-6 py-4 flex flex-col gap-2.5">
@@ -462,9 +453,6 @@ export function DetalleSolicitud({ solicitud, onClose, onEstado }: DetalleSolici
 
             {/* Trip Number */}
             {tripNumber && <InfoRow label="Trip Number" value={tripNumber} mono />}
-
-            {/* Responsable INLOP */}
-            {responsableInlop && <InfoRow label="Responsable INLOP" value={responsableInlop} />}
 
             {/* Progreso del viaje */}
             {d?.pct != null && (

@@ -22,10 +22,6 @@ export interface Solicitud {
   estado: EstadoSolicitud;
   /** Conductor/responsable asignado cuando hay viaje vinculado en ControlT. */
   conductor_nombre: string | null;
-  /** Trip number de ControlT vinculado a esta solicitud (cuando existe). */
-  controlt_trip_number: string | null;
-  /** Nombre del planificador INLOP — enriquecido client-side desde GET /api/viajes/:tripNumber. */
-  planificado_por_nombre: string | null;
 }
 
 export interface HistorialEstado {

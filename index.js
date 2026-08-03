@@ -926,6 +926,42 @@ async function syncPlaneados(motivo = 'scheduler') {
       console.log(`[SYNC #${syncId}] Parche sinCliente | ${parchesAplicados} filas actualizadas`);
     }
 
+    // ─── 8b. Enriquecimiento SOAP: planificado_por ────────────────────────────
+    // Planeados es el propietario del dato durante la etapa de planificación.
+    // Solo se enriquecen filas sin planificado_por_nombre (nuevas o pendientes).
+    // Límite por ciclo: 10 llamadas SOAP para no extender la duración del sync.
+    // Best-effort: un fallo individual no interrumpe el ciclo ni el resto del lote.
+    try {
+      const sinResponsable = await sbFetch(
+        `/planeados?planificado_por_nombre=is.null&fecha_programada_dia=gte.${hoyStr}&select=trip_number&limit=10`
+      ) || [];
+      if (sinResponsable.length > 0) {
+        console.log(`[SYNC #${syncId}] SOAP enrich | ${sinResponsable.length} viajes sin planificado_por — iniciando`);
+        let enriquecidos = 0;
+        let fallidos     = 0;
+        for (const fila of sinResponsable) {
+          try {
+            const detalle = await getTripDetail(fila.trip_number, { sbFetch: controltSbFetch });
+            const nombre  = detalle.planificado_por?.fullname ?? null;
+            if (nombre) {
+              await sbFetch(
+                `/planeados?trip_number=eq.${encodeURIComponent(fila.trip_number)}`,
+                'PATCH',
+                { planificado_por_nombre: nombre }
+              );
+              enriquecidos++;
+            }
+          } catch (soapErr) {
+            fallidos++;
+            console.warn(`[SYNC #${syncId}] SOAP enrich | fallo en ${fila.trip_number}: ${soapErr.message}`);
+          }
+        }
+        console.log(`[SYNC #${syncId}] SOAP enrich | ${enriquecidos} enriquecidos, ${fallidos} fallidos`);
+      }
+    } catch (enrichErr) {
+      console.warn(`[SYNC #${syncId}] SOAP enrich | error general (ignorado): ${enrichErr.message}`);
+    }
+
     // ─── 9. Verificación de consistencia ─────────────────────────────────────
     const bdFuturos = await sbFetch(
       `/planeados?fecha_programada_dia=gte.${hoyStr}&select=trip_number,fecha_programada_dia,license_plate,estado_programacion`
