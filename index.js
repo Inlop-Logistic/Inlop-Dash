@@ -3216,13 +3216,101 @@ serviciosRouter.get('/:id', async (req, res) => {
 });
 
 // GET /servicios/:id/paradas
+//
+// Lógica de dos capas:
+//   1) SI el viaje tiene controlt_trip_number → llamar a ControlT /Travel/:id
+//      para obtener las paradas enriquecidas (con coordenadas reales).
+//   2) SOLO cuando no existan paradas enriquecidas (sin viaje asignado, ControlT
+//      inalcanzable, o respuesta sin coordenadas válidas) → fallback Origen/Destino.
+//
+// Nunca modifica /api/viajes/:tripNumber, la integración SOAP, la persistencia,
+// sincronización ni el caché.
 serviciosRouter.get('/:id/paradas', async (req, res) => {
   try {
     const sol = await obtenerSolicitudEnScope(req.params.id, req.scope, {
-      sbFetch, select: 'id,empresa_cliente_id,origen,destino,estado',
+      sbFetch, select: 'id,empresa_cliente_id,origen,destino,estado,controlt_trip_number',
     });
     if (!sol) return res.status(404).json({ error: 'Servicio no encontrado' });
 
+    // ── Capa 1: paradas enriquecidas desde ControlT ──────────────────────────
+    if (sol.controlt_trip_number) {
+      try {
+        const tripNum = String(sol.controlt_trip_number);
+        const ctToken = await getCtPublicToken();
+        const ctRes = await fetchConTimeout(
+          `${CT_PUBLIC_URL}/Travel/${encodeURIComponent(tripNum)}`,
+          { headers: { Authorization: `Bearer ${ctToken}`, Accept: 'application/json' } },
+          8_000,
+        );
+
+        if (ctRes.ok) {
+          const ctData = await ctRes.json();
+          // El array puede estar en ctData directamente o en ctData.stops / ctData.paradas
+          const rawStops = Array.isArray(ctData)
+            ? ctData
+            : (Array.isArray(ctData?.stops) ? ctData.stops
+              : Array.isArray(ctData?.paradas) ? ctData.paradas : []);
+
+          // Verificar que al menos una parada tiene coordenadas válidas
+          const conCoords = rawStops.filter(s => {
+            const lat = parseFloat(s.latitude ?? s.lat ?? '');
+            const lng = parseFloat(s.longitude ?? s.lng ?? '');
+            return Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
+          });
+
+          if (conCoords.length > 0) {
+            const paradas = rawStops.map((s, idx) => {
+              const lat = parseFloat(s.latitude ?? s.lat ?? '');
+              const lng = parseFloat(s.longitude ?? s.lng ?? '');
+
+              // Normalizar tipo de parada (capitalizado en ControlT → lowercase)
+              const tipoRaw = (s.type ?? s.type_stop ?? s.tipo ?? '').toLowerCase().trim();
+              let tipo;
+              if (tipoRaw === 'origen' || tipoRaw === 'origin') tipo = 'origen';
+              else if (tipoRaw === 'destino' || tipoRaw === 'destination' || tipoRaw === 'destiny') tipo = 'destino';
+              else if (tipoRaw.startsWith('interm')) tipo = 'intermedia';
+              else tipo = undefined;
+
+              // Normalizar estado de parada
+              const estadoRaw = (s.status ?? s.status_stop ?? s.estado ?? '').toLowerCase().replace(/[\s-]+/g, '_');
+              let estado;
+              if (['entregado', 'completado', 'delivered', 'completed'].includes(estadoRaw)) estado = 'entregado';
+              else if (['en_camino', 'encamino', 'en_ruta', 'in_transit', 'intransit'].includes(estadoRaw)) estado = 'en_camino';
+              else estado = 'pendiente';
+
+              return {
+                id:              s.id ? String(s.id) : `${sol.id}-ct-${idx + 1}`,
+                solicitud_id:    sol.id,
+                orden:           Number(s.order ?? s.order_stop ?? s.orden ?? idx + 1),
+                nombre:          s.name ?? s.name_stop ?? s.nombre ?? '',
+                direccion:       s.address ?? s.address_stop ?? s.direccion ?? '',
+                tipo,
+                estado,
+                hora_entrega:    s.arrival_date ?? s.actual_arrival ?? s.hora_entrega ?? null,
+                hora_programada: s.arrival_schedule ?? s.scheduled_arrival ?? s.schedulate ?? s.hora_programada ?? null,
+                eta:             s.eta ?? undefined,
+                unidades:        Number(s.units ?? s.unidades ?? 0) || 0,
+                tiene_evidencia: Boolean(s.evidence ?? s.tiene_evidencia ?? false),
+                lat:             Number.isFinite(lat) ? lat : null,
+                lng:             Number.isFinite(lng) ? lng : null,
+                remision:        s.remision ?? s.number_order ?? null,
+                productos:       Array.isArray(s.products ?? s.productos) ? (s.products ?? s.productos) : [],
+                cliente:         s.client ?? s.customer ?? s.cliente ?? null,
+              };
+            });
+            return res.json(paradas);
+          }
+        }
+      } catch (ctErr) {
+        // ControlT inalcanzable o respuesta inválida → continuar con fallback
+        console.warn(
+          `⚠️ GET /servicios/${req.params.id}/paradas: ControlT falló para trip ${sol.controlt_trip_number} — usando fallback:`,
+          ctErr.message,
+        );
+      }
+    }
+
+    // ── Capa 2: fallback Origen/Destino desde la solicitud ───────────────────
     const estadoOrigen = sol.estado === 'completado' ? 'entregado'
       : sol.estado === 'en_ruta' ? 'en_camino' : 'pendiente';
 
