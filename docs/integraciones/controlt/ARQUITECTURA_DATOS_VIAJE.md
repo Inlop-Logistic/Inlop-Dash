@@ -719,6 +719,70 @@ salvo revisión explícita:
 en Fase 6 de `controlt_viajes` a `viajes`, lo cual requiere revisión de ese módulo
 específicamente (no de los demás).
 
+## Apéndice C — Regla Permanente: Fuente Única de Verdad para Datos ControlT
+
+> **Aprobada:** Sprint 4.7 — tras hallazgo de endpoint `GET /servicios/:id/paradas`
+> con doble llamada directa a ControlT violando la arquitectura de fuente única.  
+> **Estado:** Regla permanente — no derogar sin revisión de arquitectura formal.
+
+### Principio
+
+Todo dato proveniente de ControlT debe **obtenerse una sola vez, enriquecerse una
+sola vez, persistirse una sola vez y reutilizarse** por todos los endpoints internos.
+
+Ningún endpoint de consumo (ERP, Portal Cliente o APIs auxiliares) podrá volver a
+consultar ControlT cuando la información ya pueda obtenerse a través de
+`tripService.getTripDetail`.
+
+### Flujo mandatorio
+
+```
+ControlT (SOAP GetDetailMonitoringOrder)
+    │
+    ▼
+tripService.getTripDetail()   ← única puerta de entrada certificada
+    │
+    ├── caché fresco en cumplidos → devolver sin llamar al SOAP
+    └── caché vencido / ausente  → SOAP → tripMapper → persistenceLayer → devolver
+    │
+    ▼
+Endpoints consumidores:
+  GET /api/viajes/:tripNumber   (uso actual)
+  GET /servicios/:id            (vía construirControltEnriquecido)
+  GET /servicios/:id/paradas    (corrección Sprint 4.7)
+  cualquier endpoint futuro con datos ControlT
+```
+
+### Prohibido
+
+- Crear nuevas llamadas HTTP a ControlT (`CT_PUBLIC_URL`, Resume API, etc.) desde
+  endpoints consumidores.
+- Usar `getCtPublicToken()` para obtener datos de paradas, productos o detalle de viaje
+  desde un endpoint secundario — esa función es exclusiva del módulo de autenticación.
+- Reimplementar Login, SOAP, caché o persistencia fuera del módulo `controlt-soap`.
+- Consultar ControlT más de una vez por el mismo dato en el mismo request.
+
+### Función autorizada
+
+```javascript
+// Único punto de acceso a datos de ControlT desde cualquier handler HTTP:
+const detalle = await getTripDetail(codigoViaje, { sbFetch: controltSbFetch });
+// detalle.paradas → Parada[] enriquecidas (coordenadas, productos, horarios)
+```
+
+`getTripDetail` (importada de `services/controlt-soap/tripService.js`) gestiona
+internamente el caché, la autenticación, el reintento y la persistencia — el
+endpoint consumidor no necesita conocer ni reimplementar ninguno de esos detalles.
+
+### Referencia de implementación
+
+- `services/controlt-soap/tripService.js` — implementación de `getTripDetail`
+- `index.js` → `construirControltEnriquecido()` — patrón de uso con absorción de errores
+- `index.js` → `GET /api/viajes/:tripNumber` — patrón de uso con propagación de errores
+- `index.js` → `GET /servicios/:id/paradas` — corrección Sprint 4.7 aplicando esta regla
+
+---
+
 ## Apéndice B — Restricciones de Seguridad Vigentes
 
 Las siguientes restricciones permanecen en efecto en todas las fases futuras:
