@@ -7,6 +7,8 @@ import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } f
 import { getUserPreferences, updatePreference, KNOWN_CHANNELS } from './services/preferenceResolver.js';
 import { normalizeExternalRef } from './services/normalizeExternalRef.js';
 import { fechaHoyColombia, parseFechaTMS, extraerFechaColombia } from './utils/fechas.js';
+import controltDiagRouter from './routes/controltDiag.js';
+import { getTripDetail, makeSbFetchAdapter } from './services/controlt-soap/tripService.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -55,7 +57,47 @@ let tripCustomerCache = new Map();
 const SB_URL = "https://gtyydandwcgoaratmnqh.supabase.co/rest/v1";
 const SB_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0eXlkYW5kd2Nnb2FyYXRtbnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDAyMTcsImV4cCI6MjA5MjYxNjIxN30.utGZtr0L5t9hIpRABTtfhsKEsrSCBJLHcP_gQ5Hq0EI";
 const SB_KEY = process.env.SUPABASE_SERVICE_KEY || SB_ANON_KEY;
-const SB_AUTH_URL = 'https://gtyydandwcgoaratmnqh.supabase.co/auth/v1';
+const SB_AUTH_URL    = 'https://gtyydandwcgoaratmnqh.supabase.co/auth/v1';
+const SB_STORAGE_URL = 'https://gtyydandwcgoaratmnqh.supabase.co/storage/v1';
+
+// ─── ControlT SOAP — adaptador para tripService (Fase 5) ────────────────────
+// tripService.js (única puerta de entrada certificada a ControlT — Fase 4.3)
+// espera un sbFetch con contrato { data, error, status }, distinto del
+// sbFetch() global de este archivo (que retorna datos directos, ver más
+// abajo). makeSbFetchAdapter() reutiliza las mismas credenciales de Supabase
+// ya definidas arriba. SB_URL incluye el sufijo /rest/v1 pero
+// persistenceLayer.js ya antepone /rest/v1/cumplidos a cada ruta — se retira
+// aquí para no duplicarlo.
+const SB_ROOT_URL = SB_URL.replace(/\/rest\/v1$/, '');
+const controltSbFetch = makeSbFetchAdapter(SB_ROOT_URL, SB_KEY);
+
+// Helper para Supabase Storage (bucket cumplidos).
+// body puede ser un Buffer (upload binario) u objeto JSON (list/sign/delete).
+async function sbStorageFetch(path, method = 'GET', body = null, extraHeaders = {}) {
+  const headers = {
+    'apikey':        SB_ANON_KEY,
+    'Authorization': `Bearer ${SB_KEY}`,
+    ...extraHeaders,
+  };
+  const opts = { method, headers };
+  if (body !== null) {
+    if (Buffer.isBuffer(body)) {
+      opts.body = body;
+    } else {
+      headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+  }
+  const r = await fetchConTimeout(`${SB_STORAGE_URL}${path}`, opts, 30_000);
+  if (!r.ok) {
+    const txt = await r.text();
+    console.error(`SB Storage ${method} ${path} → ${r.status}: ${txt}`);
+    return null;
+  }
+  if (method === 'DELETE') return null;
+  const text = await r.text();
+  return text ? JSON.parse(text) : null;
+}
 
 if (!process.env.SUPABASE_SERVICE_KEY) {
   console.warn(
@@ -321,8 +363,12 @@ const cache = {
   pendientes:{ data: [], ts: 0 },
 };
 
+let syncViajesRunning     = false;
 let syncCumplidosRunning  = false;
 let syncPlaneadosRunning  = false;
+
+// Métricas del último ciclo de syncViajes — expuestas en /health para observabilidad.
+let lastSnapshotMetrics = null;
 
 // ─── DIAGNÓSTICO PROGRAMACIÓN ────────────────────────────────────────────────
 // Variables y helpers para instrumentación temporal. No tocar reglas funcionales.
@@ -781,8 +827,10 @@ async function syncPlaneados(motivo = 'scheduler') {
       // Derivar estado_programacion — backend es fuente de verdad
       const estadoActual = yaExiste?.estado_programacion || 'programado';
       let estado_programacion;
-      if (estadoActual === 'cancelado' || estadoActual === 'completado') {
-        estado_programacion = estadoActual; // estados sticky: sync nunca los revierte
+      if (estadoActual === 'cancelado') {
+        estado_programacion = estadoActual; // cancelado: sticky, sync nunca lo revierte
+      } else if (estadoActual === 'completado' && !estaActivo) {
+        estado_programacion = 'completado'; // completado: sticky solo si el viaje ya no está en Resume
       } else if (estaActivo) {
         estado_programacion = (f && f.getTime() <= ahora) ? 'en_ruta' : 'asignado';
       } else {
@@ -878,6 +926,42 @@ async function syncPlaneados(motivo = 'scheduler') {
       console.log(`[SYNC #${syncId}] Parche sinCliente | ${parchesAplicados} filas actualizadas`);
     }
 
+    // ─── 8b. Enriquecimiento SOAP: planificado_por ────────────────────────────
+    // Planeados es el propietario del dato durante la etapa de planificación.
+    // Solo se enriquecen filas sin planificado_por_nombre (nuevas o pendientes).
+    // Límite por ciclo: 10 llamadas SOAP para no extender la duración del sync.
+    // Best-effort: un fallo individual no interrumpe el ciclo ni el resto del lote.
+    try {
+      const sinResponsable = await sbFetch(
+        `/planeados?planificado_por_nombre=is.null&fecha_programada_dia=gte.${hoyStr}&select=trip_number&limit=10`
+      ) || [];
+      if (sinResponsable.length > 0) {
+        console.log(`[SYNC #${syncId}] SOAP enrich | ${sinResponsable.length} viajes sin planificado_por — iniciando`);
+        let enriquecidos = 0;
+        let fallidos     = 0;
+        for (const fila of sinResponsable) {
+          try {
+            const detalle = await getTripDetail(fila.trip_number, { sbFetch: controltSbFetch });
+            const nombre  = detalle.planificado_por?.fullname ?? null;
+            if (nombre) {
+              await sbFetch(
+                `/planeados?trip_number=eq.${encodeURIComponent(fila.trip_number)}`,
+                'PATCH',
+                { planificado_por_nombre: nombre }
+              );
+              enriquecidos++;
+            }
+          } catch (soapErr) {
+            fallidos++;
+            console.warn(`[SYNC #${syncId}] SOAP enrich | fallo en ${fila.trip_number}: ${soapErr.message}`);
+          }
+        }
+        console.log(`[SYNC #${syncId}] SOAP enrich | ${enriquecidos} enriquecidos, ${fallidos} fallidos`);
+      }
+    } catch (enrichErr) {
+      console.warn(`[SYNC #${syncId}] SOAP enrich | error general (ignorado): ${enrichErr.message}`);
+    }
+
     // ─── 9. Verificación de consistencia ─────────────────────────────────────
     const bdFuturos = await sbFetch(
       `/planeados?fecha_programada_dia=gte.${hoyStr}&select=trip_number,fecha_programada_dia,license_plate,estado_programacion`
@@ -919,46 +1003,131 @@ async function syncPlaneados(motivo = 'scheduler') {
 }
 
 async function syncViajes() {
+  // Mutex: evitar ejecuciones concurrentes si un ciclo tarda más de 60 s.
+  if (syncViajesRunning) {
+    console.warn('⚠️  syncViajes: ciclo anterior aún activo — omitiendo.');
+    return;
+  }
+  syncViajesRunning = true;
+  const t0 = Date.now();
+
+  // Objeto de métricas del ciclo — se persiste en lastSnapshotMetrics al finalizar.
+  const metricas = {
+    timestamp:           new Date().toISOString(),
+    paginas_intentadas:  0,
+    paginas_exitosas:    0,
+    registros_p1:        0,
+    registros_p2:        0,
+    registros_p3:        0,
+    total_viajes:        0,
+    duplicados:          0,
+    completo:            false,
+    truncado_por_limite: false,
+    errores:             [],
+    duracion_ms:         0,
+    estado:              'iniciando',
+  };
+
+  console.log('🔄 syncViajes: iniciando snapshot ControlT /Resume');
+
   try {
+    // ── Página 1 ──────────────────────────────────────────────────────────────
+    metricas.paginas_intentadas++;
     const data1 = await safeFetch("/Resume?size=100&page=1", null);
-    if (!data1) return;
-    const arr1 = Array.isArray(data1) ? data1 : data1.data || data1.result || [];
-    if (arr1.length === 0) {
-      console.warn("⚠️  Resume devolvió 0 viajes — manteniendo caché anterior");
+
+    // null indica error HTTP, parse failure o permisos denegados en safeFetch.
+    // No actualizar caché para preservar el snapshot anterior.
+    if (data1 === null) {
+      metricas.errores.push({ pagina: 1, motivo: 'http_error_o_parse' });
+      metricas.estado = 'abortado_p1_error';
+      console.warn('❌ syncViajes: página 1 devolvió error — caché anterior preservada.');
       return;
     }
 
-    let todos = [...arr1];
+    const arr1 = Array.isArray(data1) ? data1 : (data1?.data || data1?.result || []);
+    if (arr1.length === 0) {
+      metricas.estado = 'abortado_p1_vacia';
+      console.warn('⚠️  syncViajes: página 1 devolvió 0 viajes — caché anterior preservada.');
+      return;
+    }
+
+    metricas.paginas_exitosas++;
+    metricas.registros_p1 = arr1.length;
+    console.log(`📄 syncViajes p1: ${arr1.length} viajes`);
+
+    let todos    = [...arr1];
     let completo = true;
 
+    // ── Página 2 ──────────────────────────────────────────────────────────────
     if (arr1.length >= 100) {
+      metricas.paginas_intentadas++;
       try {
         const data2 = await safeFetch("/Resume?size=100&page=2", null);
-        const arr2 = Array.isArray(data2) ? data2 : (data2?.data || data2?.result || []);
-        if (arr2.length > 0) {
-          todos = [...todos, ...arr2];
-          console.log(`📄 Página 2 cargada: ${arr2.length} viajes adicionales`);
-          if (arr2.length >= 100) {
-            try {
-              const data3 = await safeFetch("/Resume?size=100&page=3", null);
-              const arr3 = Array.isArray(data3) ? data3 : (data3?.data || data3?.result || []);
-              if (arr3.length > 0) {
-                todos = [...todos, ...arr3];
-                console.log(`📄 Página 3 cargada: ${arr3.length} viajes adicionales`);
+
+        if (data2 === null) {
+          // Error HTTP / parse silencioso: marcar snapshot incompleto.
+          // Antes este caso quedaba como completo=true porque arr2=[] y no se lanzaba excepción.
+          completo = false;
+          metricas.errores.push({ pagina: 2, motivo: 'http_error_o_parse' });
+          console.error('❌ syncViajes: página 2 falló con error HTTP/parse — snapshot INCOMPLETO. syncCumplidos suspenderá lógica de finalización.');
+        } else {
+          const arr2 = Array.isArray(data2) ? data2 : (data2?.data || data2?.result || []);
+          metricas.paginas_exitosas++;
+          metricas.registros_p2 = arr2.length;
+
+          if (arr2.length > 0) {
+            todos = [...todos, ...arr2];
+            console.log(`📄 syncViajes p2: ${arr2.length} viajes adicionales`);
+
+            // ── Página 3 ──────────────────────────────────────────────────────
+            if (arr2.length >= 100) {
+              metricas.paginas_intentadas++;
+              try {
+                const data3 = await safeFetch("/Resume?size=100&page=3", null);
+
+                if (data3 === null) {
+                  completo = false;
+                  metricas.errores.push({ pagina: 3, motivo: 'http_error_o_parse' });
+                  console.error('❌ syncViajes: página 3 falló con error HTTP/parse — snapshot INCOMPLETO.');
+                } else {
+                  const arr3 = Array.isArray(data3) ? data3 : (data3?.data || data3?.result || []);
+                  metricas.paginas_exitosas++;
+                  metricas.registros_p3 = arr3.length;
+
+                  if (arr3.length > 0) {
+                    todos = [...todos, ...arr3];
+                    console.log(`📄 syncViajes p3: ${arr3.length} viajes adicionales`);
+                  } else {
+                    console.log('📄 syncViajes p3: 0 registros — paginación completa.');
+                  }
+
+                  // Página 3 llena: existen viajes más allá del límite de 3 páginas.
+                  if (arr3.length >= 100) {
+                    completo = false;
+                    metricas.truncado_por_limite = true;
+                    metricas.errores.push({ pagina: 3, motivo: 'limite_paginas_alcanzado' });
+                    console.warn(`⚠️  syncViajes: página 3 completa (${arr3.length} registros). Límite de 3 páginas alcanzado — viajes adicionales no descargados. Snapshot INCOMPLETO.`);
+                  }
+                }
+              } catch(e) {
+                completo = false;
+                metricas.errores.push({ pagina: 3, motivo: 'excepcion', detalle: e.message });
+                console.error(`❌ syncViajes: página 3 — excepción: ${e.message}`);
               }
-            } catch(e) {
-              console.warn("⚠️  Página 3 no disponible — snapshot parcial:", e.message);
-              completo = false;
             }
+          } else {
+            console.log('📄 syncViajes p2: 0 registros — paginación completa.');
           }
         }
       } catch(e) {
-        console.warn("⚠️  Página 2 no disponible — snapshot parcial:", e.message);
         completo = false;
+        metricas.errores.push({ pagina: 2, motivo: 'excepcion', detalle: e.message });
+        console.error(`❌ syncViajes: página 2 — excepción: ${e.message}`);
       }
     }
 
-    const seen = new Set();
+    // ── Deduplicación ─────────────────────────────────────────────────────────
+    const seen  = new Set();
     const dedup = todos.filter(v => {
       const k = v.trip_number || v.id_monitoring_order;
       if (seen.has(k)) return false;
@@ -966,16 +1135,36 @@ async function syncViajes() {
       return true;
     });
 
-    cache.viajes.data    = sortViajes(dedup);
-    cache.viajes.ts      = Date.now();
+    metricas.duplicados   = todos.length - dedup.length;
+    metricas.total_viajes = dedup.length;
+    metricas.completo     = completo;
+    metricas.estado       = completo ? 'completo' : 'parcial';
+
+    cache.viajes.data     = sortViajes(dedup);
+    cache.viajes.ts       = Date.now();
     cache.viajes.completo = completo;
 
     if (!completo) {
-      console.warn(`⚠️  syncViajes: snapshot PARCIAL (${dedup.length} viajes). Lógica de finalización suspendida en próximo ciclo.`);
+      const resumenErrores = metricas.errores.map(e => `p${e.pagina}:${e.motivo}`).join(', ');
+      console.warn(`⚠️  syncViajes: snapshot PARCIAL (${dedup.length} viajes). Errores: [${resumenErrores}]. syncCumplidos suspenderá lógica de finalización.`);
     }
-    console.log(`📦 Caché: ${dedup.length} viajes totales (p1:${arr1.length} + extras)`);
+
   } catch(e) {
-    console.error("❌ Error sync viajes:", e.message);
+    metricas.estado = 'error_fatal';
+    metricas.errores.push({ pagina: 0, motivo: 'excepcion_fatal', detalle: e.message });
+    console.error(`❌ syncViajes: error fatal — ${e.message}`);
+  } finally {
+    metricas.duracion_ms = Date.now() - t0;
+    lastSnapshotMetrics  = metricas;
+    syncViajesRunning    = false;
+    console.log(
+      `📊 syncViajes fin | estado:${metricas.estado}` +
+      ` | viajes:${metricas.total_viajes}` +
+      ` | páginas:${metricas.paginas_exitosas}/${metricas.paginas_intentadas}` +
+      ` | p1:${metricas.registros_p1} p2:${metricas.registros_p2} p3:${metricas.registros_p3}` +
+      ` | dedup:-${metricas.duplicados}` +
+      ` | ${metricas.duracion_ms}ms`
+    );
   }
 }
 
@@ -1080,6 +1269,104 @@ app.get('/api/viajes', requireInternalApiKey, (req, res) => {
   res.json(viajes);
 });
 
+// ─── API CANÓNICA DEL VIAJE (Fase 6) ────────────────────────────────────────
+// GET /api/viajes/:tripNumber — único punto de entrada al dominio operacional
+// Viaje. Entrada exclusiva: el Trip Number de ControlT. El consumidor NO
+// conoce ni necesita UUIDs internos ni identificadores de `solicitudes`.
+//
+// Coexiste con GET /servicios/:id (dominio Solicitud/ERP, no lo reemplaza).
+// Reutilizable por ERP, Portal Cliente (backend), App Conductor, Torre de
+// Control, BI e integraciones futuras — todas system-to-system, de ahí
+// requireInternalApiKey (mismo mecanismo que el resto de /api/*).
+//
+// Toda comunicación con ControlT pasa por tripService.getTripDetail — este
+// endpoint no reimplementa Login, SOAP, caché ni persistencia. A diferencia
+// de construirControltEnriquecido() (Fase 5, que absorbe errores porque ahí
+// ControlT es un enriquecimiento secundario de una Solicitud), aquí el Viaje
+// ES el recurso principal: un error tipado de tripService (ver errors.js)
+// se traduce 1:1 al status HTTP correspondiente (404, 502, 503, 504, etc.).
+//
+// vehiculo/telefono/ubicacion_actual: mismos campos en tiempo real que ya
+// usa mapSolicitud()/construirControltEnriquecido() vía cache.viajes (Resume
+// API) — no es una fuente nueva, es la misma ya establecida en Fase 5.
+app.get('/api/viajes/:tripNumber', requireInternalApiKey, async (req, res) => {
+  const tripNumber = String(req.params.tripNumber || '').trim();
+  if (!tripNumber) {
+    return res.status(400).json({ error: { code: 'INVALID_TRIP_NUMBER', mensaje: 'Trip Number requerido' } });
+  }
+
+  let detalle;
+  try {
+    detalle = await getTripDetail(tripNumber, { sbFetch: controltSbFetch });
+  } catch (err) {
+    const statusCode = typeof err.statusCode === 'number' ? err.statusCode : 500;
+    const code = err.code || 'INTERNAL_ERROR';
+    console.error(`❌ GET /api/viajes/${tripNumber}:`, err.message);
+    return res.status(statusCode).json({ error: { code, mensaje: err.message } });
+  }
+
+  const viajeActivo = cache.viajes.data.find(v => String(v.trip_number) === tripNumber) || null;
+
+  const ubicacion_actual = (() => {
+    if (!viajeActivo) return null;
+    const lat = parseFloat(viajeActivo.latitude ?? viajeActivo.lat ?? '');
+    const lng = parseFloat(viajeActivo.longitude ?? viajeActivo.lng ?? '');
+    if (!lat || !lng) return null;
+    return { lat, lng, ultima_actualizacion: viajeActivo.latest_gps_report || null };
+  })();
+
+  res.json({
+    trip_number: detalle.codigo_controlt,
+    codigo_controlt_secundario: detalle.codigo_controlt_secundario || null,
+    codigo_empresa:             detalle.codigo_empresa || null,
+    orden_operacional: {
+      number_order:         viajeActivo?.number_order        || null,
+      id_monitoring_order:  viajeActivo?.id_monitoring_order  || null,
+    },
+    codigo_ruta: detalle.codigo_ruta || null,
+    estado_viaje: detalle.estado_viaje,
+    // CORRECCIÓN DE MODELO (Fase 6, certificación final, Objetivo 2):
+    // username/fullname del SOAP NO son datos del conductor — son el
+    // usuario del TMS que planilló la orden (ver "planificado_por" abajo).
+    // El nombre real del conductor, cuando existe, proviene de Resume
+    // (cache.viajes.driver_name) — misma fuente que ya usa mapSolicitud()
+    // en /servicios/:id. La cédula del conductor no tiene ninguna fuente
+    // confirmada todavía (ni SOAP ni Resume la exponen) y permanece null
+    // hasta que se confirme un origen real.
+    conductor: (viajeActivo?.driver_name || detalle.conductor_nombre || detalle.conductor_cedula || viajeActivo) ? {
+      cedula:   detalle.conductor_cedula || null,
+      nombre:   viajeActivo?.driver_name || detalle.conductor_nombre || null,
+      telefono: viajeActivo ? (extraerTelefono(viajeActivo.driver_phone, viajeActivo.full_driver) || null) : null,
+    } : null,
+    // planificado_por: usuario de ControlT/TMS que creó/planilló la orden
+    // de monitoreo — NUNCA debe interpretarse como el conductor del viaje.
+    planificado_por: detalle.planificado_por || null,
+    vehiculo: viajeActivo ? { placa: viajeActivo.license_plate || null } : null,
+    tipo_operacion_codigo: detalle.tipo_operacion_codigo,
+    tipo_viaje_codigo:     detalle.tipo_viaje_codigo,
+    tipo_carga_codigo:     detalle.tipo_carga_codigo,
+    carga: {
+      valor_mercancia: detalle.valor_mercancia,
+      moneda:          detalle.moneda,
+      valor_flete:     detalle.valor_flete,
+      peso_total_ton:  detalle.peso_total_ton,
+      volumen_total:   detalle.volumen_total,
+      temperatura_min: detalle.temperatura_min,
+      temperatura_max: detalle.temperatura_max,
+    },
+    instrucciones:      detalle.instrucciones,
+    observaciones:      detalle.observaciones || null,
+    referencia_doc1:    detalle.referencia_doc1 || null,
+    referencia_doc2:    detalle.referencia_doc2 || null,
+    campos_auxiliares:  detalle.campos_auxiliares || null,
+    rastreo_nueva_ui:   detalle.rastreo_nueva_ui ?? null,
+    paradas:          detalle.paradas || [],
+    ubicacion_actual,
+    fecha_evento:     detalle.fecha_evento,
+    sincronizado_en:  detalle.soap_sincronizado_en || null,
+  });
+});
+
 // GET /api/cumplidos — viajes finalizados desde Supabase (tabla cumplidos).
 // Fuente: Supabase, nunca desde cache en memoria.
 // Paginación interna para soportar crecimiento indefinido de la tabla.
@@ -1090,7 +1377,7 @@ app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
     const allRows = [];
     while (true) {
       const page = await sbFetch(
-        `/cumplidos?select=id,manifiesto,placa,conductor,conductor_tel,cliente,origen,destino,estado_controlt,pct,fecha_viaje,fecha_finalizacion,tipo_negocio&order=fecha_viaje.desc&limit=${SB_PAGE}&offset=${sbOffset}`
+        `/cumplidos?select=id,manifiesto,placa,conductor,conductor_tel,cliente,origen,destino,estado_controlt,pct,fecha_viaje,fecha_finalizacion,tipo_negocio,estado_cumplido,tiene_soporte,obs,link_soporte&order=fecha_viaje.desc&limit=${SB_PAGE}&offset=${sbOffset}`
       );
       if (!page || page.length === 0) break;
       allRows.push(...page);
@@ -1117,7 +1404,11 @@ app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
         ...d,
         presente: d.id === 'remision' ? !!r.manifiesto : false,
       })),
-      type_operation:   r.tipo_negocio || null,
+      type_operation:   r.tipo_negocio    || null,
+      estado_cumplido:  r.estado_cumplido || null,
+      tiene_soporte:    r.tiene_soporte   ?? false,
+      obs:              r.obs             || null,
+      link_soporte:     r.link_soporte    || null,
       observaciones:    null,
       responsable:      null,
       fecha_validacion: null,
@@ -1128,6 +1419,112 @@ app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
   } catch(e) {
     console.error('❌ Error GET /api/cumplidos:', e.message);
     res.status(500).json({ error: 'Error interno al obtener viajes finalizados' });
+  }
+});
+
+// ─── DOCUMENTOS CUMPLIDOS (bucket Supabase Storage "cumplidos") ─────────────
+
+// GET /api/cumplidos/:trip/documentos — lista archivos del bucket para el viaje.
+app.get('/api/cumplidos/:trip/documentos', requireInternalApiKey, async (req, res) => {
+  try {
+    const { trip } = req.params;
+    const result = await sbStorageFetch('/object/list/cumplidos', 'POST', {
+      prefix:  `${trip}/`,
+      limit:   100,
+      offset:  0,
+      sortBy:  { column: 'name', order: 'asc' },
+    });
+    const archivos = (result || [])
+      .filter(f => f.name && f.name !== '.emptyFolderPlaceholder')
+      .map(f => ({
+        nombre:     f.name,
+        ruta:       `${trip}/${f.name}`,
+        size:       f.metadata?.size     || 0,
+        mimetype:   f.metadata?.mimetype || 'application/octet-stream',
+        created_at: f.created_at         || null,
+        updated_at: f.updated_at         || null,
+      }));
+    res.json({ archivos });
+  } catch(e) {
+    console.error('❌ GET /api/cumplidos/:trip/documentos:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/cumplidos/:trip/documentos — sube un documento al bucket (proxy).
+// Headers esperados: X-Tipo-Documento, X-Placa, X-Filename, Content-Type.
+app.post(
+  '/api/cumplidos/:trip/documentos',
+  requireInternalApiKey,
+  express.raw({ type: '*/*', limit: '50mb' }),
+  async (req, res) => {
+    try {
+      const { trip } = req.params;
+      const tipo     = (req.headers['x-tipo-documento'] || 'documento').replace(/[^a-z]/gi, '');
+      const placa    = (req.headers['x-placa'] || 'SINPLACA').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      const origName = req.headers['x-filename'] || 'archivo.bin';
+      const mime     = req.headers['content-type'] || 'application/octet-stream';
+      const ext      = origName.includes('.') ? origName.split('.').pop().toLowerCase() : 'bin';
+      const fecha    = fechaHoyColombia().replace(/-/g, '');
+      const filename = `${tipo}_${placa}_${fecha}_${Date.now()}.${ext}`;
+      const path     = `${trip}/${filename}`;
+
+      await sbStorageFetch(`/object/cumplidos/${path}`, 'POST', req.body, {
+        'Content-Type': mime,
+        'x-upsert':     'true',
+      });
+      // Marca tiene_soporte = true en la tabla cumplidos
+      await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(trip)}`, 'PATCH', { tiene_soporte: true });
+      res.json({ ok: true, filename, path });
+    } catch(e) {
+      console.error('❌ POST /api/cumplidos/:trip/documentos:', e.message);
+      res.status(500).json({ error: e.message });
+    }
+  },
+);
+
+// DELETE /api/cumplidos/:trip/documentos/:filename — elimina un documento del bucket.
+app.delete('/api/cumplidos/:trip/documentos/:filename', requireInternalApiKey, async (req, res) => {
+  try {
+    const { trip, filename } = req.params;
+    await sbStorageFetch('/object/cumplidos', 'DELETE', { prefixes: [`${trip}/${filename}`] });
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('❌ DELETE /api/cumplidos/:trip/documentos:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/cumplidos/:trip/documentos/:filename/sign — URL firmada (1h) para ver/descargar.
+app.get('/api/cumplidos/:trip/documentos/:filename/sign', requireInternalApiKey, async (req, res) => {
+  try {
+    const { trip, filename } = req.params;
+    const path   = `${trip}/${filename}`;
+    const result = await sbStorageFetch(`/object/sign/cumplidos/${path}`, 'POST', { expiresIn: 3600 });
+    if (!result?.signedURL) return res.status(404).json({ error: 'No se pudo generar URL firmada' });
+    const url = result.signedURL.startsWith('http')
+      ? result.signedURL
+      : `https://gtyydandwcgoaratmnqh.supabase.co${result.signedURL}`;
+    res.json({ url });
+  } catch(e) {
+    console.error('❌ GET /api/cumplidos/:trip/documentos/:filename/sign:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/cumplidos/:trip/estado — actualiza estado_cumplido (y opcionalmente fecha_cumplido).
+app.patch('/api/cumplidos/:trip/estado', requireInternalApiKey, async (req, res) => {
+  try {
+    const { trip }                    = req.params;
+    const { estado_cumplido, fecha_cumplido } = req.body || {};
+    if (!estado_cumplido) return res.status(400).json({ error: 'estado_cumplido requerido' });
+    const patch = { estado_cumplido };
+    if (fecha_cumplido) patch.fecha_cumplido = fecha_cumplido;
+    await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(trip)}`, 'PATCH', patch);
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('❌ PATCH /api/cumplidos/:trip/estado:', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -1426,7 +1823,7 @@ async function syncCumplidos() {
     const allExistentes = [];
     while (true) {
       const page = await sbFetch(
-        `/cumplidos?select=id,estado_cumplido,tiene_soporte,cliente,empresa_cliente_id&limit=${SB_PAGE}&offset=${sbOffset}`
+        `/cumplidos?select=id,estado_cumplido,tiene_soporte,cliente,empresa_cliente_id,fecha_finalizacion&limit=${SB_PAGE}&offset=${sbOffset}`
       );
       if (!page || page.length === 0) break;
       allExistentes.push(...page);
@@ -1435,10 +1832,13 @@ async function syncCumplidos() {
     }
     const existentes = new Map(allExistentes.map(c => [c.id, c]));
 
-    const ESTADOS_ACTIVOS = new Set(['LIVE', 'SOLICITADO', 'CUMPLIDO RECIBIDO']);
+    const ESTADOS_ACTIVOS           = new Set(['LIVE', 'SOLICITADO', 'CUMPLIDO RECIBIDO']);
+    // Estados escritos exclusivamente por syncCumplidos durante una finalización automática.
+    // Usados para distinguir finalizaciones auto-generadas de estados asignados manualmente.
+    const ESTADOS_AUTO_FINALIZACION = new Set(['FINALIZADO CONTROLT', 'PENDIENTE LIQUIDACION']);
     const apiSet = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
 
-    let insertados = 0, actualizados = 0, clientesCreados = 0, placeholdersOmitidos = 0;
+    let insertados = 0, actualizados = 0, revertidos = 0, clientesCreados = 0, placeholdersOmitidos = 0;
     for (const v of cache.viajes.data) {
       if (!v.trip_number) continue;
       const existe = existentes.get(v.trip_number);
@@ -1490,7 +1890,41 @@ async function syncCumplidos() {
         if (resolved.empresa_cliente_id && existe.empresa_cliente_id !== resolved.empresa_cliente_id) {
           patch.empresa_cliente_id = resolved.empresa_cliente_id;
         }
+
+        // Reconciliación: cualquier viaje presente en el snapshot de ControlT no puede
+        // tener fecha_finalizacion registrada. El snapshot es la única fuente de verdad.
+        const hayFinalizacion = !!(existe.fecha_finalizacion);
+
+        if (hayFinalizacion) {
+          patch.fecha_finalizacion = null;
+          // Solo restaurar a LIVE si el estado era de finalización automática.
+          // Si ya es LIVE u otro estado activo (SOLICITADO, CUMPLIDO RECIBIDO), se conserva.
+          if (ESTADOS_AUTO_FINALIZACION.has((existe.estado_cumplido || '').toUpperCase())) {
+            patch.estado_cumplido = 'LIVE';
+          }
+        }
+
         await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(v.trip_number)}`, 'PATCH', patch);
+
+        if (hayFinalizacion) {
+          revertidos++;
+          // Revertir planeados solo cuando estado_programacion sea 'completado'.
+          // El filtro condicional de Supabase garantiza que no hay efecto si ya fue
+          // revertido o si corresponde a una finalización legítima distinta.
+          await sbFetch(
+            `/planeados?trip_number=eq.${encodeURIComponent(v.trip_number)}&estado_programacion=eq.completado`,
+            'PATCH',
+            { estado_programacion: 'en_ruta', actualizado_en: new Date().toISOString() }
+          );
+          console.log(
+            `↩  syncCumplidos reconciliación | trip:${v.trip_number}` +
+            ` | estado_cumplido:${existe.estado_cumplido}${patch.estado_cumplido ? ` → ${patch.estado_cumplido}` : ' (sin cambio)'}` +
+            ` | fecha_finalizacion:${existe.fecha_finalizacion} → null` +
+            ` | planeados:completado → en_ruta (condicional)` +
+            ` | motivo:presente en snapshot ControlT`
+          );
+        }
+
         actualizados++;
       }
     }
@@ -1529,7 +1963,7 @@ async function syncCumplidos() {
       }
     }
 
-    console.log(`✅ Cumplidos sync: +${insertados} nuevos, ~${actualizados} actualizados, 🏁${finalizados} finalizados, 👤${clientesCreados} clientes creados, ⏳${placeholdersOmitidos} sin Match TMS`);
+    console.log(`✅ Cumplidos sync: +${insertados} nuevos, ~${actualizados} actualizados, 🏁${finalizados} finalizados, ↩${revertidos} revertidos, 👤${clientesCreados} clientes creados, ⏳${placeholdersOmitidos} sin Match TMS`);
   } catch(e) {
     console.error('❌ Error syncCumplidos:', e.message);
   } finally {
@@ -1562,12 +1996,14 @@ async function syncSolicitudes() {
       '&select=id,codigo_solicitud,external_ref,estado,controlt_trip_number,' +
               'creado_por,empresa_cliente_id,fecha_requerida,' +
               'observacion_coordinadora,manifiesto'
-    );
-    if (!solicitudes?.length) {
-      console.log('📋 syncSolicitudes: sin solicitudes activas.');
-      return;
+    ) || [];
+    // No retornar en 0 filas: el bloque de reconciliación (más abajo) debe
+    // ejecutarse siempre, aunque no haya solicitudes pendiente/confirmado/en_ruta.
+    if (!solicitudes.length) {
+      console.log('📋 syncSolicitudes: sin solicitudes activas — continúa a reconciliación.');
+    } else {
+      console.log(`📋 syncSolicitudes: evaluando ${solicitudes.length} solicitudes.`);
     }
-    console.log(`📋 syncSolicitudes: evaluando ${solicitudes.length} solicitudes.`);
 
     const ahora        = new Date().toISOString();
     const orphanCutoff = new Date(Date.now() - ORPHAN_HOURS * 3600 * 1000).toISOString();
@@ -1673,29 +2109,41 @@ async function syncSolicitudes() {
       }
     }
 
-    // pendVerif: trips ausentes de /Resume — verificar en cumplidos si ya fueron finalizados
+    // pendVerif: trips ausentes de /Resume — verificar en cumplidos si ya fueron finalizados.
+    // ControlT (/Resume) sigue siendo la única fuente del estado operativo mientras el viaje
+    // exista ahí; cumplidos actúa solo como validación final, y solo se confía en su marca de
+    // finalización cuando ya lleva al menos un ciclo completo de /Resume sin que el viaje haya
+    // reaparecido — así una ausencia transitoria de un único ciclo no cierra la solicitud.
+    const PENDVERIF_GRACE_MS = 90 * 1000;
     if (pendVerif.length > 0) {
       const tripNums = [...new Set(pendVerif.map(p => p.controlt_trip_number))];
       const idsStr   = tripNums.map(encodeURIComponent).join(',');
       const finalizados = await sbFetch(
-        `/cumplidos?id=in.(${idsStr})&estado_cumplido=eq.FINALIZADO%20CONTROLT&select=id,estado_cumplido,estado_controlt`
+        `/cumplidos?id=in.(${idsStr})&estado_cumplido=eq.FINALIZADO%20CONTROLT&select=id,estado_cumplido,estado_controlt,fecha_finalizacion`
       ) || [];
       const finalizadosSet = new Map(finalizados.map(c => [c.id, c]));
       for (const { sol: pSol, controlt_trip_number: tripNum } of pendVerif) {
         const cumplido = finalizadosSet.get(tripNum);
-        if (cumplido) {
-          console.log(`✅ [pendVerif] ${pSol.codigo_solicitud}: trip ${tripNum} → FINALIZADO CONTROLT en cumplidos — cerrando solicitud como completado`);
-          updates.push({ id: pSol.id, fields: {
-            estado:                        'completado',
-            estado_controlt:               'finalizado controlt',
-            ultima_actualizacion_controlt: ahora,
-            pct:                           100,
-            fecha_fin_real:                ahora,
-          }});
-          insertsNotif.push(..._notifs(pSol, 'completado', {}, pSol.estado));
-        } else {
+        if (!cumplido) {
           console.log(`⏸ [pendVerif] ${pSol.codigo_solicitud}: trip ${tripNum} ausente de /Resume y de cumplidos finalizados — estado mantenido: ${pSol.estado}`);
+          continue;
         }
+        const antiguedadMs = cumplido.fecha_finalizacion
+          ? Date.now() - new Date(cumplido.fecha_finalizacion).getTime()
+          : Infinity;
+        if (antiguedadMs < PENDVERIF_GRACE_MS) {
+          console.log(`⏸ [pendVerif] ${pSol.codigo_solicitud}: trip ${tripNum} finalizado hace ${Math.round(antiguedadMs / 1000)}s (<${PENDVERIF_GRACE_MS / 1000}s) — esperando confirmación del próximo ciclo de /Resume antes de cerrar`);
+          continue;
+        }
+        console.log(`✅ [pendVerif] ${pSol.codigo_solicitud}: trip ${tripNum} → FINALIZADO CONTROLT en cumplidos (confirmado hace ${Math.round(antiguedadMs / 1000)}s) — cerrando solicitud como completado`);
+        updates.push({ id: pSol.id, fields: {
+          estado:                        'completado',
+          estado_controlt:               'finalizado controlt',
+          ultima_actualizacion_controlt: ahora,
+          pct:                           100,
+          fecha_fin_real:                ahora,
+        }});
+        insertsNotif.push(..._notifs(pSol, 'completado', {}, pSol.estado));
       }
     }
 
@@ -2011,6 +2459,97 @@ function mapSolicitud(sol, viaje = null, cumplido = null) {
       : (sol.conductor_tel || cumplido?.conductor_tel || null),
     pct:              viaje ? (parseFloat(viaje.percentage_travel) || 0) : null,
     observaciones:    sol.observacion_coordinadora || null,
+  };
+}
+
+// ─── ENRIQUECIMIENTO CONTROLT (Fase 5) ──────────────────────────────────────
+// Único punto del backend que agrega la información SOAP de ControlT a una
+// respuesta de /servicios. Toda llamada a ControlT pasa por
+// tripService.getTripDetail — este backend NUNCA importa soapGateway ni
+// authManager directamente fuera del módulo controlt-soap.
+//
+// Contrato reutilizable: la forma de "controlt" es la misma sin importar el
+// consumidor (Portal Cliente, ERP, App Conductor, APIs internas) — no existen
+// variantes por cliente. `disponible` es el único indicador que el frontend
+// necesita revisar; el resto de campos siempre tiene la misma forma (null
+// cuando no hay dato, nunca ausente).
+//
+// Degradación: cualquier fallo de ControlT (timeout, red, viaje no
+// encontrado, fault SOAP) se absorbe aquí y retorna controltVacio() — el
+// endpoint jamás falla por una caída de ControlT.
+function controltVacio() {
+  return {
+    disponible:            false,
+    codigo_controlt:       null,
+    estado_viaje:          null,
+    conductor:             null,
+    tipo_operacion_codigo: null,
+    tipo_viaje_codigo:     null,
+    tipo_carga_codigo:     null,
+    carga: {
+      valor_mercancia: null,
+      moneda:          null,
+      valor_flete:     null,
+      peso_total_ton:  null,
+      volumen_total:   null,
+      temperatura_min: null,
+      temperatura_max: null,
+    },
+    instrucciones:    null,
+    paradas:          [],
+    ubicacion_actual: null,
+    fecha_evento:     null,
+    sincronizado_en:  null,
+  };
+}
+
+// viajeActivo: fila de cache.viajes (Resume API) — misma fuente que
+// GET /servicios/:id/vehiculo usa para la posición GPS en vivo. Los paradas
+// de ControlT (SOAP) son puntos fijos de la ruta; ubicacion_actual es la
+// posición del vehículo en tiempo real, dato distinto que solo Resume expone.
+async function construirControltEnriquecido(tripNumber, viajeActivo) {
+  if (!tripNumber) return controltVacio();
+
+  let detalle;
+  try {
+    detalle = await getTripDetail(String(tripNumber), { sbFetch: controltSbFetch });
+  } catch (e) {
+    console.error(`❌ tripService.getTripDetail(${tripNumber}):`, e.message);
+    return controltVacio();
+  }
+
+  const ubicacion_actual = (() => {
+    if (!viajeActivo) return null;
+    const lat = parseFloat(viajeActivo.latitude ?? viajeActivo.lat ?? '');
+    const lng = parseFloat(viajeActivo.longitude ?? viajeActivo.lng ?? '');
+    if (!lat || !lng) return null;
+    return { lat, lng, ultima_actualizacion: viajeActivo.latest_gps_report || null };
+  })();
+
+  return {
+    disponible:      true,
+    codigo_controlt: detalle.codigo_controlt,
+    estado_viaje:    detalle.estado_viaje,
+    conductor: (detalle.conductor_cedula || detalle.conductor_nombre)
+      ? { cedula: detalle.conductor_cedula, nombre: detalle.conductor_nombre }
+      : null,
+    tipo_operacion_codigo: detalle.tipo_operacion_codigo,
+    tipo_viaje_codigo:     detalle.tipo_viaje_codigo,
+    tipo_carga_codigo:     detalle.tipo_carga_codigo,
+    carga: {
+      valor_mercancia: detalle.valor_mercancia,
+      moneda:          detalle.moneda,
+      valor_flete:     detalle.valor_flete,
+      peso_total_ton:  detalle.peso_total_ton,
+      volumen_total:   detalle.volumen_total,
+      temperatura_min: detalle.temperatura_min,
+      temperatura_max: detalle.temperatura_max,
+    },
+    instrucciones: detalle.instrucciones,
+    paradas:       detalle.paradas || [],
+    ubicacion_actual,
+    fecha_evento:    detalle.fecha_evento,
+    sincronizado_en: detalle.soap_sincronizado_en || null,
   };
 }
 
@@ -2665,7 +3204,11 @@ serviciosRouter.get('/:id', async (req, res) => {
         cumplido = cs[0] || null;
       }
     }
-    res.json(mapSolicitud(sol, viaje, cumplido));
+    const respuesta = mapSolicitud(sol, viaje, cumplido);
+    // Fase 5: enriquecimiento ControlT — contrato reutilizable, ver
+    // construirControltEnriquecido(). Nunca lanza: degrada a controltVacio().
+    respuesta.controlt = await construirControltEnriquecido(sol.controlt_trip_number, viaje);
+    res.json(respuesta);
   } catch(e) {
     console.error('❌ GET /servicios/:id:', e.message);
     res.status(500).json({ error: e.message });
@@ -2673,21 +3216,67 @@ serviciosRouter.get('/:id', async (req, res) => {
 });
 
 // GET /servicios/:id/paradas
+//
+// Lógica de dos capas:
+//   1) SI el viaje tiene controlt_trip_number → reutilizar tripService.getTripDetail
+//      (única fuente autorizada de datos ControlT) para obtener las paradas
+//      enriquecidas del SOAP: coordenadas, productos, horarios reales.
+//   2) SOLO cuando no existan paradas enriquecidas (sin viaje asignado, tripService
+//      falla, o el viaje no tiene paradas definidas) → fallback Origen/Destino.
+//
+// PROHIBIDO: llamar directamente a ControlT (CT_PUBLIC_URL, getCtPublicToken, etc.)
+// desde este endpoint. Todo dato de ControlT pasa por tripService.getTripDetail —
+// ver regla permanente en docs/integraciones/controlt/ARQUITECTURA_DATOS_VIAJE.md
+// Apéndice C. Nunca modifica /api/viajes/:tripNumber, la integración SOAP, la
+// persistencia, sincronización ni el caché.
 serviciosRouter.get('/:id/paradas', async (req, res) => {
   try {
     const sol = await obtenerSolicitudEnScope(req.params.id, req.scope, {
-      sbFetch, select: 'id,empresa_cliente_id,origen,destino,estado',
+      sbFetch, select: 'id,empresa_cliente_id,origen,destino,estado,controlt_trip_number',
     });
     if (!sol) return res.status(404).json({ error: 'Servicio no encontrado' });
 
+    // ── Capa 1: paradas enriquecidas vía tripService (fuente única — SOAP/caché) ─
+    if (sol.controlt_trip_number) {
+      try {
+        const detalle = await getTripDetail(String(sol.controlt_trip_number), { sbFetch: controltSbFetch });
+        const paradasEnriquecidas = detalle.paradas || [];
+
+        if (paradasEnriquecidas.length > 0) {
+          return res.json(paradasEnriquecidas.map(p => ({
+            solicitud_id:    sol.id,
+            orden:           p.orden,
+            nombre:          p.nombre ?? '',
+            direccion:       p.direccion ?? '',
+            tipo:            p.tipo ?? null,
+            estado:          p.estado ?? null,
+            hora_programada: p.hora_programada ?? null,
+            hora_entrega:    p.hora_real ?? null,
+            eta:             p.eta ?? null,
+            lat:             p.lat,
+            lng:             p.lng,
+            remision:        p.remision ?? null,
+            productos:       p.productos ?? [],
+            cliente:         p.cliente ?? null,
+          })));
+        }
+      } catch (tripErr) {
+        // tripService falló (viaje no en ControlT, red, SOAP fault) → fallback
+        console.warn(
+          `⚠️ GET /servicios/${req.params.id}/paradas: getTripDetail falló para trip ${sol.controlt_trip_number} — usando fallback:`,
+          tripErr.message,
+        );
+      }
+    }
+
+    // ── Capa 2: fallback Origen/Destino desde la solicitud ───────────────────────
+    // Solo cuando controlt_trip_number no existe O tripService no devolvió paradas.
     const estadoOrigen = sol.estado === 'completado' ? 'entregado'
       : sol.estado === 'en_ruta' ? 'en_camino' : 'pendiente';
-
     const estadoDestino = sol.estado === 'completado' ? 'entregado' : 'pendiente';
 
     res.json([
       {
-        id: `${sol.id}-origen`,
         solicitud_id: sol.id,
         orden: 1,
         nombre: 'ORIGEN',
@@ -2699,7 +3288,6 @@ serviciosRouter.get('/:id/paradas', async (req, res) => {
         lat: null, lng: null,
       },
       {
-        id: `${sol.id}-destino`,
         solicitud_id: sol.id,
         orden: 99,
         nombre: 'DESTINO',
@@ -3922,15 +4510,17 @@ app.get("/health", (req, res) => {
     ultimoLogin: lastLogin ? new Date(lastLogin).toISOString() : null,
     cache: {
       viajes:  {
-        cantidad: cache.viajes.data.length,
-        edad_seg: Math.round((Date.now() - cache.viajes.ts) / 1000),
-        por_estado: estados
+        cantidad:  cache.viajes.data.length,
+        edad_seg:  Math.round((Date.now() - cache.viajes.ts) / 1000),
+        completo:  cache.viajes.completo,
+        por_estado: estados,
       },
       alarmas: {
         cantidad: cache.alarmas.data.length,
-        edad_seg: Math.round((Date.now() - cache.alarmas.ts) / 1000)
-      }
-    }
+        edad_seg: Math.round((Date.now() - cache.alarmas.ts) / 1000),
+      },
+    },
+    ultimo_snapshot: lastSnapshotMetrics,
   });
 });
 
@@ -3973,6 +4563,9 @@ app.delete('/push/suscripcion', requireClienteAuth, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// ─── DIAGNÓSTICO CONTROLT SOAP ───────────────────────────────────────────────
+app.use('/api/controlt', requireInternalApiKey, controltDiagRouter);
 
 // ─── INICIO ─────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;

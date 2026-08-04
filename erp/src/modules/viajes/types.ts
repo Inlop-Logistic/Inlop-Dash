@@ -56,6 +56,11 @@ export interface TmsViaje {
   alarm_description?: string | null;
 }
 
+/** Respuesta de GET /api/viajes/:tripNumber — incluye planificador. */
+export interface ViajeDetalle extends TmsViaje {
+  planificado_por: { username: string; fullname: string } | null;
+}
+
 /** Evento derivado o real para el timeline cronológico del viaje. */
 export interface TmsEvent {
   id:           string;

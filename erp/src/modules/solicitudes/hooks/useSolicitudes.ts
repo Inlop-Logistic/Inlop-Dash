@@ -21,9 +21,8 @@ export function useSolicitudes() {
     setLoading(true);
     setError(null);
     try {
-      // Usa las fechas actuales del estado para la llamada al servidor.
-      // Al presionar "Actualizar" con un rango activo, carga ese rango específico.
-      setData(await getSolicitudes(fechaDesde || hace7dias(), fechaHasta || hoy()));
+      const list = await getSolicitudes(fechaDesde || hace7dias(), fechaHasta || hoy());
+      setData(list);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al cargar solicitudes");
     } finally {

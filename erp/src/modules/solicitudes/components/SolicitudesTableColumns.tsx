@@ -150,14 +150,4 @@ export const COLUMNS: Column<Solicitud>[] = [
     align:  "center",
     render: (s) => <EstadoBadge estado={s.estado} />,
   },
-  {
-    key:    "conductor_nombre",
-    header: "Responsable",
-    width:  "110px",
-    render: (_s) => (
-      <span className="text-[12px]" style={{ color: "var(--gray-400)" }}>
-        Sin asignar
-      </span>
-    ),
-  },
 ];

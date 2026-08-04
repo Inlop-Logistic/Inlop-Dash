@@ -98,9 +98,10 @@ export const COLUMNS: Column<ViajeResumen>[] = [
   {
     key: "cliente",
     header: "Cliente",
+    width: "180px",
     render: (v) => (
       <div
-        className="text-[13px] font-medium truncate max-w-[160px]"
+        className="text-[13px] font-medium truncate"
         style={{ color: v.nombre_cliente ? "var(--gray-800)" : "var(--gray-300)" }}
         title={v.nombre_cliente ?? undefined}
       >
@@ -168,5 +169,19 @@ export const COLUMNS: Column<ViajeResumen>[] = [
     header: "Estado",
     width: "120px",
     render: (v) => <EstadoBadge estado={v.estado_programacion} />,
+  },
+  {
+    key: "planificado_por_nombre",
+    header: "Responsable INLOP",
+    width: "140px",
+    render: (v) => (
+      <div
+        className="text-[12px] truncate"
+        style={{ color: v.planificado_por_nombre ? "var(--gray-700)" : "var(--gray-300)" }}
+        title={v.planificado_por_nombre ?? undefined}
+      >
+        {v.planificado_por_nombre ?? "—"}
+      </div>
+    ),
   },
 ];

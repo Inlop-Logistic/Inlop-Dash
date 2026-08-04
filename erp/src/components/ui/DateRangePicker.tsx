@@ -150,11 +150,14 @@ export function DateRangePicker({ desde, hasta, onChange }: DateRangePickerProps
   };
 
   // Shortcuts preestablecidos — todos calculados en hora Colombia.
-  const hoy     = fechaHoyColombia();
+  // Para añadir nuevos rangos rápidos, agregar una entrada a este array.
+  const hoy      = fechaHoyColombia();
+  const manana   = sumarDias(hoy, 1);
   const SHORTCUTS = [
-    { label: "Hoy",         d: hoy,                    h: hoy                    },
-    { label: "Últimos 7d",  d: sumarDias(hoy, -6),     h: hoy                    },
-    { label: "Últimos 30d", d: sumarDias(hoy, -29),    h: hoy                    },
+    { label: "Hoy",         d: hoy,                 h: hoy    },
+    { label: "Mañana",      d: manana,               h: manana },
+    { label: "Últimos 7d",  d: sumarDias(hoy, -6),  h: hoy    },
+    { label: "Últimos 30d", d: sumarDias(hoy, -29), h: hoy    },
   ];
 
   return (

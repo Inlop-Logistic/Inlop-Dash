@@ -24,6 +24,8 @@ export interface ViajeResumen {
   type_operation: string | null;
   /** Teléfono normalizado del conductor — disponible cuando el viaje está activo en Resume. */
   conductor_tel: string | null;
+  /** Nombre del planificador INLOP — persistido por syncPlaneados vía SOAP una vez por viaje. */
+  planificado_por_nombre: string | null;
 }
 
 export interface SolicitudVinculada {
