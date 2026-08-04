@@ -42,6 +42,39 @@ import { upsertViaje, fetchViaje }  from './persistenceLayer.js';
 import { getConfig }                from './config.js';
 import { SoapFaultError }           from './errors.js';
 
+// ── AUDIT INSTRUMENTATION — getTripDetail (temporal, remover tras diagnóstico) ─
+
+const _AUDIT_SEP  = '▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶';
+const _AUDIT_SEP2 = '───────────────────────────────────────────────────────';
+
+/** Cuenta paradas de forma segura desde un array (puede ser null/undefined). */
+function _countArr(arr) {
+  if (!arr) return 0;
+  if (Array.isArray(arr)) return arr.length;
+  return 1; // objeto único (ControlT a veces no envuelve en array)
+}
+
+/**
+ * Cuenta las paradas crudas del objeto soapResult ANTES del mapper.
+ * Replica el mismo camino de navegación que normalizeArray() en tripMapper.
+ */
+function _countSoapRaw(soapResult) {
+  // soapGateway devuelve el nodo GetDetailMonitoringOrderResult que contiene
+  // { success, data: { stops: { eMonitoringOrderPointStop: [...] } } }
+  const data = soapResult?.data ?? soapResult?.GetDetailMonitoringOrderResult?.data ?? soapResult;
+  const stopsNode = data?.stops;
+  if (!stopsNode) return { count: 0, path: 'data.stops ausente' };
+
+  const raw = stopsNode.eMonitoringOrderPointStop ??
+              stopsNode.Paradas?.Parada          ??
+              stopsNode.paradas?.Parada          ??
+              stopsNode.Paradas;
+
+  if (raw == null) return { count: 0, path: 'eMonitoringOrderPointStop/Paradas ausente' };
+  const count = _countArr(raw);
+  return { count, path: 'data.stops.eMonitoringOrderPointStop' };
+}
+
 // TTL por defecto: 5 minutos
 const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1_000;
 
@@ -173,11 +206,55 @@ export async function getTripDetail(codigoViaje, {
   const doSoapGetDetail = _soapGetDetail ?? getDetailMonitoringOrder;
   const doMap           = _mapper        ?? mapToViajeRow;
 
+  // ── AUDIT ① — entrada ─────────────────────────────────────────────────────
+  console.log(`\n${_AUDIT_SEP}`);
+  console.log(`[AUDIT getTripDetail] INICIO`);
+  console.log(`  [1] Trip Number recibido : "${codigoTrimmed}"`);
+  console.log(`  TTL caché configurado    : ${resolvedTtl / 1000}s`);
+  console.log(_AUDIT_SEP2);
+
   // ── 1. Verificar caché ────────────────────────────────────────────────────
   const cached = await doFetchViaje(codigoTrimmed, { sbFetch });
-  if (cached && !isStale(cached.soap_sincronizado_en, now, resolvedTtl)) {
-    return cached;
+
+  // ── AUDIT ② — estado del caché ────────────────────────────────────────────
+  if (!cached) {
+    console.log(`  [2] Caché               : NO existe registro en cumplidos`);
+    console.log(`  [3] soap_sincronizado_en: null`);
+    console.log(`  [4] Edad del caché      : N/A`);
+    console.log(`  [5] Decisión            : CONSULTAR SOAP (sin caché previo)`);
+  } else {
+    const sincEn    = cached.soap_sincronizado_en;
+    const edadMs    = sincEn ? now - new Date(sincEn).getTime() : null;
+    const edadMin   = edadMs != null ? (edadMs / 60_000).toFixed(2) : 'N/A';
+    const stale     = isStale(sincEn, now, resolvedTtl);
+    const nParadasCache = _countArr(cached.paradas);
+
+    console.log(`  [2] Caché               : EXISTE registro en cumplidos`);
+    console.log(`  [3] soap_sincronizado_en: ${sincEn ?? 'null'}`);
+    console.log(`  [4] Edad del caché      : ${edadMin} min (TTL = ${resolvedTtl / 60_000} min)`);
+    console.log(`  [7] Paradas en caché    : ${nParadasCache}`);
+
+    if (!stale) {
+      console.log(`  [5] Decisión            : USAR CACHÉ (edad < TTL → fresco)`);
+      console.log(`      Motivo              : soap_sincronizado_en dentro del TTL`);
+      if (nParadasCache === 0) {
+        console.log(`  ⚠️  [8] PARADAS VACÍAS   : la caché contiene 0 paradas.`);
+        console.log(`         Las paradas desaparecieron cuando se persistió este registro.`);
+        console.log(`         Verificar el upsert previo — ControlT pudo haber devuelto`);
+        console.log(`         0 paradas en esa llamada, o la persistencia las descartó.`);
+        console.log(`         Limpiar la fila en cumplidos para forzar nueva llamada SOAP.`);
+      }
+      console.log(_AUDIT_SEP);
+      return cached;
+    }
+
+    console.log(`  [5] Decisión            : CONSULTAR SOAP (caché vencido)`);
+    console.log(`      Motivo              : edad ${edadMin} min ≥ TTL ${resolvedTtl / 60_000} min`);
+    if (!sincEn) {
+      console.log(`      (Nota: soap_sincronizado_en es null → siempre se considera vencido)`);
+    }
   }
+  console.log(_AUDIT_SEP2);
 
   // ── 2. Llamada SOAP con reintento en fallo de autenticación ───────────────
   let soapResult;
@@ -190,23 +267,53 @@ export async function getTripDetail(codigoViaje, {
 
     if (isAuthFault) {
       // Token ya invalidado por soapGateway — el reintento dispara un nuevo Login.
+      console.log(`  [AUDIT] Auth fault detectado — reintentando con nuevo token`);
       soapResult = await doSoapGetDetail(codigoTrimmed, resolvedConfig);
     } else {
+      console.log(`  [AUDIT] Error SOAP no-auth — propagando: ${firstErr.message}`);
       throw firstErr;
     }
   }
 
+  // ── AUDIT ③ — resultado crudo SOAP (antes del mapper) ────────────────────
+  const soapSuccess = soapResult?.success ?? soapResult?.GetDetailMonitoringOrderResult?.success;
+  const { count: nParadasRaw, path: rawPath } = _countSoapRaw(soapResult);
+  console.log(`  [6a] SOAP success field  : ${soapSuccess === undefined ? '(campo ausente)' : soapSuccess}`);
+  console.log(`  [6b] Paradas XML (crudo) : ${nParadasRaw}  (ruta: ${rawPath})`);
+  if (nParadasRaw === 0) {
+    console.log(`  ⚠️  SOAP devolvió 0 paradas — verificar:`);
+    console.log(`      - ¿El trip number "${codigoTrimmed}" es correcto para ControlT?`);
+    console.log(`      - ¿El token era válido? (soapGateway ya logueó la respuesta XML completa)`);
+    console.log(`      - ¿ControlT devolvió success=false sin SOAP Fault?`);
+  }
+
   const viajeRow = doMap(soapResult, codigoTrimmed);
+
+  // ── AUDIT ④ — después del mapper ─────────────────────────────────────────
+  const nParadasMapper = _countArr(viajeRow.paradas);
+  console.log(`  [6c] Paradas post-mapper : ${nParadasMapper}`);
+  if (nParadasRaw > 0 && nParadasMapper === 0) {
+    console.log(`  ⚠️  [8] PARADAS VACÍAS   : el mapper recibió ${nParadasRaw} paradas del SOAP`);
+    console.log(`         pero mapToViajeRow() devolvió 0.`);
+    console.log(`         Las paradas DESAPARECIERON dentro del mapper.`);
+    console.log(`         Revisar tripMapper.js → normalizeArray() → mapParada()`);
+    console.log(`         y la ruta de navegación real del XML en este ambiente.`);
+  }
 
   // ── 3. Persistir en cumplidos (best-effort) ───────────────────────────────
   // Un fallo aquí no interrumpe la respuesta — el consumidor recibe los datos
   // frescos del SOAP aunque el enriquecimiento no pueda persistirse.
+  const nParadasPrePersist = _countArr(viajeRow.paradas);
+  console.log(`  [6d] Paradas pre-persist : ${nParadasPrePersist}`);
+
   try {
     await doUpsertViaje(viajeRow, { sbFetch });
+    console.log(`  [AUDIT] Persistencia OK  : ${nParadasPrePersist} paradas guardadas en cumplidos`);
   } catch (persistErr) {
     console.error(
       `[tripService] persistencia fallida para ${codigoTrimmed}: ${persistErr.message}`
     );
+    console.log(`  ⚠️  Persistencia FALLÓ   : los datos SOAP no quedarán en caché`);
   }
 
   // BUG CONFIRMADO (auditoría Fase 6): mapToViajeRow() nunca produce
@@ -215,5 +322,21 @@ export async function getTripDetail(codigoViaje, {
   // sincronizado_en: null aunque el enriquecimiento sí ocurrió. Se fija aquí
   // con el mismo `now` ya resuelto arriba (respeta el hook de test `_now`),
   // para que el contrato de salida sea idéntico entre caché y SOAP fresco.
-  return { ...viajeRow, soap_sincronizado_en: new Date(now).toISOString() };
+  const resultado = { ...viajeRow, soap_sincronizado_en: new Date(now).toISOString() };
+
+  // ── AUDIT ⑤ — resultado final ─────────────────────────────────────────────
+  const nParadasFinal = _countArr(resultado.paradas);
+  console.log(`  [AUDIT] Paradas devueltas: ${nParadasFinal}`);
+  if (nParadasFinal === 0 && nParadasRaw > 0) {
+    console.log(`  🔴 [8] CAUSA RAÍZ        : ControlT devolvió ${nParadasRaw} paradas`);
+    console.log(`         pero la respuesta final contiene 0.`);
+    console.log(`         El punto exacto de pérdida está entre [6b] y [6c] → mapper.`);
+  } else if (nParadasFinal === 0) {
+    console.log(`  🔴 [8] El SOAP también devolvió 0 paradas — problema en ControlT o en`);
+    console.log(`         el parámetro enviado (trip number, token, code_company).`);
+  }
+  console.log(`[AUDIT getTripDetail] FIN — ${codigoTrimmed}`);
+  console.log(_AUDIT_SEP);
+
+  return resultado;
 }
