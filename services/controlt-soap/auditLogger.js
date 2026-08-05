@@ -122,5 +122,48 @@ export function logError(err, context = {}) {
   _pinoInstance.error({ err, ...redactSensitive(context) }, err.message);
 }
 
+/**
+ * Log a complete getTripDetail() execution summary.
+ *
+ * Prefix [CT:TRIP] in the message allows easy filtering in Railway log search.
+ * All tracking fields are also emitted as structured JSON for query tools.
+ *
+ * @param {object} p
+ * @param {string}           p.codigoViaje   — trip code sent to ControlT (e.g. "IN018175")
+ * @param {string|null}      p.monitoreoId   — ControlT internal monitoring order ID, or null
+ * @param {'CACHE'|'SOAP'|'RETRY'|'CACHE_FALLBACK'} p.origenDatos
+ *   CACHE         → served from fresh cumplidos cache, no SOAP call
+ *   SOAP          → served from a single successful SOAP call
+ *   RETRY         → served from a retry call (auth fault or empty paradas on first call)
+ *   CACHE_FALLBACK → SOAP returned empty after retry; returned previous valid cache
+ * @param {boolean}          p.tokenRenovado — true if a fresh Login was triggered this call
+ * @param {number}           p.duracionMs    — total wall time from entry to exit
+ * @param {object}           p.paradas
+ * @param {number|null}      p.paradas.xml         — count in raw SOAP XML (null if no SOAP call)
+ * @param {number|null}      p.paradas.mapper      — count after mapToViajeRow (null if no SOAP call)
+ * @param {number|null}      p.paradas.persistidas — count passed to upsert (null if skipped)
+ * @param {number}           p.paradas.enviadas    — count in the final response to the caller
+ */
+export function logTripDetail({ codigoViaje, monitoreoId, origenDatos, tokenRenovado, duracionMs, paradas }) {
+  const tokenTag = tokenRenovado ? 'token:RENOVADO' : 'token:REUTILIZADO';
+  const msg = `[CT:TRIP] ${codigoViaje} | ${origenDatos} | ${tokenTag} | ${paradas.enviadas}p | ${duracionMs}ms`;
+  _pinoInstance.info(
+    {
+      codigoViaje,
+      monitoreoId: monitoreoId ?? null,
+      origenDatos,
+      tokenRenovado,
+      duracionMs,
+      paradas: {
+        xml:         paradas.xml         ?? null,
+        mapper:      paradas.mapper      ?? null,
+        persistidas: paradas.persistidas ?? null,
+        enviadas:    paradas.enviadas,
+      },
+    },
+    msg
+  );
+}
+
 // Export pino instance for advanced use (e.g., child loggers in tests).
 export const _logger = _pinoInstance;
