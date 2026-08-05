@@ -314,7 +314,13 @@ app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true); // server-to-server / health checks
     if (_allowedOriginsSet.has(origin)) return callback(null, true);
-    callback(new Error(`CORS: origen no permitido: ${origin}`));
+    // Rechazar silenciosamente: callback(null, false) omite los headers CORS
+    // sin generar un error Express (que causaría HTTP 500 + stack trace en logs).
+    // El navegador bloquea la respuesta en el lado del cliente por falta de
+    // Access-Control-Allow-Origin. Para preflight OPTIONS, el cors package
+    // responde 204 sin Allow-Origin y el navegador cancela la petición real.
+    console.warn(`[CORS] Origen rechazado: ${origin}`);
+    callback(null, false);
   },
   credentials: true,
 }));
