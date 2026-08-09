@@ -1,6 +1,7 @@
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
+import { randomUUID } from "crypto";
 import { publishBusinessEvent } from './services/notificationOrchestrator.js';
 import { buildLookupMap, normalizeClient, resolveCustomer, resolveTrip, isPlaceholderTmsCustomer } from './services/customerResolver.js';
 import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } from './services/authScope.js';
@@ -1568,7 +1569,7 @@ app.post(
       const fecha          = fechaHoyColombia().replace(/-/g, '');
       const nombreGenerado = generarNombreSoporte({ fecha, trip, placa, descripcion, ext });
       const tipoDocumento  = inferirTipoDocumento(descripcion);
-      const docId          = crypto.randomUUID();
+      const docId          = randomUUID();
       const rutaStorage    = `${trip}/${docId}.${ext}`;
 
       await sbStorageFetch(`/object/cumplidos/${rutaStorage}`, 'POST', req.body, {
@@ -1641,7 +1642,7 @@ app.put(
       const fecha          = fechaHoyColombia().replace(/-/g, '');
       const nombreGenerado = generarNombreSoporte({ fecha, trip, placa, descripcion, ext });
       const tipoDocumento  = inferirTipoDocumento(descripcion) ?? anterior.tipo_documento ?? null;
-      const nuevoId        = crypto.randomUUID();
+      const nuevoId        = randomUUID();
       const rutaStorage    = `${trip}/${nuevoId}.${ext}`;
 
       // 1) Eliminar primero el archivo anterior (Storage + metadata) — nunca deja duplicados.
