@@ -3,7 +3,7 @@ import { SidePanel, PanelSection, InfoRow } from "@/components/ui";
 import { fmtTms } from "@/utils/parseFecha";
 import type { CumplidoRecord } from "../types";
 import { EstadoDocumental } from "./EstadoDocumental";
-import { ExpedienteDocumental } from "./ExpedienteDocumental";
+import { SoportesCumplido } from "./SoportesCumplido";
 import { TimelineViaje } from "./TimelineViaje";
 import { ConexionesCumplido } from "./ConexionesCumplido";
 
@@ -155,8 +155,8 @@ export function DetalleCumplido({ cumplido, onClose }: DetalleCumplidoProps) {
         )}
       </PanelSection>
 
-      {/* Expediente documental — sección principal */}
-      <ExpedienteDocumental cumplido={cumplido} />
+      {/* Soportes de cumplido — sección principal */}
+      <SoportesCumplido cumplido={cumplido} />
 
       {/* Timeline del viaje */}
       <TimelineViaje cumplido={cumplido} />

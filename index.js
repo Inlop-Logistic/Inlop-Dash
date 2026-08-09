@@ -648,15 +648,84 @@ function primerNombreCliente(str) {
   return (str ?? '').split(',')[0].trim() || null;
 }
 
-const DOCUMENTOS_BASE = [
-  { id: 'remision',        label: 'Remisión',              requerido: true  },
-  { id: 'manifiesto',      label: 'Manifiesto de carga',   requerido: true  },
-  { id: 'soporte_entrega', label: 'Soporte de entrega',    requerido: true  },
-  { id: 'fotos',           label: 'Registro fotográfico',  requerido: false },
-  { id: 'firma',           label: 'Firma del receptor',    requerido: true  },
-  { id: 'novedades',       label: 'Registro de novedades', requerido: false },
-  { id: 'observaciones',   label: 'Observaciones',         requerido: false },
+// ─── SOPORTES DE CUMPLIDO — fuente única de verdad de tipos documentales ────
+// Antes existían dos listas desconectadas (DOCUMENTOS_BASE en el backend,
+// nunca persistida, y TIPOS_BASE en ExpedienteDocumental.tsx, la que realmente
+// se usaba para nombrar archivos). Esta es la única lista ahora — el frontend
+// la usa para mostrar el progreso ("3/5 requeridos") y para inferir el tipo
+// documental a partir de la descripción que el usuario escribe al cargar.
+const TIPOS_DOCUMENTO_CUMPLIDO = [
+  { id: 'remesa',     label: 'Remesa',                  requerido: true  },
+  { id: 'cumplido',   label: 'Cumplido',                requerido: true  },
+  { id: 'manifiesto', label: 'Manifiesto',              requerido: true  },
+  { id: 'evidencias', label: 'Evidencias fotográficas', requerido: false },
+  { id: 'tiquete',    label: 'Tiquete báscula',         requerido: false },
 ];
+const TIPO_DOCUMENTO_GUT = { id: 'gut', label: 'GUT', requerido: true };
+
+function tiposDocumentoParaViaje(typeOperation) {
+  const esGranel = (typeOperation ?? '').trim().toLowerCase() === 'granel liquido';
+  return esGranel ? [...TIPOS_DOCUMENTO_CUMPLIDO, TIPO_DOCUMENTO_GUT] : TIPOS_DOCUMENTO_CUMPLIDO;
+}
+
+// Infiere el tipo documental a partir de la descripción opcional que el
+// usuario escribe al cargar (coincidencia por label, sin distinguir mayúsculas
+// ni acentos). Devuelve null cuando no hay descripción o no coincide con
+// ningún tipo conocido — el soporte queda como "general", sin tipo asignado.
+function normalizarTexto(str) {
+  return (str || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+function inferirTipoDocumento(descripcion) {
+  const norm = normalizarTexto(descripcion);
+  if (!norm) return null;
+  const todos = [...TIPOS_DOCUMENTO_CUMPLIDO, TIPO_DOCUMENTO_GUT];
+  const match = todos.find(t => norm.includes(normalizarTexto(t.label)) || norm.includes(t.id));
+  return match ? match.id : null;
+}
+
+// ─── Validación de archivos subidos como soporte de cumplido ───────────────
+const SOPORTE_EXT_PERMITIDAS  = new Set(['pdf', 'jpg', 'jpeg', 'png', 'webp']);
+const SOPORTE_MIME_PERMITIDOS = new Set([
+  'application/pdf', 'image/jpeg', 'image/png', 'image/webp',
+]);
+const SOPORTE_MAX_BYTES = 20 * 1024 * 1024; // 20 MB por archivo
+
+function validarArchivoSoporte({ ext, mime, size }) {
+  if (!SOPORTE_EXT_PERMITIDAS.has(ext)) {
+    return `Extensión ".${ext}" no permitida. Formatos válidos: ${[...SOPORTE_EXT_PERMITIDAS].join(', ')}.`;
+  }
+  if (!SOPORTE_MIME_PERMITIDOS.has(mime)) {
+    return `Tipo de archivo "${mime}" no permitido.`;
+  }
+  if (size > SOPORTE_MAX_BYTES) {
+    return `El archivo supera el límite de ${SOPORTE_MAX_BYTES / 1024 / 1024} MB.`;
+  }
+  if (size <= 0) {
+    return 'El archivo está vacío.';
+  }
+  return null;
+}
+
+// Sanitiza texto libre (descripción, usuario) para uso seguro en nombre de
+// archivo y en columnas de texto — quita caracteres de control y separadores
+// de ruta, colapsa espacios, y limita longitud.
+function sanitizarTextoLibre(str, maxLen = 80) {
+  return (str || '')
+    .replace(/[\/:*?"<>|]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLen);
+}
+
+// Genera el nombre legible del soporte: FECHA_TRIPNUMBER_PLACA_DESCRIPCION.ext
+// Este nombre es solo para mostrar en pantalla y como nombre de descarga —
+// nunca se usa como clave física en Storage (ver ruta_storage, basada en uuid).
+function generarNombreSoporte({ fecha, trip, placa, descripcion, ext }) {
+  const partes = [fecha, sanitizarTextoLibre(trip, 40) || trip, sanitizarTextoLibre(placa, 20) || 'SINPLACA'];
+  const desc = sanitizarTextoLibre(descripcion, 60);
+  if (desc) partes.push(desc);
+  return `${partes.join('_')}.${ext}`;
+}
 
 async function syncPendientes() {
   try {
@@ -1383,7 +1452,7 @@ app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
     const allRows = [];
     while (true) {
       const page = await sbFetch(
-        `/cumplidos?select=id,manifiesto,placa,conductor,conductor_tel,cliente,origen,destino,estado_controlt,pct,fecha_viaje,fecha_finalizacion,tipo_negocio,estado_cumplido,tiene_soporte,obs,link_soporte&order=fecha_viaje.desc&limit=${SB_PAGE}&offset=${sbOffset}`
+        `/cumplidos?select=id,manifiesto,placa,conductor,conductor_tel,cliente,origen,destino,estado_controlt,pct,fecha_viaje,fecha_finalizacion,tipo_negocio,estado_cumplido,tiene_soporte,estado_documental,obs,link_soporte&order=fecha_viaje.desc&limit=${SB_PAGE}&offset=${sbOffset}`
       );
       if (!page || page.length === 0) break;
       allRows.push(...page);
@@ -1405,20 +1474,12 @@ app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
       activated_on:          r.fecha_viaje || null,
       created_on:            null,
       fecha_cumplido:        r.fecha_finalizacion || null,
-      estado_documental:     'pendiente',
-      documentos:            DOCUMENTOS_BASE.map(d => ({
-        ...d,
-        presente: d.id === 'remision' ? !!r.manifiesto : false,
-      })),
+      estado_documental:     r.estado_documental || 'pendiente',
       type_operation:   r.tipo_negocio    || null,
       estado_cumplido:  r.estado_cumplido || null,
       tiene_soporte:    r.tiene_soporte   ?? false,
       obs:              r.obs             || null,
       link_soporte:     r.link_soporte    || null,
-      observaciones:    null,
-      responsable:      null,
-      fecha_validacion: null,
-      aprobado_por:     null,
     }));
 
     res.json(cumplidos);
@@ -1428,60 +1489,117 @@ app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
   }
 });
 
-// ─── DOCUMENTOS CUMPLIDOS (bucket Supabase Storage "cumplidos") ─────────────
+// ─── SOPORTES DE CUMPLIDO (bucket Supabase Storage "cumplidos" + tabla cumplidos_documentos) ─
+//
+// Arquitectura: el nombre físico del archivo en Storage es un UUID opaco
+// (cumplidos/{trip}/{id}.{ext}) — nunca se usa para lógica del sistema. Toda la
+// metadata (nombre legible, descripción, tipo, usuario, tamaño) vive en la
+// tabla cumplidos_documentos, identificada por ese mismo UUID. El frontend
+// referencia cada soporte por su id; nunca por nombre de archivo.
 
-// GET /api/cumplidos/:trip/documentos — lista archivos del bucket para el viaje.
+// Decodifica un header HTTP transmitido en base64 — evita que texto libre con
+// tildes/ñ (descripción, usuario, nombre original) se corrompa en tránsito,
+// ya que los headers HTTP no garantizan UTF-8 de punta a punta.
+function decodeB64Header(h) {
+  if (!h) return '';
+  try { return Buffer.from(String(h), 'base64').toString('utf8'); }
+  catch { return ''; }
+}
+
+// Recalcula tiene_soporte y avanza/revierte estado_documental entre
+// 'pendiente' y 'en_revision' según la presencia real de soportes. Estados
+// manuales más avanzados (con_observaciones / aprobado / rechazado /
+// listo_facturacion) nunca se tocan aquí — pertenecen a una fase futura de
+// revisión manual, para la que hoy no existe ninguna acción de UI.
+async function refrescarEstadoSoportes(trip) {
+  const docs = await sbFetch(`/cumplidos_documentos?trip_number=eq.${encodeURIComponent(trip)}&select=id`);
+  const tieneSoporte = !!(docs && docs.length > 0);
+  const actual = await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(trip)}&select=estado_documental`);
+  const estadoActual = actual?.[0]?.estado_documental || 'pendiente';
+  const patch = { tiene_soporte: tieneSoporte };
+  if (tieneSoporte && estadoActual === 'pendiente')    patch.estado_documental = 'en_revision';
+  if (!tieneSoporte && estadoActual === 'en_revision') patch.estado_documental = 'pendiente';
+  await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(trip)}`, 'PATCH', patch);
+}
+
+// GET /api/cumplidos/:trip/documentos — lista los soportes persistidos para el viaje.
 app.get('/api/cumplidos/:trip/documentos', requireInternalApiKey, async (req, res) => {
   try {
     const { trip } = req.params;
-    const result = await sbStorageFetch('/object/list/cumplidos', 'POST', {
-      prefix:  `${trip}/`,
-      limit:   100,
-      offset:  0,
-      sortBy:  { column: 'name', order: 'asc' },
-    });
-    const archivos = (result || [])
-      .filter(f => f.name && f.name !== '.emptyFolderPlaceholder')
-      .map(f => ({
-        nombre:     f.name,
-        ruta:       `${trip}/${f.name}`,
-        size:       f.metadata?.size     || 0,
-        mimetype:   f.metadata?.mimetype || 'application/octet-stream',
-        created_at: f.created_at         || null,
-        updated_at: f.updated_at         || null,
-      }));
-    res.json({ archivos });
+    const rows = await sbFetch(
+      `/cumplidos_documentos?trip_number=eq.${encodeURIComponent(trip)}` +
+      `&select=id,nombre_generado,nombre_original,descripcion,tipo_documento,tamano_bytes,mime_type,usuario,creado_en` +
+      `&order=creado_en.desc`
+    );
+    res.json({ documentos: rows || [] });
   } catch(e) {
     console.error('❌ GET /api/cumplidos/:trip/documentos:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
-// POST /api/cumplidos/:trip/documentos — sube un documento al bucket (proxy).
-// Headers esperados: X-Tipo-Documento, X-Placa, X-Filename, Content-Type.
+// POST /api/cumplidos/:trip/documentos — sube un soporte nuevo.
+// Headers esperados: X-Filename-B64, X-Descripcion-B64 (opcional), X-Usuario-B64
+// (opcional), X-Placa, Content-Type. El frontend hace una llamada por archivo
+// cuando el usuario selecciona varios en el diálogo de carga.
 app.post(
   '/api/cumplidos/:trip/documentos',
   requireInternalApiKey,
-  express.raw({ type: '*/*', limit: '50mb' }),
+  express.raw({ type: '*/*', limit: '21mb' }),
   async (req, res) => {
     try {
-      const { trip } = req.params;
-      const tipo     = (req.headers['x-tipo-documento'] || 'documento').replace(/[^a-z]/gi, '');
-      const placa    = (req.headers['x-placa'] || 'SINPLACA').replace(/[^A-Z0-9]/gi, '').toUpperCase();
-      const origName = req.headers['x-filename'] || 'archivo.bin';
-      const mime     = req.headers['content-type'] || 'application/octet-stream';
-      const ext      = origName.includes('.') ? origName.split('.').pop().toLowerCase() : 'bin';
-      const fecha    = fechaHoyColombia().replace(/-/g, '');
-      const filename = `${tipo}_${placa}_${fecha}_${Date.now()}.${ext}`;
-      const path     = `${trip}/${filename}`;
+      const { trip }     = req.params;
+      const origName     = decodeB64Header(req.headers['x-filename-b64']) || req.headers['x-filename'] || 'archivo.bin';
+      const descripcion  = decodeB64Header(req.headers['x-descripcion-b64']);
+      const usuario      = sanitizarTextoLibre(decodeB64Header(req.headers['x-usuario-b64']), 120);
+      const placa        = ((req.headers['x-placa'] || '').replace(/[^A-Z0-9]/gi, '').toUpperCase()) || 'SINPLACA';
+      const mime         = req.headers['content-type'] || 'application/octet-stream';
+      const ext          = origName.includes('.') ? origName.split('.').pop().toLowerCase() : '';
+      const size         = Buffer.isBuffer(req.body) ? req.body.length : 0;
 
-      await sbStorageFetch(`/object/cumplidos/${path}`, 'POST', req.body, {
+      const errorValidacion = validarArchivoSoporte({ ext, mime, size });
+      if (errorValidacion) return res.status(400).json({ error: errorValidacion });
+
+      // El viaje debe existir ya en la tabla cumplidos — lo garantiza syncCumplidos
+      // antes de que el panel de detalle esté disponible en el frontend.
+      const existeViaje = await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(trip)}&select=id`);
+      if (!existeViaje?.length) return res.status(404).json({ error: `Viaje ${trip} no encontrado` });
+
+      const fecha          = fechaHoyColombia().replace(/-/g, '');
+      const nombreGenerado = generarNombreSoporte({ fecha, trip, placa, descripcion, ext });
+      const tipoDocumento  = inferirTipoDocumento(descripcion);
+      const docId          = crypto.randomUUID();
+      const rutaStorage    = `${trip}/${docId}.${ext}`;
+
+      await sbStorageFetch(`/object/cumplidos/${rutaStorage}`, 'POST', req.body, {
         'Content-Type': mime,
         'x-upsert':     'true',
       });
-      // Marca tiene_soporte = true en la tabla cumplidos
-      await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(trip)}`, 'PATCH', { tiene_soporte: true });
-      res.json({ ok: true, filename, path });
+
+      await sbFetch('/cumplidos_documentos', 'POST', {
+        id:              docId,
+        trip_number:     trip,
+        ruta_storage:    rutaStorage,
+        nombre_generado: nombreGenerado,
+        nombre_original: origName.slice(0, 200),
+        descripcion:     descripcion || null,
+        tipo_documento:  tipoDocumento,
+        tamano_bytes:    size,
+        mime_type:       mime,
+        usuario:         usuario || null,
+      });
+
+      await refrescarEstadoSoportes(trip);
+
+      res.json({
+        ok: true,
+        documento: {
+          id: docId, nombre_generado: nombreGenerado, nombre_original: origName,
+          descripcion: descripcion || null, tipo_documento: tipoDocumento,
+          tamano_bytes: size, mime_type: mime, usuario: usuario || null,
+          creado_en: new Date().toISOString(),
+        },
+      });
     } catch(e) {
       console.error('❌ POST /api/cumplidos/:trip/documentos:', e.message);
       res.status(500).json({ error: e.message });
@@ -1489,31 +1607,128 @@ app.post(
   },
 );
 
-// DELETE /api/cumplidos/:trip/documentos/:filename — elimina un documento del bucket.
-app.delete('/api/cumplidos/:trip/documentos/:filename', requireInternalApiKey, async (req, res) => {
+// PUT /api/cumplidos/:trip/documentos/:id/reemplazar — elimina el soporte anterior
+// del Storage y de la base, y sube el nuevo en su lugar. Nunca deja duplicados
+// ni huérfanos: el borrado ocurre antes que la carga.
+app.put(
+  '/api/cumplidos/:trip/documentos/:id/reemplazar',
+  requireInternalApiKey,
+  express.raw({ type: '*/*', limit: '21mb' }),
+  async (req, res) => {
+    try {
+      const { trip, id } = req.params;
+      const rows = await sbFetch(
+        `/cumplidos_documentos?id=eq.${encodeURIComponent(id)}&trip_number=eq.${encodeURIComponent(trip)}` +
+        `&select=id,ruta_storage,descripcion,tipo_documento`
+      );
+      const anterior = rows?.[0];
+      if (!anterior) return res.status(404).json({ error: 'Documento no encontrado' });
+
+      const origName    = decodeB64Header(req.headers['x-filename-b64']) || req.headers['x-filename'] || 'archivo.bin';
+      // Si el cliente no envía una nueva descripción, conserva la del documento reemplazado.
+      const descripcion = req.headers['x-descripcion-b64'] !== undefined
+        ? decodeB64Header(req.headers['x-descripcion-b64'])
+        : (anterior.descripcion || '');
+      const usuario = sanitizarTextoLibre(decodeB64Header(req.headers['x-usuario-b64']), 120);
+      const placa   = ((req.headers['x-placa'] || '').replace(/[^A-Z0-9]/gi, '').toUpperCase()) || 'SINPLACA';
+      const mime    = req.headers['content-type'] || 'application/octet-stream';
+      const ext     = origName.includes('.') ? origName.split('.').pop().toLowerCase() : '';
+      const size    = Buffer.isBuffer(req.body) ? req.body.length : 0;
+
+      const errorValidacion = validarArchivoSoporte({ ext, mime, size });
+      if (errorValidacion) return res.status(400).json({ error: errorValidacion });
+
+      const fecha          = fechaHoyColombia().replace(/-/g, '');
+      const nombreGenerado = generarNombreSoporte({ fecha, trip, placa, descripcion, ext });
+      const tipoDocumento  = inferirTipoDocumento(descripcion) ?? anterior.tipo_documento ?? null;
+      const nuevoId        = crypto.randomUUID();
+      const rutaStorage    = `${trip}/${nuevoId}.${ext}`;
+
+      // 1) Eliminar primero el archivo anterior (Storage + metadata) — nunca deja duplicados.
+      await sbStorageFetch('/object/cumplidos', 'DELETE', { prefixes: [anterior.ruta_storage] });
+      await sbFetch(`/cumplidos_documentos?id=eq.${encodeURIComponent(id)}`, 'DELETE');
+
+      // 2) Subir el nuevo archivo.
+      await sbStorageFetch(`/object/cumplidos/${rutaStorage}`, 'POST', req.body, {
+        'Content-Type': mime,
+        'x-upsert':     'true',
+      });
+      await sbFetch('/cumplidos_documentos', 'POST', {
+        id:              nuevoId,
+        trip_number:     trip,
+        ruta_storage:    rutaStorage,
+        nombre_generado: nombreGenerado,
+        nombre_original: origName.slice(0, 200),
+        descripcion:     descripcion || null,
+        tipo_documento:  tipoDocumento,
+        tamano_bytes:    size,
+        mime_type:       mime,
+        usuario:         usuario || null,
+      });
+
+      await refrescarEstadoSoportes(trip);
+
+      res.json({
+        ok: true,
+        documento: {
+          id: nuevoId, nombre_generado: nombreGenerado, nombre_original: origName,
+          descripcion: descripcion || null, tipo_documento: tipoDocumento,
+          tamano_bytes: size, mime_type: mime, usuario: usuario || null,
+          creado_en: new Date().toISOString(),
+        },
+      });
+    } catch(e) {
+      console.error('❌ PUT /api/cumplidos/:trip/documentos/:id/reemplazar:', e.message);
+      res.status(500).json({ error: e.message });
+    }
+  },
+);
+
+// DELETE /api/cumplidos/:trip/documentos/:id — elimina un soporte (Storage + metadata)
+// y actualiza tiene_soporte / estado_documental si el viaje queda sin documentos.
+app.delete('/api/cumplidos/:trip/documentos/:id', requireInternalApiKey, async (req, res) => {
   try {
-    const { trip, filename } = req.params;
-    await sbStorageFetch('/object/cumplidos', 'DELETE', { prefixes: [`${trip}/${filename}`] });
+    const { trip, id } = req.params;
+    const rows = await sbFetch(
+      `/cumplidos_documentos?id=eq.${encodeURIComponent(id)}&trip_number=eq.${encodeURIComponent(trip)}&select=id,ruta_storage`
+    );
+    const doc = rows?.[0];
+    if (!doc) return res.status(404).json({ error: 'Documento no encontrado' });
+
+    await sbStorageFetch('/object/cumplidos', 'DELETE', { prefixes: [doc.ruta_storage] });
+    await sbFetch(`/cumplidos_documentos?id=eq.${encodeURIComponent(id)}`, 'DELETE');
+    await refrescarEstadoSoportes(trip);
+
     res.json({ ok: true });
   } catch(e) {
-    console.error('❌ DELETE /api/cumplidos/:trip/documentos:', e.message);
+    console.error('❌ DELETE /api/cumplidos/:trip/documentos/:id:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
-// GET /api/cumplidos/:trip/documentos/:filename/sign — URL firmada (1h) para ver/descargar.
-app.get('/api/cumplidos/:trip/documentos/:filename/sign', requireInternalApiKey, async (req, res) => {
+// GET /api/cumplidos/:trip/documentos/:id/sign — URL firmada (1h) para ver/descargar.
+// ?download=1 fuerza la descarga con el nombre legible (nombre_generado) en vez
+// del UUID físico del Storage.
+app.get('/api/cumplidos/:trip/documentos/:id/sign', requireInternalApiKey, async (req, res) => {
   try {
-    const { trip, filename } = req.params;
-    const path   = `${trip}/${filename}`;
-    const result = await sbStorageFetch(`/object/sign/cumplidos/${path}`, 'POST', { expiresIn: 3600 });
+    const { trip, id } = req.params;
+    const rows = await sbFetch(
+      `/cumplidos_documentos?id=eq.${encodeURIComponent(id)}&trip_number=eq.${encodeURIComponent(trip)}&select=ruta_storage,nombre_generado`
+    );
+    const doc = rows?.[0];
+    if (!doc) return res.status(404).json({ error: 'Documento no encontrado' });
+
+    const result = await sbStorageFetch(`/object/sign/cumplidos/${doc.ruta_storage}`, 'POST', { expiresIn: 3600 });
     if (!result?.signedURL) return res.status(404).json({ error: 'No se pudo generar URL firmada' });
-    const url = result.signedURL.startsWith('http')
+    let url = result.signedURL.startsWith('http')
       ? result.signedURL
       : `https://gtyydandwcgoaratmnqh.supabase.co${result.signedURL}`;
+    if (req.query.download === '1') {
+      url += (url.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(doc.nombre_generado);
+    }
     res.json({ url });
   } catch(e) {
-    console.error('❌ GET /api/cumplidos/:trip/documentos/:filename/sign:', e.message);
+    console.error('❌ GET /api/cumplidos/:trip/documentos/:id/sign:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -4572,6 +4787,17 @@ app.delete('/push/suscripcion', requireClienteAuth, async (req, res) => {
 
 // ─── DIAGNÓSTICO CONTROLT SOAP ───────────────────────────────────────────────
 app.use('/api/controlt', requireInternalApiKey, controltDiagRouter);
+
+// ─── MANEJADOR DE ERRORES — respuestas JSON limpias para fallos de body-parser ──
+// (ej. archivo de soporte que excede el límite de express.raw). Sin este
+// handler, Express respondería con una página HTML de error por defecto.
+app.use((err, req, res, next) => {
+  if (err && (err.type === 'entity.too.large' || err.status === 413)) {
+    return res.status(413).json({ error: 'El archivo enviado excede el tamaño máximo permitido.' });
+  }
+  console.error('❌ Error no manejado:', err?.message || err);
+  res.status(err?.status || 500).json({ error: err?.message || 'Error interno del servidor' });
+});
 
 // ─── INICIO ─────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;

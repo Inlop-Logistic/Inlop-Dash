@@ -1,4 +1,4 @@
-import type { EstadoDocumental, CumplidoRecord } from "./types";
+import type { EstadoDocumental, CumplidoRecord, TipoDocumento } from "./types";
 
 export const ESTADO_VIAJE_CFG = {
   pendiente:  { label: "Pendiente",  color: "#92400E", bg: "#FEF3C7", dot: "#D97706" },
@@ -43,4 +43,32 @@ export function tabCount(data: CumplidoRecord[], tabId: string): number {
   if (tabId === "listosFacturacion") return data.filter(c => c.estado_documental === "listo_facturacion").length;
   if (tabId === "rechazados")        return data.filter(c => c.estado_documental === "rechazado").length;
   return 0;
+}
+
+// ─── Soportes de Cumplido — tipos documentales ─────────────────────────────
+// Única fuente de verdad en el frontend — refleja TIPOS_DOCUMENTO_CUMPLIDO en
+// index.js. Antes existían dos listas desconectadas: DOCUMENTOS_BASE (backend,
+// nunca persistida) y TIPOS_BASE (frontend, la que realmente nombraba
+// archivos). El backend infiere el tipo a partir de la descripción que el
+// usuario escribe al cargar; esta lista se usa aquí solo para mostrar el
+// progreso ("3/5 requeridos").
+export interface TipoDocumentoConfig {
+  id:        TipoDocumento;
+  label:     string;
+  requerido: boolean;
+}
+
+export const TIPOS_DOCUMENTO_CUMPLIDO: TipoDocumentoConfig[] = [
+  { id: "remesa",     label: "Remesa",                  requerido: true  },
+  { id: "cumplido",   label: "Cumplido",                requerido: true  },
+  { id: "manifiesto", label: "Manifiesto",              requerido: true  },
+  { id: "evidencias", label: "Evidencias fotográficas", requerido: false },
+  { id: "tiquete",    label: "Tiquete báscula",         requerido: false },
+];
+
+export const TIPO_DOCUMENTO_GUT: TipoDocumentoConfig = { id: "gut", label: "GUT", requerido: true };
+
+export function tiposDocumentoParaViaje(typeOperation: string | null): TipoDocumentoConfig[] {
+  const esGranel = (typeOperation ?? "").trim().toLowerCase() === "granel liquido";
+  return esGranel ? [...TIPOS_DOCUMENTO_CUMPLIDO, TIPO_DOCUMENTO_GUT] : TIPOS_DOCUMENTO_CUMPLIDO;
 }
