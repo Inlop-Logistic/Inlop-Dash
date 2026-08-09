@@ -1572,10 +1572,17 @@ app.post(
       const docId          = randomUUID();
       const rutaStorage    = `${trip}/${docId}.${ext}`;
 
-      await sbStorageFetch(`/object/cumplidos/${rutaStorage}`, 'POST', req.body, {
+      // sbStorageFetch devuelve null ante cualquier respuesta no-2xx de Storage
+      // (ver index.js:93-96) — sin este chequeo, un upload rechazado quedaba
+      // silencioso y la fila de metadata se creaba igual, apuntando a un
+      // objeto que nunca llegó a existir en el bucket.
+      const uploadResult = await sbStorageFetch(`/object/cumplidos/${rutaStorage}`, 'POST', req.body, {
         'Content-Type': mime,
         'x-upsert':     'true',
       });
+      if (!uploadResult) {
+        return res.status(502).json({ error: 'No se pudo subir el archivo a Storage. Intenta nuevamente.' });
+      }
 
       await sbFetch('/cumplidos_documentos', 'POST', {
         id:              docId,
@@ -1649,11 +1656,18 @@ app.put(
       await sbStorageFetch('/object/cumplidos', 'DELETE', { prefixes: [anterior.ruta_storage] });
       await sbFetch(`/cumplidos_documentos?id=eq.${encodeURIComponent(id)}`, 'DELETE');
 
-      // 2) Subir el nuevo archivo.
-      await sbStorageFetch(`/object/cumplidos/${rutaStorage}`, 'POST', req.body, {
+      // 2) Subir el nuevo archivo. Igual que en el POST de carga: sbStorageFetch
+      // devuelve null ante una respuesta no-2xx de Storage — sin este chequeo,
+      // un upload rechazado dejaba el viaje sin el archivo anterior (ya
+      // eliminado en el paso 1) y además creaba metadata apuntando a un
+      // objeto nuevo que nunca llegó a existir en el bucket.
+      const uploadResult = await sbStorageFetch(`/object/cumplidos/${rutaStorage}`, 'POST', req.body, {
         'Content-Type': mime,
         'x-upsert':     'true',
       });
+      if (!uploadResult) {
+        return res.status(502).json({ error: 'No se pudo subir el archivo a Storage. El documento anterior ya fue eliminado — vuelve a intentar la carga.' });
+      }
       await sbFetch('/cumplidos_documentos', 'POST', {
         id:              nuevoId,
         trip_number:     trip,
