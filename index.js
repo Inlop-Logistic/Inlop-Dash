@@ -1735,9 +1735,15 @@ app.get('/api/cumplidos/:trip/documentos/:id/sign', requireInternalApiKey, async
 
     const result = await sbStorageFetch(`/object/sign/cumplidos/${doc.ruta_storage}`, 'POST', { expiresIn: 3600 });
     if (!result?.signedURL) return res.status(404).json({ error: 'No se pudo generar URL firmada' });
+    // result.signedURL es un path relativo a /storage/v1 (ej. "/object/sign/cumplidos/{path}?token=..."),
+    // NO relativo a la raíz del dominio. Anteponer solo el dominio omite el
+    // segmento /storage/v1 y produce una ruta que Supabase Storage rechaza
+    // con "requested path is invalid". SB_STORAGE_URL ya incluye /storage/v1
+    // (línea 62) — es el mismo prefijo usado para todas las demás llamadas a
+    // Storage en este archivo (carga, reemplazo, eliminación, listado).
     let url = result.signedURL.startsWith('http')
       ? result.signedURL
-      : `https://gtyydandwcgoaratmnqh.supabase.co${result.signedURL}`;
+      : `${SB_STORAGE_URL}${result.signedURL}`;
     if (req.query.download === '1') {
       url += (url.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(doc.nombre_generado);
     }
