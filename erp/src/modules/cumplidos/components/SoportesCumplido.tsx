@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import {
-  Upload, Eye, Download, Trash2, MessageCircle, RefreshCw,
-  FileText, CheckCircle2, Loader2, AlertCircle,
+  Upload, Eye, Download, Trash2, MessageCircle,
+  RefreshCw, FileText, Loader2, AlertCircle,
+  MoreHorizontal, Paperclip,
 } from "lucide-react";
 import { PanelSection } from "@/components/ui";
 import type { CumplidoRecord } from "../types";
@@ -10,6 +11,8 @@ import { tiposDocumentoParaViaje } from "../constants";
 import { UploadSoportesDialog } from "./UploadSoportesDialog";
 
 const ACCEPT_REEMPLAZO = ".pdf,.jpg,.jpeg,.png,.webp";
+const CAP_SOPORTES     = 7;
+const MAX_VISIBLE_INIT = 3;
 
 function fmtSize(bytes: number): string {
   if (bytes < 1024)      return `${bytes} B`;
@@ -17,24 +20,103 @@ function fmtSize(bytes: number): string {
   return `${(bytes / 1_048_576).toFixed(1)} MB`;
 }
 
-function fmtFecha(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleDateString("es-CO", {
-    timeZone: "America/Bogota",
-    day: "2-digit", month: "short", year: "numeric",
-  });
+// ─── Menú ••• por soporte ─────────────────────────────────────────────────────
+
+interface MasMenuProps {
+  onDescargar:  () => void;
+  onReemplazar: () => void;
+  onEliminar:   () => void;
 }
 
-// ─── Fila de un soporte ──────────────────────────────────────────────────────
+function MasMenu({ onDescargar, onReemplazar, onEliminar }: MasMenuProps) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const OPCIONES = [
+    {
+      icon:   <Download  className="w-3 h-3" />,
+      label:  "Descargar",
+      danger: false,
+      action: () => { setOpen(false); onDescargar(); },
+    },
+    {
+      icon:   <RefreshCw className="w-3 h-3" />,
+      label:  "Reemplazar",
+      danger: false,
+      action: () => { setOpen(false); onReemplazar(); },
+    },
+    {
+      icon:   <Trash2    className="w-3 h-3" />,
+      label:  "Eliminar",
+      danger: true,
+      action: () => { setOpen(false); onEliminar(); },
+    },
+  ];
+
+  return (
+    <div className="relative shrink-0" ref={wrapRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title="Más acciones"
+        className="flex items-center justify-center w-7 h-7 rounded-lg transition-colors"
+        style={{
+          background: open ? "var(--gray-200)" : "var(--gray-100)",
+          color:      "var(--gray-500)",
+          cursor:     "pointer",
+        }}
+      >
+        <MoreHorizontal className="w-3.5 h-3.5" />
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 z-50 overflow-hidden"
+          style={{
+            top:          "calc(100% + 4px)",
+            minWidth:     148,
+            background:   "#fff",
+            border:       "1px solid var(--gray-200)",
+            borderRadius: 10,
+            boxShadow:    "0 4px 16px rgba(0,0,0,0.12)",
+          }}
+        >
+          {OPCIONES.map(({ icon, label, danger, action }) => (
+            <button
+              key={label}
+              type="button"
+              onClick={action}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-[11px] font-medium transition-colors hover:opacity-80"
+              style={{
+                color:      danger ? "#DC2626" : "var(--gray-700)",
+                background: "transparent",
+                cursor:     "pointer",
+              }}
+            >
+              <span style={{ color: danger ? "#DC2626" : "var(--gray-400)" }}>{icon}</span>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Fila compacta de un soporte ──────────────────────────────────────────────
 
 interface SoporteRowProps {
-  nombre:       string;
-  nombreOriginal: string;
-  tipoLabel:    string | null;
+  tipoLabel:    string;
   size:         number;
-  fecha:        string | null;
-  usuario:      string | null;
   reemplazando: boolean;
   eliminando:   boolean;
   onVer:        () => void;
@@ -44,81 +126,68 @@ interface SoporteRowProps {
 }
 
 function SoporteRow({
-  nombre, nombreOriginal, tipoLabel, size, fecha, usuario,
-  reemplazando, eliminando, onVer, onDescargar, onReemplazar, onEliminar,
+  tipoLabel, size, reemplazando, eliminando,
+  onVer, onDescargar, onReemplazar, onEliminar,
 }: SoporteRowProps) {
   const ocupado = reemplazando || eliminando;
+
   return (
     <div
-      className="rounded-xl overflow-hidden"
-      style={{ border: "1.5px solid var(--gray-200)", background: "#fff", opacity: ocupado ? 0.6 : 1 }}
-    >
-      <div className="flex items-center justify-between px-3 py-2.5 gap-2 flex-wrap">
-        <div className="flex items-start gap-2.5 min-w-0 flex-1">
-          <FileText className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: "var(--navy)" }} />
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[12px] font-semibold truncate font-mono" style={{ color: "var(--gray-800)" }} title={nombre}>
-                {nombre}
-              </span>
-              {tipoLabel && (
-                <span
-                  className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
-                  style={{ background: "#DBEAFE", color: "#1D4ED8" }}
-                >
-                  {tipoLabel.toUpperCase()}
-                </span>
-              )}
-            </div>
-            <p className="text-[10px] mt-0.5" style={{ color: "var(--gray-400)" }}>
-              {fmtSize(size)}{fecha ? ` · ${fmtFecha(fecha)}` : ""}{usuario ? ` · ${usuario}` : ""}
-            </p>
-            {nombreOriginal && nombreOriginal !== nombre && (
-              <p className="text-[10px] mt-0.5 truncate" style={{ color: "var(--gray-300)" }} title={nombreOriginal}>
-                Original: {nombreOriginal}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1 shrink-0">
-          {ocupado ? (
-            <span className="flex items-center gap-1 text-[10px] px-2 py-1" style={{ color: "var(--gray-400)" }}>
-              <Loader2 className="w-3 h-3 animate-spin" />
-              {reemplazando ? "Reemplazando…" : "Eliminando…"}
-            </span>
-          ) : (
-            <>
-              <ActionBtn icon={<Eye className="w-3 h-3" />}      label="Ver"         onClick={onVer} />
-              <ActionBtn icon={<Download className="w-3 h-3" />} label="Descargar"   onClick={onDescargar} />
-              <ActionBtn icon={<RefreshCw className="w-3 h-3" />} label="Reemplazar" onClick={onReemplazar} />
-              <ActionBtn icon={<Trash2 className="w-3 h-3" />}   label="Eliminar"    onClick={onEliminar} danger />
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ActionBtn({
-  icon, label, onClick, danger = false,
-}: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors"
+      className="flex items-center gap-2 px-3 py-2"
       style={{
-        background: danger ? "#FFF1F2" : "var(--gray-100)",
-        color:      danger ? "#DC2626" : "var(--gray-600)",
-        cursor:     "pointer",
+        borderRadius: 10,
+        border:       "1px solid var(--gray-200)",
+        background:   "#fff",
+        opacity:      ocupado ? 0.6 : 1,
+        transition:   "opacity 0.15s",
       }}
     >
-      {icon}
-      {label}
-    </button>
+      <FileText
+        className="w-3.5 h-3.5 shrink-0"
+        style={{ color: "var(--navy)" }}
+      />
+
+      {/* Tipo + tamaño */}
+      <div className="flex-1 min-w-0 flex items-baseline gap-2">
+        <span
+          className="text-[12px] font-semibold uppercase tracking-wide truncate"
+          style={{ color: "var(--gray-800)" }}
+        >
+          {tipoLabel}
+        </span>
+        <span
+          className="text-[10px] shrink-0 tabular-nums"
+          style={{ color: "var(--gray-400)" }}
+        >
+          {fmtSize(size)}
+        </span>
+      </div>
+
+      {/* Acciones */}
+      {ocupado ? (
+        <span className="flex items-center gap-1 text-[10px] shrink-0" style={{ color: "var(--gray-400)" }}>
+          <Loader2 className="w-3 h-3 animate-spin" />
+          {reemplazando ? "Reemplazando…" : "Eliminando…"}
+        </span>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={onVer}
+            className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg shrink-0 transition-colors"
+            style={{ background: "var(--gray-100)", color: "var(--gray-600)", cursor: "pointer" }}
+          >
+            <Eye className="w-3 h-3" />
+            Ver
+          </button>
+          <MasMenu
+            onDescargar={onDescargar}
+            onReemplazar={onReemplazar}
+            onEliminar={onEliminar}
+          />
+        </>
+      )}
+    </div>
   );
 }
 
@@ -136,15 +205,21 @@ export function SoportesCumplido({ cumplido }: SoportesCumplidoProps) {
   } = useSoportesCumplido(cumplido.trip_number, cumplido.license_plate);
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [expandido,  setExpandido]  = useState(false);
   const reemplazoTargetId = useRef<string | null>(null);
   const reemplazoInputRef = useRef<HTMLInputElement>(null);
 
-  const tipos       = tiposDocumentoParaViaje(cumplido.type_operation);
-  const hasTel      = !!cumplido.conductor_tel;
-  const tiposCargados = new Set(soportes.map((s) => s.tipo_documento).filter(Boolean));
-  const requeridos     = tipos.filter((t) => t.requerido).length;
-  const requeridosOk   = tipos.filter((t) => t.requerido && tiposCargados.has(t.id)).length;
-  const completo       = requeridos === 0 || requeridosOk === requeridos;
+  const tipos     = tiposDocumentoParaViaje(cumplido.type_operation);
+  const hasTel    = !!cumplido.conductor_tel;
+  const total     = soportes.length;
+  const lleno     = total >= CAP_SOPORTES;
+  const restantes = total - MAX_VISIBLE_INIT;
+
+  // Primeros MAX_VISIBLE_INIT, o todos si expandido
+  const soportesVisibles =
+    expandido || total <= MAX_VISIBLE_INIT
+      ? soportes
+      : soportes.slice(0, MAX_VISIBLE_INIT);
 
   function iniciarReemplazo(id: string) {
     reemplazoTargetId.current = id;
@@ -158,18 +233,20 @@ export function SoportesCumplido({ cumplido }: SoportesCumplidoProps) {
     if (file && id) reemplazar(id, file);
   }
 
-  function handleEliminar(id: string, nombre: string) {
-    if (window.confirm(`¿Eliminar el soporte "${nombre}"? Esta acción no se puede deshacer.`)) {
+  function getTipoLabel(tipoId: string | null): string {
+    if (!tipoId) return "Soporte";
+    return tipos.find((t) => t.id === tipoId)?.label ?? tipoId.toUpperCase();
+  }
+
+  function handleEliminar(id: string, tipoLabel: string) {
+    if (window.confirm(`¿Eliminar el soporte "${tipoLabel}"? Esta acción no se puede deshacer.`)) {
       eliminar(id);
     }
   }
 
   return (
-    <PanelSection
-      title="Soportes de Cumplido"
-      icon={<CheckCircle2 className="w-3.5 h-3.5" />}
-    >
-      {/* input oculto compartido para "Reemplazar" */}
+    <PanelSection>
+      {/* input oculto compartido para Reemplazar */}
       <input
         ref={reemplazoInputRef}
         type="file"
@@ -178,51 +255,69 @@ export function SoportesCumplido({ cumplido }: SoportesCumplidoProps) {
         onChange={handleReemplazoSeleccionado}
       />
 
-      {/* Barra de progreso */}
-      {requeridos > 0 && (
-        <div
-          className="flex items-center justify-between px-3 py-2.5 rounded-xl mb-3"
-          style={{
-            background: completo ? "#D1FAE5" : "#FEF3C7",
-            border: `1px solid ${completo ? "#A7F3D0" : "#FDE68A"}`,
-          }}
-        >
-          <span className="text-[12px] font-semibold" style={{ color: completo ? "#065F46" : "#92400E" }}>
-            {completo
-              ? "Documentación requerida completa"
-              : `${requeridos - requeridosOk} tipo${requeridos - requeridosOk !== 1 ? "s" : ""} requerido${requeridos - requeridosOk !== 1 ? "s" : ""} sin soporte`}
-          </span>
-          <span className="text-[11px] font-mono font-bold" style={{ color: completo ? "#059669" : "#B45309" }}>
-            {requeridosOk}/{requeridos}
+      {/* ── Encabezado: título + contador ────────────────────────────────── */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Paperclip
+            className="w-3.5 h-3.5 shrink-0"
+            style={{ color: "var(--gray-400)" }}
+          />
+          <span
+            className="text-[11px] font-semibold uppercase tracking-widest"
+            style={{ color: "var(--gray-400)" }}
+          >
+            Soportes de Cumplido
           </span>
         </div>
-      )}
 
-      {/* Acciones */}
-      <div className="flex items-center gap-2 flex-wrap mb-3">
+        {!cargando && (
+          <span
+            className="text-[11px] font-bold tabular-nums"
+            title={`${total} de ${CAP_SOPORTES} soportes cargados`}
+            style={{ color: lleno ? "var(--inlop-red, #C0392B)" : "var(--gray-500)" }}
+          >
+            {total}/{CAP_SOPORTES}
+          </span>
+        )}
+      </div>
+
+      {/* ── Acciones ─────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 mb-3">
         <button
           type="button"
-          onClick={() => setDialogOpen(true)}
-          className="flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-lg"
-          style={{ background: "var(--navy)", color: "#fff", cursor: "pointer" }}
+          disabled={lleno}
+          onClick={() => !lleno && setDialogOpen(true)}
+          title={lleno ? `Límite de ${CAP_SOPORTES} soportes alcanzado` : undefined}
+          className="flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-lg transition-colors"
+          style={{
+            background: lleno ? "var(--gray-100)" : "var(--navy)",
+            color:      lleno ? "var(--gray-400)" : "#fff",
+            cursor:     lleno ? "not-allowed" : "pointer",
+          }}
         >
           <Upload className="w-3 h-3" />
-          Cargar Soportes
+          {lleno ? "Límite alcanzado" : "Cargar"}
         </button>
+
         {hasTel && (
           <button
             type="button"
-            onClick={() => solicitarWhatsApp(cumplido.conductor_tel ?? "", cumplido.driver_name ?? "conductor")}
-            className="flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-lg"
+            onClick={() =>
+              solicitarWhatsApp(
+                cumplido.conductor_tel ?? "",
+                cumplido.driver_name   ?? "conductor",
+              )
+            }
+            className="flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-lg transition-colors"
             style={{ background: "#D1FAE5", color: "#065F46", cursor: "pointer" }}
           >
             <MessageCircle className="w-3 h-3" />
-            Solicitar por WhatsApp
+            WhatsApp
           </button>
         )}
       </div>
 
-      {/* Error */}
+      {/* ── Error ────────────────────────────────────────────────────────── */}
       {error && (
         <div
           className="flex items-start gap-2 text-[12px] px-3 py-2 rounded-xl mb-3"
@@ -233,47 +328,80 @@ export function SoportesCumplido({ cumplido }: SoportesCumplidoProps) {
         </div>
       )}
 
-      {/* Lista */}
+      {/* ── Lista ────────────────────────────────────────────────────────── */}
       {cargando ? (
-        <div className="flex items-center justify-center py-8 gap-2" style={{ color: "var(--gray-400)" }}>
+        <div
+          className="flex items-center justify-center py-6 gap-2"
+          style={{ color: "var(--gray-400)" }}
+        >
           <Loader2 className="w-4 h-4 animate-spin" />
           <span className="text-[12px]">Cargando soportes…</span>
         </div>
       ) : soportes.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-1.5 py-8 text-center">
+        <div className="flex flex-col items-center justify-center gap-1.5 py-6 text-center">
           <FileText className="w-5 h-5" style={{ color: "var(--gray-300)" }} />
           <span className="text-[12px]" style={{ color: "var(--gray-400)" }}>
             Aún no se han cargado soportes para este viaje.
           </span>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {soportes.map((s) => (
-            <SoporteRow
-              key={s.id}
-              nombre={s.nombre_generado}
-              nombreOriginal={s.nombre_original}
-              tipoLabel={tipos.find((t) => t.id === s.tipo_documento)?.label ?? null}
-              size={s.tamano_bytes}
-              fecha={s.creado_en}
-              usuario={s.usuario}
-              reemplazando={reemplazandoId === s.id}
-              eliminando={eliminandoId === s.id}
-              onVer={() => abrirUrl(s.id, false)}
-              onDescargar={() => abrirUrl(s.id, true)}
-              onReemplazar={() => iniciarReemplazo(s.id)}
-              onEliminar={() => handleEliminar(s.id, s.nombre_generado)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="flex flex-col gap-1.5">
+            {soportesVisibles.map((s) => {
+              const label = getTipoLabel(s.tipo_documento);
+              return (
+                <SoporteRow
+                  key={s.id}
+                  tipoLabel={label}
+                  size={s.tamano_bytes}
+                  reemplazando={reemplazandoId === s.id}
+                  eliminando={eliminandoId === s.id}
+                  onVer={()         => abrirUrl(s.id, false)}
+                  onDescargar={()   => abrirUrl(s.id, true)}
+                  onReemplazar={()  => iniciarReemplazo(s.id)}
+                  onEliminar={()    => handleEliminar(s.id, label)}
+                />
+              );
+            })}
+          </div>
+
+          {/* Ver / ocultar restantes */}
+          {!expandido && restantes > 0 && (
+            <button
+              type="button"
+              onClick={() => setExpandido(true)}
+              className="w-full mt-2 text-[11px] font-semibold text-right transition-colors"
+              style={{ color: "var(--navy)", cursor: "pointer", background: "transparent" }}
+            >
+              Ver los {restantes} restante{restantes !== 1 ? "s" : ""} →
+            </button>
+          )}
+          {expandido && total > MAX_VISIBLE_INIT && (
+            <button
+              type="button"
+              onClick={() => setExpandido(false)}
+              className="w-full mt-2 text-[11px] font-semibold text-right transition-colors"
+              style={{ color: "var(--gray-400)", cursor: "pointer", background: "transparent" }}
+            >
+              Mostrar menos
+            </button>
+          )}
+        </>
       )}
 
+      {/* ── Observación TorreControl ─────────────────────────────────────── */}
       {cumplido.obs && (
         <div
           className="mt-3 text-[12px] px-3 py-2.5 rounded-xl"
-          style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A", lineHeight: 1.5 }}
+          style={{
+            background:  "#FEF3C7",
+            color:       "#92400E",
+            border:      "1px solid #FDE68A",
+            lineHeight:  1.5,
+          }}
         >
-          <span className="font-semibold">Obs. TorreControl: </span>{cumplido.obs}
+          <span className="font-semibold">Obs. TorreControl: </span>
+          {cumplido.obs}
         </div>
       )}
 
