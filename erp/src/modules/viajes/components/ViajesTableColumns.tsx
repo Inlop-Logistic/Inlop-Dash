@@ -7,6 +7,7 @@ import { GpsStatus } from "./GpsStatus";
 import { parseFechaTMS } from "@/utils/parseFecha";
 import { extraerFechaColombia } from "@/utils/date";
 import { toTitleCase } from "@/utils/text";
+import { lineaNegocio } from "@/utils/lineaNegocio";
 import { esPanico } from "../constants";
 
 // ── Paleta de texto unificada ────────────────────────────────────────────────
@@ -82,17 +83,12 @@ const RENDERERS: Record<string, (v: TmsViaje) => React.ReactNode> = {
     <TxCell value={clienteLabel(v)} maxW={152} />
   ),
 
-  // ── Operación ─────────────────────────────────────────────────────────────
-  type_operation: (v) => {
-    const texto = v.type_operation === "Granel Liquido"
-      ? "Carga Líquida"
-      : (v.type_operation ? toTitleCase(v.type_operation) : "—");
-    return (
-      <span className="text-[12px] leading-none" style={TX}>
-        {texto}
-      </span>
-    );
-  },
+  // ── Operación ─── "Granel Liquido" → Carga Líquida; cualquier otro → Carga Seca
+  type_operation: (v) => (
+    <span className="text-[12px] leading-none" style={TX}>
+      {lineaNegocio(v.type_operation)}
+    </span>
+  ),
 
   // ── Tipo ─── texto plano, sin badge ──────────────────────────────────────
   _tipo: (v) => {
