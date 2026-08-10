@@ -935,19 +935,30 @@ async function syncPlaneados(motivo = 'scheduler') {
     const tLot = Date.now() - tLot0;
     console.log(`[SYNC #${syncId}] Lote | ${rows.length} filas preparadas | ${tLot}ms construcción`);
 
-    // ─── 5. Batch upsert ──────────────────────────────────────────────────────
+    // ─── 5. Deduplicar por trip_number ────────────────────────────────────────
+    // El TMS puede devolver el mismo trip_number más de una vez (estado intermedio,
+    // segmentos, retrasos de caché interna). PostgreSQL error 21000 ocurre cuando
+    // ON CONFLICT DO UPDATE intenta actualizar la misma fila dos veces en un solo batch.
+    // Solución: mantener la última aparición en el orden ya ordenado (schedulate_origin asc).
+    const rowsUniq  = [...new Map(rows.map(r => [r.trip_number, r])).values()];
+    const dupCount  = rows.length - rowsUniq.length;
+    if (dupCount > 0) {
+      console.warn(`[SYNC #${syncId}] ⚠️  ${dupCount} trip_number(s) duplicado(s) en el batch TMS — eliminados antes del upsert`);
+    }
+
+    // ─── 6. Batch upsert ──────────────────────────────────────────────────────
     // empresa_cliente_id se omite intencionalmente: merge-duplicates preserva el valor
     // existente en BD; nuevas filas lo dejan null (resuelto por el módulo Clientes).
     const tBatch0  = Date.now();
-    const batchRes = await sbFetch('/planeados', 'POST', rows);
+    const batchRes = await sbFetch('/planeados', 'POST', rowsUniq);
     const tBatch   = Date.now() - tBatch0;
     const retornadas = (batchRes || []).length;
-    console.log(`[SYNC #${syncId}] Batch | ${rows.length} enviadas → ${retornadas} retornadas por Supabase | ${tBatch}ms`);
+    console.log(`[SYNC #${syncId}] Batch | ${rowsUniq.length} enviadas → ${retornadas} retornadas por Supabase | ${tBatch}ms`);
     if (!batchRes) {
       console.log(`[SYNC #${syncId}] ⚠️  Batch retornó null — ver error Supabase encima de este log`);
     }
 
-    // ─── 6. Conteo BD post-batch (+0s / +2s / +5s) ───────────────────────────
+    // ─── 7. Conteo BD post-batch (+0s / +2s / +5s) ───────────────────────────
     const tP0 = Date.now();
     const post0 = (await sbFetch('/planeados?select=trip_number') || []).length;
     console.log(`[SYNC #${syncId}] BD POST-BATCH (+0s) | ${post0} filas | ${Date.now() - tP0}ms`);
