@@ -36,15 +36,26 @@ export interface ReporteBase {
 
 // Claves de máquina estables. Si el label visible cambia, solo cambia aquí;
 // los registros almacenados en DB usan modulo_id / tipo_reporte y no se rompen.
+//
+// Jerarquía en el sidebar:
+//   NavSection.id = "logistica"  → label "GESTIÓN LOGÍSTICA"  (categoría/agrupador)
+//   NavItem.id    = "viajes"     → label "Viajes Activos"      (módulo funcional)
+//
+// modulo_id almacena el NavItem.id, NO el NavSection.id.
 
 export const MODULOS = [
-  { value: "gestion_logistica", label: "Gestión Logística" },
+  { value: "viajes", label: "Viajes Activos" },
+  // A medida que se agreguen reportes de otros módulos:
+  // { value: "solicitudes",  label: "Solicitudes"         },
+  // { value: "programacion", label: "Programación"        },
+  // { value: "cumplidos",    label: "Viajes Finalizados"  },
 ] as const;
 
 export type Modulo = (typeof MODULOS)[number]["value"];
 
 export const TIPOS_REPORTE = [
-  { value: "viajes_activos", moduloId: "gestion_logistica", label: "Viajes Activos" },
+  // moduloId = NavItem.id del módulo al que pertenece el reporte
+  { value: "viajes_activos", moduloId: "viajes", label: "Viajes Activos" },
 ] as const;
 
 export type TipoReporte = (typeof TIPOS_REPORTE)[number]["value"];
