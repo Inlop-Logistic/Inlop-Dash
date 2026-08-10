@@ -27,7 +27,12 @@ function clienteLabel(v: TmsViaje): string {
   return toTitleCase(raw);
 }
 
-/** Celda de texto única línea con ellipsis y tooltip. */
+/**
+ * Celda de texto única línea con ellipsis y tooltip.
+ *
+ * maxW: ancho máximo visible en px — usar col_width - 8 como referencia.
+ * Esto evita que el span desborde cuando table-layout:auto asigna espacio extra.
+ */
 function TxCell({
   value, dim = false, maxW, mono = false, semibold = false, upper = false,
 }: {
@@ -52,10 +57,12 @@ function TxCell({
 }
 
 // ── Renderers por columna ────────────────────────────────────────────────────
+// maxW = col_width - 8  (respira sin cortar texto legible)
 
 const RENDERERS: Record<string, (v: TmsViaje) => React.ReactNode> = {
 
   // ── Fecha ─── solo DD/MM/AA, sin hora ────────────────────────────────────
+  // col: 80px
   activated_on: (v) => {
     if (!v.activated_on) return <span style={DIM}>—</span>;
     const d = parseFechaTMS(v.activated_on, "MDY");
@@ -68,7 +75,7 @@ const RENDERERS: Record<string, (v: TmsViaje) => React.ReactNode> = {
     );
   },
 
-  // ── Manifiesto ─── MAYÚSCULAS + semibold ─────────────────────────────────
+  // ── Manifiesto ─── MAYÚSCULAS + semibold, col: 100px ─────────────────────
   trip_number: (v) => (
     <div className="flex items-center gap-1.5">
       <TxCell value={v.trip_number} mono semibold upper />
@@ -78,19 +85,20 @@ const RENDERERS: Record<string, (v: TmsViaje) => React.ReactNode> = {
     </div>
   ),
 
-  // ── Cliente ─── Title Case + tooltip ─────────────────────────────────────
+  // ── Cliente ─── Title Case + tooltip, col: 164px → maxW 156 ──────────────
   company_customer_name: (v) => (
-    <TxCell value={clienteLabel(v)} maxW={152} />
+    <TxCell value={clienteLabel(v)} maxW={156} />
   ),
 
-  // ── Operación ─── "Granel Liquido" → Carga Líquida; cualquier otro → Carga Seca
+  // ── Operación ─── col: 128px — "Carga Líquida" cabe en una línea ──────────
+  // type_operation === "Granel Liquido" → Carga Líquida; cualquier otro → Carga Seca
   type_operation: (v) => (
     <span className="text-[12px] leading-none" style={TX}>
       {lineaNegocio(v.type_operation)}
     </span>
   ),
 
-  // ── Tipo ─── texto plano, sin badge ──────────────────────────────────────
+  // ── Tipo ─── texto plano, col: 88px — "Nacional" cabe centrado ───────────
   _tipo: (v) => {
     const urbano = !!(v.origin_city_name && v.origin_city_name === v.destiny_city_name);
     return (
@@ -100,30 +108,30 @@ const RENDERERS: Record<string, (v: TmsViaje) => React.ReactNode> = {
     );
   },
 
-  // ── Origen ─── Title Case + tooltip ──────────────────────────────────────
+  // ── Origen ─── Title Case + tooltip, col: 104px → maxW 96 ────────────────
   origin_city_name: (v) => (
     <TxCell
       value={toTitleCase(v.origin_city_name)}
       dim={!v.origin_city_name}
-      maxW={104}
+      maxW={96}
     />
   ),
 
-  // ── Destino ─── Title Case + tooltip ─────────────────────────────────────
+  // ── Destino ─── Title Case + tooltip, col: 104px → maxW 96 ───────────────
   destiny_city_name: (v) => (
     <TxCell
       value={toTitleCase(v.destiny_city_name)}
       dim={!v.destiny_city_name}
-      maxW={104}
+      maxW={96}
     />
   ),
 
-  // ── Placa ─── MAYÚSCULAS + semibold, sin badge ───────────────────────────
+  // ── Placa ─── MAYÚSCULAS + semibold, col: 84px ───────────────────────────
   license_plate: (v) => v.license_plate
     ? <TxCell value={v.license_plate} mono semibold upper />
     : <span style={DIM}>—</span>,
 
-  // ── Conductor ─── Title Case + tooltip ───────────────────────────────────
+  // ── Conductor ─── Title Case + tooltip, col: 140px → maxW 132 ────────────
   driver_name: (v) => (
     <TxCell
       value={v.driver_name ? toTitleCase(v.driver_name) : "Sin asignar"}
@@ -132,7 +140,7 @@ const RENDERERS: Record<string, (v: TmsViaje) => React.ReactNode> = {
     />
   ),
 
-  // ── Teléfono ──────────────────────────────────────────────────────────────
+  // ── Teléfono ─── col: 104px ───────────────────────────────────────────────
   driver_phone: (v) => (
     <span
       className="text-[12px] font-mono leading-none"

@@ -6,23 +6,27 @@
  * ViajesTableColumns.tsx la lee y construye Column<TmsViaje>[] con renderers concretos.
  *
  * Regla: ningún renderer ni lógica de presentación vive aquí — solo metadatos.
+ *
+ * Anchos calibrados para 100% de zoom (referencia): suma total ~1268 px.
+ * Operación necesita 128 px para contener "Carga Líquida" sin wrapping.
+ * Tipo necesita 88 px para contener "Nacional" centrado.
  */
 
 export const VIAJES_ENTITY = "viaje" as const;
 
 /** Metadatos de cada columna — sin renderers. */
 export const VIAJES_COLUMNS_DEF = [
-  { key: "activated_on",          header: "Fecha",      width: "84px",   align: "center" as const, sortable: true,  mono: true  },
-  { key: "trip_number",           header: "Manifiesto", width: "104px",  align: "left"   as const, sortable: true,  mono: true  },
-  { key: "company_customer_name", header: "Cliente",    width: "160px",  align: "left"   as const, sortable: true,  mono: false },
-  { key: "type_operation",        header: "Operación",  width: "100px",  align: "left"   as const, sortable: false, mono: false },
-  { key: "_tipo",                 header: "Tipo",       width: "72px",   align: "center" as const, sortable: false, mono: false },
-  { key: "origin_city_name",      header: "Origen",     width: "110px",  align: "left"   as const, sortable: false, mono: true  },
-  { key: "destiny_city_name",     header: "Destino",    width: "110px",  align: "left"   as const, sortable: false, mono: true  },
-  { key: "license_plate",         header: "Placa",      width: "90px",   align: "center" as const, sortable: true,  mono: true  },
+  { key: "activated_on",          header: "Fecha",      width: "80px",   align: "center" as const, sortable: true,  mono: true  },
+  { key: "trip_number",           header: "Manifiesto", width: "100px",  align: "left"   as const, sortable: true,  mono: true  },
+  { key: "company_customer_name", header: "Cliente",    width: "164px",  align: "left"   as const, sortable: true,  mono: false },
+  { key: "type_operation",        header: "Operación",  width: "128px",  align: "left"   as const, sortable: false, mono: false },
+  { key: "_tipo",                 header: "Tipo",       width: "88px",   align: "center" as const, sortable: false, mono: false },
+  { key: "origin_city_name",      header: "Origen",     width: "104px",  align: "left"   as const, sortable: false, mono: true  },
+  { key: "destiny_city_name",     header: "Destino",    width: "104px",  align: "left"   as const, sortable: false, mono: true  },
+  { key: "license_plate",         header: "Placa",      width: "84px",   align: "center" as const, sortable: true,  mono: true  },
   { key: "driver_name",           header: "Conductor",  width: "140px",  align: "left"   as const, sortable: true,  mono: false },
-  { key: "driver_phone",          header: "Teléfono",   width: "110px",  align: "left"   as const, sortable: false, mono: true  },
-  { key: "state_travel",          header: "Estado",     width: "140px",  align: "left"   as const, sortable: true,  mono: false },
+  { key: "driver_phone",          header: "Teléfono",   width: "104px",  align: "left"   as const, sortable: false, mono: true  },
+  { key: "state_travel",          header: "Estado",     width: "136px",  align: "left"   as const, sortable: true,  mono: false },
   { key: "_actions",              header: "",           width: "36px",   align: "center" as const, sortable: false, mono: false },
 ] as const;
 
