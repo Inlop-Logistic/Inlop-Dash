@@ -21,7 +21,7 @@ function splitActivatedOn(raw: string | null | undefined): { fecha: string; hora
 export const COLUMNS: Column<CumplidoRecord>[] = [
   {
     key: "activated_on",
-    header: "Programado",
+    header: "Fecha Viaje",
     width: "110px",
     render: (c) => {
       const { fecha, hora } = splitActivatedOn(c.activated_on);
@@ -37,7 +37,7 @@ export const COLUMNS: Column<CumplidoRecord>[] = [
   },
   {
     key: "trip_number",
-    header: "Viaje",
+    header: "Manifiesto",
     width: "110px",
     render: (c) => (
       <span className="text-[12px] font-mono" style={{ color: "var(--navy)" }}>
