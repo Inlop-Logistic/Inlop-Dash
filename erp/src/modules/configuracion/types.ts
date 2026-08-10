@@ -3,7 +3,11 @@
 export interface ReporteAutomatico {
   id:                 string;
   nombre:             string;
+  modulo_id:          string;
   tipo_reporte:       string;
+  asunto:             string | null;
+  cuerpo:             string | null;
+  formato:            "excel" | "html_filas" | "html_columnas";
   frecuencia:         "diaria" | "semanal" | "mensual";
   activo:             boolean;
   proxima_ejecucion:  string | null;
@@ -13,20 +17,43 @@ export interface ReporteAutomatico {
   updated_by:         string | null;
 }
 
-/** Campos requeridos para crear o editar un reporte. */
+/** Campos para crear o editar un reporte (Información básica). */
 export interface ReporteBase {
   nombre:       string;
+  modulo_id:    string;
   tipo_reporte: string;
+  asunto:       string | null;
+  cuerpo:       string | null;
+  formato:      "excel" | "html_filas" | "html_columnas";
+  activo:       boolean;
+  /** frecuencia no forma parte de Información básica (Fase futura). Conservada en DB. */
   frecuencia:   "diaria" | "semanal" | "mensual";
 }
 
 // ─── Catálogos ────────────────────────────────────────────────────────────────
 
+// Claves de máquina estables. Si el label cambia, solo cambia aquí —
+// los registros almacenados en DB usan modulo_id/tipo_reporte y nunca se rompen.
+
+export const MODULOS = [
+  { value: "gestion_logistica", label: "Gestión Logística" },
+] as const;
+
+export type Modulo = (typeof MODULOS)[number]["value"];
+
 export const TIPOS_REPORTE = [
-  { value: "viajes_activos", label: "Viajes Activos" },
+  { value: "viajes_activos", moduloId: "gestion_logistica", label: "Viajes Activos" },
 ] as const;
 
 export type TipoReporte = (typeof TIPOS_REPORTE)[number]["value"];
+
+export const FORMATOS = [
+  { value: "excel",          label: "Excel"           },
+  { value: "html_filas",     label: "HTML — Filas"    },
+  { value: "html_columnas",  label: "HTML — Columnas" },
+] as const;
+
+export type Formato = (typeof FORMATOS)[number]["value"];
 
 export const FRECUENCIAS = [
   { value: "diaria",  label: "Diaria"  },
@@ -38,8 +65,16 @@ export type Frecuencia = (typeof FRECUENCIAS)[number]["value"];
 
 // ─── Helpers de presentación ──────────────────────────────────────────────────
 
+export function labelModulo(valor: string): string {
+  return MODULOS.find(m => m.value === valor)?.label ?? valor;
+}
+
 export function labelTipoReporte(valor: string): string {
   return TIPOS_REPORTE.find(t => t.value === valor)?.label ?? valor;
+}
+
+export function labelFormato(valor: string): string {
+  return FORMATOS.find(f => f.value === valor)?.label ?? valor;
 }
 
 export function labelFrecuencia(valor: string): string {

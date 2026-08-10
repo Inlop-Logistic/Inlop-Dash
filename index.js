@@ -4775,6 +4775,7 @@ app.patch("/api/clientes/:id/alias/:aliasId", requireInternalApiKey, async (req,
 // Módulo: Configuración → Parámetros → Reportes Automáticos (Fase 2 — CRUD base)
 
 const FRECUENCIAS_VALIDAS_RA = new Set(["diaria", "semanal", "mensual"]);
+const FORMATOS_VALIDOS_RA    = new Set(["excel", "html_filas", "html_columnas"]);
 
 app.get("/api/reportes-automaticos", async (req, res) => {
   try {
@@ -4789,19 +4790,36 @@ app.get("/api/reportes-automaticos", async (req, res) => {
 app.post("/api/reportes-automaticos", async (req, res) => {
   try {
     const actor = req.headers["x-user-email"] ?? "sistema";
-    const { nombre, tipo_reporte, frecuencia = "diaria" } = req.body ?? {};
+    const {
+      nombre,
+      modulo_id    = "gestion_logistica",
+      tipo_reporte,
+      asunto,
+      cuerpo,
+      formato      = "excel",
+      activo       = true,
+      frecuencia   = "diaria",
+    } = req.body ?? {};
 
     if (!nombre?.trim())       return res.status(400).json({ error: "El nombre es obligatorio" });
     if (!tipo_reporte?.trim()) return res.status(400).json({ error: "El tipo de reporte es obligatorio" });
+    if (!modulo_id?.trim())    return res.status(400).json({ error: "El módulo es obligatorio" });
+    if (!FORMATOS_VALIDOS_RA.has(formato)) {
+      return res.status(400).json({ error: "Formato inválido. Use: excel, html_filas o html_columnas" });
+    }
     if (!FRECUENCIAS_VALIDAS_RA.has(frecuencia)) {
       return res.status(400).json({ error: "Frecuencia inválida. Use: diaria, semanal o mensual" });
     }
 
     const rows = await sbFetch("/reportes_automaticos", "POST", {
       nombre:       nombre.trim(),
+      modulo_id:    modulo_id.trim(),
       tipo_reporte: tipo_reporte.trim(),
+      asunto:       asunto?.trim()  ?? null,
+      cuerpo:       cuerpo?.trim()  ?? null,
+      formato,
+      activo:       typeof activo === "boolean" ? activo : true,
       frecuencia,
-      activo:       true,
       created_by:   actor,
       updated_by:   actor,
     });
@@ -4817,12 +4835,22 @@ app.patch("/api/reportes-automaticos/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const actor = req.headers["x-user-email"] ?? "sistema";
-    const { nombre, tipo_reporte, frecuencia } = req.body ?? {};
+    const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, frecuencia } = req.body ?? {};
 
     const patch = { updated_by: actor };
     if (nombre       !== undefined) patch.nombre       = nombre.trim();
+    if (modulo_id    !== undefined) patch.modulo_id    = modulo_id.trim();
     if (tipo_reporte !== undefined) patch.tipo_reporte = tipo_reporte.trim();
-    if (frecuencia   !== undefined) {
+    if (asunto       !== undefined) patch.asunto       = asunto?.trim() ?? null;
+    if (cuerpo       !== undefined) patch.cuerpo       = cuerpo?.trim() ?? null;
+    if (activo       !== undefined) patch.activo       = Boolean(activo);
+    if (formato !== undefined) {
+      if (!FORMATOS_VALIDOS_RA.has(formato)) {
+        return res.status(400).json({ error: "Formato inválido. Use: excel, html_filas o html_columnas" });
+      }
+      patch.formato = formato;
+    }
+    if (frecuencia !== undefined) {
       if (!FRECUENCIAS_VALIDAS_RA.has(frecuencia)) {
         return res.status(400).json({ error: "Frecuencia inválida. Use: diaria, semanal o mensual" });
       }

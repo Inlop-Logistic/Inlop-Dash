@@ -47,7 +47,7 @@ export function CrearReportePage({ onCreado, onCancelar }: Props) {
 
       <PageHeader
         title="Crear reporte"
-        subtitle="Define el nombre, tipo y frecuencia del reporte automático."
+        subtitle="Define la información básica del reporte automático."
         icon={<Mail className="w-5 h-5" />}
       />
 

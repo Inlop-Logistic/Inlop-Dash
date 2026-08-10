@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { Button } from "@/components/ui";
-import { TIPOS_REPORTE, FRECUENCIAS, type Frecuencia, type ReporteBase, type ReporteAutomatico } from "../types";
+import {
+  MODULOS, TIPOS_REPORTE, FORMATOS,
+  type Modulo, type Formato,
+  type ReporteBase, type ReporteAutomatico,
+} from "../types";
 
 const INPUT_STYLE: React.CSSProperties = {
   border:       "1.5px solid var(--gray-200)",
@@ -23,11 +27,11 @@ const LABEL_STYLE: React.CSSProperties = {
 
 interface Props {
   /** Reporte inicial (edición) — undefined para crear desde cero */
-  inicial?:   Partial<ReporteAutomatico>;
-  guardando:  boolean;
+  inicial?:    Partial<ReporteAutomatico>;
+  guardando:   boolean;
   labelAccion?: string;
-  onGuardar:  (datos: ReporteBase) => Promise<void>;
-  onCancelar: () => void;
+  onGuardar:   (datos: ReporteBase) => Promise<void>;
+  onCancelar:  () => void;
 }
 
 export function FormReporteAutomatico({
@@ -38,9 +42,31 @@ export function FormReporteAutomatico({
   onCancelar,
 }: Props) {
   const [nombre,      setNombre]      = useState(inicial?.nombre       ?? "");
-  const [tipoReporte, setTipoReporte] = useState(inicial?.tipo_reporte ?? TIPOS_REPORTE[0].value);
-  const [frecuencia,  setFrecuencia]  = useState<Frecuencia>(inicial?.frecuencia ?? "diaria");
+  const [moduloId,    setModuloId]    = useState<Modulo>(
+    (inicial?.modulo_id as Modulo | undefined) ?? MODULOS[0].value
+  );
+  const [tipoReporte, setTipoReporte] = useState(
+    inicial?.tipo_reporte ??
+    TIPOS_REPORTE.find(t => t.moduloId === (inicial?.modulo_id ?? MODULOS[0].value))?.value ??
+    TIPOS_REPORTE[0].value
+  );
+  const [asunto,      setAsunto]      = useState(inicial?.asunto       ?? "");
+  const [cuerpo,      setCuerpo]      = useState(inicial?.cuerpo       ?? "");
+  const [formato,     setFormato]     = useState<Formato>(
+    (inicial?.formato as Formato | undefined) ?? "excel"
+  );
+  const [activo,      setActivo]      = useState(inicial?.activo ?? true);
   const [errorLocal,  setErrorLocal]  = useState<string | null>(null);
+
+  // Reportes disponibles para el módulo seleccionado
+  const tiposDelModulo = TIPOS_REPORTE.filter(t => t.moduloId === moduloId);
+
+  function handleModuloChange(nuevoModulo: Modulo) {
+    setModuloId(nuevoModulo);
+    // Si el tipo actual no pertenece al nuevo módulo, resetear al primero disponible
+    const primeroDelModulo = TIPOS_REPORTE.find(t => t.moduloId === nuevoModulo);
+    if (primeroDelModulo) setTipoReporte(primeroDelModulo.value);
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,11 +75,20 @@ export function FormReporteAutomatico({
       setErrorLocal("El nombre es obligatorio");
       return;
     }
+    if (!asunto.trim()) {
+      setErrorLocal("El asunto del correo es obligatorio");
+      return;
+    }
     try {
       await onGuardar({
         nombre:       nombre.trim(),
+        modulo_id:    moduloId,
         tipo_reporte: tipoReporte,
-        frecuencia:   frecuencia as ReporteBase["frecuencia"],
+        asunto:       asunto.trim(),
+        cuerpo:       cuerpo.trim() || null,
+        formato,
+        activo,
+        frecuencia:   inicial?.frecuencia ?? "diaria",
       });
     } catch (e) {
       setErrorLocal(e instanceof Error ? e.message : "Error al guardar");
@@ -79,7 +114,24 @@ export function FormReporteAutomatico({
         />
       </div>
 
-      {/* Tipo de reporte */}
+      {/* Módulo */}
+      <div>
+        <label style={LABEL_STYLE}>
+          Módulo <span style={{ color: "var(--inlop-red)" }}>*</span>
+        </label>
+        <select
+          value={moduloId}
+          onChange={e => handleModuloChange(e.target.value as Modulo)}
+          style={INPUT_STYLE}
+          required
+        >
+          {MODULOS.map(m => (
+            <option key={m.value} value={m.value}>{m.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Reporte (filtrado por módulo) */}
       <div>
         <label style={LABEL_STYLE}>
           Reporte <span style={{ color: "var(--inlop-red)" }}>*</span>
@@ -90,29 +142,73 @@ export function FormReporteAutomatico({
           style={INPUT_STYLE}
           required
         >
-          {TIPOS_REPORTE.map(t => (
+          {tiposDelModulo.map(t => (
             <option key={t.value} value={t.value}>{t.label}</option>
           ))}
         </select>
       </div>
 
-      {/* Frecuencia */}
+      {/* Asunto del correo */}
       <div>
         <label style={LABEL_STYLE}>
-          Frecuencia <span style={{ color: "var(--inlop-red)" }}>*</span>
+          Asunto del correo <span style={{ color: "var(--inlop-red)" }}>*</span>
         </label>
-        <select
-          value={frecuencia}
-          onChange={e => {
-            const match = FRECUENCIAS.find(f => f.value === e.target.value);
-            if (match) setFrecuencia(match.value);
-          }}
+        <input
+          type="text"
+          value={asunto}
+          onChange={e => setAsunto(e.target.value)}
+          placeholder="Ej. Reporte de Viajes Activos — INLOP"
           style={INPUT_STYLE}
           required
-        >
-          {FRECUENCIAS.map(f => (
-            <option key={f.value} value={f.value}>{f.label}</option>
+        />
+      </div>
+
+      {/* Cuerpo del correo */}
+      <div>
+        <label style={LABEL_STYLE}>Cuerpo del correo</label>
+        <textarea
+          value={cuerpo}
+          onChange={e => setCuerpo(e.target.value)}
+          placeholder="Mensaje adicional que acompañará el adjunto (opcional)"
+          rows={3}
+          style={{ ...INPUT_STYLE, resize: "vertical" }}
+        />
+      </div>
+
+      {/* Formato */}
+      <div>
+        <label style={LABEL_STYLE}>Formato</label>
+        <div className="flex flex-col gap-2" style={{ marginTop: "2px" }}>
+          {FORMATOS.map(f => (
+            <label
+              key={f.value}
+              className="flex items-center gap-2 cursor-pointer"
+              style={{ fontSize: "13px", color: "var(--gray-700)" }}
+            >
+              <input
+                type="radio"
+                name="formato"
+                value={f.value}
+                checked={formato === f.value}
+                onChange={() => setFormato(f.value as Formato)}
+                style={{ accentColor: "var(--navy)" }}
+              />
+              {f.label}
+            </label>
           ))}
+        </div>
+      </div>
+
+      {/* Estado */}
+      <div>
+        <label style={LABEL_STYLE}>Estado</label>
+        <select
+          value={activo ? "activo" : "inactivo"}
+          onChange={e => setActivo(e.target.value === "activo")}
+          style={INPUT_STYLE}
+        >
+          <option value="activo">Activo</option>
+          <option value="inactivo">Inactivo</option>
         </select>
       </div>
 
