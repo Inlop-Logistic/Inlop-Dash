@@ -26,6 +26,7 @@ import {
 } from "../types";
 import { crearReporteAutomatico, actualizarReporteAutomatico } from "../services/api";
 import { EtapaInfoBasica }  from "./etapas/EtapaInfoBasica";
+import { EtapaFiltros }     from "./etapas/EtapaFiltros";
 import { EtapaPlaceholder } from "./etapas/EtapaPlaceholder";
 import { EtapaRevision }    from "./etapas/EtapaRevision";
 
@@ -43,12 +44,15 @@ const PLACEHOLDER_DESC: Partial<Record<EtapaId, string>> = {
 
 function isEtapaCompleta(id: EtapaId, datos: DatosConfigurador): boolean {
   if (id === "info-basica") return etapaInfoBasicaCompleta(datos.infoBasica);
-  // Etapas 02-06: se actualizará al desarrollar cada una
+  // "filtros" siempre es válida — array vacío = sin filtros (incluir todos)
+  if (id === "filtros") return true;
+  // Etapas 03-06: se actualizará al desarrollar cada una
   return false;
 }
 
 const DATOS_INICIAL: DatosConfigurador = {
   infoBasica: { ...DATOS_INFO_BASICA_INICIAL },
+  filtros:    [],
 };
 
 // ─── Componente principal ────────────────────────────────────────────────────
@@ -94,12 +98,15 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
     setErrorMsg(null);
     setGuardando(true);
     try {
+      // Serializar filtros: strip `id` (local React key) antes de enviar a la DB
+      const filtrosDB = datos.filtros.map(({ id: _id, ...rest }) => rest);
       const payload = {
         ...datos.infoBasica,
-        cuerpo:    datos.infoBasica.cuerpo.trim() || null,
-        borrador:  true,
-        activo:    false,
+        cuerpo:     datos.infoBasica.cuerpo.trim() || null,
+        borrador:   true,
+        activo:     false,
         frecuencia: "diaria" as const,
+        filtros:    filtrosDB,
       };
       if (borradorId) {
         await actualizarReporteAutomatico(borradorId, payload);
@@ -122,12 +129,15 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
     setErrorMsg(null);
     setGuardando(true);
     try {
+      // Serializar filtros: strip `id` (local React key) antes de enviar a la DB
+      const filtrosDB = datos.filtros.map(({ id: _id, ...rest }) => rest);
       const payload = {
         ...datos.infoBasica,
-        cuerpo:    datos.infoBasica.cuerpo.trim() || null,
-        borrador:  false,
-        activo:    datos.infoBasica.activo,
+        cuerpo:     datos.infoBasica.cuerpo.trim() || null,
+        borrador:   false,
+        activo:     datos.infoBasica.activo,
         frecuencia: "diaria" as const,
+        filtros:    filtrosDB,
       };
       if (borradorId) {
         await actualizarReporteAutomatico(borradorId, payload);
@@ -151,6 +161,14 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
           <EtapaInfoBasica
             datos={datos.infoBasica}
             onChange={infoBasica => setDatos(d => ({ ...d, infoBasica }))}
+          />
+        );
+      case "filtros":
+        return (
+          <EtapaFiltros
+            filtros={datos.filtros}
+            tipoReporte={datos.infoBasica.tipo_reporte}
+            onChange={filtros => setDatos(d => ({ ...d, filtros }))}
           />
         );
       case "revision":

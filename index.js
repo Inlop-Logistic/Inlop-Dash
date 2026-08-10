@@ -4800,6 +4800,7 @@ app.post("/api/reportes-automaticos", async (req, res) => {
       activo       = true,
       borrador     = false,
       frecuencia   = "diaria",
+      filtros,
     } = req.body ?? {};
 
     if (!nombre?.trim())       return res.status(400).json({ error: "El nombre es obligatorio" });
@@ -4810,6 +4811,9 @@ app.post("/api/reportes-automaticos", async (req, res) => {
     }
     if (!FRECUENCIAS_VALIDAS_RA.has(frecuencia)) {
       return res.status(400).json({ error: "Frecuencia inválida. Use: diaria, semanal o mensual" });
+    }
+    if (filtros !== undefined && !Array.isArray(filtros)) {
+      return res.status(400).json({ error: "filtros debe ser un array" });
     }
 
     const rows = await sbFetch("/reportes_automaticos", "POST", {
@@ -4822,6 +4826,7 @@ app.post("/api/reportes-automaticos", async (req, res) => {
       activo:       typeof activo === "boolean" ? activo : true,
       borrador:     typeof borrador === "boolean" ? borrador : false,
       frecuencia,
+      filtros:      Array.isArray(filtros) ? filtros : [],
       created_by:   actor,
       updated_by:   actor,
     });
@@ -4837,7 +4842,7 @@ app.patch("/api/reportes-automaticos/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const actor = req.headers["x-user-email"] ?? "sistema";
-    const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, borrador, frecuencia } = req.body ?? {};
+    const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, borrador, frecuencia, filtros } = req.body ?? {};
 
     const patch = { updated_by: actor };
     if (nombre       !== undefined) patch.nombre       = nombre.trim();
@@ -4858,6 +4863,12 @@ app.patch("/api/reportes-automaticos/:id", async (req, res) => {
         return res.status(400).json({ error: "Frecuencia inválida. Use: diaria, semanal o mensual" });
       }
       patch.frecuencia = frecuencia;
+    }
+    if (filtros !== undefined) {
+      if (!Array.isArray(filtros)) {
+        return res.status(400).json({ error: "filtros debe ser un array" });
+      }
+      patch.filtros = filtros;
     }
 
     const rows = await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}`, "PATCH", patch);

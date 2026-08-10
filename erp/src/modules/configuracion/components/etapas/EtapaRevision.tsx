@@ -4,7 +4,7 @@
  * Muestra un resumen de toda la configuración. La activación real
  * la ejecuta ConfiguradorReporte (botón "Activar reporte" en el footer).
  *
- * Al desarrollar las etapas 02-06, agregar cada sección de resumen aquí.
+ * Al desarrollar las etapas 03-06, agregar cada sección de resumen aquí.
  */
 import { CheckCircle2, AlertCircle } from "lucide-react";
 import {
@@ -13,6 +13,7 @@ import {
   etapaInfoBasicaCompleta,
   type DatosConfigurador,
 } from "../../types";
+import { CAMPOS_FILTRO } from "./filtros/catalogoFiltros";
 
 interface Props {
   datos: DatosConfigurador;
@@ -22,9 +23,11 @@ export function EtapaRevision({ datos }: Props) {
   const ib = datos.infoBasica;
   const infoCompleta = etapaInfoBasicaCompleta(ib);
 
-  // Etapas intermedias (02-06): pendientes de implementar
+  const camposFiltro = CAMPOS_FILTRO[ib.tipo_reporte] ?? [];
+
+  // Etapas intermedias (03-06): pendientes de implementar
   const etapasPendientes = ETAPAS.filter(
-    e => e.id !== "info-basica" && e.id !== "revision"
+    e => e.id !== "info-basica" && e.id !== "filtros" && e.id !== "revision"
   );
 
   return (
@@ -92,7 +95,71 @@ export function EtapaRevision({ datos }: Props) {
         )}
       </section>
 
-      {/* ─── Etapas 02-06: pendientes ─── */}
+      {/* ─── Etapa 02: Filtros ─── */}
+      <section
+        className="rounded-xl p-4 flex flex-col gap-3"
+        style={{ border: "1.5px solid var(--gray-200)", background: "var(--gray-50)" }}
+      >
+        <div className="flex items-center justify-between">
+          <span
+            className="text-[11px] font-bold uppercase tracking-wider"
+            style={{ color: "var(--gray-500)" }}
+          >
+            02 · Filtros
+          </span>
+          <CheckCircle2 className="w-4 h-4" style={{ color: "var(--success)" }} />
+        </div>
+
+        {datos.filtros.length === 0 ? (
+          <p className="text-[13px]" style={{ color: "var(--gray-500)" }}>
+            Sin filtros — se incluirán todos los registros.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {datos.filtros.map((f, i) => {
+              const campoCfg    = camposFiltro.find(c => c.campo === f.campo);
+              const operadorCfg = campoCfg?.operadores.find(o => o.id === f.operador);
+              const campoLabel    = campoCfg?.label    ?? f.campo;
+              const operadorLabel = operadorCfg?.label ?? f.operador;
+
+              let valorLabel = "";
+              if (f.campo && f.operador) {
+                if (operadorCfg?.tipoValor === "ninguno") {
+                  valorLabel = "";
+                } else if (operadorCfg?.tipoValor === "date_range") {
+                  valorLabel = `${f.valor_desde ?? "—"} y ${f.valor_hasta ?? "—"}`;
+                } else if (operadorCfg?.tipoValor === "select") {
+                  const opcion = campoCfg?.opciones?.find(o => o.value === f.valor);
+                  valorLabel = opcion?.label ?? f.valor ?? "—";
+                } else {
+                  valorLabel = f.valor ?? "—";
+                }
+              }
+
+              return (
+                <div
+                  key={i}
+                  className="flex items-center gap-1.5 flex-wrap"
+                  style={{ fontSize: "13px", color: "var(--gray-700)" }}
+                >
+                  <span style={{ fontWeight: 600 }}>{campoLabel}</span>
+                  <span style={{ color: "var(--gray-400)" }}>{operadorLabel}</span>
+                  {valorLabel && (
+                    <span
+                      className="px-2 py-0.5 rounded-full text-[12px] font-medium"
+                      style={{ background: "var(--gray-200)", color: "var(--gray-700)" }}
+                    >
+                      {valorLabel}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* ─── Etapas 03-06: pendientes ─── */}
       {etapasPendientes.map(etapa => (
         <section
           key={etapa.id}

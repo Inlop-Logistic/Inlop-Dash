@@ -1,5 +1,28 @@
 // ─── Tipos de Configuración → Parámetros → Reportes Automáticos ──────────────
 
+// ─── Filtros ──────────────────────────────────────────────────────────────────
+
+/**
+ * Un filtro tal como se persiste en la columna JSONB `filtros` de la DB.
+ * Sin `id` local de React.
+ */
+export interface FiltroDB {
+  campo:        string;
+  operador:     string;
+  valor?:       string | null;
+  valor_desde?: string | null;
+  valor_hasta?: string | null;
+}
+
+/**
+ * Un filtro con `id` local para las keys de React.
+ * Se serializa a FiltroDB (sin `id`) al persistir.
+ */
+export interface FiltroItem extends FiltroDB {
+  /** UUID local — solo para React keys, nunca se envía a la DB. */
+  id: string;
+}
+
 export interface ReporteAutomatico {
   id:                 string;
   nombre:             string;
@@ -11,6 +34,7 @@ export interface ReporteAutomatico {
   frecuencia:         "diaria" | "semanal" | "mensual";
   activo:             boolean;
   borrador:           boolean;
+  filtros:            FiltroDB[];
   proxima_ejecucion:  string | null;
   created_at:         string;
   updated_at:         string;
@@ -30,6 +54,7 @@ export interface ReporteBase {
   borrador?:    boolean;
   /** frecuencia: preservada en DB; no expuesta en Información básica (Fase futura). */
   frecuencia:   "diaria" | "semanal" | "mensual";
+  filtros?:     FiltroDB[];
 }
 
 // ─── Catálogos ────────────────────────────────────────────────────────────────
@@ -127,7 +152,9 @@ export const DATOS_INFO_BASICA_INICIAL: DatosInfoBasica = {
 /** Estado agregado del configurador (todas las etapas). */
 export interface DatosConfigurador {
   infoBasica: DatosInfoBasica;
-  // Etapas 02-06 se agregarán aquí al desarrollarse cada una.
+  /** Etapa 02 — condiciones de filtrado; array vacío = sin filtros. */
+  filtros: FiltroItem[];
+  // Etapas 03-06 se agregarán aquí al desarrollarse cada una.
 }
 
 /** Devuelve true si la etapa de Información básica cumple los requisitos mínimos. */
