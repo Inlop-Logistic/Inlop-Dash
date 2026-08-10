@@ -3252,6 +3252,22 @@ app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
     // Índice de cache.viajes por trip_number para enriquecer con datos del TMS en vivo.
     const viajesIdx = new Map(cache.viajes.data.map(v => [v.trip_number, v]));
 
+    // Fallback de conductor_tel para viajes no activos en TMS (completados, sin_asignar…):
+    // solicitudes persiste el teléfono durante todo el ciclo de vida del viaje, mientras
+    // que cache.viajes solo contiene viajes activos en este momento.
+    const tripNums = rows.map(r => r.trip_number).filter(Boolean);
+    let solTelMap = {};
+    if (tripNums.length) {
+      const solRows = await sbFetch(
+        `/solicitudes?controlt_trip_number=in.(${tripNums.map(encodeURIComponent).join(',')})&select=controlt_trip_number,conductor_tel`
+      ) || [];
+      solRows.forEach(s => {
+        if (s.controlt_trip_number && s.conductor_tel) {
+          solTelMap[s.controlt_trip_number] = s.conductor_tel;
+        }
+      });
+    }
+
     const enriched = rows.map(r => {
       let nombre_cliente = null;
       if (r.empresa_cliente_id && empMap[r.empresa_cliente_id]) {
@@ -3273,7 +3289,7 @@ app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
         match_tms_pendiente: !r.empresa_cliente_id && isPlaceholderTmsCustomer(r.company_customer_name),
         tipo_servicio,
         type_operation: vivo?.type_operation || null,
-        conductor_tel: vivo ? (extraerTelefono(vivo.driver_phone, vivo.full_driver) || null) : null,
+        conductor_tel: vivo ? (extraerTelefono(vivo.driver_phone, vivo.full_driver) || null) : (solTelMap[r.trip_number] || null),
       };
     });
 
