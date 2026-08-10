@@ -1,29 +1,14 @@
-import { useState } from "react";
 import { Mail } from "lucide-react";
-import { PageHeader, Card } from "@/components/ui";
-import { FormReporteAutomatico } from "./FormReporteAutomatico";
-import { crearReporteAutomatico } from "../services/api";
-import type { ReporteBase } from "../types";
+import { PageHeader } from "@/components/ui";
+import { ConfiguradorReporte } from "./ConfiguradorReporte";
 
 interface Props {
-  /** Invocado tras persistir con éxito — el caller navega de vuelta al listado. */
+  /** Invocado tras persistir con éxito — el caller navega al listado. */
   onCreado:   () => void;
   onCancelar: () => void;
 }
 
 export function CrearReportePage({ onCreado, onCancelar }: Props) {
-  const [guardando, setGuardando] = useState(false);
-
-  const handleCrear = async (datos: ReporteBase) => {
-    setGuardando(true);
-    try {
-      await crearReporteAutomatico(datos);
-      onCreado();
-    } finally {
-      setGuardando(false);
-    }
-  };
-
   return (
     <div className="p-6 flex flex-col gap-6">
 
@@ -47,20 +32,11 @@ export function CrearReportePage({ onCreado, onCancelar }: Props) {
 
       <PageHeader
         title="Crear reporte"
-        subtitle="Define la información básica del reporte automático."
+        subtitle="Configura el reporte automático paso a paso."
         icon={<Mail className="w-5 h-5" />}
       />
 
-      <div className="max-w-lg">
-        <Card padding="md">
-          <FormReporteAutomatico
-            guardando={guardando}
-            labelAccion="Crear reporte"
-            onGuardar={handleCrear}
-            onCancelar={onCancelar}
-          />
-        </Card>
-      </div>
+      <ConfiguradorReporte onCreado={onCreado} onCancelar={onCancelar} />
 
     </div>
   );

@@ -4798,6 +4798,7 @@ app.post("/api/reportes-automaticos", async (req, res) => {
       cuerpo,
       formato      = "excel",
       activo       = true,
+      borrador     = false,
       frecuencia   = "diaria",
     } = req.body ?? {};
 
@@ -4819,6 +4820,7 @@ app.post("/api/reportes-automaticos", async (req, res) => {
       cuerpo:       cuerpo?.trim()  ?? null,
       formato,
       activo:       typeof activo === "boolean" ? activo : true,
+      borrador:     typeof borrador === "boolean" ? borrador : false,
       frecuencia,
       created_by:   actor,
       updated_by:   actor,
@@ -4835,7 +4837,7 @@ app.patch("/api/reportes-automaticos/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const actor = req.headers["x-user-email"] ?? "sistema";
-    const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, frecuencia } = req.body ?? {};
+    const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, borrador, frecuencia } = req.body ?? {};
 
     const patch = { updated_by: actor };
     if (nombre       !== undefined) patch.nombre       = nombre.trim();
@@ -4844,6 +4846,7 @@ app.patch("/api/reportes-automaticos/:id", async (req, res) => {
     if (asunto       !== undefined) patch.asunto       = asunto?.trim() ?? null;
     if (cuerpo       !== undefined) patch.cuerpo       = cuerpo?.trim() ?? null;
     if (activo       !== undefined) patch.activo       = Boolean(activo);
+    if (borrador     !== undefined) patch.borrador     = Boolean(borrador);
     if (formato !== undefined) {
       if (!FORMATOS_VALIDOS_RA.has(formato)) {
         return res.status(400).json({ error: "Formato inválido. Use: excel, html_filas o html_columnas" });
