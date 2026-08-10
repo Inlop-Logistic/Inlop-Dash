@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import {
-  Upload, Eye, Download, Trash2, MessageCircle,
+  Upload, Eye, Download, Trash2,
   RefreshCw, FileText, Loader2, AlertCircle,
   MoreHorizontal, Paperclip,
 } from "lucide-react";
@@ -201,7 +201,7 @@ export function SoportesCumplido({ cumplido }: SoportesCumplidoProps) {
   const {
     soportes, cargando, error, progreso,
     reemplazandoId, eliminandoId,
-    subirVarios, reemplazar, eliminar, abrirUrl, solicitarWhatsApp,
+    subirVarios, reemplazar, eliminar, abrirUrl,
   } = useSoportesCumplido(cumplido.trip_number, cumplido.license_plate);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -209,9 +209,8 @@ export function SoportesCumplido({ cumplido }: SoportesCumplidoProps) {
   const reemplazoTargetId = useRef<string | null>(null);
   const reemplazoInputRef = useRef<HTMLInputElement>(null);
 
-  const tipos     = tiposDocumentoParaViaje(cumplido.type_operation);
-  const hasTel    = !!cumplido.conductor_tel;
-  const total     = soportes.length;
+  const tipos  = tiposDocumentoParaViaje(cumplido.type_operation);
+  const total  = soportes.length;
   const lleno     = total >= CAP_SOPORTES;
   const restantes = total - MAX_VISIBLE_INIT;
 
@@ -299,22 +298,6 @@ export function SoportesCumplido({ cumplido }: SoportesCumplidoProps) {
           {lleno ? "Límite alcanzado" : "Cargar"}
         </button>
 
-        {hasTel && (
-          <button
-            type="button"
-            onClick={() =>
-              solicitarWhatsApp(
-                cumplido.conductor_tel ?? "",
-                cumplido.driver_name   ?? "conductor",
-              )
-            }
-            className="flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-lg transition-colors"
-            style={{ background: "#D1FAE5", color: "#065F46", cursor: "pointer" }}
-          >
-            <MessageCircle className="w-3 h-3" />
-            WhatsApp
-          </button>
-        )}
       </div>
 
       {/* ── Error ────────────────────────────────────────────────────────── */}

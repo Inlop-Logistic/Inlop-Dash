@@ -1,4 +1,4 @@
-import { ArrowRight, Car, User } from "lucide-react";
+import { ArrowRight, Truck, User, Phone, MessageCircle } from "lucide-react";
 import { SidePanel, PanelSection, InfoRow } from "@/components/ui";
 import { fmtTms } from "@/utils/parseFecha";
 import type { CumplidoRecord } from "../types";
@@ -96,62 +96,124 @@ export function DetalleCumplido({ cumplido, onClose }: DetalleCumplidoProps) {
         />
       </PanelSection>
 
-      {/* Vehículo y conductor */}
-      <PanelSection title="Vehículo y conductor" icon={<User className="w-3.5 h-3.5" />}>
-        {cumplido.driver_name ? (
-          <div
-            className="flex items-center gap-3 p-3 rounded-xl mb-3"
-            style={{ background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}
-          >
-            <div
-              className="h-10 w-10 rounded-full flex items-center justify-center font-bold text-[14px] shrink-0"
-              style={{ background: "var(--navy)", color: "#fff" }}
-            >
-              {cumplido.driver_name.charAt(0).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <div className="text-[13px] font-bold" style={{ color: "var(--gray-800)" }}>
-                {cumplido.driver_name}
-              </div>
-              {cumplido.conductor_tel && (
-                <div className="text-[11px] font-mono" style={{ color: "var(--gray-400)" }}>
-                  {cumplido.conductor_tel}
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div
-            className="flex items-center gap-2 text-[12px] py-2 px-3 rounded-xl mb-3"
-            style={{ background: "var(--gray-50)", color: "var(--gray-400)" }}
-          >
-            <User className="w-3.5 h-3.5 shrink-0" />
-            Sin conductor asignado
-          </div>
-        )}
-        {cumplido.license_plate ? (
-          <div
-            className="p-3 rounded-xl"
-            style={{ background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}
-          >
-            <div className="flex items-center gap-2">
-              <Car className="w-4 h-4 shrink-0" style={{ color: "var(--gray-400)" }} />
-              <span
-                className="text-[18px] font-bold tracking-widest"
-                style={{ color: "var(--navy)", fontFamily: "monospace" }}
-              >
-                {cumplido.license_plate}
-              </span>
-            </div>
-          </div>
-        ) : (
+      {/* Asignación: conductor + vehículo + contacto en una tarjeta compacta */}
+      <PanelSection title="Asignación" icon={<User className="w-3.5 h-3.5" />}>
+        {!cumplido.driver_name && !cumplido.license_plate ? (
+
+          /* ── Sin datos ─────────────────────────────────────────────────── */
           <div
             className="flex items-center gap-2 text-[12px] py-2 px-3 rounded-xl"
             style={{ background: "var(--gray-50)", color: "var(--gray-400)" }}
           >
-            <Car className="w-3.5 h-3.5 shrink-0" />
-            Sin vehículo asignado
+            <User className="w-3.5 h-3.5 shrink-0" />
+            Sin asignación
           </div>
+
+        ) : !cumplido.driver_name && cumplido.license_plate ? (
+
+          /* ── Solo vehículo ─────────────────────────────────────────────── */
+          <div
+            className="flex items-center gap-2.5 p-3 rounded-xl"
+            style={{ background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}
+          >
+            <Truck className="w-4 h-4 shrink-0" style={{ color: "var(--gray-400)" }} />
+            <span
+              className="text-[16px] font-bold tracking-widest"
+              style={{ color: "var(--navy)", fontFamily: "monospace" }}
+            >
+              {cumplido.license_plate}
+            </span>
+          </div>
+
+        ) : (
+
+          /* ── Conductor (con o sin vehículo) ────────────────────────────── */
+          <div
+            className="flex items-start gap-3 p-3 rounded-xl"
+            style={{ background: "var(--gray-50)", border: "1px solid var(--gray-100)" }}
+          >
+            {/* Avatar inicial */}
+            <div
+              className="h-8 w-8 rounded-full flex items-center justify-center font-bold text-[13px] shrink-0 mt-0.5"
+              style={{ background: "var(--navy)", color: "#fff" }}
+            >
+              {cumplido.driver_name!.charAt(0).toUpperCase()}
+            </div>
+
+            {/* Datos */}
+            <div className="flex-1 min-w-0">
+
+              {/* Nombre */}
+              <div
+                className="text-[13px] font-bold leading-tight"
+                style={{ color: "var(--gray-800)" }}
+              >
+                {cumplido.driver_name}
+              </div>
+
+              {/* Teléfono (izq) · Placa (der) */}
+              <div className="flex items-center justify-between gap-2 mt-0.5">
+                {cumplido.conductor_tel ? (
+                  <span
+                    className="text-[11px] font-mono"
+                    style={{ color: "var(--gray-400)" }}
+                  >
+                    {cumplido.conductor_tel}
+                  </span>
+                ) : <span />}
+
+                {cumplido.license_plate && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Truck className="w-3 h-3" style={{ color: "var(--gray-400)" }} />
+                    <span
+                      className="text-[12px] font-bold tracking-wider"
+                      style={{ color: "var(--navy)", fontFamily: "monospace" }}
+                    >
+                      {cumplido.license_plate}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Acciones de contacto */}
+              {cumplido.conductor_tel && (
+                <div className="flex items-center gap-2 mt-2">
+                  <a
+                    href={`tel:${cumplido.conductor_tel}`}
+                    className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg"
+                    style={{
+                      background:     "var(--gray-100)",
+                      color:          "var(--gray-600)",
+                      textDecoration: "none",
+                      cursor:         "pointer",
+                    }}
+                  >
+                    <Phone className="w-3 h-3" />
+                    Llamar
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const tel    = cumplido.conductor_tel!.replace(/\D/g, "");
+                      const nombre = cumplido.driver_name ?? "conductor";
+                      window.open(
+                        `https://wa.me/57${tel}?text=${encodeURIComponent(
+                          `Hola ${nombre}, te contactamos desde Inlop Logística.`,
+                        )}`,
+                        "_blank",
+                      );
+                    }}
+                    className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg"
+                    style={{ background: "#D1FAE5", color: "#065F46", cursor: "pointer" }}
+                  >
+                    <MessageCircle className="w-3 h-3" />
+                    WhatsApp
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
         )}
       </PanelSection>
 
