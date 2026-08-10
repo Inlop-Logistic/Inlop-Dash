@@ -1,15 +1,193 @@
-import { Mail } from "lucide-react";
-import { PageHeader } from "@/components/ui";
+import { Mail, Plus, Pencil, Power } from "lucide-react";
+import {
+  PageHeader, FilterBar, DataTable, Button,
+  Badge, SidePanel, PanelSection, InfoRow,
+} from "@/components/ui";
+import type { Column } from "@/components/ui";
+import { FormReporteAutomatico } from "./components/FormReporteAutomatico";
+import { useReportesAutomaticos } from "./hooks/useReportesAutomaticos";
+import {
+  labelTipoReporte, labelFrecuencia, formatFechaCorta,
+  type ReporteAutomatico,
+} from "./types";
 
 interface Props {
-  onBack: () => void;
+  onBack:   () => void;
+  onCrear:  () => void;
 }
 
-export function ReportesAutomaticosPage({ onBack }: Props) {
+// ── Empty state ──────────────────────────────────────────────────────────────
+
+function EmptyState({ conFiltro, onCrear }: { conFiltro: boolean; onCrear: () => void }) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center py-20 rounded-[var(--radius-2xl)] gap-3"
+      style={{ border: "1.5px dashed var(--gray-200)", background: "var(--gray-50)" }}
+    >
+      <div
+        className="h-12 w-12 rounded-xl flex items-center justify-center"
+        style={{ background: "var(--gray-100)" }}
+      >
+        <Mail className="w-5 h-5" style={{ color: "var(--gray-400)" }} />
+      </div>
+      {conFiltro ? (
+        <>
+          <p className="font-semibold text-[15px]" style={{ color: "var(--navy)" }}>
+            Sin resultados
+          </p>
+          <p className="text-[13px]" style={{ color: "var(--gray-400)" }}>
+            Ningún reporte coincide con la búsqueda.
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="font-semibold text-[15px]" style={{ color: "var(--navy)" }}>
+            No hay reportes configurados
+          </p>
+          <p className="text-[13px]" style={{ color: "var(--gray-400)" }}>
+            Crea el primer reporte automático para empezar.
+          </p>
+          <Button icon={<Plus className="w-4 h-4" />} size="sm" onClick={onCrear} className="mt-1">
+            Crear reporte
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Toggle activo (con feedback de error silencioso) ─────────────────────────
+
+function ToggleActivoBtn({
+  reporte,
+  onToggle,
+}: {
+  reporte: ReporteAutomatico;
+  onToggle: (id: string, activo: boolean) => Promise<void>;
+}) {
+  const siguiente = !reporte.activo;
+  return (
+    <button
+      type="button"
+      title={siguiente ? "Activar" : "Desactivar"}
+      aria-label={siguiente ? "Activar reporte" : "Desactivar reporte"}
+      onClick={e => { e.stopPropagation(); onToggle(reporte.id, siguiente).catch(() => {}); }}
+      className="flex items-center justify-center w-7 h-7 rounded-lg transition-colors hover:bg-[var(--gray-100)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--navy)]"
+      style={{ color: reporte.activo ? "var(--gray-500)" : "var(--gray-300)" }}
+    >
+      <Power className="w-3.5 h-3.5" />
+    </button>
+  );
+}
+
+// ── Columnas de la tabla ──────────────────────────────────────────────────────
+
+function buildColumns(
+  onEditar:  (r: ReporteAutomatico) => void,
+  onToggle:  (id: string, activo: boolean) => Promise<void>,
+): Column<ReporteAutomatico>[] {
+  return [
+    {
+      key:    "nombre",
+      header: "Nombre",
+      width:  "220px",
+      render: (r) => (
+        <span className="font-medium text-[13px]" style={{ color: "var(--gray-800)" }}>
+          {r.nombre}
+        </span>
+      ),
+    },
+    {
+      key:    "tipo_reporte",
+      header: "Reporte",
+      width:  "160px",
+      render: (r) => (
+        <span className="text-[13px]" style={{ color: "var(--gray-600)" }}>
+          {labelTipoReporte(r.tipo_reporte)}
+        </span>
+      ),
+    },
+    {
+      key:    "frecuencia",
+      header: "Frecuencia",
+      width:  "110px",
+      render: (r) => (
+        <span className="text-[13px]" style={{ color: "var(--gray-600)" }}>
+          {labelFrecuencia(r.frecuencia)}
+        </span>
+      ),
+    },
+    {
+      key:    "proxima_ejecucion",
+      header: "Próxima ejecución",
+      width:  "160px",
+      render: (r) => (
+        <span className="text-[13px]" style={{ color: "var(--gray-400)" }}>
+          {formatFechaCorta(r.proxima_ejecucion)}
+        </span>
+      ),
+    },
+    {
+      key:    "activo",
+      header: "Estado",
+      width:  "100px",
+      render: (r) => (
+        <Badge variant={r.activo ? "success" : "default"}>
+          {r.activo ? "Activo" : "Inactivo"}
+        </Badge>
+      ),
+    },
+    {
+      key:    "_acciones",
+      header: "",
+      width:  "72px",
+      align:  "right",
+      render: (r) => (
+        <div className="flex items-center justify-end gap-1">
+          <ToggleActivoBtn reporte={r} onToggle={onToggle} />
+          <button
+            type="button"
+            title="Editar"
+            aria-label="Editar reporte"
+            onClick={e => { e.stopPropagation(); onEditar(r); }}
+            className="flex items-center justify-center w-7 h-7 rounded-lg transition-colors hover:bg-[var(--gray-100)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--navy)]"
+            style={{ color: "var(--gray-500)" }}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ),
+    },
+  ];
+}
+
+// ── Página principal ──────────────────────────────────────────────────────────
+
+export function ReportesAutomaticosPage({ onBack, onCrear }: Props) {
+  const state = useReportesAutomaticos();
+  const {
+    filtrados, loading,
+    busqueda, setBusqueda,
+    panelId, setPanelId, panelReporte,
+    guardando, toggleActivo, guardarEdicion,
+  } = state;
+
+  const columns = buildColumns(
+    (r) => setPanelId(r.id),
+    toggleActivo,
+  );
+
+  const hayBusqueda = busqueda.trim().length > 0;
+
   return (
     <div className="p-6 flex flex-col gap-6">
+
       {/* Migas de pan interna */}
-      <nav aria-label="Ruta interna" className="flex items-center gap-1.5 text-[13px]" style={{ color: "var(--gray-400)" }}>
+      <nav
+        aria-label="Ruta interna"
+        className="flex items-center gap-1.5 text-[13px]"
+        style={{ color: "var(--gray-400)" }}
+      >
         <button
           type="button"
           onClick={onBack}
@@ -22,27 +200,73 @@ export function ReportesAutomaticosPage({ onBack }: Props) {
         <span style={{ color: "var(--gray-700)", fontWeight: 600 }}>Reportes Automáticos</span>
       </nav>
 
-      <PageHeader
-        title="Reportes Automáticos"
-        subtitle="Configura reportes que el ERP genera y envía automáticamente."
-        icon={<Mail className="w-5 h-5" />}
+      {/* Header + acción principal */}
+      <div className="flex items-start justify-between gap-4">
+        <PageHeader
+          title="Reportes Automáticos"
+          subtitle="Configura reportes que el ERP genera y envía automáticamente."
+          icon={<Mail className="w-5 h-5" />}
+        />
+        <Button
+          icon={<Plus className="w-4 h-4" />}
+          onClick={onCrear}
+          className="shrink-0"
+        >
+          Crear reporte
+        </Button>
+      </div>
+
+      {/* Barra de búsqueda */}
+      <FilterBar
+        busqueda={busqueda}
+        onBusqueda={setBusqueda}
+        searchPlaceholder="Buscar por nombre..."
+        hayFiltros={hayBusqueda}
+        onLimpiar={hayBusqueda ? () => setBusqueda("") : undefined}
       />
 
-      {/* Placeholder — contenido pendiente de implementación */}
-      <div
-        className="flex flex-col items-center justify-center py-24 rounded-[var(--radius-2xl)] gap-3"
-        style={{ border: "1.5px dashed var(--gray-200)", background: "var(--gray-50)" }}
+      {/* Tabla o empty state */}
+      {!loading && filtrados.length === 0 ? (
+        <EmptyState conFiltro={hayBusqueda} onCrear={onCrear} />
+      ) : (
+        <DataTable<ReporteAutomatico>
+          columns={columns}
+          rows={filtrados}
+          rowKey={(r) => r.id}
+          loading={loading}
+          emptyMessage="Sin reportes"
+        />
+      )}
+
+      {/* Panel de edición */}
+      <SidePanel
+        open={panelId !== null}
+        onClose={() => setPanelId(null)}
+        title="Editar reporte"
+        subtitle={panelReporte?.nombre}
+        width="440px"
       >
-        <div className="h-12 w-12 rounded-xl flex items-center justify-center" style={{ background: "var(--gray-100)" }}>
-          <Mail className="w-5 h-5" style={{ color: "var(--gray-400)" }} />
-        </div>
-        <p className="font-semibold text-[15px]" style={{ color: "var(--navy)" }}>
-          Próximamente disponible
-        </p>
-        <p className="text-[13px] text-center max-w-[340px]" style={{ color: "var(--gray-400)" }}>
-          La configuración de reportes automáticos estará disponible en una próxima versión del ERP.
-        </p>
-      </div>
+        {panelReporte && (
+          <div className="p-5">
+            <PanelSection first>
+              <div className="mb-5 flex flex-col gap-1">
+                <InfoRow label="Creado"   value={formatFechaCorta(panelReporte.created_at)} />
+                <InfoRow label="Editado"  value={formatFechaCorta(panelReporte.updated_at)} />
+                {panelReporte.created_by && (
+                  <InfoRow label="Por" value={panelReporte.created_by} />
+                )}
+              </div>
+              <FormReporteAutomatico
+                inicial={panelReporte}
+                guardando={guardando}
+                onGuardar={(datos) => guardarEdicion(panelReporte.id, datos)}
+                onCancelar={() => setPanelId(null)}
+              />
+            </PanelSection>
+          </div>
+        )}
+      </SidePanel>
+
     </div>
   );
 }

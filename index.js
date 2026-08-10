@@ -4771,6 +4771,95 @@ app.patch("/api/clientes/:id/alias/:aliasId", requireInternalApiKey, async (req,
   }
 });
 
+// ─── REPORTES AUTOMÁTICOS ─────────────────────────────────────────────────────
+// Módulo: Configuración → Parámetros → Reportes Automáticos (Fase 2 — CRUD base)
+
+const FRECUENCIAS_VALIDAS_RA = new Set(["diaria", "semanal", "mensual"]);
+
+app.get("/api/reportes-automaticos", async (req, res) => {
+  try {
+    const rows = await sbFetch("/reportes_automaticos?order=created_at.desc&limit=500");
+    res.json(rows ?? []);
+  } catch (e) {
+    console.error("GET /api/reportes-automaticos error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.post("/api/reportes-automaticos", async (req, res) => {
+  try {
+    const actor = req.headers["x-user-email"] ?? "sistema";
+    const { nombre, tipo_reporte, frecuencia = "diaria" } = req.body ?? {};
+
+    if (!nombre?.trim())       return res.status(400).json({ error: "El nombre es obligatorio" });
+    if (!tipo_reporte?.trim()) return res.status(400).json({ error: "El tipo de reporte es obligatorio" });
+    if (!FRECUENCIAS_VALIDAS_RA.has(frecuencia)) {
+      return res.status(400).json({ error: "Frecuencia inválida. Use: diaria, semanal o mensual" });
+    }
+
+    const rows = await sbFetch("/reportes_automaticos", "POST", {
+      nombre:       nombre.trim(),
+      tipo_reporte: tipo_reporte.trim(),
+      frecuencia,
+      activo:       true,
+      created_by:   actor,
+      updated_by:   actor,
+    });
+    if (!rows?.[0]) return res.status(502).json({ error: "No se pudo crear el reporte" });
+    res.status(201).json(rows[0]);
+  } catch (e) {
+    console.error("POST /api/reportes-automaticos error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.patch("/api/reportes-automaticos/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const actor = req.headers["x-user-email"] ?? "sistema";
+    const { nombre, tipo_reporte, frecuencia } = req.body ?? {};
+
+    const patch = { updated_by: actor };
+    if (nombre       !== undefined) patch.nombre       = nombre.trim();
+    if (tipo_reporte !== undefined) patch.tipo_reporte = tipo_reporte.trim();
+    if (frecuencia   !== undefined) {
+      if (!FRECUENCIAS_VALIDAS_RA.has(frecuencia)) {
+        return res.status(400).json({ error: "Frecuencia inválida. Use: diaria, semanal o mensual" });
+      }
+      patch.frecuencia = frecuencia;
+    }
+
+    const rows = await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}`, "PATCH", patch);
+    if (!rows?.[0]) return res.status(404).json({ error: "Reporte no encontrado" });
+    res.json(rows[0]);
+  } catch (e) {
+    console.error("PATCH /api/reportes-automaticos/:id error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.patch("/api/reportes-automaticos/:id/activo", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const actor = req.headers["x-user-email"] ?? "sistema";
+    const { activo } = req.body ?? {};
+
+    if (typeof activo !== "boolean") {
+      return res.status(400).json({ error: "'activo' debe ser boolean" });
+    }
+    const rows = await sbFetch(
+      `/reportes_automaticos?id=eq.${encodeURIComponent(id)}`,
+      "PATCH",
+      { activo, updated_by: actor }
+    );
+    if (!rows?.[0]) return res.status(404).json({ error: "Reporte no encontrado" });
+    res.json({ ok: true, activo: rows[0].activo });
+  } catch (e) {
+    console.error("PATCH /api/reportes-automaticos/:id/activo error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
 // Health check
 app.get("/health", (req, res) => {
   const estados = {};
