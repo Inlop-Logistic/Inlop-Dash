@@ -11,7 +11,8 @@ export type Vista =
   | "vehiculos"
   | "programacion"
   | "cumplidos"
-  | "clientes";
+  | "clientes"
+  | "configuracion";
 
 export interface NavItem    { id: Vista; label: string; icon: ReactNode; badge?: number }
 export interface NavSection { id: string; label: string; items: NavItem[] }

@@ -8,6 +8,7 @@ import { ViajesPage } from "@/pages/ViajesPage";
 import { CumplidosPage } from "@/pages/CumplidosPage";
 import { GpsPage } from "@/pages/GpsPage";
 import { ClientesPage } from "@/pages/ClientesPage";
+import { ConfiguracionPage } from "@/pages/ConfiguracionPage";
 
 function ComingSoon({ titulo }: { titulo: string }) {
   return (
@@ -38,7 +39,8 @@ function AppInner() {
     if (vista === "viajes")       return <ViajesPage />;
     if (vista === "cumplidos")    return <CumplidosPage />;
     if (vista === "mapa")         return <GpsPage />;
-    if (vista === "clientes")     return <ClientesPage />;
+    if (vista === "clientes")       return <ClientesPage />;
+    if (vista === "configuracion")  return <ConfiguracionPage />;
     return <ComingSoon titulo={vista.charAt(0).toUpperCase() + vista.slice(1)} />;
   };
 

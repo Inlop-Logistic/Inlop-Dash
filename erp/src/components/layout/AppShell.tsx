@@ -2,7 +2,7 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import { useAuth } from "@/state/AuthContext";
 import {
   LayoutDashboard, ClipboardList, Truck, Map,
-  CalendarClock, CheckSquare,
+  CalendarClock, CheckSquare, Settings,
   LogOut, ChevronRight, ChevronLeft, Building2,
 } from "lucide-react";
 import { TopbarSearch } from "@/components/layout/TopbarSearch";
@@ -33,11 +33,17 @@ const NAV_SECTIONS: NavSection[] = [
       { id: "cumplidos",    label: "Viajes Finalizados",   icon: <CheckSquare     className="w-4 h-4" /> },
     ],
   },
+  {
+    id: "sistema",
+    label: "CONFIGURACIÓN",
+    items: [
+      { id: "configuracion", label: "Configuración", icon: <Settings className="w-4 h-4" /> },
+    ],
+  },
   // Secciones futuras — descomentar y agregar items[] cuando el módulo esté listo:
   // { id: "finanzas",       label: "FINANZAS",        items: [] },
   // { id: "talento_humano", label: "TALENTO HUMANO",  items: [] },
   // { id: "hseq",           label: "HSEQ",            items: [] },
-  // { id: "configuracion",  label: "CONFIGURACIÓN",   items: [] },
 ];
 
 const NAV_ALL = NAV_SECTIONS.flatMap((s) => s.items);
