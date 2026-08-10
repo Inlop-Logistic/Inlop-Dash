@@ -8,7 +8,9 @@ import { parseFechaTMS } from "@/utils/parseFecha";
 import { extraerFechaColombia } from "@/utils/date";
 import { esPanico } from "../constants";
 
-const TZ_COL = "America/Bogota";
+// Estilos base unificados para texto de celdas
+const TX_NORMAL  = { color: "var(--gray-700)" } as const;
+const TX_DIM     = { color: "var(--gray-400)" } as const;
 
 /** Razón social del Maestro, con fallback al primer nombre TMS. */
 function clienteDisplay(v: TmsViaje): string {
@@ -20,39 +22,38 @@ function clienteDisplay(v: TmsViaje): string {
 /** Mapa de key → renderer para las columnas definidas en VIAJES_COLUMNS_DEF. */
 const RENDERERS: Record<string, (v: TmsViaje) => React.ReactNode> = {
 
+  // ── Fecha ─── solo fecha, sin hora ───────────────────────────────────────────
   activated_on: (v) => {
-    if (!v.activated_on) return <span style={{ color: "var(--gray-300)" }}>—</span>;
+    if (!v.activated_on) return <span style={TX_DIM}>—</span>;
     const d = parseFechaTMS(v.activated_on, "MDY");
-    if (!d) return <span style={{ color: "var(--gray-300)" }}>—</span>;
+    if (!d) return <span style={TX_DIM}>—</span>;
     const [Y, M, D] = extraerFechaColombia(d).split("-");
-    const hhmm = d.toLocaleTimeString("en-US", { timeZone: TZ_COL, hour: "2-digit", minute: "2-digit", hour12: false });
     return (
-      <div className="flex flex-col items-center leading-none gap-0.5">
-        <span className="text-[12px] font-mono tabular-nums" style={{ color: "var(--gray-700)" }}>
-          {D}/{M}/{Y.slice(2)}
-        </span>
-        <span className="text-[12px] font-mono tabular-nums" style={{ color: "var(--gray-700)" }}>
-          {hhmm}
-        </span>
-      </div>
+      <span className="text-[12px] font-mono tabular-nums" style={TX_NORMAL}>
+        {D}/{M}/{Y.slice(2)}
+      </span>
     );
   },
 
+  // ── Manifiesto ─── semibold, sin color azul ───────────────────────────────────
   trip_number: (v) => (
-    <div className="flex items-center gap-1">
-      <span className="text-[13px] font-bold font-mono tabular-nums" style={{ color: "var(--navy)" }}>
+    <div className="flex items-center gap-1.5">
+      <span className="text-[12px] font-semibold font-mono tabular-nums" style={TX_NORMAL}>
         {v.trip_number}
       </span>
-      {esPanico(v) && <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: "#EF4444" }} />}
+      {esPanico(v) && (
+        <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: "#EF4444" }} />
+      )}
     </div>
   ),
 
+  // ── Cliente ───────────────────────────────────────────────────────────────────
   company_customer_name: (v) => {
     const nombre = clienteDisplay(v);
     return (
       <span
-        className="text-[13px] block truncate"
-        style={{ color: "var(--gray-700)", maxWidth: 152 }}
+        className="text-[12px] block truncate"
+        style={{ ...TX_NORMAL, maxWidth: 152 }}
         title={nombre !== "—" ? nombre : undefined}
       >
         {nombre}
@@ -60,73 +61,80 @@ const RENDERERS: Record<string, (v: TmsViaje) => React.ReactNode> = {
     );
   },
 
+  // ── Operación ─────────────────────────────────────────────────────────────────
   type_operation: (v) => {
-    const cargaLiquida = v.type_operation === "Granel Liquido";
+    const texto = v.type_operation === "Granel Liquido" ? "Carga Líquida" : (v.type_operation ?? "—");
     return (
       <span className="text-[12px]" style={{ color: "var(--gray-600)" }}>
-        {cargaLiquida ? "Carga Líquida" : "Carga Seca"}
+        {texto}
       </span>
     );
   },
 
+  // ── Tipo ─── texto plano, sin badge ──────────────────────────────────────────
   _tipo: (v) => {
     const urbano = !!(v.origin_city_name && v.origin_city_name === v.destiny_city_name);
     return (
-      <span
-        className="inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full"
-        style={
-          urbano
-            ? { background: "#EFF6FF", color: "#2563EB" }
-            : { background: "var(--gray-100)", color: "var(--gray-500)" }
-        }
-      >
+      <span className="text-[12px]" style={{ color: "var(--gray-600)" }}>
         {urbano ? "Urbano" : "Nacional"}
       </span>
     );
   },
 
+  // ── Origen ────────────────────────────────────────────────────────────────────
   origin_city_name: (v) => (
     <span
-      className="text-[12px] font-mono uppercase"
-      style={{ color: v.origin_city_name ? "var(--gray-700)" : "var(--gray-300)" }}
+      className="text-[12px] truncate block"
+      style={{ ...(v.origin_city_name ? TX_NORMAL : TX_DIM), maxWidth: 104 }}
+      title={v.origin_city_name ?? undefined}
     >
       {v.origin_city_name ?? "—"}
     </span>
   ),
 
+  // ── Destino ───────────────────────────────────────────────────────────────────
   destiny_city_name: (v) => (
     <span
-      className="text-[12px] font-mono uppercase"
-      style={{ color: v.destiny_city_name ? "var(--gray-600)" : "var(--gray-300)" }}
+      className="text-[12px] truncate block"
+      style={{ ...(v.destiny_city_name ? TX_NORMAL : TX_DIM), maxWidth: 104 }}
+      title={v.destiny_city_name ?? undefined}
     >
       {v.destiny_city_name ?? "—"}
     </span>
   ),
 
+  // ── Placa ─── semibold, sin badge ────────────────────────────────────────────
   license_plate: (v) => v.license_plate ? (
     <span
-      className="text-[11px] font-bold font-mono tracking-widest px-1.5 py-0.5 rounded"
-      style={{ background: "var(--gray-100)", color: "var(--navy)", border: "1px solid var(--gray-200)" }}
+      className="text-[12px] font-semibold font-mono tracking-widest"
+      style={TX_NORMAL}
     >
       {v.license_plate}
     </span>
-  ) : <span style={{ color: "var(--gray-300)" }}>—</span>,
+  ) : <span style={TX_DIM}>—</span>,
 
+  // ── Conductor ─────────────────────────────────────────────────────────────────
   driver_name: (v) => (
     <span
-      className="text-[13px] truncate block"
-      style={{ color: v.driver_name ? "var(--gray-700)" : "var(--gray-300)", maxWidth: 132 }}
+      className="text-[12px] truncate block"
+      style={{ ...(v.driver_name ? TX_NORMAL : TX_DIM), maxWidth: 132 }}
+      title={v.driver_name ?? undefined}
     >
       {v.driver_name ?? "Sin asignar"}
     </span>
   ),
 
+  // ── Teléfono ──────────────────────────────────────────────────────────────────
   driver_phone: (v) => (
-    <span className="text-[12px] font-mono" style={{ color: v.driver_phone ? "var(--gray-700)" : "var(--gray-300)" }}>
+    <span
+      className="text-[12px] font-mono"
+      style={v.driver_phone ? TX_NORMAL : TX_DIM}
+    >
       {v.driver_phone ?? "—"}
     </span>
   ),
 
+  // ── Estado ─── badge semántico + GPS (sin cambios) ────────────────────────────
   state_travel: (v) => (
     <div className="flex flex-col items-start gap-1">
       <EstadoBadge estado={v.state_travel} />
@@ -137,6 +145,7 @@ const RENDERERS: Record<string, (v: TmsViaje) => React.ReactNode> = {
     </div>
   ),
 
+  // ── Flecha del drawer ─────────────────────────────────────────────────────────
   _actions: () => <ChevronRight className="w-4 h-4" style={{ color: "var(--gray-300)" }} />,
 };
 
