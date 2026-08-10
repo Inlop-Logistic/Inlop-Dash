@@ -15,4 +15,5 @@ export type Vista =
   | "configuracion";
 
 export interface NavItem    { id: Vista; label: string; icon: ReactNode; badge?: number }
-export interface NavSection { id: string; label: string; items: NavItem[] }
+/** breadcrumbLabel: si está definido, el topbar muestra "[breadcrumbLabel] › [item.label]" en lugar de solo "[item.label]". */
+export interface NavSection { id: string; label: string; items: NavItem[]; breadcrumbLabel?: string }

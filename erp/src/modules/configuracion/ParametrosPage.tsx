@@ -43,27 +43,12 @@ function OpcionCard({ icon, titulo, descripcion, onClick }: OpcionCard) {
 }
 
 interface Props {
-  onBack:               () => void;
   onReportesAutomaticos: () => void;
 }
 
-export function ParametrosPage({ onBack, onReportesAutomaticos }: Props) {
+export function ParametrosPage({ onReportesAutomaticos }: Props) {
   return (
     <div className="p-6 flex flex-col gap-6">
-      {/* Migas de pan interna */}
-      <nav aria-label="Ruta interna" className="flex items-center gap-1.5 text-[13px]" style={{ color: "var(--gray-400)" }}>
-        <button
-          type="button"
-          onClick={onBack}
-          className="hover:underline focus-visible:outline-none"
-          style={{ color: "var(--gray-500)" }}
-        >
-          Configuración
-        </button>
-        <span aria-hidden="true">›</span>
-        <span style={{ color: "var(--gray-700)", fontWeight: 600 }}>Parámetros</span>
-      </nav>
-
       <PageHeader
         title="Parámetros"
         subtitle="Configuraciones funcionales del ERP."

@@ -36,8 +36,9 @@ const NAV_SECTIONS: NavSection[] = [
   {
     id: "sistema",
     label: "CONFIGURACIÓN",
+    breadcrumbLabel: "Configuración",
     items: [
-      { id: "configuracion", label: "Configuración", icon: <Settings className="w-4 h-4" /> },
+      { id: "configuracion", label: "Parámetros", icon: <Settings className="w-4 h-4" /> },
     ],
   },
   // Secciones futuras — descomentar y agregar items[] cuando el módulo esté listo:
@@ -315,13 +316,25 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
         >
           {/* Breadcrumb semántico — WAI-ARIA breadcrumb pattern */}
           <nav aria-label="Ruta de navegación">
-            <ol className="flex items-center gap-1.5 list-none m-0 p-0 text-[var(--text-md)]" style={{ color: "var(--gray-400)" }}>
-              <li><span>INLOP</span></li>
-              <li aria-hidden="true"><ChevronRight className="w-3.5 h-3.5" /></li>
-              <li aria-current="page" style={{ color: "var(--gray-700)", fontWeight: "var(--weight-semibold)" }}>
-                {NAV_ALL.find((n) => n.id === vista)?.label ?? "—"}
-              </li>
-            </ol>
+            {(() => {
+              const activeSec  = NAV_SECTIONS.find(s => s.items.some(i => i.id === vista));
+              const activeItem = NAV_ALL.find(n => n.id === vista);
+              return (
+                <ol className="flex items-center gap-1.5 list-none m-0 p-0 text-[var(--text-md)]" style={{ color: "var(--gray-400)" }}>
+                  <li><span>INLOP</span></li>
+                  <li aria-hidden="true"><ChevronRight className="w-3.5 h-3.5" /></li>
+                  {activeSec?.breadcrumbLabel && (
+                    <>
+                      <li>{activeSec.breadcrumbLabel}</li>
+                      <li aria-hidden="true"><ChevronRight className="w-3.5 h-3.5" /></li>
+                    </>
+                  )}
+                  <li aria-current="page" style={{ color: "var(--gray-700)", fontWeight: "var(--weight-semibold)" }}>
+                    {activeItem?.label ?? "—"}
+                  </li>
+                </ol>
+              );
+            })()}
           </nav>
 
           {/* Centro — Buscador global */}
