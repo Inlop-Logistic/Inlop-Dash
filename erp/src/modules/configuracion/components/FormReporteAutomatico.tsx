@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui";
-import { TIPOS_REPORTE, FRECUENCIAS, type ReporteBase, type ReporteAutomatico } from "../types";
+import { TIPOS_REPORTE, FRECUENCIAS, type Frecuencia, type ReporteBase, type ReporteAutomatico } from "../types";
 
 const INPUT_STYLE: React.CSSProperties = {
   border:       "1.5px solid var(--gray-200)",
@@ -39,7 +39,7 @@ export function FormReporteAutomatico({
 }: Props) {
   const [nombre,      setNombre]      = useState(inicial?.nombre       ?? "");
   const [tipoReporte, setTipoReporte] = useState(inicial?.tipo_reporte ?? TIPOS_REPORTE[0].value);
-  const [frecuencia,  setFrecuencia]  = useState(inicial?.frecuencia   ?? "diaria");
+  const [frecuencia,  setFrecuencia]  = useState<Frecuencia>(inicial?.frecuencia ?? "diaria");
   const [errorLocal,  setErrorLocal]  = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -103,7 +103,10 @@ export function FormReporteAutomatico({
         </label>
         <select
           value={frecuencia}
-          onChange={e => setFrecuencia(e.target.value)}
+          onChange={e => {
+            const match = FRECUENCIAS.find(f => f.value === e.target.value);
+            if (match) setFrecuencia(match.value);
+          }}
           style={INPUT_STYLE}
           required
         >
