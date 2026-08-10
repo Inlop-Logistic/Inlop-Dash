@@ -1,9 +1,13 @@
+import { useEffect, useState } from "react";
 import {
   ClipboardList, CalendarClock, Truck, CheckCircle2, FileCheck,
 } from "lucide-react";
 import { PanelSection } from "@/components/ui";
 import { fmtTms } from "@/utils/parseFecha";
-import type { CumplidoRecord } from "../types";
+import type { CumplidoRecord, SoporteCumplido } from "../types";
+import { listarSoportesCumplido } from "../services/api";
+import { obtenerSolicitudVinculada } from "@/modules/programacion/services/api";
+import type { SolicitudVinculadaResult } from "@/modules/programacion/types";
 
 type ItemStatus = "completed" | "active" | "pending";
 
@@ -18,11 +22,25 @@ const STATUS_BG: Record<ItemStatus, string> = {
   pending:   "var(--gray-100)",
 };
 
+// Opciones de formato compartidas — fecha corta + hora, siempre con año.
+const OPTS_FECHA_HORA: Intl.DateTimeFormatOptions = {
+  day: "2-digit", month: "short", year: "numeric",
+  hour: "2-digit", minute: "2-digit", hour12: true,
+};
+
+/** Formatea un timestamp ISO (Supabase timestamptz) en hora Colombia. */
+function fmtIso(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleString("es-CO", { timeZone: "America/Bogota", ...OPTS_FECHA_HORA });
+}
+
 interface TLItemProps {
   icon:      React.ReactNode;
   label:     string;
   sublabel?: string;
-  timestamp?: string;
+  timestamp?: string | null;
   status:    ItemStatus;
   isLast?:   boolean;
 }
@@ -77,24 +95,161 @@ function TLItem({ icon, label, sublabel, timestamp, status, isLast }: TLItemProp
   );
 }
 
-function estadoDocLabel(cumplido: CumplidoRecord): string {
-  if (cumplido.estado_cumplido === "SOLICITADO")        return "Documentos solicitados al conductor";
-  if (cumplido.estado_cumplido === "CUMPLIDO RECIBIDO") return "Documentos recibidos físicamente";
-  if (cumplido.estado_cumplido === "CUMPLIDO ENVIADO")  return "Documentos enviados al área de facturación";
-  if (cumplido.estado_cumplido === "LIQUIDADO")         return "Liquidado y cerrado";
-  if (cumplido.tiene_soporte)                           return "Al menos un documento subido al expediente";
-  return "Sin documentación recibida aún";
+interface Hito {
+  status:    ItemStatus;
+  sublabel:  string;
+  timestamp: string | null;
 }
 
-function estadoDocStatus(cumplido: CumplidoRecord): ItemStatus {
-  const e = cumplido.estado_cumplido ?? "";
-  if (["CUMPLIDO ENVIADO", "LIQUIDADO", "CUMPLIDO RECIBIDO"].includes(e)) return "completed";
-  if (e === "SOLICITADO" || cumplido.tiene_soporte) return "active";
-  return "pending";
+// ─── Hito 1: Solicitud creada ───────────────────────────────────────────────
+// Fuente real: tabla `solicitudes` (creado_en), vinculada por controlt_trip_number
+// vía GET /api/programacion/:id/solicitud (mismo endpoint que "Abrir Solicitud").
+// Sin solicitud vinculada: el viaje existe igualmente (fuente TMS/ControlT directa),
+// se marca completado pero sin fecha inventada.
+function hitoSolicitud(sol: SolicitudVinculadaResult | null, solCargando: boolean): Hito {
+  if (solCargando) {
+    return { status: "pending", sublabel: "Consultando solicitud de origen…", timestamp: null };
+  }
+  if (sol && sol.vinculada) {
+    return {
+      status:    "completed",
+      sublabel:  `Solicitud ${sol.codigo_solicitud} registrada en el sistema`,
+      timestamp: fmtIso(sol.creado_en),
+    };
+  }
+  return {
+    status:    "completed",
+    sublabel:  "Servicio registrado — sin solicitud vinculada en el sistema",
+    timestamp: null,
+  };
+}
+
+// ─── Hito 2: Viaje programado ───────────────────────────────────────────────
+// Fuente real: `solicitudes.fecha_confirmacion` (momento en que la solicitud
+// pasó a estado 'confirmado', asignando vehículo y conductor). Si el viaje no
+// tiene solicitud vinculada, se usa como evidencia directa la presencia de
+// placa y conductor en el propio registro de cumplido — sin fecha, porque no
+// existe un timestamp real de esa asignación fuera de la solicitud.
+function hitoProgramado(
+  sol: SolicitudVinculadaResult | null,
+  solCargando: boolean,
+  cumplido: CumplidoRecord,
+): Hito {
+  if (solCargando) {
+    return { status: "pending", sublabel: "Consultando estado de la solicitud…", timestamp: null };
+  }
+  if (sol && sol.vinculada) {
+    if (sol.fecha_confirmacion) {
+      return {
+        status:    "completed",
+        sublabel:  `Solicitud ${sol.codigo_solicitud} confirmada — vehículo y conductor asignados`,
+        timestamp: fmtIso(sol.fecha_confirmacion),
+      };
+    }
+    if (sol.estado === "cancelado") {
+      return { status: "pending", sublabel: `Solicitud ${sol.codigo_solicitud} cancelada`, timestamp: null };
+    }
+    return {
+      status:    "active",
+      sublabel:  `Solicitud ${sol.codigo_solicitud} pendiente de confirmación`,
+      timestamp: null,
+    };
+  }
+  if (cumplido.license_plate && cumplido.driver_name) {
+    return {
+      status:    "completed",
+      sublabel:  "Vehículo y conductor asignados (sin solicitud vinculada)",
+      timestamp: null,
+    };
+  }
+  return { status: "pending", sublabel: "Sin vehículo ni conductor asignado", timestamp: null };
+}
+
+// ─── Hito 3: Viaje en tránsito ───────────────────────────────────────────────
+// Fuente real: `cumplidos.fecha_viaje` (activated_on) — momento real de
+// activación del viaje en la plataforma de monitoreo (ControlT/TMS).
+function hitoTransito(cumplido: CumplidoRecord): Hito {
+  if (!cumplido.activated_on) {
+    return { status: "pending", sublabel: "Aún no inicia el viaje", timestamp: null };
+  }
+  const inicio = fmtTms(cumplido.activated_on, "MDY", OPTS_FECHA_HORA);
+  if (!cumplido.fecha_cumplido) {
+    return { status: "active", sublabel: "Viaje actualmente en tránsito", timestamp: inicio };
+  }
+  return { status: "completed", sublabel: "Servicio activo en plataforma de monitoreo", timestamp: inicio };
+}
+
+// ─── Hito 4: Viaje finalizado ───────────────────────────────────────────────
+// Fuente real: `cumplidos.fecha_finalizacion` (fecha_cumplido) — set por
+// syncCumplidos al detectar el cierre real del viaje.
+function hitoFinalizado(cumplido: CumplidoRecord): Hito {
+  if (!cumplido.fecha_cumplido) {
+    return { status: "pending", sublabel: "Viaje aún no finalizado", timestamp: null };
+  }
+  return {
+    status:    "completed",
+    sublabel:  "Servicio completado en la plataforma",
+    timestamp: fmtTms(cumplido.fecha_cumplido, "DMY", OPTS_FECHA_HORA),
+  };
+}
+
+// ─── Hito 5: Documentación de cumplido ──────────────────────────────────────
+// Fuente real: tabla `cumplidos_documentos` (mismos registros que consume
+// SoportesCumplido). 0 documentos → pendiente. 1+ → completado, usando la
+// fecha del primer soporte cargado (creado_en mínimo del conjunto).
+function hitoDocumentacion(soportes: SoporteCumplido[], docsCargando: boolean): Hito {
+  if (docsCargando) {
+    return { status: "pending", sublabel: "Consultando documentación…", timestamp: null };
+  }
+  if (soportes.length === 0) {
+    return { status: "pending", sublabel: "Sin documentación recibida aún", timestamp: null };
+  }
+  const tiempos = soportes
+    .map((s) => new Date(s.creado_en).getTime())
+    .filter((t) => !isNaN(t));
+  const primerSoporte = tiempos.length > 0 ? new Date(Math.min(...tiempos)).toISOString() : null;
+  const n = soportes.length;
+  return {
+    status:    "completed",
+    sublabel:  `${n} soporte${n !== 1 ? "s" : ""} recibido${n !== 1 ? "s" : ""}`,
+    timestamp: fmtIso(primerSoporte),
+  };
 }
 
 export function TimelineViaje({ cumplido }: { cumplido: CumplidoRecord }) {
-  const docStatus = estadoDocStatus(cumplido);
+  const trip = cumplido.trip_number;
+
+  const [sol, setSol]                 = useState<SolicitudVinculadaResult | null>(null);
+  const [solCargando, setSolCargando] = useState(true);
+
+  const [soportes, setSoportes]         = useState<SoporteCumplido[]>([]);
+  const [docsCargando, setDocsCargando] = useState(true);
+
+  useEffect(() => {
+    let cancelado = false;
+    setSolCargando(true);
+    obtenerSolicitudVinculada(trip)
+      .then((r) => { if (!cancelado) setSol(r); })
+      .catch(() => { if (!cancelado) setSol(null); })
+      .finally(() => { if (!cancelado) setSolCargando(false); });
+    return () => { cancelado = true; };
+  }, [trip]);
+
+  useEffect(() => {
+    let cancelado = false;
+    setDocsCargando(true);
+    listarSoportesCumplido(trip)
+      .then((r) => { if (!cancelado) setSoportes(r.documentos); })
+      .catch(() => { if (!cancelado) setSoportes([]); })
+      .finally(() => { if (!cancelado) setDocsCargando(false); });
+    return () => { cancelado = true; };
+  }, [trip]);
+
+  const h1 = hitoSolicitud(sol, solCargando);
+  const h2 = hitoProgramado(sol, solCargando, cumplido);
+  const h3 = hitoTransito(cumplido);
+  const h4 = hitoFinalizado(cumplido);
+  const h5 = hitoDocumentacion(soportes, docsCargando);
 
   return (
     <PanelSection title="Timeline del viaje" icon={<ClipboardList className="w-3.5 h-3.5" />}>
@@ -102,35 +257,37 @@ export function TimelineViaje({ cumplido }: { cumplido: CumplidoRecord }) {
         <TLItem
           icon={<ClipboardList className="w-3 h-3" />}
           label="Solicitud creada"
-          sublabel="Servicio registrado en el sistema"
-          timestamp={fmtTms(cumplido.created_on, "MDY")}
-          status="completed"
+          sublabel={h1.sublabel}
+          timestamp={h1.timestamp}
+          status={h1.status}
         />
         <TLItem
           icon={<CalendarClock className="w-3 h-3" />}
           label="Viaje programado"
-          sublabel="Asignación de vehículo y conductor confirmada"
-          status="completed"
+          sublabel={h2.sublabel}
+          timestamp={h2.timestamp}
+          status={h2.status}
         />
         <TLItem
           icon={<Truck className="w-3 h-3" />}
           label="Viaje en tránsito"
-          sublabel="Servicio activo en plataforma de monitoreo"
-          timestamp={fmtTms(cumplido.activated_on, "MDY")}
-          status="completed"
+          sublabel={h3.sublabel}
+          timestamp={h3.timestamp}
+          status={h3.status}
         />
         <TLItem
           icon={<CheckCircle2 className="w-3 h-3" />}
           label="Viaje finalizado"
-          sublabel="Servicio completado en la plataforma"
-          timestamp={fmtTms(cumplido.fecha_cumplido, "DMY")}
-          status="completed"
+          sublabel={h4.sublabel}
+          timestamp={h4.timestamp}
+          status={h4.status}
         />
         <TLItem
           icon={<FileCheck className="w-3 h-3" />}
           label="Documentación de cumplido"
-          sublabel={estadoDocLabel(cumplido)}
-          status={docStatus}
+          sublabel={h5.sublabel}
+          timestamp={h5.timestamp}
+          status={h5.status}
           isLast
         />
       </div>
