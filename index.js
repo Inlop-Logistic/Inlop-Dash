@@ -14,6 +14,7 @@ import {
   transformarViajesActivos, transformarCentroGps,
 } from './services/reportes/datasetProvider.js';
 import { ejecutarReporteManual } from './services/reportes/envioManual.js';
+import { ejecutarTickScheduler } from './services/reportes/scheduler.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -5042,11 +5043,45 @@ app.use((err, req, res, next) => {
   res.status(err?.status || 500).json({ error: err?.message || 'Error interno del servidor' });
 });
 
+// ─── SCHEDULER DE REPORTES AUTOMÁTICOS (Fase 9F) ────────────────────────────
+// Wrapper delgado: toda la lógica (qué reportes están vencidos, cómo se
+// calcula la próxima ejecución, el mutex de un tick a la vez) vive en
+// services/reportes/scheduler.js — aquí solo se inyectan las dependencias
+// del proceso (sbFetch, caché de viajes, helpers) y se registra el log,
+// mismo patrón que el bloque de syncPlaneados de abajo.
+async function tickSchedulerReportes(origen) {
+  try {
+    const resultado = await ejecutarTickScheduler({
+      sbFetch,
+      viajesCache: cache.viajes.data,
+      tripCustomerCache,
+      extraerTelefono,
+      primerNombreCliente,
+    });
+    if (!resultado.ok) {
+      if (resultado.motivo !== 'tick_en_curso') {
+        console.warn(`[SCHEDULER REPORTES] (${origen}) tick omitido: ${resultado.motivo}`);
+      }
+      return;
+    }
+    if (resultado.inicializados.length || resultado.ejecutados.length) {
+      const exitosos = resultado.ejecutados.filter(r => r.ok).length;
+      const fallidos  = resultado.ejecutados.length - exitosos;
+      console.log(
+        `[SCHEDULER REPORTES] (${origen}) inicializados: ${resultado.inicializados.length} | ` +
+        `ejecutados: ${resultado.ejecutados.length} (ok: ${exitosos}, error: ${fallidos})`
+      );
+    }
+  } catch (e) {
+    console.error(`[SCHEDULER REPORTES] (${origen}) Error inesperado:`, e.message);
+  }
+}
+
 // ─── INICIO ─────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`🚀 INLOP Torre de Control — Servidor iniciado en puerto ${PORT}`);
-  console.log(`📊 Sync: viajes cada 60s | solicitudes cada 65s | planeados cada 5min`);
+  console.log(`📊 Sync: viajes cada 60s | solicitudes cada 65s | planeados cada 5min | reportes automáticos cada 60s`);
 
   try {
     await refreshCustomerLookup();
@@ -5061,6 +5096,8 @@ app.listen(PORT, async () => {
     console.error("❌ Error inicialización:", e.message);
   }
 
+  await tickSchedulerReportes('inicio-servidor');
+
   setInterval(refreshCustomerLookup, 10 * 60 * 1000);
   setInterval(syncViajes,             60 * 1000);
   setInterval(syncAlarmas,            70 * 1000);
@@ -5073,4 +5110,5 @@ app.listen(PORT, async () => {
   }, 5 * 60 * 1000);
   setInterval(syncCumplidos,          60 * 1000);
   setInterval(syncSolicitudes,        65 * 1000);
+  setInterval(() => tickSchedulerReportes('scheduler'), 60 * 1000);
 });
