@@ -39,8 +39,12 @@
  *   centro_gps        → GpsRecord         (GET /api/gps)
  *
  * Corrección Fase 5 (2026-08-11): filtros ≠ columnas.
- *   viajes_activos expandido a 13 campos: 4 filtrables + columna,
- *   9 solo columna. Fuente: VIAJES_COLUMNS_DEF + ViajesTableColumns.tsx.
+ *   Todos los datasets expandidos con campos reales auditados por módulo:
+ *   viajes_activos    → 13 campos (9 solo-col + 4 filtro+col)
+ *   solicitudes       → 14 campos (10 solo-col + 4 filtro+col)
+ *   programacion      → 14 campos (10 solo-col + 4 filtro+col)
+ *   viajes_finalizados→ 16 campos (10 solo-col + 6 filtro+col)
+ *   centro_gps        → 12 campos (9 solo-col + 3 filtro+col)
  */
 import { ESTADO_CFG as ESTADO_VIAJE_CFG }        from "@/modules/viajes/constants";
 import { ESTADO_CFG as ESTADO_SOLICITUD_CFG }     from "@/modules/solicitudes/constants";
@@ -301,21 +305,119 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
       // Dataset fuente: Solicitud (GET /api/solicitudes).
       // Estado persiste como EstadoSolicitud: pendiente | aprobado | en_ruta |
       // completado | cancelado. Labels tomados de solicitudes/constants ESTADO_CFG.
+      //
+      // Auditoría Fase 5 corrección (2026-08-11):
+      //   Columnas reales confirmadas en SolicitudesTableColumns.tsx y
+      //   solicitudes/types.ts (Solicitud). Expandido de 6 a 14 campos.
+      //   Fuente: codigo_solicitud, external_ref, creado_en, cliente, canal,
+      //   agencia, tipo_operacion, origen+destino, fecha_requerida, estado,
+      //   solicitante, tipo_vehiculo, conductor_nombre.
       {
         id:    "solicitudes",
         label: "Solicitudes",
         campos: [
+          // ── Solo columna (no filtrable) ──────────────────────────────────
+
           {
-            key:    "estado",
-            label:  "Estado",
-            tipo:   "enum",
-            origen: "Solicitud.estado — estado de la solicitud de servicio",
+            key:    "codigo_solicitud",
+            label:  "Nro. solicitud",
+            tipo:   "texto",
+            origen: "Solicitud.codigo_solicitud — código interno de la solicitud de servicio",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "external_ref",
+            label:  "Referencia externa",
+            tipo:   "texto",
+            origen: "Solicitud.external_ref — referencia o remisión del cliente",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "cliente",
+            label:  "Cliente",
+            tipo:   "texto",
+            origen: "Solicitud.cliente — nombre del cliente que genera la solicitud",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "canal",
+            label:  "Canal",
+            tipo:   "texto",
+            origen: "Solicitud.canal — canal por el que ingresó la solicitud (web, app, manual, etc.)",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "agencia",
+            label:  "Agencia",
+            tipo:   "texto",
+            origen: "Solicitud.agencia — agencia o punto de origen interno de la solicitud",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "tipo_vehiculo",
+            label:  "Tipo de vehículo",
+            tipo:   "texto",
+            origen: "Solicitud.tipo_vehiculo — tipo de vehículo requerido para el servicio",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "origen",
+            label:  "Ciudad de origen",
+            tipo:   "texto",
+            origen: "Solicitud.origen — ciudad/dirección de recogida",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "destino",
+            label:  "Ciudad de destino",
+            tipo:   "texto",
+            origen: "Solicitud.destino — ciudad/dirección de entrega",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "solicitante",
+            label:  "Solicitante",
+            tipo:   "texto",
+            origen: "Solicitud.solicitante — nombre del usuario que creó la solicitud",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "conductor_nombre",
+            label:  "Conductor asignado",
+            tipo:   "texto",
+            origen: "Solicitud.conductor_nombre — nombre del conductor asignado a la solicitud aprobada",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+
+          // ── Filtrable + columna ──────────────────────────────────────────
+
+          {
+            key:    "creado_en",
+            label:  "Fecha de creación",
+            tipo:   "fecha",
+            origen: "Solicitud.creado_en — fecha de registro de la solicitud en el sistema",
             filtrable:  true,
-            operadores: [OP_ES, OP_NO_ES],
-            opciones:   Object.entries(ESTADO_SOLICITUD_CFG).map(([value, cfg]) => ({
-              value,
-              label: cfg.label,
-            })),
+            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
             seleccionableColumna: true,
             ordenable:            true,
           },
@@ -344,31 +446,18 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             ordenable:            true,
           },
           {
-            key:    "cliente",
-            label:  "Cliente",
-            tipo:   "texto",
-            origen: "Solicitud.cliente — nombre del cliente que genera la solicitud",
-            filtrable:            false,
+            key:    "estado",
+            label:  "Estado",
+            tipo:   "enum",
+            origen: "Solicitud.estado — estado de la solicitud de servicio",
+            filtrable:  true,
+            operadores: [OP_ES, OP_NO_ES],
+            opciones:   Object.entries(ESTADO_SOLICITUD_CFG).map(([value, cfg]) => ({
+              value,
+              label: cfg.label,
+            })),
             seleccionableColumna: true,
             ordenable:            true,
-          },
-          {
-            key:    "origen",
-            label:  "Ciudad de origen",
-            tipo:   "texto",
-            origen: "Solicitud.origen — ciudad/dirección de recogida",
-            filtrable:            false,
-            seleccionableColumna: true,
-            ordenable:            false,
-          },
-          {
-            key:    "destino",
-            label:  "Ciudad de destino",
-            tipo:   "texto",
-            origen: "Solicitud.destino — ciudad/dirección de entrega",
-            filtrable:            false,
-            seleccionableColumna: true,
-            ordenable:            false,
           },
         ],
       },
@@ -378,21 +467,120 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
       // estado_programacion persiste como EstadoProgramacion: programado |
       // asignado | en_ruta | completado | cancelado | sin_asignar.
       // Labels tomados de programacion/constants ESTADO_CFG.
+      //
+      // Auditoría Fase 5 corrección (2026-08-11):
+      //   Columnas reales confirmadas en ProgramacionTableColumns.tsx y
+      //   programacion/types.ts (ViajeResumen). Expandido de 4 a 14 campos.
+      //   Fuente: schedulate_origin, trip_number, license_plate, tipo_servicio,
+      //   linea_negocio, nombre_cliente, city_origin, city_destination,
+      //   driver_name, conductor_tel, estado_programacion,
+      //   planificado_por_nombre, observaciones, activo_en_resume.
       {
         id:    "programacion",
         label: "Programación",
         campos: [
+          // ── Solo columna (no filtrable) ──────────────────────────────────
+
           {
-            key:    "estado_programacion",
-            label:  "Estado de programación",
-            tipo:   "enum",
-            origen: "ViajeResumen.estado_programacion — estado operativo del viaje en programación",
+            key:    "trip_number",
+            label:  "Manifiesto",
+            tipo:   "texto",
+            origen: "ViajeResumen.trip_number — número de manifiesto del viaje en el TMS",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "license_plate",
+            label:  "Placa",
+            tipo:   "texto",
+            origen: "ViajeResumen.license_plate — placa del vehículo asignado al viaje",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "tipo_servicio",
+            label:  "Tipo de servicio",
+            tipo:   "texto",
+            origen: "Derivado: 'Urbano' si city_origin === city_destination, 'Nacional' en otro caso",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "nombre_cliente",
+            label:  "Cliente",
+            tipo:   "texto",
+            origen: "ViajeResumen.nombre_cliente — nombre del cliente del viaje programado",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "city_origin",
+            label:  "Ciudad de origen",
+            tipo:   "texto",
+            origen: "ViajeResumen.city_origin — ciudad de origen programada del viaje",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "city_destination",
+            label:  "Ciudad de destino",
+            tipo:   "texto",
+            origen: "ViajeResumen.city_destination — ciudad de destino programada del viaje",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "driver_name",
+            label:  "Conductor",
+            tipo:   "texto",
+            origen: "ViajeResumen.driver_name — nombre del conductor asignado al viaje",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "conductor_tel",
+            label:  "Celular del conductor",
+            tipo:   "texto",
+            origen: "ViajeResumen.conductor_tel — teléfono del conductor asignado",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "planificado_por_nombre",
+            label:  "Planificado por",
+            tipo:   "texto",
+            origen: "ViajeResumen.planificado_por_nombre — nombre del usuario que programó el viaje",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "observaciones",
+            label:  "Observaciones",
+            tipo:   "texto",
+            origen: "ViajeResumen.observaciones — observaciones libres ingresadas en la programación",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+
+          // ── Filtrable + columna ──────────────────────────────────────────
+
+          {
+            key:    "schedulate_origin",
+            label:  "Fecha de despacho",
+            tipo:   "fecha",
+            origen: "ViajeResumen.schedulate_origin — fecha/hora programada de despacho en origen",
             filtrable:  true,
-            operadores: [OP_ES, OP_NO_ES],
-            opciones:   Object.entries(ESTADO_PROGRAMACION_CFG).map(([value, cfg]) => ({
-              value,
-              label: cfg.label,
-            })),
+            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
             seleccionableColumna: true,
             ordenable:            true,
           },
@@ -408,12 +596,16 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             ordenable:            false,
           },
           {
-            key:    "schedulate_origin",
-            label:  "Fecha de despacho",
-            tipo:   "fecha",
-            origen: "ViajeResumen.schedulate_origin — fecha/hora programada de despacho en origen",
+            key:    "estado_programacion",
+            label:  "Estado de programación",
+            tipo:   "enum",
+            origen: "ViajeResumen.estado_programacion — estado operativo del viaje en programación",
             filtrable:  true,
-            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
+            operadores: [OP_ES, OP_NO_ES],
+            opciones:   Object.entries(ESTADO_PROGRAMACION_CFG).map(([value, cfg]) => ({
+              value,
+              label: cfg.label,
+            })),
             seleccionableColumna: true,
             ordenable:            true,
           },
@@ -435,10 +627,145 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
       // estado_documental persiste como EstadoDocumental: pendiente |
       // en_revision | con_observaciones | aprobado | rechazado | listo_facturacion.
       // Labels tomados de cumplidos/constants ESTADO_DOC_CFG.
+      //
+      // Auditoría Fase 5 corrección (2026-08-11):
+      //   Columnas reales confirmadas en CumplidosTableColumns.tsx,
+      //   cumplidos.definition.ts (CUMPLIDOS_COLUMNS_DEF) y
+      //   cumplidos/types.ts (CumplidoRecord). Expandido de 5 a 16 campos.
+      //   Fuente: activated_on, trip_number, number_order, license_plate,
+      //   tipo_servicio, linea_negocio, company_customer_name, origin_city_name,
+      //   destiny_city_name, driver_name, conductor_tel, fecha_cumplido,
+      //   estado_documental, state_travel, tiene_soporte, obs.
       {
         id:    "viajes_finalizados",
         label: "Viajes Finalizados",
         campos: [
+          // ── Solo columna (no filtrable) ──────────────────────────────────
+
+          {
+            key:    "trip_number",
+            label:  "Manifiesto",
+            tipo:   "texto",
+            origen: "CumplidoRecord.trip_number — número de manifiesto del viaje en el TMS",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "number_order",
+            label:  "Remisión",
+            tipo:   "texto",
+            origen: "CumplidoRecord.number_order — número de remisión / documento de transporte",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "company_customer_name",
+            label:  "Cliente",
+            tipo:   "texto",
+            origen: "CumplidoRecord.company_customer_name — nombre del cliente del viaje finalizado",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "license_plate",
+            label:  "Placa",
+            tipo:   "texto",
+            origen: "CumplidoRecord.license_plate — placa del vehículo del viaje",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "driver_name",
+            label:  "Conductor",
+            tipo:   "texto",
+            origen: "CumplidoRecord.driver_name — nombre del conductor del viaje",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "conductor_tel",
+            label:  "Celular del conductor",
+            tipo:   "texto",
+            origen: "CumplidoRecord.conductor_tel — teléfono del conductor del viaje",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "tipo_servicio",
+            label:  "Tipo de servicio",
+            tipo:   "texto",
+            origen: "Derivado: 'Urbano' si origin_city_name === destiny_city_name, 'Nacional' en otro caso",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "origin_city_name",
+            label:  "Ciudad de origen",
+            tipo:   "texto",
+            origen: "CumplidoRecord.origin_city_name — ciudad de recogida del viaje",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "destiny_city_name",
+            label:  "Ciudad de destino",
+            tipo:   "texto",
+            origen: "CumplidoRecord.destiny_city_name — ciudad de entrega del viaje",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "obs",
+            label:  "Observaciones",
+            tipo:   "texto",
+            origen: "CumplidoRecord.obs — observaciones libres del cumplido",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+
+          // ── Filtrable + columna ──────────────────────────────────────────
+
+          {
+            key:    "activated_on",
+            label:  "Fecha de activación",
+            tipo:   "fecha",
+            origen: "CumplidoRecord.activated_on — fecha de inicio del viaje reportada por el TMS",
+            filtrable:  true,
+            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "fecha_cumplido",
+            label:  "Fecha de cumplido",
+            tipo:   "fecha",
+            origen: "CumplidoRecord.fecha_cumplido — fecha en que se registró el cumplido en el sistema",
+            filtrable:  true,
+            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "linea_negocio",
+            label:  "Línea de negocio",
+            tipo:   "enum",
+            origen: "Derivado de CumplidoRecord.type_operation — 'granel liquido' → Carga Líquida, resto → Carga Seca",
+            filtrable:  true,
+            operadores: [OP_ES],
+            opciones:   OPCIONES_LINEA_NEGOCIO,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
           {
             key:    "estado_documental",
             label:  "Estado documental",
@@ -468,27 +795,6 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             ordenable:            false,
           },
           {
-            key:    "linea_negocio",
-            label:  "Línea de negocio",
-            tipo:   "enum",
-            origen: "Derivado de CumplidoRecord.type_operation — 'granel liquido' → Carga Líquida, resto → Carga Seca",
-            filtrable:  true,
-            operadores: [OP_ES],
-            opciones:   OPCIONES_LINEA_NEGOCIO,
-            seleccionableColumna: true,
-            ordenable:            false,
-          },
-          {
-            key:    "activated_on",
-            label:  "Fecha de activación",
-            tipo:   "fecha",
-            origen: "CumplidoRecord.activated_on — fecha de inicio del viaje reportada por el TMS",
-            filtrable:  true,
-            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
-            seleccionableColumna: true,
-            ordenable:            true,
-          },
-          {
             key:    "tiene_soporte",
             label:  "Tiene soporte cargado",
             tipo:   "booleano",
@@ -506,10 +812,104 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
       // estadoGps es un campo calculado en el backend a partir de la posición,
       // velocidad y alertas GPS activas: activo | detenido | con_alarma |
       // panico | desconectado. Labels tomados de gps/constants ESTADO_GPS_CFG.
+      //
+      // Auditoría Fase 5 corrección (2026-08-11):
+      //   Columnas reales confirmadas en gps.definition.ts (GPS_COLUMNS_DEF),
+      //   VehiculosTable.tsx y gps/types.ts (GpsRecord). Expandido de 3 a 12
+      //   campos. Fuente: license_plate, driver_name, company_customer_name,
+      //   estadoGps, latest_gps_report, trip_number, number_order,
+      //   origin_city_name, destiny_city_name, current_address_location,
+      //   state_travel, last_alarm_name.
       {
         id:    "centro_gps",
         label: "Centro GPS",
         campos: [
+          // ── Solo columna (no filtrable) ──────────────────────────────────
+
+          {
+            key:    "license_plate",
+            label:  "Placa",
+            tipo:   "texto",
+            origen: "GpsRecord.license_plate — placa del vehículo monitoreado",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "driver_name",
+            label:  "Conductor",
+            tipo:   "texto",
+            origen: "GpsRecord.driver_name — nombre del conductor asignado al vehículo",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "company_customer_name",
+            label:  "Cliente",
+            tipo:   "texto",
+            origen: "GpsRecord.razon_social ?? GpsRecord.company_customer_name — razón social del cliente del viaje",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "latest_gps_report",
+            label:  "Último reporte GPS",
+            tipo:   "texto",
+            origen: "GpsRecord.latest_gps_report — timestamp del último reporte recibido del dispositivo GPS",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "trip_number",
+            label:  "Manifiesto",
+            tipo:   "texto",
+            origen: "GpsRecord.trip_number — número de manifiesto del viaje activo del vehículo",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "number_order",
+            label:  "Remisión",
+            tipo:   "texto",
+            origen: "GpsRecord.number_order — número de remisión del viaje activo",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "origin_city_name",
+            label:  "Ciudad de origen",
+            tipo:   "texto",
+            origen: "GpsRecord.origin_city_name — ciudad de origen del viaje activo del vehículo",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "destiny_city_name",
+            label:  "Ciudad de destino",
+            tipo:   "texto",
+            origen: "GpsRecord.destiny_city_name — ciudad de destino del viaje activo del vehículo",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "current_address_location",
+            label:  "Ubicación actual",
+            tipo:   "texto",
+            origen: "GpsRecord.current_address_location — dirección geocodificada de la última posición conocida",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+
+          // ── Filtrable + columna ──────────────────────────────────────────
+
           {
             key:    "estadoGps",
             label:  "Estado GPS",
