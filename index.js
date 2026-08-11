@@ -4885,6 +4885,16 @@ app.patch("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, re
         return res.status(400).json({ error: "recurrencia debe ser un objeto" });
       }
       patch.recurrencia = recurrencia;
+      // Fase 9G — hallazgo de auditoría: si no se limpia proxima_ejecucion
+      // aquí, un reporte activo cuya recurrencia se edita conserva el
+      // próximo disparo calculado con el horario ANTERIOR (ej. seguía
+      // "diaria 08:00" aunque el usuario ya cambió a "semanal lunes 14:00")
+      // — el scheduler lo dispararía una vez con el timing viejo antes de
+      // corregirse solo. Poniéndolo en null, el scheduler.js#
+      // inicializarPendientes() recalcula desde cero con la recurrencia
+      // nueva en su próximo tick — mismo camino que ya usa un reporte
+      // recién activado, sin lógica nueva.
+      patch.proxima_ejecucion = null;
     }
     if (destinatarios !== undefined) {
       const err = errorDestinatarios(destinatarios);

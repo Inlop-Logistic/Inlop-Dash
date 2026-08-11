@@ -183,3 +183,51 @@ test('recurrencia incompleta (sin horas, sin fecha_inicio, sin tipo) devuelve nu
   assert.equal(calcularProximaEjecucion(null, null), null);
   assert.equal(calcularProximaEjecucion({}, null), null);
 });
+
+// ── Regresión Fase 9G: repeticiones no debe subestimarse en recurrencias
+// de larga duración (fecha_inicio de más de ~3 años de antigüedad) ─────────
+
+test('fin.repeticiones: no subestima el ordinal cuando fecha_inicio supera el límite interno de búsqueda (~1100 días)', () => {
+  // Diaria, fecha_inicio hace ~5 años (~1826 días transcurridos hasta hoy).
+  // Con un límite de conteo artificial de ~1100 días (el bug: reusar
+  // LIMITE_DIAS_BUSQUEDA dentro de contarSlotsHasta), el ordinal quedaría
+  // truncado en ~1100 — y con cantidad=1500 eso se leería como "todavía
+  // dentro del límite" (1100 <= 1500), cuando el ordinal REAL (~1826) ya lo
+  // superó hace rato. La cota exacta (diasEntre) debe detectar esto y
+  // devolver null — sin más ejecuciones.
+  const haceCincoAnios = new Date();
+  haceCincoAnios.setUTCFullYear(haceCincoAnios.getUTCFullYear() - 5);
+  const fechaInicio = haceCincoAnios.toISOString().slice(0, 10);
+
+  const rec = {
+    tipo: 'diaria', horas: ['08:00'], fecha_inicio: fechaInicio,
+    fin: { modo: 'repeticiones', cantidad: 1500 }, // entre el conteo truncado (~1100) y el real (~1826)
+  };
+
+  const out = calcularProximaEjecucion(rec, new Date());
+  assert.equal(out, null); // con conteo exacto, cantidad=1500 ya se agotó hace tiempo
+});
+
+test('fin.repeticiones: con fecha_inicio antigua, las primeras N ejecuciones siguen siendo válidas', () => {
+  const haceCincoAnios = new Date();
+  haceCincoAnios.setUTCFullYear(haceCincoAnios.getUTCFullYear() - 5);
+  const fechaInicio = haceCincoAnios.toISOString().slice(0, 10);
+
+  const rec = {
+    tipo: 'diaria', horas: ['08:00'], fecha_inicio: fechaInicio,
+    fin: { modo: 'repeticiones', cantidad: 3 },
+  };
+
+  // Bootstrapping (referencia=null): el ordinal 1 siempre cae en fecha_inicio,
+  // sin importar cuán antigua sea — contarSlotsHasta la evalúa con cota exacta.
+  const primera = calcularProximaEjecucion(rec, null);
+  assert.ok(primera);
+  assert.equal(primera.toISOString().slice(0, 10), fechaInicio);
+
+  const segunda = calcularProximaEjecucion(rec, primera);
+  const tercera  = calcularProximaEjecucion(rec, segunda);
+  const cuarta   = calcularProximaEjecucion(rec, tercera);
+  assert.ok(segunda);
+  assert.ok(tercera);
+  assert.equal(cuarta, null); // ordinal 4 excede cantidad=3
+});

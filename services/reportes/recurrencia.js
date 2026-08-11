@@ -36,10 +36,12 @@ import { extraerFechaColombia } from '../../utils/fechas.js';
 
 const OFFSET_COL = '-05:00';
 
-/** Cota de seguridad para la búsqueda día a día — ~3 años. En uso real
- *  nunca debería alcanzarse (mensual es el tipo con salto más largo, ~12
- *  candidatos/año); protege contra una recurrencia mal formada que nunca
- *  encuentra un día válido (loop infinito). */
+/** Cota de seguridad para la búsqueda del SIGUIENTE slot (calcularProximaEjecucion)
+ *  — ~3 años. En uso real nunca debería alcanzarse: la búsqueda arranca en
+ *  `referencia` (normalmente "ahora"), no en `fecha_inicio`, así que el salto
+ *  más largo posible es ~31 días (mensual). Protege contra una recurrencia
+ *  mal formada que nunca encuentra un día válido (loop infinito). NO se usa
+ *  en contarSlotsHasta() — esa función necesita una cota exacta, ver abajo. */
 const LIMITE_DIAS_BUSQUEDA = 1100;
 
 // ─── Aritmética de fechas (YYYY-MM-DD), UTC-pura — mismo patrón que
@@ -66,6 +68,15 @@ function diaDelMes(fechaYMD) {
 function ultimoDiaDelMes(fechaYMD) {
   const [y, m] = fechaYMD.split('-').map(Number);
   return new Date(Date.UTC(y, m, 0)).getUTCDate(); // día 0 del mes siguiente = último del actual
+}
+
+/** Días de calendario entre dos fechas YYYY-MM-DD (>= 0 si hasta >= desde). */
+function diasEntre(desdeYMD, hastaYMD) {
+  const [y1, m1, d1] = desdeYMD.split('-').map(Number);
+  const [y2, m2, d2] = hastaYMD.split('-').map(Number);
+  const t1 = Date.UTC(y1, m1 - 1, d1);
+  const t2 = Date.UTC(y2, m2 - 1, d2);
+  return Math.round((t2 - t1) / 86_400_000);
 }
 
 /** Instante real (Date) de una fecha+hora en horario Colombia fijo (UTC−5). */
@@ -106,12 +117,21 @@ export function esFechaValida(fechaYMD, recurrencia) {
  * el slot (fechaObjetivo, horaObjetivo) (inclusive) — usado únicamente por
  * `fin.modo === "repeticiones"` para saber si ese slot todavía cabe dentro
  * de `cantidad`. Cada hora configurada cuenta como un slot independiente.
+ *
+ * Cota EXACTA (no LIMITE_DIAS_BUSQUEDA): un reporte diario/semanal con
+ * `fecha_inicio` de más de ~3 años de antigüedad superaría la cota de
+ * búsqueda genérica y el conteo se cortaría antes de llegar a
+ * `fechaObjetivo`, subestimando el ordinal — un reporte con `repeticiones`
+ * ya agotadas seguiría pareciendo "dentro de la cantidad" y el scheduler lo
+ * seguiría ejecutando indefinidamente. Aquí el número de iteraciones se
+ * calcula a partir del rango real de fechas, sin techo artificial.
  */
 function contarSlotsHasta(recurrencia, fechaObjetivo, horaObjetivo) {
   const horas = [...recurrencia.horas].sort();
   let contador = 0;
   let fecha = recurrencia.fecha_inicio;
-  for (let i = 0; i < LIMITE_DIAS_BUSQUEDA && fecha <= fechaObjetivo; i++) {
+  const maxIteraciones = Math.max(diasEntre(recurrencia.fecha_inicio, fechaObjetivo) + 1, 1);
+  for (let i = 0; i < maxIteraciones && fecha <= fechaObjetivo; i++) {
     if (esFechaValida(fecha, recurrencia)) {
       contador += fecha === fechaObjetivo
         ? horas.filter(h => h <= horaObjetivo).length
