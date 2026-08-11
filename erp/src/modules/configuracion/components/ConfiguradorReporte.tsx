@@ -180,7 +180,9 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
                 return {
                   ...d,
                   infoBasica,
-                  columnas: d.columnas.filter(k => keysValidas.has(k)),
+                  columnas: d.columnas
+                    .filter(c => keysValidas.has(c.campo))
+                    .map((c, i) => ({ ...c, orden: i })),
                 };
               }
               return { ...d, infoBasica };

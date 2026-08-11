@@ -32,8 +32,10 @@ export function EtapaRevision({ datos }: Props) {
   const camposColumnaMap = new Map(camposColumna.map(c => [c.key, c]));
   // Si no hay selección explícita, mostrar "todas por defecto"
   const columnasEfectivas = datos.columnas.length > 0
-    ? datos.columnas.filter(k => camposColumnaMap.has(k))
-    : camposColumna.map(c => c.key);
+    ? [...datos.columnas]
+        .filter(c => camposColumnaMap.has(c.campo))
+        .sort((a, b) => a.orden - b.orden)
+    : camposColumna.map((c, i) => ({ campo: c.key, titulo: c.label, orden: i }));
 
   // Etapas intermedias (04-06): pendientes de implementar
   const etapasPendientes = ETAPAS.filter(
@@ -190,12 +192,13 @@ export function EtapaRevision({ datos }: Props) {
           </p>
         ) : (
           <div className="flex flex-col gap-1.5">
-            {columnasEfectivas.map((key, idx) => {
-              const campo = camposColumnaMap.get(key);
+            {columnasEfectivas.map((col, idx) => {
+              const campo = camposColumnaMap.get(col.campo);
+              const personalizado = campo && col.titulo !== campo.label;
               return (
                 <div
-                  key={key}
-                  className="flex items-center gap-2"
+                  key={col.campo}
+                  className="flex items-baseline gap-2"
                   style={{ fontSize: "13px", color: "var(--gray-700)" }}
                 >
                   <span
@@ -204,7 +207,12 @@ export function EtapaRevision({ datos }: Props) {
                   >
                     {String(idx + 1).padStart(2, "0")}
                   </span>
-                  <span style={{ fontWeight: 500 }}>{campo?.label ?? key}</span>
+                  <span style={{ fontWeight: 500 }}>{col.titulo || campo?.label || col.campo}</span>
+                  {personalizado && (
+                    <span className="text-[11px]" style={{ color: "var(--gray-400)" }}>
+                      (antes: {campo?.label})
+                    </span>
+                  )}
                 </div>
               );
             })}

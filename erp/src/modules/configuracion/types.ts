@@ -24,6 +24,18 @@ export interface FiltroItem extends FiltroDB {
   id: string;
 }
 
+/**
+ * Una columna del reporte tal como se persiste en la columna JSONB `columnas`
+ * de la DB. `campo` es la clave técnica estable del catálogo (nunca cambia
+ * por acción del usuario); `titulo` es el nombre visible que el usuario
+ * puede personalizar; `orden` es la posición (0-based) en el reporte.
+ */
+export interface ColumnaReporte {
+  campo:  string;
+  titulo: string;
+  orden:  number;
+}
+
 export interface ReporteAutomatico {
   id:                 string;
   nombre:             string;
@@ -36,8 +48,8 @@ export interface ReporteAutomatico {
   activo:             boolean;
   borrador:           boolean;
   filtros:            FiltroDB[];
-  /** Columnas seleccionadas, en el orden definido por el usuario. [] = todas. */
-  columnas:           string[];
+  /** Columnas del reporte, en el orden definido por el usuario. [] = todas. */
+  columnas:           ColumnaReporte[];
   proxima_ejecucion:  string | null;
   created_at:         string;
   updated_at:         string;
@@ -58,8 +70,8 @@ export interface ReporteBase {
   /** frecuencia: preservada en DB; no expuesta en Información básica (Fase futura). */
   frecuencia:   "diaria" | "semanal" | "mensual";
   filtros?:     FiltroDB[];
-  /** Columnas seleccionadas, en el orden definido por el usuario. Omitido = todas. */
-  columnas?:    string[];
+  /** Columnas del reporte, en el orden definido por el usuario. Omitido = todas. */
+  columnas?:    ColumnaReporte[];
 }
 
 // ─── Catálogos ────────────────────────────────────────────────────────────────
@@ -164,11 +176,11 @@ export interface DatosConfigurador {
   /** Etapa 02 — condiciones de filtrado; array vacío = sin filtros. */
   filtros: FiltroItem[];
   /**
-   * Etapa 03 — columnas seleccionadas, en el orden definido por el usuario.
-   * Array de campo.key estables del catálogo. [] = todas las columnas del
-   * reporte en el orden del catálogo (comportamiento por omisión del generador).
+   * Etapa 03 — columnas del reporte: campo + título visible + orden.
+   * [] = todas las columnas del reporte en el orden del catálogo
+   * (comportamiento por omisión del generador).
    */
-  columnas: string[];
+  columnas: ColumnaReporte[];
   // Etapas 04-06 se agregarán aquí al desarrollarse cada una.
 }
 

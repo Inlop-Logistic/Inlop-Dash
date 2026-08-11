@@ -1,16 +1,22 @@
 /**
  * Etapa 03 — Columnas
  *
- * Permite seleccionar y ordenar las columnas que aparecerán en el reporte.
- * Las columnas disponibles se obtienen exclusivamente de CATALOGO_REPORTES
- * (campos con seleccionableColumna = true) — no hay ningún catálogo propio.
+ * Constructor de columnas de dos paneles:
+ *   - Izquierda "Datos disponibles" → todos los campos del reporte
+ *     seleccionado con seleccionableColumna = true, que aún NO están en el
+ *     reporte. Se agregan con el botón "+".
+ *   - Derecha "Columnas del reporte" → columnas incluidas, en el orden en
+ *     que aparecerán. Se reordenan con drag & drop (o los botones ↑↓ como
+ *     alternativa accesible), se renombran con un campo de texto inline, y
+ *     se quitan con "×" (vuelven a la izquierda, nunca se borran del dataset).
  *
- * Comportamiento de estado:
- *   - Columnas seleccionadas (orden definido por el usuario) → sección superior.
- *   - Columnas disponibles no seleccionadas → sección inferior, en orden de catálogo.
- *   - Toggle: mover a/desde la selección activa.
- *   - Reordenar: flechas ↑↓ sobre las columnas seleccionadas.
- *   - Restaurar predeterminadas: toda la selección en el orden del catálogo.
+ * Los datos disponibles salen exclusivamente de CATALOGO_REPORTES — no hay
+ * ningún catálogo de columnas propio de esta etapa.
+ *
+ * Cada columna seleccionada se persiste como { campo, titulo, orden }:
+ *   - campo  → clave técnica estable del catálogo (nunca la modifica el usuario)
+ *   - titulo → nombre visible, editable, por defecto el label del catálogo
+ *   - orden  → posición 0-based, definida por la posición en el panel derecho
  *
  * El componente recibe `key={tipoReporte}` desde ConfiguradorReporte, por lo
  * que se remonta limpio cada vez que cambia el reporte — no necesita useEffect
@@ -18,11 +24,12 @@
  *
  * Componente controlado: el estado vive en ConfiguradorReporte.
  */
-import { useState }                         from "react";
-import { Columns3, ChevronUp, ChevronDown } from "lucide-react";
-import { Button }                           from "@/components/ui";
-import { buscarReporte }                    from "@/modules/configuracion/catalogos/datasetsReportes";
-import type { CampoDataset }                from "@/modules/configuracion/catalogos/datasetsReportes";
+import { useState }                                              from "react";
+import { Columns3, ChevronUp, ChevronDown, GripVertical, Plus, X } from "lucide-react";
+import { Button }                                                 from "@/components/ui";
+import { buscarReporte }                                          from "@/modules/configuracion/catalogos/datasetsReportes";
+import type { CampoDataset }                                      from "@/modules/configuracion/catalogos/datasetsReportes";
+import type { ColumnaReporte }                                    from "@/modules/configuracion/types";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -38,7 +45,7 @@ function TipoBadge({ tipo }: { tipo: CampoDataset["tipo"] }) {
   const { label, color, bg } = MAP[tipo] ?? MAP.texto;
   return (
     <span
-      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10.5px] font-semibold"
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10.5px] font-semibold shrink-0"
       style={{ color, background: bg, letterSpacing: "0.01em" }}
     >
       {label}
@@ -46,13 +53,26 @@ function TipoBadge({ tipo }: { tipo: CampoDataset["tipo"] }) {
   );
 }
 
+const TITULO_INPUT_STYLE: React.CSSProperties = {
+  border:       "1.5px solid transparent",
+  borderRadius: "6px",
+  color:        "var(--gray-800)",
+  background:   "transparent",
+  outline:      "none",
+  width:        "100%",
+  fontSize:     "13px",
+  fontWeight:   500,
+  padding:      "2px 4px",
+  marginLeft:   "-4px",
+};
+
 // ─── Props ───────────────────────────────────────────────────────────────────
 
 interface Props {
-  /** Ordered array of selected campo.key values; [] = not yet configured. */
-  columnas:    string[];
+  /** Columnas incluidas en el reporte, en el orden en que aparecerán. */
+  columnas:    ColumnaReporte[];
   tipoReporte: string;
-  onChange:    (columnas: string[]) => void;
+  onChange:    (columnas: ColumnaReporte[]) => void;
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
@@ -61,35 +81,52 @@ export function EtapaColumnas({ columnas, tipoReporte, onChange }: Props) {
   const camposDisponibles: CampoDataset[] = buscarReporte(tipoReporte)
     ?.campos.filter(c => c.seleccionableColumna) ?? [];
 
-  const keysDisponibles = camposDisponibles.map(c => c.key);
+  const campoPorKey = new Map(camposDisponibles.map(c => [c.key, c]));
 
   /**
-   * Estado local de la selección. Se inicializa desde `columnas` prop:
-   *   - Si hay claves válidas en `columnas` → úsalas (orden del usuario).
-   *   - Si está vacío (primer acceso al paso) → todas seleccionadas por defecto.
+   * Estado local de las columnas incluidas. Se inicializa desde `columnas`:
+   *   - Si hay entradas válidas para este reporte → úsalas (orden del usuario).
+   *   - Si está vacío (primer acceso al paso) → todos los campos disponibles,
+   *     en el orden del catálogo, con título = label del catálogo.
    */
-  const [seleccionadas, setSeleccionadas] = useState<string[]>(() => {
-    const validas = columnas.filter(k => keysDisponibles.includes(k));
-    return validas.length > 0 ? validas : [...keysDisponibles];
+  const [seleccionadas, setSeleccionadas] = useState<ColumnaReporte[]>(() => {
+    const validas = columnas.filter(c => campoPorKey.has(c.campo));
+    if (validas.length > 0) {
+      return validas.map((c, i) => ({ ...c, orden: i }));
+    }
+    return camposDisponibles.map((c, i) => ({ campo: c.key, titulo: c.label, orden: i }));
   });
 
-  const selSet = new Set(seleccionadas);
-  const noSeleccionadas = camposDisponibles.filter(c => !selSet.has(c.key));
+  const [dragIndex,    setDragIndex]    = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const seleccionadasKeys = new Set(seleccionadas.map(c => c.campo));
+  const disponibles = camposDisponibles.filter(c => !seleccionadasKeys.has(c.key));
 
   // ── Mutaciones con propagación al padre ──────────────────────────────────
 
-  function aplicar(next: string[]) {
-    setSeleccionadas(next);
-    onChange(next);
+  function aplicar(next: ColumnaReporte[]) {
+    const normalizado = next.map((c, i) => ({ ...c, orden: i }));
+    setSeleccionadas(normalizado);
+    onChange(normalizado);
   }
 
-  function toggleColumna(key: string) {
-    if (selSet.has(key)) {
-      // Deseleccionar: quitar de la selección
-      aplicar(seleccionadas.filter(k => k !== key));
-    } else {
-      // Seleccionar: añadir al final
-      aplicar([...seleccionadas, key]);
+  function agregar(campo: CampoDataset) {
+    aplicar([...seleccionadas, { campo: campo.key, titulo: campo.label, orden: seleccionadas.length }]);
+  }
+
+  function quitar(campoKey: string) {
+    aplicar(seleccionadas.filter(c => c.campo !== campoKey));
+  }
+
+  function renombrar(campoKey: string, titulo: string) {
+    aplicar(seleccionadas.map(c => (c.campo === campoKey ? { ...c, titulo } : c)));
+  }
+
+  /** Si el usuario deja el título vacío, restaura el label del catálogo. */
+  function handleBlurTitulo(campoKey: string, tituloActual: string) {
+    if (!tituloActual.trim()) {
+      renombrar(campoKey, campoPorKey.get(campoKey)?.label ?? campoKey);
     }
   }
 
@@ -108,7 +145,34 @@ export function EtapaColumnas({ columnas, tipoReporte, onChange }: Props) {
   }
 
   function restaurarPredeterminadas() {
-    aplicar([...keysDisponibles]);
+    aplicar(camposDisponibles.map((c, i) => ({ campo: c.key, titulo: c.label, orden: i })));
+  }
+
+  // ── Drag & drop (panel derecho) ───────────────────────────────────────────
+
+  function handleDragStart(index: number) {
+    setDragIndex(index);
+  }
+
+  function handleDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault();
+    if (dragOverIndex !== index) setDragOverIndex(index);
+  }
+
+  function handleDrop(index: number) {
+    if (dragIndex !== null && dragIndex !== index) {
+      const next = [...seleccionadas];
+      const [movido] = next.splice(dragIndex, 1);
+      next.splice(index, 0, movido);
+      aplicar(next);
+    }
+    setDragIndex(null);
+    setDragOverIndex(null);
+  }
+
+  function handleDragEnd() {
+    setDragIndex(null);
+    setDragOverIndex(null);
   }
 
   // ── Sin campos disponibles ────────────────────────────────────────────────
@@ -140,7 +204,7 @@ export function EtapaColumnas({ columnas, tipoReporte, onChange }: Props) {
   // ── Render principal ──────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-5" style={{ maxWidth: "560px" }}>
+    <div className="flex flex-col gap-5" style={{ maxWidth: "820px" }}>
 
       {/* Encabezado */}
       <div className="flex items-start justify-between gap-3">
@@ -149,7 +213,8 @@ export function EtapaColumnas({ columnas, tipoReporte, onChange }: Props) {
             Columnas del reporte
           </p>
           <p className="text-[13px] mt-1" style={{ color: "var(--gray-400)" }}>
-            Selecciona las columnas y arrastra para reordenarlas.
+            Agrega columnas desde los datos disponibles, arrastra para reordenarlas
+            y personaliza su nombre visible.
           </p>
         </div>
         <Button
@@ -162,171 +227,199 @@ export function EtapaColumnas({ columnas, tipoReporte, onChange }: Props) {
         </Button>
       </div>
 
-      {/* ── Sección: Columnas seleccionadas ── */}
-      <div className="flex flex-col gap-1">
-        <p
-          className="text-[11px] font-bold uppercase tracking-wider mb-1"
-          style={{ color: "var(--gray-500)" }}
-        >
-          Incluidas en el reporte · {seleccionadas.length}
-        </p>
+      {/* ── Dos paneles ── */}
+      <div className="grid grid-cols-2 gap-4">
 
-        {seleccionadas.length === 0 ? (
-          <div
-            className="py-6 rounded-xl flex items-center justify-center"
-            style={{ border: "1.5px dashed var(--gray-200)", background: "var(--gray-50)" }}
-          >
-            <p className="text-[13px]" style={{ color: "var(--gray-400)" }}>
-              Ninguna columna seleccionada
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-1.5">
-            {seleccionadas.map((key, idx) => {
-              const campo = camposDisponibles.find(c => c.key === key);
-              if (!campo) return null;
-              return (
-                <ColumnaRow
-                  key={key}
-                  campo={campo}
-                  seleccionada={true}
-                  puedeSubir={idx > 0}
-                  puedeBajar={idx < seleccionadas.length - 1}
-                  onToggle={() => toggleColumna(key)}
-                  onSubir={() => moverArriba(idx)}
-                  onBajar={() => moverAbajo(idx)}
-                />
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ── Sección: Columnas no incluidas ── */}
-      {noSeleccionadas.length > 0 && (
-        <div className="flex flex-col gap-1">
+        {/* ── Panel izquierdo: Datos disponibles ── */}
+        <div className="flex flex-col gap-1.5 min-w-0">
           <p
             className="text-[11px] font-bold uppercase tracking-wider mb-1"
-            style={{ color: "var(--gray-400)" }}
+            style={{ color: "var(--gray-500)" }}
           >
-            No incluidas · {noSeleccionadas.length}
+            Datos disponibles · {disponibles.length}
           </p>
-          <div className="flex flex-col gap-1.5">
-            {noSeleccionadas.map(campo => (
-              <ColumnaRow
-                key={campo.key}
-                campo={campo}
-                seleccionada={false}
-                puedeSubir={false}
-                puedeBajar={false}
-                onToggle={() => toggleColumna(campo.key)}
-                onSubir={() => {}}
-                onBajar={() => {}}
-              />
-            ))}
+
+          <div
+            className="flex flex-col gap-1.5 overflow-y-auto p-1 -m-1"
+            style={{ maxHeight: "420px" }}
+          >
+            {disponibles.length === 0 ? (
+              <div
+                className="py-6 px-3 rounded-xl flex items-center justify-center text-center"
+                style={{ border: "1.5px dashed var(--gray-200)", background: "var(--gray-50)" }}
+              >
+                <p className="text-[12.5px]" style={{ color: "var(--gray-400)" }}>
+                  Todos los datos disponibles ya están incluidos en el reporte
+                </p>
+              </div>
+            ) : (
+              disponibles.map(campo => (
+                <div
+                  key={campo.key}
+                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg"
+                  style={{ border: "1.5px solid var(--gray-100)", background: "var(--gray-50)" }}
+                >
+                  <span
+                    className="flex-1 text-[13px] font-medium truncate"
+                    style={{ color: "var(--gray-700)" }}
+                    title={campo.label}
+                  >
+                    {campo.label}
+                  </span>
+                  <TipoBadge tipo={campo.tipo} />
+                  <button
+                    type="button"
+                    aria-label={`Agregar columna ${campo.label}`}
+                    onClick={() => agregar(campo)}
+                    className="shrink-0 flex items-center justify-center rounded-md transition-colors"
+                    style={{
+                      width: "24px", height: "24px",
+                      border: "1.5px solid var(--navy)",
+                      color: "var(--navy)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Plus style={{ width: "13px", height: "13px" }} strokeWidth={2.5} />
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         </div>
-      )}
+
+        {/* ── Panel derecho: Columnas del reporte ── */}
+        <div className="flex flex-col gap-1.5 min-w-0">
+          <p
+            className="text-[11px] font-bold uppercase tracking-wider mb-1"
+            style={{ color: "var(--gray-500)" }}
+          >
+            Columnas del reporte · {seleccionadas.length}
+          </p>
+
+          <div
+            className="flex flex-col gap-1.5 overflow-y-auto p-1 -m-1"
+            style={{ maxHeight: "420px" }}
+          >
+            {seleccionadas.length === 0 ? (
+              <div
+                className="py-6 px-3 rounded-xl flex items-center justify-center text-center"
+                style={{ border: "1.5px dashed var(--gray-200)", background: "var(--gray-50)" }}
+              >
+                <p className="text-[12.5px]" style={{ color: "var(--gray-400)" }}>
+                  Ninguna columna seleccionada — agrega desde "Datos disponibles"
+                </p>
+              </div>
+            ) : (
+              seleccionadas.map((col, idx) => {
+                const campo = campoPorKey.get(col.campo);
+                if (!campo) return null;
+                const esDragOver = dragOverIndex === idx && dragIndex !== null && dragIndex !== idx;
+                return (
+                  <div
+                    key={col.campo}
+                    draggable
+                    onDragStart={() => handleDragStart(idx)}
+                    onDragOver={e => handleDragOver(e, idx)}
+                    onDrop={() => handleDrop(idx)}
+                    onDragEnd={handleDragEnd}
+                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg transition-colors"
+                    style={{
+                      border:     `1.5px solid ${esDragOver ? "var(--navy)" : "var(--gray-200)"}`,
+                      background: dragIndex === idx ? "var(--gray-50)" : "#fff",
+                      opacity:    dragIndex === idx ? 0.5 : 1,
+                    }}
+                  >
+                    {/* Manija de arrastre */}
+                    <span
+                      className="shrink-0 flex items-center justify-center"
+                      style={{ color: "var(--gray-300)", cursor: "grab" }}
+                      aria-hidden="true"
+                    >
+                      <GripVertical style={{ width: "14px", height: "14px" }} />
+                    </span>
+
+                    {/* Posición */}
+                    <span
+                      className="shrink-0 text-[10.5px] font-semibold tabular-nums"
+                      style={{ color: "var(--gray-400)", minWidth: "16px" }}
+                    >
+                      {idx + 1}
+                    </span>
+
+                    {/* Título editable + clave técnica + tipo */}
+                    <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                      <input
+                        type="text"
+                        value={col.titulo}
+                        onChange={e => renombrar(col.campo, e.target.value)}
+                        onFocus={e => { e.currentTarget.style.borderColor = "var(--gray-200)"; }}
+                        onBlur={e => {
+                          e.currentTarget.style.borderColor = "transparent";
+                          handleBlurTitulo(col.campo, e.target.value);
+                        }}
+                        aria-label={`Nombre visible de la columna ${campo.label}`}
+                        style={TITULO_INPUT_STYLE}
+                      />
+                      <span
+                        className="text-[10.5px] truncate"
+                        style={{ color: "var(--gray-400)", marginLeft: "0px" }}
+                        title={campo.key}
+                      >
+                        {campo.key}
+                      </span>
+                    </div>
+
+                    <TipoBadge tipo={campo.tipo} />
+
+                    {/* Controles de orden (alternativa accesible al drag & drop) */}
+                    <div className="flex flex-col shrink-0">
+                      <button
+                        type="button"
+                        aria-label={`Subir ${campo.label}`}
+                        onClick={() => moverArriba(idx)}
+                        disabled={idx === 0}
+                        className="flex items-center justify-center rounded transition-colors disabled:opacity-20"
+                        style={{ width: "18px", height: "16px", cursor: idx === 0 ? "default" : "pointer", color: "var(--gray-400)" }}
+                      >
+                        <ChevronUp style={{ width: "13px", height: "13px" }} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Bajar ${campo.label}`}
+                        onClick={() => moverAbajo(idx)}
+                        disabled={idx === seleccionadas.length - 1}
+                        className="flex items-center justify-center rounded transition-colors disabled:opacity-20"
+                        style={{ width: "18px", height: "16px", cursor: idx === seleccionadas.length - 1 ? "default" : "pointer", color: "var(--gray-400)" }}
+                      >
+                        <ChevronDown style={{ width: "13px", height: "13px" }} />
+                      </button>
+                    </div>
+
+                    {/* Quitar */}
+                    <button
+                      type="button"
+                      aria-label={`Quitar columna ${campo.label}`}
+                      onClick={() => quitar(col.campo)}
+                      className="shrink-0 flex items-center justify-center rounded-md transition-colors"
+                      style={{ width: "22px", height: "22px", color: "var(--gray-400)", cursor: "pointer" }}
+                    >
+                      <X style={{ width: "13px", height: "13px" }} />
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+      </div>
 
       {/* Nota */}
       <p className="text-[11.5px]" style={{ color: "var(--gray-400)" }}>
-        Las columnas aparecerán en el reporte en el orden mostrado arriba.
-        El botón "Restaurar predeterminadas" incluye todas las columnas disponibles
-        en el orden del catálogo.
+        Las columnas aparecerán en el reporte en el orden mostrado en el panel derecho.
+        El nombre visible es solo de presentación — no afecta el campo de origen del dato.
       </p>
 
-    </div>
-  );
-}
-
-// ─── Fila de columna ─────────────────────────────────────────────────────────
-
-interface ColumnaRowProps {
-  campo:       CampoDataset;
-  seleccionada: boolean;
-  puedeSubir:  boolean;
-  puedeBajar:  boolean;
-  onToggle:    () => void;
-  onSubir:     () => void;
-  onBajar:     () => void;
-}
-
-function ColumnaRow({
-  campo, seleccionada, puedeSubir, puedeBajar,
-  onToggle, onSubir, onBajar,
-}: ColumnaRowProps) {
-  return (
-    <div
-      className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-colors"
-      style={{
-        border:     `1.5px solid ${seleccionada ? "var(--gray-200)" : "var(--gray-100)"}`,
-        background: seleccionada ? "#fff" : "var(--gray-50)",
-        opacity:    seleccionada ? 1 : 0.75,
-      }}
-    >
-      {/* Checkbox */}
-      <button
-        type="button"
-        aria-label={seleccionada ? `Quitar columna ${campo.label}` : `Agregar columna ${campo.label}`}
-        onClick={onToggle}
-        className="shrink-0 flex items-center justify-center rounded transition-colors"
-        style={{
-          width:      "18px",
-          height:     "18px",
-          border:     `2px solid ${seleccionada ? "var(--navy)" : "var(--gray-300)"}`,
-          background: seleccionada ? "var(--navy)" : "transparent",
-          color:      "#fff",
-          cursor:     "pointer",
-        }}
-      >
-        {seleccionada && (
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path d="M1.5 5l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        )}
-      </button>
-
-      {/* Label + tipo */}
-      <span
-        className="flex-1 text-[13px] font-medium"
-        style={{ color: seleccionada ? "var(--gray-800)" : "var(--gray-500)" }}
-      >
-        {campo.label}
-      </span>
-
-      <TipoBadge tipo={campo.tipo} />
-
-      {/* Controles de orden (solo en seleccionadas) */}
-      {seleccionada && (
-        <div className="flex flex-col shrink-0">
-          <button
-            type="button"
-            aria-label={`Subir ${campo.label}`}
-            onClick={onSubir}
-            disabled={!puedeSubir}
-            className="flex items-center justify-center rounded transition-colors disabled:opacity-20"
-            style={{
-              width: "20px", height: "18px", cursor: puedeSubir ? "pointer" : "default",
-              color: "var(--gray-400)",
-            }}
-          >
-            <ChevronUp style={{ width: "14px", height: "14px" }} />
-          </button>
-          <button
-            type="button"
-            aria-label={`Bajar ${campo.label}`}
-            onClick={onBajar}
-            disabled={!puedeBajar}
-            className="flex items-center justify-center rounded transition-colors disabled:opacity-20"
-            style={{
-              width: "20px", height: "18px", cursor: puedeBajar ? "pointer" : "default",
-              color: "var(--gray-400)",
-            }}
-          >
-            <ChevronDown style={{ width: "14px", height: "14px" }} />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
