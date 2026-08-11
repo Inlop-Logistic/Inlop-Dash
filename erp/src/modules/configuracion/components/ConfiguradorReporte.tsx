@@ -243,7 +243,7 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
           />
         );
       case "revision":
-        return <EtapaRevision datos={datos} />;
+        return <EtapaRevision datos={datos} onIrA={irA} />;
       default: {
         const etapa = ETAPAS.find(e => e.id === etapaActiva)!;
         return (
