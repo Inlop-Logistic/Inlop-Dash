@@ -261,15 +261,15 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
 
   return (
     <div
-      className="flex flex-col overflow-hidden"
+      className="flex-1 min-h-0 flex flex-col overflow-hidden"
       style={{
         border:       "1.5px solid var(--gray-200)",
         borderRadius: "var(--radius-lg)",
-        minHeight:    "560px",
+        minHeight:    "480px",
       }}
     >
       {/* ── Área principal: sidebar + contenido ───────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden" style={{ minHeight: "488px" }}>
+      <div className="flex flex-1 min-h-0 overflow-hidden">
 
         {/* Sidebar */}
         <nav

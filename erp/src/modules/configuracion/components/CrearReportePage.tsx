@@ -10,7 +10,7 @@ interface Props {
 
 export function CrearReportePage({ onCreado, onCancelar }: Props) {
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="p-6 flex flex-col gap-6 h-full min-h-0">
 
       {/* Migas de pan interna */}
       <nav
