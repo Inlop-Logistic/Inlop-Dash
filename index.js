@@ -4772,41 +4772,39 @@ app.patch("/api/clientes/:id/alias/:aliasId", requireInternalApiKey, async (req,
 });
 
 // ─── PERSONAL INLOP ───────────────────────────────────────────────────────────
-// Fuente real de identidad interna del ERP: tabla `profiles` (misma que usa
-// AuthContext.tsx del frontend para resolver nombre/cargo/rol del usuario
-// autenticado). NO es usuarios_cliente (eso es el portal de clientes).
+// Fuente oficial: tabla `personal` (SQL_04_personal.sql) — el maestro de
+// personal de INLOP, independiente de Auth y base futura de Talento Humano.
+// NO es `profiles` (cuenta de acceso al ERP, puede no existir) ni
+// `usuarios_cliente` (portal de clientes externos).
 //
-// profiles.email no siempre está poblado de forma confiable — el correo
-// canónico vive en Supabase Auth (auth.users). Se resuelve igual que en
-// GET /usuarios: profiles + admin/users, tomando el de Auth como prioritario.
+// Columnas reales de `personal`: id, nombre, cargo, area, correo_compartido
+// (el correo NO es individual — varias personas de una misma área pueden
+// compartir un solo correo institucional, ej. 3 controladores de tráfico →
+// trafico@inlop.com.co: es dato real, no se deduplica), observaciones,
+// profile_id (nullable, solo si la persona tiene acceso al ERP), activo.
+//
+// Protegido con requireInternalApiKey — mismo perímetro que el resto de
+// endpoints internos sensibles del ERP (/api/programacion, /api/planeados).
 //
 // Usado por Configuración → Reportes Automáticos → Etapa 05 · Destinatarios
 // para poblar la lista de "Personal INLOP" seleccionable — nunca hardcodeada.
-app.get("/api/personal", async (req, res) => {
+app.get("/api/personal", requireInternalApiKey, async (req, res) => {
   try {
-    const [perfiles, authData] = await Promise.all([
-      sbFetch("/profiles?select=id,nombre,cargo,email&order=nombre.asc"),
-      sbAuthAdmin("/admin/users?per_page=1000").catch(() => null),
-    ]);
+    const rows = await sbFetch(
+      "/personal?select=id,nombre,cargo,correo_compartido&activo=eq.true&order=nombre.asc"
+    );
 
-    const emailMap = {};
-    ((authData || {}).users || []).forEach(u => { if (u.id) emailMap[u.id] = u.email || ""; });
-
-    const vistos = new Set(); // dedupe por email (case-insensitive) — evita duplicados en la fuente
-    const personal = (perfiles ?? [])
+    // Solo los campos necesarios para el selector de destinatarios. Se
+    // excluye personal inactivo (activo=eq.true arriba, estado real de la
+    // tabla) y personal sin correo asignado (no puede ser destinatario).
+    const personal = (rows ?? [])
       .map(p => ({
         id:     p.id,
         nombre: p.nombre || "",
         cargo:  p.cargo  || "",
-        email:  (emailMap[p.id] || p.email || "").trim(),
+        email:  (p.correo_compartido || "").trim(),
       }))
-      .filter(p => p.email) // sin correo no puede ser destinatario
-      .filter(p => {
-        const clave = p.email.toLowerCase();
-        if (vistos.has(clave)) return false;
-        vistos.add(clave);
-        return true;
-      });
+      .filter(p => p.email);
 
     res.json(personal);
   } catch (e) {

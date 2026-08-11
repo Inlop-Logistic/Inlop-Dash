@@ -39,7 +39,8 @@ export interface ColumnaReporte {
 /**
  * Los destinatarios del reporte, tal como se persisten en la columna JSONB
  * `destinatarios` de la DB. Nunca una cadena de correos concatenada:
- *   - personal_ids   → referencias a profiles.id (Personal INLOP real).
+ *   - personal_ids     → referencias a personal.id (tabla `personal`, el
+ *     maestro real de personal de INLOP — ver SQL_04_personal.sql).
  *   - correos_externos → correos externos agregados manualmente, validados.
  */
 export interface DestinatariosReporte {
@@ -94,9 +95,11 @@ export interface ReporteBase {
 }
 
 /**
- * Una persona del Personal INLOP, proyectada desde `profiles` (la tabla
- * real de identidad del ERP — ver AuthContext.tsx) por el endpoint
- * GET /api/personal. Nunca hardcodeada ni inventada.
+ * Una persona del Personal INLOP, proyectada desde `personal` — el maestro
+ * real de personal de INLOP (independiente de Auth, base futura de Talento
+ * Humano — ver SQL_04_personal.sql) por el endpoint GET /api/personal.
+ * Nunca hardcodeada ni inventada. `email` viene de personal.correo_compartido
+ * — puede repetirse entre varias personas de una misma área (dato real).
  */
 export interface PersonalInlop {
   id:     string;

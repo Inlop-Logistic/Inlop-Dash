@@ -3,14 +3,17 @@
  *
  * Dos fuentes de destinatarios, persistidas por separado (nunca como una
  * cadena de correos concatenada):
- *   - Personal INLOP: seleccionado por checkbox desde `profiles`, la tabla
- *     real de identidad del ERP (ver GET /api/personal → index.js). NO es
- *     una lista hardcodeada ni una tabla nueva.
+ *   - Personal INLOP: seleccionado por checkbox desde `personal`, el
+ *     maestro real de personal de INLOP (ver GET /api/personal → index.js;
+ *     fuente SQL_04_personal.sql). NO es `profiles`, NO es `usuarios_cliente`,
+ *     NO es una lista hardcodeada ni una tabla nueva.
  *   - Correos externos: agregados manualmente, con validación de formato.
  *
- * Se persisten referencias (profiles.id), no snapshots de nombre/correo —
- * si el dato de una persona cambia en `profiles`, el reporte sigue
- * apuntando a la persona correcta.
+ * Se persisten referencias (personal.id), no snapshots de nombre/correo —
+ * si el dato de una persona cambia en `personal`, el reporte sigue
+ * apuntando a la persona correcta. El correo de Personal INLOP viene de
+ * personal.correo_compartido, que puede repetirse entre varias personas de
+ * una misma área (dato real de la fuente, no un error de deduplicación).
  *
  * Componente controlado: la selección vive en ConfiguradorReporte. El único
  * estado local es el propio de esta etapa (personal cargado, búsqueda,

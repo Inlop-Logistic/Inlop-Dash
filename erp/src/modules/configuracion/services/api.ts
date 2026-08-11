@@ -7,8 +7,9 @@ export function listarReportesAutomaticos(): Promise<ReporteAutomatico[]> {
 
 /**
  * Personal INLOP disponible como destinatario de reportes — proyectado por
- * el backend desde `profiles` (la tabla real de identidad del ERP, misma
- * que usa AuthContext). Ver GET /api/personal en index.js.
+ * el backend desde `personal` (el maestro real de personal de INLOP,
+ * independiente de Auth — ver SQL_04_personal.sql). Ver GET /api/personal
+ * en index.js.
  */
 export function listarPersonal(): Promise<PersonalInlop[]> {
   return req<PersonalInlop[]>("/api/personal");
