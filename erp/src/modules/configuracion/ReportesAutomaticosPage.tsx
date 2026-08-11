@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Mail, Plus, Pencil, Power, Send } from "lucide-react";
+import { Mail, Plus, Pencil, Power, Send, Trash2, Settings2 } from "lucide-react";
 import {
   PageHeader, FilterBar, DataTable, Button,
   Badge, SidePanel, PanelSection, InfoRow,
@@ -7,6 +7,7 @@ import {
 import type { Column } from "@/components/ui";
 import { FormReporteAutomatico } from "./components/FormReporteAutomatico";
 import { ModalEnviarReporte } from "./components/ModalEnviarReporte";
+import { ModalEliminarReporte } from "./components/ModalEliminarReporte";
 import { useReportesAutomaticos } from "./hooks/useReportesAutomaticos";
 import {
   labelTipoReporte, labelFrecuencia, formatFechaCorta,
@@ -14,8 +15,10 @@ import {
 } from "./types";
 
 interface Props {
-  onBack:   () => void;
-  onCrear:  () => void;
+  onBack:  () => void;
+  onCrear: () => void;
+  /** Abre el wizard de 6 etapas precargado — "Editar configuración completa" (Fase 9I). */
+  onEditarCompleto: (reporte: ReporteAutomatico) => void;
 }
 
 // ── Empty state ──────────────────────────────────────────────────────────────
@@ -85,9 +88,10 @@ function ToggleActivoBtn({
 // ── Columnas de la tabla ──────────────────────────────────────────────────────
 
 function buildColumns(
-  onEditar:  (r: ReporteAutomatico) => void,
-  onToggle:  (id: string, activo: boolean) => Promise<void>,
-  onEnviar:  (r: ReporteAutomatico) => void,
+  onEditar:   (r: ReporteAutomatico) => void,
+  onToggle:   (id: string, activo: boolean) => Promise<void>,
+  onEnviar:   (r: ReporteAutomatico) => void,
+  onEliminar: (r: ReporteAutomatico) => void,
 ): Column<ReporteAutomatico>[] {
   return [
     {
@@ -143,7 +147,7 @@ function buildColumns(
     {
       key:    "_acciones",
       header: "",
-      width:  "96px",
+      width:  "124px",
       align:  "right",
       render: (r) => (
         <div className="flex items-center justify-end gap-1">
@@ -168,6 +172,16 @@ function buildColumns(
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>
+          <button
+            type="button"
+            title="Eliminar"
+            aria-label="Eliminar reporte"
+            onClick={e => { e.stopPropagation(); onEliminar(r); }}
+            className="flex items-center justify-center w-7 h-7 rounded-lg transition-colors hover:bg-[var(--danger-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--navy)]"
+            style={{ color: "var(--gray-500)" }}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
         </div>
       ),
     },
@@ -176,21 +190,23 @@ function buildColumns(
 
 // ── Página principal ──────────────────────────────────────────────────────────
 
-export function ReportesAutomaticosPage({ onBack, onCrear }: Props) {
+export function ReportesAutomaticosPage({ onBack, onCrear, onEditarCompleto }: Props) {
   const state = useReportesAutomaticos();
   const {
     filtrados, loading,
     busqueda, setBusqueda,
     panelId, setPanelId, panelReporte,
-    guardando, toggleActivo, guardarEdicion,
+    guardando, toggleActivo, guardarEdicion, eliminar,
   } = state;
 
-  const [reporteAEnviar, setReporteAEnviar] = useState<ReporteAutomatico | null>(null);
+  const [reporteAEnviar,   setReporteAEnviar]   = useState<ReporteAutomatico | null>(null);
+  const [reporteAEliminar, setReporteAEliminar] = useState<ReporteAutomatico | null>(null);
 
   const columns = buildColumns(
     (r) => setPanelId(r.id),
     toggleActivo,
     (r) => setReporteAEnviar(r),
+    (r) => setReporteAEliminar(r),
   );
 
   const hayBusqueda = busqueda.trim().length > 0;
@@ -272,12 +288,39 @@ export function ReportesAutomaticosPage({ onBack, onCrear }: Props) {
                   <InfoRow label="Por" value={panelReporte.created_by} />
                 )}
               </div>
+
+              {/* Edición rápida de Información básica (Nombre, Asunto, Cuerpo,
+                  entre otros campos de la Etapa 01) — UX sin cambios. */}
               <FormReporteAutomatico
                 inicial={panelReporte}
                 guardando={guardando}
                 onGuardar={(datos) => guardarEdicion(panelReporte.id, datos)}
                 onCancelar={() => setPanelId(null)}
               />
+
+              {/* Editar configuración completa (Fase 9I): abre el mismo wizard
+                  de 6 etapas usado para crear, precargado con TODOS los datos
+                  del reporte — filtros, columnas, frecuencia y destinatarios
+                  incluidos, no solo la Información básica de arriba. */}
+              <div
+                className="mt-5 pt-4 flex flex-col gap-2"
+                style={{ borderTop: "1px solid var(--gray-100)" }}
+              >
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  icon={<Settings2 className="w-3.5 h-3.5" />}
+                  onClick={() => onEditarCompleto(panelReporte)}
+                  className="w-full"
+                >
+                  Editar configuración completa
+                </Button>
+                <p className="text-[11.5px]" style={{ color: "var(--gray-400)" }}>
+                  Filtros, columnas, frecuencia y destinatarios — el asistente
+                  completo de creación, precargado con este reporte.
+                </p>
+              </div>
             </PanelSection>
           </div>
         )}
@@ -288,6 +331,15 @@ export function ReportesAutomaticosPage({ onBack, onCrear }: Props) {
         <ModalEnviarReporte
           reporte={reporteAEnviar}
           onClose={() => setReporteAEnviar(null)}
+        />
+      )}
+
+      {/* Confirmación + eliminación definitiva (Fase 9I) */}
+      {reporteAEliminar && (
+        <ModalEliminarReporte
+          reporte={reporteAEliminar}
+          onEliminar={eliminar}
+          onClose={() => setReporteAEliminar(null)}
         />
       )}
 

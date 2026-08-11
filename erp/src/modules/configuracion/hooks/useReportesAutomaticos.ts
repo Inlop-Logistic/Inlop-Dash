@@ -5,6 +5,7 @@ import {
   toggleReporteActivo,
   actualizarReporteAutomatico,
   crearReporteAutomatico,
+  eliminarReporteAutomatico,
 } from "../services/api";
 
 export function useReportesAutomaticos() {
@@ -82,6 +83,18 @@ export function useReportesAutomaticos() {
     }
   }, []);
 
+  /**
+   * Eliminación definitiva (Fase 9I). Quita la fila de `data` al confirmar
+   * el éxito del backend — el listado se actualiza en memoria, sin recargar
+   * la página ni volver a pedir la lista completa. Cierra el panel si el
+   * reporte eliminado es el que estaba abierto.
+   */
+  const eliminar = useCallback(async (id: string) => {
+    await eliminarReporteAutomatico(id);
+    setData(prev => prev.filter(r => r.id !== id));
+    setPanelId(prev => prev === id ? null : prev);
+  }, []);
+
   return {
     data,
     filtrados,
@@ -96,6 +109,7 @@ export function useReportesAutomaticos() {
     toggleActivo,
     guardarEdicion,
     crear,
+    eliminar,
     cargar,
   };
 }

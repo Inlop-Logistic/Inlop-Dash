@@ -347,6 +347,44 @@ export function etapaInfoBasicaCompleta(d: DatosInfoBasica): boolean {
   return Boolean(d.nombre.trim() && d.asunto.trim());
 }
 
+// ─── Edición completa (Fase 9I) ───────────────────────────────────────────────
+
+/** UUID local para las keys de React de un FiltroItem — nunca se persiste. */
+function idLocal(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/**
+ * Proyecta un ReporteAutomatico ya persistido al estado del configurador
+ * (DatosConfigurador) para precargar el mismo wizard de 6 etapas usado al
+ * crear — "Editar configuración completa" nunca abre un formulario nuevo,
+ * solo reutiliza ConfiguradorReporte con este estado inicial en vez del que
+ * arma datosInicial() al crear.
+ *
+ * `recurrencia`/`destinatarios` pueden llegar vacíos ({}) en un reporte que
+ * quedó como borrador antes de completar esas etapas — en ese caso se cae a
+ * los mismos valores por defecto que usa el flujo de creación
+ * (crearRecurrenciaInicial/crearDestinatariosInicial), nunca a un objeto
+ * inválido para las etapas 04/05.
+ */
+export function datosConfiguradorDesdeReporte(r: ReporteAutomatico): DatosConfigurador {
+  return {
+    infoBasica: {
+      nombre:       r.nombre,
+      modulo_id:    r.modulo_id,
+      tipo_reporte: r.tipo_reporte,
+      asunto:       r.asunto ?? "",
+      cuerpo:       r.cuerpo ?? "",
+      formato:      r.formato,
+      activo:       r.activo,
+    },
+    filtros:       (r.filtros ?? []).map(f => ({ ...f, id: idLocal() })),
+    columnas:      r.columnas ?? [],
+    frecuencia:    r.recurrencia?.tipo ? r.recurrencia : crearRecurrenciaInicial(),
+    destinatarios: r.destinatarios ?? crearDestinatariosInicial(),
+  };
+}
+
 // ─── Helpers de presentación ──────────────────────────────────────────────────
 
 export function labelModulo(valor: string): string {

@@ -4933,6 +4933,28 @@ app.patch("/api/reportes-automaticos/:id/activo", requireInternalApiKey, async (
   }
 });
 
+// DELETE /api/reportes-automaticos/:id — eliminación definitiva (Fase 9I).
+// No toca el motor de generación/envío/scheduler: un reporte eliminado deja
+// de existir en reportes_automaticos, así que scheduler.js (que solo procesa
+// filas existentes con proxima_ejecucion vencida) simplemente nunca vuelve a
+// encontrarlo — no requiere ninguna lógica adicional de "cancelación".
+// sbFetch(..., "DELETE") siempre devuelve null (ver sbFetch arriba), así que
+// primero se verifica existencia — mismo patrón que
+// DELETE /api/cumplidos/:trip/documentos/:id más arriba.
+app.delete("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existente = await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}&select=id`);
+    if (!existente?.[0]) return res.status(404).json({ error: "Reporte no encontrado" });
+
+    await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}`, "DELETE");
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("DELETE /api/reportes-automaticos/:id error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
 // POST /api/reportes-automaticos/:id/enviar — ejecución manual (Fase 9E).
 // Genera el archivo (Excel/HTML, según reporte.formato) con el pipeline de
 // 9B-9D y lo envía por correo a los destinatarios configurados. No toca

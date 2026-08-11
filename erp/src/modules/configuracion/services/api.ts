@@ -257,6 +257,18 @@ export function toggleReporteActivo(
 }
 
 /**
+ * Eliminación definitiva (Fase 9I). No hay confirmación a nivel de API —
+ * la confirmación explícita (nombre del reporte, advertencia si está activo)
+ * vive en ModalEliminarReporte, antes de invocar esta función.
+ */
+export function eliminarReporteAutomatico(id: string): Promise<{ ok: boolean }> {
+  return req<{ ok: boolean }>(
+    `/api/reportes-automaticos/${encodeURIComponent(id)}`,
+    { method: "DELETE" }
+  );
+}
+
+/**
  * Ejecución manual (Fase 9E): genera el archivo del reporte (Excel/HTML,
  * según su formato) y lo envía de inmediato por correo a sus destinatarios
  * configurados — sin tocar `proxima_ejecucion` ni `recurrencia`, sin crear

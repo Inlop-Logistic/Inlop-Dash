@@ -74,12 +74,24 @@ function datosInicial(): DatosConfigurador {
 interface Props {
   onCreado:   () => void;
   onCancelar: () => void;
+  /**
+   * Modo edición (Fase 9I) — "Editar configuración completa" desde el panel
+   * lateral del listado abre este mismo wizard, precargado con TODOS los
+   * datos del reporte existente, en vez del formulario creado desde cero.
+   * `reporteId` fija el id sobre el que se guarda (nunca crea uno nuevo:
+   * ver guardarBorrador/activarReporte más abajo, que ya distinguen
+   * crear/actualizar según si hay un id conocido) y `datosIniciales` precarga
+   * las 6 etapas — ver datosConfiguradorDesdeReporte() en types.ts.
+   */
+  reporteId?:      string;
+  datosIniciales?: DatosConfigurador;
 }
 
-export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
+export function ConfiguradorReporte({ onCreado, onCancelar, reporteId, datosIniciales }: Props) {
+  const esEdicion = Boolean(reporteId);
   const [etapaActiva, setEtapaActiva] = useState<EtapaId>("info-basica");
-  const [datos,       setDatos]       = useState<DatosConfigurador>(datosInicial);
-  const [borradorId,  setBorradorId]  = useState<string | null>(null);
+  const [datos,       setDatos]       = useState<DatosConfigurador>(() => datosIniciales ?? datosInicial());
+  const [borradorId,  setBorradorId]  = useState<string | null>(reporteId ?? null);
   const [guardando,   setGuardando]   = useState(false);
   const [errorMsg,    setErrorMsg]    = useState<string | null>(null);
 
@@ -354,19 +366,24 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
               onClick={activarReporte}
               loading={guardando}
             >
-              Activar reporte
+              {esEdicion ? "Guardar cambios" : "Activar reporte"}
             </Button>
           </>
         ) : (
           <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={guardarBorrador}
-              loading={guardando}
-            >
-              Guardar borrador
-            </Button>
+            {/* "Guardar borrador" solo tiene sentido creando desde cero — en
+                edición marcaría borrador:true/activo:false sobre un reporte
+                que ya puede estar activo y en producción. */}
+            {!esEdicion && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={guardarBorrador}
+                loading={guardando}
+              >
+                Guardar borrador
+              </Button>
+            )}
             <Button
               size="sm"
               onClick={handleContinuar}
