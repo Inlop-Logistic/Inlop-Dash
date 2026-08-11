@@ -61,3 +61,49 @@ test('obtenerDatosReporte con columnas=[] usa todas las columnas del catálogo (
 test('obtenerDatosReporte exige tipo_reporte', async () => {
   await assert.rejects(() => obtenerDatosReporte({}, {}), /tipo_reporte/);
 });
+
+// ── Orden por fecha (Fase 9H) ────────────────────────────────────────────────
+
+test('obtenerDatosReporte ordena por la columna de fecha seleccionada, DESC', async () => {
+  const viajesCache = [
+    { trip_number: 'A', activated_on: '01/05/2026 08:00:00', origin_city_name: 'Bogotá', destiny_city_name: 'Cali' },
+    { trip_number: 'B', activated_on: '08/11/2026 08:00:00', origin_city_name: 'Bogotá', destiny_city_name: 'Cali' },
+    { trip_number: 'C', activated_on: '03/20/2026 08:00:00', origin_city_name: 'Bogotá', destiny_city_name: 'Cali' },
+  ];
+  const deps = {
+    viajesCache,
+    tripCustomerCache: new Map(),
+    extraerTelefono: () => null,
+    primerNombreCliente: () => null,
+  };
+  const reporte = {
+    tipo_reporte: 'viajes_activos',
+    filtros: [],
+    columnas: [
+      { campo: 'trip_number',  titulo: 'Manifiesto', orden: 0 },
+      { campo: 'activated_on', titulo: 'Fecha',       orden: 1 },
+    ],
+  };
+  const out = await obtenerDatosReporte(reporte, deps);
+  assert.deepEqual(out.registros.map(r => r.trip_number), ['B', 'C', 'A']);
+});
+
+test('obtenerDatosReporte sin columna de fecha seleccionada conserva el orden del dataset', async () => {
+  const viajesCache = [
+    { trip_number: 'A', activated_on: '01/05/2026 08:00:00', origin_city_name: 'Bogotá', destiny_city_name: 'Cali' },
+    { trip_number: 'B', activated_on: '08/11/2026 08:00:00', origin_city_name: 'Bogotá', destiny_city_name: 'Cali' },
+  ];
+  const deps = {
+    viajesCache,
+    tripCustomerCache: new Map(),
+    extraerTelefono: () => null,
+    primerNombreCliente: () => null,
+  };
+  const reporte = {
+    tipo_reporte: 'viajes_activos',
+    filtros: [],
+    columnas: [{ campo: 'trip_number', titulo: 'Manifiesto', orden: 0 }],
+  };
+  const out = await obtenerDatosReporte(reporte, deps);
+  assert.deepEqual(out.registros.map(r => r.trip_number), ['A', 'B']);
+});

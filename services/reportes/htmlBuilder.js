@@ -23,7 +23,7 @@
  * (decisión Fase 9A §5.4).
  */
 import { extraerFechaColombia } from '../../utils/fechas.js';
-import { valorFecha } from './valoresCelda.js';
+import { valorFecha, normalizarTextoDuplicado } from './valoresCelda.js';
 import { construirNombreArchivo } from './nombreArchivo.js';
 import { camposDe } from './catalogoDatasets.js';
 import { obtenerDatosReporte } from './index.js';
@@ -64,7 +64,10 @@ function formatearFechaDDMMYYYY(valorCrudo, campoInfo) {
  * texto (HTML no tiene un tipo de dato "fecha" o "número" nativo):
  *   - fecha    → DD/MM/YYYY
  *   - booleano → "Sí"/"No" (mismo criterio que excelBuilder/Preview)
- *   - texto/enum/numero → String(valor)
+ *   - texto    → String(valor), con duplicados idénticos separados por
+ *     coma colapsados (ver normalizarTextoDuplicado en valoresCelda.js —
+ *     mismo criterio que excelBuilder.js, presentación únicamente)
+ *   - enum/numero → String(valor)
  *   - vacío (null/undefined/'') → cadena vacía — celda vacía, sin
  *     placeholder "—" (regla explícita de Fase 9D, distinta de la Preview
  *     del wizard que sí usa "—" para legibilidad en pantalla).
@@ -76,6 +79,8 @@ function formatearValorTexto(valorCrudo, campoInfo) {
       return formatearFechaDDMMYYYY(valorCrudo, campoInfo);
     case 'booleano':
       return (valorCrudo === true || valorCrudo === 'true') ? 'Sí' : 'No';
+    case 'texto':
+      return normalizarTextoDuplicado(String(valorCrudo));
     default:
       return String(valorCrudo);
   }

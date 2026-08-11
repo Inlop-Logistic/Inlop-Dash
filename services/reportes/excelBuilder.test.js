@@ -165,6 +165,73 @@ test('construirNombreArchivo sin fechaEjecucion usa la fecha de hoy (Colombia) �
   assert.match(nombre, /^x_\d{4}-\d{2}-\d{2}\.xlsx$/);
 });
 
+// ── Cliente con nombres duplicados (Fase 9H) ────────────────────────────────
+
+test('un valor de texto con el mismo nombre repetido por comas se normaliza (sin tocar el dato fuente)', async () => {
+  const datos = {
+    columnas:  [{ campo: 'company_customer_name', titulo: 'Cliente' }],
+    registros: [{ company_customer_name: 'FRONTERA ENERGY COLOMBIA CORP, FRONTERA ENERGY COLOMBIA CORP' }],
+    metadata:  { tipoReporte: 'viajes_activos', fechaEjecucion: '2026-08-11' },
+  };
+  const { buffer } = await generarExcel(datos, { nombre: 'Viajes activos' });
+  const hoja = await leerHoja(buffer);
+  assert.equal(hoja.getRow(2).getCell(1).value, 'FRONTERA ENERGY COLOMBIA CORP');
+});
+
+test('un valor de texto con clientes realmente distintos separados por coma no se altera', async () => {
+  const datos = {
+    columnas:  [{ campo: 'company_customer_name', titulo: 'Cliente' }],
+    registros: [{ company_customer_name: 'ACME S.A.S., FRONTERA ENERGY COLOMBIA CORP' }],
+    metadata:  { tipoReporte: 'viajes_activos', fechaEjecucion: '2026-08-11' },
+  };
+  const { buffer } = await generarExcel(datos, { nombre: 'Viajes activos' });
+  const hoja = await leerHoja(buffer);
+  assert.equal(hoja.getRow(2).getCell(1).value, 'ACME S.A.S., FRONTERA ENERGY COLOMBIA CORP');
+});
+
+// ── Ancho de columnas (Fase 9H) ──────────────────────────────────────────────
+
+test('columnas de texto largo quedan acotadas a un ancho máximo razonable, con wrapText activado', async () => {
+  const textoLargo = 'Observación muy larga que en el TMS puede llegar a superar por mucho el ancho normal de una columna de Excel repetidamente';
+  const datos = {
+    columnas:  [{ campo: 'obs', titulo: 'Observaciones' }],
+    registros: [{ obs: textoLargo }],
+    metadata:  { tipoReporte: 'viajes_finalizados', fechaEjecucion: '2026-08-11' },
+  };
+  const { buffer } = await generarExcel(datos, { nombre: 'Viajes finalizados' });
+  const hoja = await leerHoja(buffer);
+  const columna = hoja.getColumn(1);
+  assert.ok(columna.width < textoLargo.length, 'el ancho no debe crecer con todo el contenido');
+  assert.ok(columna.width <= 45, 'debe respetar el límite máximo por tipo texto');
+  assert.equal(columna.alignment?.wrapText, true);
+});
+
+test('columnas de fecha/booleano tienen un ancho fijo derivado del tipo, no del contenido', async () => {
+  const datos = {
+    columnas: [
+      { campo: 'activated_on',  titulo: 'Fecha de activación' },
+      { campo: 'tiene_soporte', titulo: 'Tiene soporte' },
+    ],
+    registros: [{ activated_on: '08/11/2026 09:00:00', tiene_soporte: true }],
+    metadata: { tipoReporte: 'viajes_finalizados', fechaEjecucion: '2026-08-11' },
+  };
+  const { buffer } = await generarExcel(datos, { nombre: 'Viajes finalizados' });
+  const hoja = await leerHoja(buffer);
+  assert.equal(hoja.getColumn(1).width, 21); // ancho fijo de fecha (12) cede ante un título más largo (19+2)
+  assert.equal(hoja.getColumn(2).width, 15); // ancho fijo de booleano (8) cede ante un título más largo (13+2)
+});
+
+test('columnas cortas no quedan gigantes por un título largo — ancho acotado al tipo (enum)', async () => {
+  const datos = {
+    columnas:  [{ campo: 'estado_documental', titulo: 'Estado documental del expediente completo' }],
+    registros: [{ estado_documental: 'completo' }],
+    metadata:  { tipoReporte: 'viajes_finalizados', fechaEjecucion: '2026-08-11' },
+  };
+  const { buffer } = await generarExcel(datos, { nombre: 'Viajes finalizados' });
+  const hoja = await leerHoja(buffer);
+  assert.equal(hoja.getColumn(1).width, 24); // tope de ancho para tipo enum
+});
+
 // ── Pipeline completo: obtenerDatosReporte → generarExcel ──────────────────
 
 test('generarExcelDeReporte encadena el pipeline completo (Fase 9B + 9C)', async () => {

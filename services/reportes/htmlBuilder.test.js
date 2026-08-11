@@ -157,6 +157,29 @@ test('columnas de tipo booleano se muestran como Sí/No', () => {
   assert.ok(html.includes('<td>No</td>'));
 });
 
+// ── Cliente con nombres duplicados (Fase 9H) ────────────────────────────────
+
+test('un valor de texto con el mismo nombre repetido por comas se normaliza en HTML', () => {
+  const datos = {
+    columnas:  [{ campo: 'company_customer_name', titulo: 'Cliente' }],
+    registros: [{ company_customer_name: 'FRONTERA ENERGY COLOMBIA CORP, FRONTERA ENERGY COLOMBIA CORP' }],
+    metadata:  { tipoReporte: 'viajes_activos', fechaEjecucion: '2026-08-11' },
+  };
+  const html = generarHtmlFilas(datos, { nombre: 'Viajes activos' });
+  assert.ok(html.includes('<td>FRONTERA ENERGY COLOMBIA CORP</td>'));
+  assert.ok(!html.includes('FRONTERA ENERGY COLOMBIA CORP, FRONTERA ENERGY COLOMBIA CORP'));
+});
+
+test('un valor de texto con clientes realmente distintos separados por coma no se altera en HTML', () => {
+  const datos = {
+    columnas:  [{ campo: 'company_customer_name', titulo: 'Cliente' }],
+    registros: [{ company_customer_name: 'ACME S.A.S., FRONTERA ENERGY COLOMBIA CORP' }],
+    metadata:  { tipoReporte: 'viajes_activos', fechaEjecucion: '2026-08-11' },
+  };
+  const html = generarHtmlFilas(datos, { nombre: 'Viajes activos' });
+  assert.ok(html.includes('<td>ACME S.A.S., FRONTERA ENERGY COLOMBIA CORP</td>'));
+});
+
 // ── Sin registros ─────────────────────────────────────────────────────────────
 
 test('html_filas sin registros: HTML válido, encabezados presentes, aviso de "sin registros"', () => {

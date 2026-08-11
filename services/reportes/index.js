@@ -5,14 +5,16 @@
  * No genera Excel, no genera HTML, no envía correo, no programa nada — eso
  * son fases posteriores (9C+, ver docs/REPORTES_AUTOMATICOS_MOTOR_GENERACION.md).
  */
-import { obtenerDatasetCompleto } from './datasetProvider.js';
-import { aplicarFiltros }         from './filterEngine.js';
-import { resolverColumnas }       from './columnResolver.js';
-import { fechaHoyColombia }       from '../../utils/fechas.js';
+import { obtenerDatasetCompleto }        from './datasetProvider.js';
+import { aplicarFiltros }                from './filterEngine.js';
+import { resolverColumnas }              from './columnResolver.js';
+import { ordenarPorFechaSeleccionada }   from './ordenReporte.js';
+import { fechaHoyColombia }              from '../../utils/fechas.js';
 
 export { obtenerDatasetCompleto } from './datasetProvider.js';
 export { aplicarFiltros, evaluaCondicion, fechaCampoYMD } from './filterEngine.js';
 export { resolverColumnas } from './columnResolver.js';
+export { ordenarPorFechaSeleccionada } from './ordenReporte.js';
 export { CATALOGO_DATASETS, camposDe } from './catalogoDatasets.js';
 
 /**
@@ -53,9 +55,12 @@ export async function obtenerDatosReporte(reporte, deps = {}) {
     fechaEjecucion: deps.fechaEjecucion || fechaHoyColombia(),
   };
 
-  const datasetCompleto = await obtenerDatasetCompleto(tipoReporte, contexto, deps);
-  const registros        = aplicarFiltros(datasetCompleto, filtros, tipoReporte);
-  const columnas          = resolverColumnas(tipoReporte, columnasCfg);
+  const datasetCompleto  = await obtenerDatasetCompleto(tipoReporte, contexto, deps);
+  const registrosFiltrados = aplicarFiltros(datasetCompleto, filtros, tipoReporte);
+  const columnas            = resolverColumnas(tipoReporte, columnasCfg);
+  // Si hay una columna de fecha seleccionada, más reciente → más antiguo —
+  // mismo orden para Excel y HTML porque ambos parten de esta única salida.
+  const registros            = ordenarPorFechaSeleccionada(registrosFiltrados, columnas, tipoReporte);
 
   return {
     columnas,
