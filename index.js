@@ -4764,7 +4764,7 @@ function errorDestinatarios(destinatarios) {
   return null;
 }
 
-app.get("/api/reportes-automaticos", async (req, res) => {
+app.get("/api/reportes-automaticos", requireInternalApiKey, async (req, res) => {
   try {
     const rows = await sbFetch("/reportes_automaticos?order=created_at.desc&limit=500");
     res.json(rows ?? []);
@@ -4774,7 +4774,7 @@ app.get("/api/reportes-automaticos", async (req, res) => {
   }
 });
 
-app.post("/api/reportes-automaticos", async (req, res) => {
+app.post("/api/reportes-automaticos", requireInternalApiKey, async (req, res) => {
   try {
     const actor = req.headers["x-user-email"] ?? "sistema";
     const {
@@ -4841,7 +4841,7 @@ app.post("/api/reportes-automaticos", async (req, res) => {
   }
 });
 
-app.patch("/api/reportes-automaticos/:id", async (req, res) => {
+app.patch("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, res) => {
   try {
     const { id } = req.params;
     const actor = req.headers["x-user-email"] ?? "sistema";
@@ -4900,7 +4900,7 @@ app.patch("/api/reportes-automaticos/:id", async (req, res) => {
   }
 });
 
-app.patch("/api/reportes-automaticos/:id/activo", async (req, res) => {
+app.patch("/api/reportes-automaticos/:id/activo", requireInternalApiKey, async (req, res) => {
   try {
     const { id } = req.params;
     const actor = req.headers["x-user-email"] ?? "sistema";
