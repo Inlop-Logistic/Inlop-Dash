@@ -30,8 +30,19 @@
  *     array `reportes` de ese módulo.
  *   - Para agregar un campo a un reporte existente: agregar una entrada al
  *     array `campos` de ese reporte, con sus metadatos completos.
+ *
+ * Auditoría de datasets — Gestión Logística (2026-08-11):
+ *   viajes_activos    → TmsViaje          (GET /api/viajes)
+ *   solicitudes       → Solicitud         (GET /api/solicitudes)
+ *   programacion      → ViajeResumen      (GET /api/programacion)
+ *   viajes_finalizados→ CumplidoRecord    (GET /api/cumplidos)
+ *   centro_gps        → GpsRecord         (GET /api/gps)
  */
-import { ESTADO_CFG } from "@/modules/viajes/constants";
+import { ESTADO_CFG as ESTADO_VIAJE_CFG }        from "@/modules/viajes/constants";
+import { ESTADO_CFG as ESTADO_SOLICITUD_CFG }     from "@/modules/solicitudes/constants";
+import { ESTADO_CFG as ESTADO_PROGRAMACION_CFG }  from "@/modules/programacion/constants";
+import { ESTADO_DOC_CFG }                         from "@/modules/cumplidos/constants";
+import { ESTADO_GPS_CFG }                         from "@/modules/gps/constants";
 
 // ─── Tipos de campo ───────────────────────────────────────────────────────────
 
@@ -114,6 +125,14 @@ const OP_ANTES_DE: OperadorConfig    = { id: "antes_de",     label: "antes de", 
 const OP_DESPUES_DE: OperadorConfig  = { id: "despues_de",   label: "después de",  tipoValor: "date"       };
 const OP_ENTRE: OperadorConfig       = { id: "entre",        label: "entre",       tipoValor: "date_range" };
 
+// ─── Opciones compartidas entre reportes ─────────────────────────────────────
+
+/** Línea de negocio derivada de type_operation — usada en varios reportes. */
+const OPCIONES_LINEA_NEGOCIO: OpcionValor[] = [
+  { value: "Carga Seca",    label: "Carga Seca"    },
+  { value: "Carga Líquida", label: "Carga Líquida" },
+];
+
 // ─── Catálogo central ──────────────────────────────────────────────────────────
 
 export const CATALOGO_REPORTES: ModuloDataset[] = [
@@ -121,11 +140,13 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
     id:    "gestion_logistica",
     label: "Gestión Logística",
     reportes: [
+
+      // ── Viajes Activos ──────────────────────────────────────────────────────
+      // Dataset fuente: TmsViaje (GET /api/viajes).
+      // Campos confirmados en la auditoría de Fase 4.
       {
         id:    "viajes_activos",
         label: "Viajes Activos",
-        // Dataset fuente: TmsViaje (GET /api/viajes). Campos confirmados en
-        // la auditoría de Fase 4 — no se listan columnas sin confirmar.
         campos: [
           {
             key:    "state_travel",
@@ -134,7 +155,7 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             origen: "TmsViaje.state_travel — estado reportado por el TMS",
             filtrable:  true,
             operadores: [OP_ES, OP_NO_ES],
-            opciones:   Object.entries(ESTADO_CFG).map(([value, cfg]) => ({
+            opciones:   Object.entries(ESTADO_VIAJE_CFG).map(([value, cfg]) => ({
               value,
               label: cfg.label,
             })),
@@ -145,13 +166,10 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             key:    "linea_negocio",
             label:  "Línea de negocio",
             tipo:   "enum",
-            origen: "Derivado de TmsViaje.type_operation",
+            origen: "Derivado de TmsViaje.type_operation — 'granel liquido' → Carga Líquida, resto → Carga Seca",
             filtrable:  true,
             operadores: [OP_ES],
-            opciones: [
-              { value: "Carga Seca",    label: "Carga Seca"    },
-              { value: "Carga Líquida", label: "Carga Líquida" },
-            ],
+            opciones:   OPCIONES_LINEA_NEGOCIO,
             seleccionableColumna: true,
             ordenable:            true,
           },
@@ -177,13 +195,261 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
           },
         ],
       },
-      // Otros reportes de Gestión Logística (Solicitudes, Programación,
-      // Viajes Finalizados, Centro GPS) se agregan aquí cuando se audite el
-      // dataset correspondiente. Estructura esperada:
-      // {
-      //   id: "solicitudes_activas", label: "Solicitudes Activas",
-      //   campos: [ /* campos confirmados de Solicitud, ver modules/solicitudes/types.ts */ ],
-      // },
+
+      // ── Solicitudes ─────────────────────────────────────────────────────────
+      // Dataset fuente: Solicitud (GET /api/solicitudes).
+      // Estado persiste como EstadoSolicitud: pendiente | aprobado | en_ruta |
+      // completado | cancelado. Labels tomados de solicitudes/constants ESTADO_CFG.
+      {
+        id:    "solicitudes",
+        label: "Solicitudes",
+        campos: [
+          {
+            key:    "estado",
+            label:  "Estado",
+            tipo:   "enum",
+            origen: "Solicitud.estado — estado de la solicitud de servicio",
+            filtrable:  true,
+            operadores: [OP_ES, OP_NO_ES],
+            opciones:   Object.entries(ESTADO_SOLICITUD_CFG).map(([value, cfg]) => ({
+              value,
+              label: cfg.label,
+            })),
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "tipo_operacion",
+            label:  "Tipo de operación",
+            tipo:   "enum",
+            origen: "Solicitud.tipo_operacion — urbana | nacional",
+            filtrable:  true,
+            operadores: [OP_ES],
+            opciones: [
+              { value: "urbana",   label: "Urbana"   },
+              { value: "nacional", label: "Nacional" },
+            ],
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "fecha_requerida",
+            label:  "Fecha requerida",
+            tipo:   "fecha",
+            origen: "Solicitud.fecha_requerida — fecha de entrega solicitada por el cliente",
+            filtrable:  true,
+            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "cliente",
+            label:  "Cliente",
+            tipo:   "texto",
+            origen: "Solicitud.cliente — nombre del cliente que genera la solicitud",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "origen",
+            label:  "Ciudad de origen",
+            tipo:   "texto",
+            origen: "Solicitud.origen — ciudad/dirección de recogida",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "destino",
+            label:  "Ciudad de destino",
+            tipo:   "texto",
+            origen: "Solicitud.destino — ciudad/dirección de entrega",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+        ],
+      },
+
+      // ── Programación ────────────────────────────────────────────────────────
+      // Dataset fuente: ViajeResumen (GET /api/programacion).
+      // estado_programacion persiste como EstadoProgramacion: programado |
+      // asignado | en_ruta | completado | cancelado | sin_asignar.
+      // Labels tomados de programacion/constants ESTADO_CFG.
+      {
+        id:    "programacion",
+        label: "Programación",
+        campos: [
+          {
+            key:    "estado_programacion",
+            label:  "Estado de programación",
+            tipo:   "enum",
+            origen: "ViajeResumen.estado_programacion — estado operativo del viaje en programación",
+            filtrable:  true,
+            operadores: [OP_ES, OP_NO_ES],
+            opciones:   Object.entries(ESTADO_PROGRAMACION_CFG).map(([value, cfg]) => ({
+              value,
+              label: cfg.label,
+            })),
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "linea_negocio",
+            label:  "Línea de negocio",
+            tipo:   "enum",
+            origen: "Derivado de ViajeResumen.type_operation — 'granel liquido' → Carga Líquida, resto → Carga Seca",
+            filtrable:  true,
+            operadores: [OP_ES],
+            opciones:   OPCIONES_LINEA_NEGOCIO,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "schedulate_origin",
+            label:  "Fecha de despacho",
+            tipo:   "fecha",
+            origen: "ViajeResumen.schedulate_origin — fecha/hora programada de despacho en origen",
+            filtrable:  true,
+            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "activo_en_resume",
+            label:  "Activo en programación",
+            tipo:   "booleano",
+            origen: "ViajeResumen.activo_en_resume — indica si el viaje aparece activo en el resumen operativo",
+            filtrable:  true,
+            operadores: [OP_TIENE_VALOR, OP_SIN_VALOR],
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+        ],
+      },
+
+      // ── Viajes Finalizados ───────────────────────────────────────────────────
+      // Dataset fuente: CumplidoRecord (GET /api/cumplidos).
+      // estado_documental persiste como EstadoDocumental: pendiente |
+      // en_revision | con_observaciones | aprobado | rechazado | listo_facturacion.
+      // Labels tomados de cumplidos/constants ESTADO_DOC_CFG.
+      {
+        id:    "viajes_finalizados",
+        label: "Viajes Finalizados",
+        campos: [
+          {
+            key:    "estado_documental",
+            label:  "Estado documental",
+            tipo:   "enum",
+            origen: "CumplidoRecord.estado_documental — estado de revisión del paquete documental del cumplido",
+            filtrable:  true,
+            operadores: [OP_ES, OP_NO_ES],
+            opciones:   Object.entries(ESTADO_DOC_CFG).map(([value, cfg]) => ({
+              value,
+              label: cfg.label,
+            })),
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "state_travel",
+            label:  "Estado del viaje (TMS)",
+            tipo:   "enum",
+            origen: "CumplidoRecord.state_travel — estado del viaje reportado por el TMS al momento del cumplido",
+            filtrable:  true,
+            operadores: [OP_ES, OP_NO_ES],
+            opciones:   Object.entries(ESTADO_VIAJE_CFG).map(([value, cfg]) => ({
+              value,
+              label: cfg.label,
+            })),
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "linea_negocio",
+            label:  "Línea de negocio",
+            tipo:   "enum",
+            origen: "Derivado de CumplidoRecord.type_operation — 'granel liquido' → Carga Líquida, resto → Carga Seca",
+            filtrable:  true,
+            operadores: [OP_ES],
+            opciones:   OPCIONES_LINEA_NEGOCIO,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "activated_on",
+            label:  "Fecha de activación",
+            tipo:   "fecha",
+            origen: "CumplidoRecord.activated_on — fecha de inicio del viaje reportada por el TMS",
+            filtrable:  true,
+            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "tiene_soporte",
+            label:  "Tiene soporte cargado",
+            tipo:   "booleano",
+            origen: "CumplidoRecord.tiene_soporte — indica si el cumplido tiene al menos un archivo adjunto",
+            filtrable:  true,
+            operadores: [OP_TIENE_VALOR, OP_SIN_VALOR],
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+        ],
+      },
+
+      // ── Centro GPS ───────────────────────────────────────────────────────────
+      // Dataset fuente: GpsRecord (GET /api/gps).
+      // estadoGps es un campo calculado en el backend a partir de la posición,
+      // velocidad y alertas GPS activas: activo | detenido | con_alarma |
+      // panico | desconectado. Labels tomados de gps/constants ESTADO_GPS_CFG.
+      {
+        id:    "centro_gps",
+        label: "Centro GPS",
+        campos: [
+          {
+            key:    "estadoGps",
+            label:  "Estado GPS",
+            tipo:   "enum",
+            origen: "GpsRecord.estadoGps — estado calculado del vehículo en el sistema de monitoreo",
+            filtrable:  true,
+            operadores: [OP_ES, OP_NO_ES],
+            opciones:   Object.entries(ESTADO_GPS_CFG).map(([value, cfg]) => ({
+              value,
+              label: cfg.label,
+            })),
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "state_travel",
+            label:  "Estado del viaje (TMS)",
+            tipo:   "enum",
+            origen: "GpsRecord.state_travel — estado del viaje reportado por el TMS",
+            filtrable:  true,
+            operadores: [OP_ES, OP_NO_ES],
+            opciones:   Object.entries(ESTADO_VIAJE_CFG).map(([value, cfg]) => ({
+              value,
+              label: cfg.label,
+            })),
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "last_alarm_name",
+            label:  "Con alarma activa",
+            tipo:   "booleano",
+            origen: "GpsRecord.last_alarm_name — presencia de alarma GPS activa en el vehículo",
+            filtrable:  true,
+            operadores: [OP_TIENE_VALOR, OP_SIN_VALOR],
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+        ],
+      },
+
     ],
   },
   // Módulos futuros — se agregan como nuevas entradas de nivel superior,
