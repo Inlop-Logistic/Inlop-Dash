@@ -37,6 +37,10 @@
  *   programacion      → ViajeResumen      (GET /api/programacion)
  *   viajes_finalizados→ CumplidoRecord    (GET /api/cumplidos)
  *   centro_gps        → GpsRecord         (GET /api/gps)
+ *
+ * Corrección Fase 5 (2026-08-11): filtros ≠ columnas.
+ *   viajes_activos expandido a 13 campos: 4 filtrables + columna,
+ *   9 solo columna. Fuente: VIAJES_COLUMNS_DEF + ViajesTableColumns.tsx.
  */
 import { ESTADO_CFG as ESTADO_VIAJE_CFG }        from "@/modules/viajes/constants";
 import { ESTADO_CFG as ESTADO_SOLICITUD_CFG }     from "@/modules/solicitudes/constants";
@@ -143,11 +147,129 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
 
       // ── Viajes Activos ──────────────────────────────────────────────────────
       // Dataset fuente: TmsViaje (GET /api/viajes).
-      // Campos confirmados en la auditoría de Fase 4.
+      //
+      // Auditoría Fase 5 corrección (2026-08-11):
+      //   Columnas reales confirmadas en viajes.definition.ts (VIAJES_COLUMNS_DEF)
+      //   y ViajesTableColumns.tsx (RENDERERS). La tabla real muestra 11 columnas;
+      //   el catálogo anterior solo declaraba los 4 campos filtrables — error
+      //   conceptual: filtros ≠ columnas. Cada campo ahora tiene metadata
+      //   independiente para filtrado y para selección de columna.
+      //
+      // Leyenda de metadata:
+      //   filtrable=true  → disponible en etapa Filtros
+      //   seleccionableColumna=true → disponible en etapa Columnas
+      //   Un campo puede ser ninguno, uno, o ambos, según su utilidad real.
       {
         id:    "viajes_activos",
         label: "Viajes Activos",
         campos: [
+          // ── Solo columna (no filtrable) ──────────────────────────────────
+
+          {
+            key:    "trip_number",
+            label:  "Manifiesto",
+            tipo:   "texto",
+            origen: "TmsViaje.trip_number — número de manifiesto TMS (clave del viaje)",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "number_order",
+            label:  "Remisión",
+            tipo:   "texto",
+            origen: "TmsViaje.number_order — número de remisión / documento de transporte",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "company_customer_name",
+            label:  "Cliente",
+            tipo:   "texto",
+            origen: "TmsViaje.razon_social ?? TmsViaje.company_customer_name — razón social del Maestro de Clientes, o nombre TMS como fallback",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "tipo_servicio",
+            label:  "Tipo de servicio",
+            tipo:   "texto",
+            origen: "Derivado: 'Urbano' si origin_city_name === destiny_city_name, 'Nacional' en otro caso",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "origin_city_name",
+            label:  "Ciudad de origen",
+            tipo:   "texto",
+            origen: "TmsViaje.origin_city_name — ciudad de recogida reportada por el TMS",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "destiny_city_name",
+            label:  "Ciudad de destino",
+            tipo:   "texto",
+            origen: "TmsViaje.destiny_city_name — ciudad de entrega reportada por el TMS",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+          {
+            key:    "license_plate",
+            label:  "Placa",
+            tipo:   "texto",
+            origen: "TmsViaje.license_plate — placa del vehículo asignado",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "driver_name",
+            label:  "Conductor",
+            tipo:   "texto",
+            origen: "TmsViaje.driver_name — nombre del conductor asignado",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "driver_phone",
+            label:  "Celular del conductor",
+            tipo:   "texto",
+            origen: "TmsViaje.driver_phone — teléfono del conductor",
+            filtrable:            false,
+            seleccionableColumna: true,
+            ordenable:            false,
+          },
+
+          // ── Filtrable + columna ──────────────────────────────────────────
+
+          {
+            key:    "activated_on",
+            label:  "Fecha de activación",
+            tipo:   "fecha",
+            origen: "TmsViaje.activated_on — fecha de activación reportada por el TMS (formato MDY del TMS)",
+            filtrable:  true,
+            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
+          {
+            key:    "linea_negocio",
+            label:  "Línea de negocio",
+            tipo:   "enum",
+            origen: "Derivado de TmsViaje.type_operation — 'granel liquido' (case-insensitive) → Carga Líquida, cualquier otro → Carga Seca",
+            filtrable:  true,
+            operadores: [OP_ES],
+            opciones:   OPCIONES_LINEA_NEGOCIO,
+            seleccionableColumna: true,
+            ordenable:            true,
+          },
           {
             key:    "state_travel",
             label:  "Estado del viaje",
@@ -163,35 +285,14 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             ordenable:            true,
           },
           {
-            key:    "linea_negocio",
-            label:  "Línea de negocio",
-            tipo:   "enum",
-            origen: "Derivado de TmsViaje.type_operation — 'granel liquido' → Carga Líquida, resto → Carga Seca",
-            filtrable:  true,
-            operadores: [OP_ES],
-            opciones:   OPCIONES_LINEA_NEGOCIO,
-            seleccionableColumna: true,
-            ordenable:            true,
-          },
-          {
             key:    "last_alarm_name",
             label:  "Con novedad",
             tipo:   "booleano",
-            origen: "TmsViaje.last_alarm_name — presencia de alarma activa",
+            origen: "TmsViaje.last_alarm_name — presencia de alarma activa en el viaje",
             filtrable:  true,
             operadores: [OP_TIENE_VALOR, OP_SIN_VALOR],
             seleccionableColumna: true,
             ordenable:            false,
-          },
-          {
-            key:    "activated_on",
-            label:  "Fecha de activación",
-            tipo:   "fecha",
-            origen: "TmsViaje.activated_on — fecha de activación reportada por el TMS",
-            filtrable:  true,
-            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
-            seleccionableColumna: true,
-            ordenable:            true,
           },
         ],
       },
