@@ -4802,6 +4802,7 @@ app.post("/api/reportes-automaticos", async (req, res) => {
       frecuencia   = "diaria",
       filtros,
       columnas,
+      recurrencia,
     } = req.body ?? {};
 
     if (!nombre?.trim())       return res.status(400).json({ error: "El nombre es obligatorio" });
@@ -4819,6 +4820,9 @@ app.post("/api/reportes-automaticos", async (req, res) => {
     if (columnas !== undefined && !Array.isArray(columnas)) {
       return res.status(400).json({ error: "columnas debe ser un array" });
     }
+    if (recurrencia !== undefined && (typeof recurrencia !== "object" || recurrencia === null || Array.isArray(recurrencia))) {
+      return res.status(400).json({ error: "recurrencia debe ser un objeto" });
+    }
 
     const rows = await sbFetch("/reportes_automaticos", "POST", {
       nombre:       nombre.trim(),
@@ -4832,6 +4836,7 @@ app.post("/api/reportes-automaticos", async (req, res) => {
       frecuencia,
       filtros:      Array.isArray(filtros)  ? filtros  : [],
       columnas:     Array.isArray(columnas) ? columnas : [],
+      recurrencia:  recurrencia ?? {},
       created_by:   actor,
       updated_by:   actor,
     });
@@ -4847,7 +4852,7 @@ app.patch("/api/reportes-automaticos/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const actor = req.headers["x-user-email"] ?? "sistema";
-    const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, borrador, frecuencia, filtros, columnas } = req.body ?? {};
+    const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, borrador, frecuencia, filtros, columnas, recurrencia } = req.body ?? {};
 
     const patch = { updated_by: actor };
     if (nombre       !== undefined) patch.nombre       = nombre.trim();
@@ -4880,6 +4885,12 @@ app.patch("/api/reportes-automaticos/:id", async (req, res) => {
         return res.status(400).json({ error: "columnas debe ser un array" });
       }
       patch.columnas = columnas;
+    }
+    if (recurrencia !== undefined) {
+      if (typeof recurrencia !== "object" || recurrencia === null || Array.isArray(recurrencia)) {
+        return res.status(400).json({ error: "recurrencia debe ser un objeto" });
+      }
+      patch.recurrencia = recurrencia;
     }
 
     const rows = await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}`, "PATCH", patch);

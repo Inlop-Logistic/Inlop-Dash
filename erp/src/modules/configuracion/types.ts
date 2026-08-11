@@ -50,6 +50,8 @@ export interface ReporteAutomatico {
   filtros:            FiltroDB[];
   /** Columnas del reporte, en el orden definido por el usuario. [] = todas. */
   columnas:           ColumnaReporte[];
+  /** Configuración estructurada de recurrencia (horas, días, rango). */
+  recurrencia:        RecurrenciaReporte;
   proxima_ejecucion:  string | null;
   created_at:         string;
   updated_at:         string;
@@ -67,11 +69,13 @@ export interface ReporteBase {
   formato:      "excel" | "html_filas" | "html_columnas";
   activo:       boolean;
   borrador?:    boolean;
-  /** frecuencia: preservada en DB; no expuesta en Información básica (Fase futura). */
+  /** Espejo de recurrencia.tipo — columna simple usada por el listado. */
   frecuencia:   "diaria" | "semanal" | "mensual";
   filtros?:     FiltroDB[];
   /** Columnas del reporte, en el orden definido por el usuario. Omitido = todas. */
   columnas?:    ColumnaReporte[];
+  /** Configuración estructurada de recurrencia. Omitido = sin configurar. */
+  recurrencia?: RecurrenciaReporte;
 }
 
 // ─── Catálogos ────────────────────────────────────────────────────────────────
@@ -128,7 +132,6 @@ export type EtapaId =
   | "info-basica"
   | "filtros"
   | "columnas"
-  | "ordenamiento"
   | "frecuencia"
   | "destinatarios"
   | "revision";
@@ -143,10 +146,9 @@ export const ETAPAS: EtapaConfig[] = [
   { id: "info-basica",   numero: 1, label: "Información básica"    },
   { id: "filtros",       numero: 2, label: "Filtros"               },
   { id: "columnas",      numero: 3, label: "Columnas"              },
-  { id: "ordenamiento",  numero: 4, label: "Ordenamiento"          },
-  { id: "frecuencia",    numero: 5, label: "Frecuencia"            },
-  { id: "destinatarios", numero: 6, label: "Destinatarios"         },
-  { id: "revision",      numero: 7, label: "Revisión y activación" },
+  { id: "frecuencia",    numero: 4, label: "Frecuencia"            },
+  { id: "destinatarios", numero: 5, label: "Destinatarios"         },
+  { id: "revision",      numero: 6, label: "Revisión y activación" },
 ];
 
 /** Estado de los campos de la etapa 01 — Información básica */
@@ -170,6 +172,96 @@ export const DATOS_INFO_BASICA_INICIAL: DatosInfoBasica = {
   activo:       true,
 };
 
+// ─── Etapa 04 · Frecuencia — recurrencia estructurada ────────────────────────
+//
+// Diseñada para que un scheduler futuro pueda calcular la próxima ejecución
+// sin reinterpretar texto libre: tipo de frecuencia, una o varias horas de
+// disparo, los días/día que aplican según el tipo, y un rango de repetición
+// con una única modalidad de finalización activa a la vez (discriminada por
+// `fin.modo`).
+
+export type TipoFrecuencia = "diaria" | "semanal" | "mensual";
+
+/** Días de la semana — value = JS Date#getDay() (0 = domingo … 6 = sábado). */
+export const DIAS_SEMANA = [
+  { value: 1, label: "Lunes"     },
+  { value: 2, label: "Martes"    },
+  { value: 3, label: "Miércoles" },
+  { value: 4, label: "Jueves"    },
+  { value: 5, label: "Viernes"   },
+  { value: 6, label: "Sábado"    },
+  { value: 0, label: "Domingo"   },
+] as const;
+
+/**
+ * Modalidad de finalización del rango de repetición — mutuamente excluyentes
+ * por construcción (discriminated union, no flags booleanos independientes).
+ */
+export type FinRecurrencia =
+  | { modo: "nunca" }
+  | { modo: "fecha"; fecha: string }            // YYYY-MM-DD
+  | { modo: "repeticiones"; cantidad: number };  // >= 1
+
+export interface RecurrenciaReporte {
+  tipo: TipoFrecuencia;
+  /** Horas de ejecución del día, "HH:mm" (24h). Al menos una. */
+  horas: string[];
+  /** Solo aplica cuando tipo === "semanal". */
+  dias_semana?: number[];
+  /** Solo aplica cuando tipo === "mensual". 1-31. */
+  dia_mes?: number;
+  /** Fecha de inicio del rango de repetición, YYYY-MM-DD. Obligatoria. */
+  fecha_inicio: string;
+  fin: FinRecurrencia;
+}
+
+/** Fecha de hoy en formato YYYY-MM-DD (zona horaria local del navegador). */
+function hoyISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Recurrencia por defecto al abrir la etapa por primera vez. */
+export function crearRecurrenciaInicial(): RecurrenciaReporte {
+  return {
+    tipo:         "diaria",
+    horas:        ["08:00"],
+    fecha_inicio: hoyISO(),
+    fin:          { modo: "nunca" },
+  };
+}
+
+/**
+ * Al cambiar `tipo`, conserva horas/fecha_inicio/fin (compatibles con
+ * cualquier frecuencia) y descarta dias_semana/dia_mes si ya no corresponden
+ * al nuevo tipo — nunca deja campos huérfanos de una frecuencia anterior.
+ */
+export function cambiarTipoFrecuencia(
+  r: RecurrenciaReporte,
+  nuevoTipo: TipoFrecuencia
+): RecurrenciaReporte {
+  const { dias_semana: _ds, dia_mes: _dm, ...resto } = r;
+  const base: RecurrenciaReporte = { ...resto, tipo: nuevoTipo };
+  if (nuevoTipo === "semanal") return { ...base, dias_semana: r.dias_semana ?? [] };
+  if (nuevoTipo === "mensual") return { ...base, dia_mes: r.dia_mes };
+  return base;
+}
+
+/** Devuelve true si la etapa de Frecuencia cumple los requisitos mínimos. */
+export function etapaFrecuenciaCompleta(r: RecurrenciaReporte): boolean {
+  if (!r.fecha_inicio.trim())        return false;
+  if (r.horas.length === 0)          return false;
+  if (r.horas.some(h => !h.trim()))  return false;
+  if (r.tipo === "semanal" && (r.dias_semana?.length ?? 0) === 0) return false;
+  if (r.tipo === "mensual" && !r.dia_mes)                          return false;
+  if (r.fin.modo === "fecha"        && !r.fin.fecha.trim())        return false;
+  if (r.fin.modo === "repeticiones" && !(r.fin.cantidad >= 1))      return false;
+  return true;
+}
+
 /** Estado agregado del configurador (todas las etapas). */
 export interface DatosConfigurador {
   infoBasica: DatosInfoBasica;
@@ -181,7 +273,9 @@ export interface DatosConfigurador {
    * (comportamiento por omisión del generador).
    */
   columnas: ColumnaReporte[];
-  // Etapas 04-06 se agregarán aquí al desarrollarse cada una.
+  /** Etapa 04 — periodicidad de ejecución del reporte. */
+  frecuencia: RecurrenciaReporte;
+  // Etapa 05 (Destinatarios) se agregará aquí al desarrollarse.
 }
 
 /** Devuelve true si la etapa de Información básica cumple los requisitos mínimos. */

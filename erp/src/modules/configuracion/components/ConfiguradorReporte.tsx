@@ -2,7 +2,7 @@
  * ConfiguradorReporte — Wizard multi-etapa para crear reportes automáticos.
  *
  * Estructura:
- *   - Sidebar izquierdo con las 7 etapas y su estado visual (✓ / ● / ○)
+ *   - Sidebar izquierdo con las 6 etapas y su estado visual (✓ / ● / ○)
  *   - Área de contenido derecha que monta la etapa activa
  *   - Footer con acciones: Cancelar | Guardar borrador | Continuar
  *                          (última etapa: ← Atrás | Activar reporte)
@@ -20,6 +20,8 @@ import {
   ETAPAS,
   DATOS_INFO_BASICA_INICIAL,
   etapaInfoBasicaCompleta,
+  etapaFrecuenciaCompleta,
+  crearRecurrenciaInicial,
   type EtapaId,
   type EtapaConfig,
   type DatosConfigurador,
@@ -29,6 +31,7 @@ import { crearReporteAutomatico, actualizarReporteAutomatico } from "../services
 import { EtapaInfoBasica }  from "./etapas/EtapaInfoBasica";
 import { EtapaFiltros }     from "./etapas/EtapaFiltros";
 import { EtapaColumnas }    from "./etapas/EtapaColumnas";
+import { EtapaFrecuencia }  from "./etapas/EtapaFrecuencia";
 import { EtapaPlaceholder } from "./etapas/EtapaPlaceholder";
 import { EtapaRevision }    from "./etapas/EtapaRevision";
 
@@ -37,8 +40,6 @@ import { EtapaRevision }    from "./etapas/EtapaRevision";
 const PLACEHOLDER_DESC: Partial<Record<EtapaId, string>> = {
   filtros:       "Define criterios para filtrar qué registros se incluyen en el reporte.",
   columnas:      "Elige qué columnas aparecerán en el reporte y en qué orden.",
-  ordenamiento:  "Establece cómo se ordenarán los registros en el reporte.",
-  frecuencia:    "Configura con qué periodicidad se genera y envía el reporte.",
   destinatarios: "Agrega los correos electrónicos que recibirán el reporte.",
 };
 
@@ -51,15 +52,19 @@ function isEtapaCompleta(id: EtapaId, datos: DatosConfigurador): boolean {
   // "columnas" es válida si hay al menos una columna seleccionada, o si aún
   // no se ha tocado ([] = todas por defecto)
   if (id === "columnas") return true;
-  // Etapas 04-06: se actualizará al desarrollar cada una
+  if (id === "frecuencia") return etapaFrecuenciaCompleta(datos.frecuencia);
+  // Etapa 05 (Destinatarios): se actualizará al desarrollarla
   return false;
 }
 
-const DATOS_INICIAL: DatosConfigurador = {
-  infoBasica: { ...DATOS_INFO_BASICA_INICIAL },
-  filtros:    [],
-  columnas:   [],
-};
+function datosInicial(): DatosConfigurador {
+  return {
+    infoBasica: { ...DATOS_INFO_BASICA_INICIAL },
+    filtros:    [],
+    columnas:   [],
+    frecuencia: crearRecurrenciaInicial(),
+  };
+}
 
 // ─── Componente principal ────────────────────────────────────────────────────
 
@@ -70,7 +75,7 @@ interface Props {
 
 export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
   const [etapaActiva, setEtapaActiva] = useState<EtapaId>("info-basica");
-  const [datos,       setDatos]       = useState<DatosConfigurador>(DATOS_INICIAL);
+  const [datos,       setDatos]       = useState<DatosConfigurador>(datosInicial);
   const [borradorId,  setBorradorId]  = useState<string | null>(null);
   const [guardando,   setGuardando]   = useState(false);
   const [errorMsg,    setErrorMsg]    = useState<string | null>(null);
@@ -108,12 +113,13 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
       const filtrosDB = datos.filtros.map(({ id: _id, ...rest }) => rest);
       const payload = {
         ...datos.infoBasica,
-        cuerpo:     datos.infoBasica.cuerpo.trim() || null,
-        borrador:   true,
-        activo:     false,
-        frecuencia: "diaria" as const,
-        filtros:    filtrosDB,
-        columnas:   datos.columnas,
+        cuerpo:      datos.infoBasica.cuerpo.trim() || null,
+        borrador:    true,
+        activo:      false,
+        frecuencia:  datos.frecuencia.tipo,
+        filtros:     filtrosDB,
+        columnas:    datos.columnas,
+        recurrencia: datos.frecuencia,
       };
       if (borradorId) {
         await actualizarReporteAutomatico(borradorId, payload);
@@ -140,12 +146,13 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
       const filtrosDB = datos.filtros.map(({ id: _id, ...rest }) => rest);
       const payload = {
         ...datos.infoBasica,
-        cuerpo:     datos.infoBasica.cuerpo.trim() || null,
-        borrador:   false,
-        activo:     datos.infoBasica.activo,
-        frecuencia: "diaria" as const,
-        filtros:    filtrosDB,
-        columnas:   datos.columnas,
+        cuerpo:      datos.infoBasica.cuerpo.trim() || null,
+        borrador:    false,
+        activo:      datos.infoBasica.activo,
+        frecuencia:  datos.frecuencia.tipo,
+        filtros:     filtrosDB,
+        columnas:    datos.columnas,
+        recurrencia: datos.frecuencia,
       };
       if (borradorId) {
         await actualizarReporteAutomatico(borradorId, payload);
@@ -205,6 +212,13 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
             columnas={datos.columnas}
             tipoReporte={datos.infoBasica.tipo_reporte}
             onChange={columnas => setDatos(d => ({ ...d, columnas }))}
+          />
+        );
+      case "frecuencia":
+        return (
+          <EtapaFrecuencia
+            recurrencia={datos.frecuencia}
+            onChange={frecuencia => setDatos(d => ({ ...d, frecuencia }))}
           />
         );
       case "revision":

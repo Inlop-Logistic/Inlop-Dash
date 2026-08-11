@@ -1,23 +1,39 @@
 /**
- * Etapa 07 — Revisión y activación
+ * Etapa 06 — Revisión y activación
  *
  * Muestra un resumen de toda la configuración. La activación real
  * la ejecuta ConfiguradorReporte (botón "Activar reporte" en el footer).
  *
- * Al desarrollar las etapas 03-06, agregar cada sección de resumen aquí.
+ * Al desarrollar la etapa 05 (Destinatarios), agregar su sección aquí.
  */
 import { CheckCircle2, AlertCircle } from "lucide-react";
 import {
   ETAPAS,
-  labelModulo, labelTipoReporte, labelFormato,
-  etapaInfoBasicaCompleta,
+  labelModulo, labelTipoReporte, labelFormato, labelFrecuencia,
+  etapaInfoBasicaCompleta, etapaFrecuenciaCompleta,
+  DIAS_SEMANA,
   type DatosConfigurador,
+  type FinRecurrencia,
 } from "../../types";
 import { CAMPOS_FILTRO }  from "./filtros/catalogoFiltros";
 import { buscarReporte }  from "../../catalogos/datasetsReportes";
 
 interface Props {
   datos: DatosConfigurador;
+}
+
+/** "2026-08-11" → "11/08/2026" — evita el corrimiento de zona horaria de Date(). */
+function formatFechaISO(iso: string | undefined): string {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
+  return `${d}/${m}/${y}`;
+}
+
+function labelFin(fin: FinRecurrencia): string {
+  if (fin.modo === "nunca")        return "Sin fecha de finalización";
+  if (fin.modo === "fecha")        return `Finaliza el ${formatFechaISO(fin.fecha)}`;
+  return `Finaliza después de ${fin.cantidad} repetición${fin.cantidad !== 1 ? "es" : ""}`;
 }
 
 export function EtapaRevision({ datos }: Props) {
@@ -37,9 +53,16 @@ export function EtapaRevision({ datos }: Props) {
         .sort((a, b) => a.orden - b.orden)
     : camposColumna.map((c, i) => ({ campo: c.key, titulo: c.label, orden: i }));
 
-  // Etapas intermedias (04-06): pendientes de implementar
+  const frecuencia = datos.frecuencia;
+  const frecuenciaCompleta = etapaFrecuenciaCompleta(frecuencia);
+  const diasSemanaLabel = DIAS_SEMANA
+    .filter(d => (frecuencia.dias_semana ?? []).includes(d.value))
+    .map(d => d.label)
+    .join(", ");
+
+  // Etapa 05 (Destinatarios): pendiente de implementar
   const etapasPendientes = ETAPAS.filter(
-    e => !["info-basica", "filtros", "columnas", "revision"].includes(e.id)
+    e => !["info-basica", "filtros", "columnas", "frecuencia", "revision"].includes(e.id)
   );
 
   return (
@@ -220,7 +243,78 @@ export function EtapaRevision({ datos }: Props) {
         )}
       </section>
 
-      {/* ─── Etapas 04-06: pendientes ─── */}
+      {/* ─── Etapa 04: Frecuencia ─── */}
+      <section
+        className="rounded-xl p-4 flex flex-col gap-3"
+        style={{
+          border:     `1.5px solid ${frecuenciaCompleta ? "var(--gray-200)" : "var(--danger-light)"}`,
+          background: frecuenciaCompleta ? "var(--gray-50)" : "var(--danger-bg)",
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <span
+            className="text-[11px] font-bold uppercase tracking-wider"
+            style={{ color: frecuenciaCompleta ? "var(--gray-500)" : "var(--inlop-red)" }}
+          >
+            04 · Frecuencia
+          </span>
+          {frecuenciaCompleta
+            ? <CheckCircle2 className="w-4 h-4" style={{ color: "var(--success)" }} />
+            : <AlertCircle  className="w-4 h-4" style={{ color: "var(--inlop-red)" }} />
+          }
+        </div>
+
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-2.5">
+          <div>
+            <dt className="text-[11px] font-semibold" style={{ color: "var(--gray-400)" }}>Tipo</dt>
+            <dd className="text-[13px] mt-0.5" style={{ color: "var(--gray-700)" }}>
+              {labelFrecuencia(frecuencia.tipo)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[11px] font-semibold" style={{ color: "var(--gray-400)" }}>Hora(s) de envío</dt>
+            <dd className="text-[13px] mt-0.5" style={{ color: "var(--gray-700)" }}>
+              {frecuencia.horas.length > 0 ? frecuencia.horas.join(", ") : "—"}
+            </dd>
+          </div>
+          {frecuencia.tipo === "semanal" && (
+            <div>
+              <dt className="text-[11px] font-semibold" style={{ color: "var(--gray-400)" }}>Días</dt>
+              <dd className="text-[13px] mt-0.5" style={{ color: "var(--gray-700)" }}>
+                {diasSemanaLabel || "—"}
+              </dd>
+            </div>
+          )}
+          {frecuencia.tipo === "mensual" && (
+            <div>
+              <dt className="text-[11px] font-semibold" style={{ color: "var(--gray-400)" }}>Día del mes</dt>
+              <dd className="text-[13px] mt-0.5" style={{ color: "var(--gray-700)" }}>
+                {frecuencia.dia_mes ?? "—"}
+              </dd>
+            </div>
+          )}
+          <div>
+            <dt className="text-[11px] font-semibold" style={{ color: "var(--gray-400)" }}>Comienzo</dt>
+            <dd className="text-[13px] mt-0.5" style={{ color: "var(--gray-700)" }}>
+              {formatFechaISO(frecuencia.fecha_inicio)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[11px] font-semibold" style={{ color: "var(--gray-400)" }}>Finalización</dt>
+            <dd className="text-[13px] mt-0.5" style={{ color: "var(--gray-700)" }}>
+              {labelFin(frecuencia.fin)}
+            </dd>
+          </div>
+        </dl>
+
+        {!frecuenciaCompleta && (
+          <p className="text-[13px]" style={{ color: "var(--inlop-red)" }}>
+            Configuración incompleta — vuelve a la etapa 04 y completa los campos requeridos.
+          </p>
+        )}
+      </section>
+
+      {/* ─── Etapa 05: pendiente ─── */}
       {etapasPendientes.map(etapa => (
         <section
           key={etapa.id}
