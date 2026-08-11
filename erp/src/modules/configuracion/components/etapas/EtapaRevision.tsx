@@ -13,7 +13,8 @@ import {
   etapaInfoBasicaCompleta,
   type DatosConfigurador,
 } from "../../types";
-import { CAMPOS_FILTRO } from "./filtros/catalogoFiltros";
+import { CAMPOS_FILTRO }  from "./filtros/catalogoFiltros";
+import { buscarReporte }  from "../../catalogos/datasetsReportes";
 
 interface Props {
   datos: DatosConfigurador;
@@ -25,9 +26,18 @@ export function EtapaRevision({ datos }: Props) {
 
   const camposFiltro = CAMPOS_FILTRO[ib.tipo_reporte] ?? [];
 
-  // Etapas intermedias (03-06): pendientes de implementar
+  // Columnas: resolución de labels desde el catálogo central
+  const camposColumna = buscarReporte(ib.tipo_reporte)
+    ?.campos.filter(c => c.seleccionableColumna) ?? [];
+  const camposColumnaMap = new Map(camposColumna.map(c => [c.key, c]));
+  // Si no hay selección explícita, mostrar "todas por defecto"
+  const columnasEfectivas = datos.columnas.length > 0
+    ? datos.columnas.filter(k => camposColumnaMap.has(k))
+    : camposColumna.map(c => c.key);
+
+  // Etapas intermedias (04-06): pendientes de implementar
   const etapasPendientes = ETAPAS.filter(
-    e => e.id !== "info-basica" && e.id !== "filtros" && e.id !== "revision"
+    e => !["info-basica", "filtros", "columnas", "revision"].includes(e.id)
   );
 
   return (
@@ -159,7 +169,50 @@ export function EtapaRevision({ datos }: Props) {
         )}
       </section>
 
-      {/* ─── Etapas 03-06: pendientes ─── */}
+      {/* ─── Etapa 03: Columnas ─── */}
+      <section
+        className="rounded-xl p-4 flex flex-col gap-3"
+        style={{ border: "1.5px solid var(--gray-200)", background: "var(--gray-50)" }}
+      >
+        <div className="flex items-center justify-between">
+          <span
+            className="text-[11px] font-bold uppercase tracking-wider"
+            style={{ color: "var(--gray-500)" }}
+          >
+            03 · Columnas
+          </span>
+          <CheckCircle2 className="w-4 h-4" style={{ color: "var(--success)" }} />
+        </div>
+
+        {datos.columnas.length === 0 ? (
+          <p className="text-[13px]" style={{ color: "var(--gray-500)" }}>
+            Todas las columnas disponibles · {camposColumna.length} columnas en orden del catálogo.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {columnasEfectivas.map((key, idx) => {
+              const campo = camposColumnaMap.get(key);
+              return (
+                <div
+                  key={key}
+                  className="flex items-center gap-2"
+                  style={{ fontSize: "13px", color: "var(--gray-700)" }}
+                >
+                  <span
+                    className="text-[10.5px] font-semibold tabular-nums"
+                    style={{ color: "var(--gray-400)", minWidth: "18px" }}
+                  >
+                    {String(idx + 1).padStart(2, "0")}
+                  </span>
+                  <span style={{ fontWeight: 500 }}>{campo?.label ?? key}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* ─── Etapas 04-06: pendientes ─── */}
       {etapasPendientes.map(etapa => (
         <section
           key={etapa.id}

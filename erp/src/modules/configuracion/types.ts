@@ -36,6 +36,8 @@ export interface ReporteAutomatico {
   activo:             boolean;
   borrador:           boolean;
   filtros:            FiltroDB[];
+  /** Columnas seleccionadas, en el orden definido por el usuario. [] = todas. */
+  columnas:           string[];
   proxima_ejecucion:  string | null;
   created_at:         string;
   updated_at:         string;
@@ -56,6 +58,8 @@ export interface ReporteBase {
   /** frecuencia: preservada en DB; no expuesta en Información básica (Fase futura). */
   frecuencia:   "diaria" | "semanal" | "mensual";
   filtros?:     FiltroDB[];
+  /** Columnas seleccionadas, en el orden definido por el usuario. Omitido = todas. */
+  columnas?:    string[];
 }
 
 // ─── Catálogos ────────────────────────────────────────────────────────────────
@@ -159,7 +163,13 @@ export interface DatosConfigurador {
   infoBasica: DatosInfoBasica;
   /** Etapa 02 — condiciones de filtrado; array vacío = sin filtros. */
   filtros: FiltroItem[];
-  // Etapas 03-06 se agregarán aquí al desarrollarse cada una.
+  /**
+   * Etapa 03 — columnas seleccionadas, en el orden definido por el usuario.
+   * Array de campo.key estables del catálogo. [] = todas las columnas del
+   * reporte en el orden del catálogo (comportamiento por omisión del generador).
+   */
+  columnas: string[];
+  // Etapas 04-06 se agregarán aquí al desarrollarse cada una.
 }
 
 /** Devuelve true si la etapa de Información básica cumple los requisitos mínimos. */

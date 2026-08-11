@@ -24,9 +24,11 @@ import {
   type EtapaConfig,
   type DatosConfigurador,
 } from "../types";
+import { buscarReporte }                                       from "../catalogos/datasetsReportes";
 import { crearReporteAutomatico, actualizarReporteAutomatico } from "../services/api";
 import { EtapaInfoBasica }  from "./etapas/EtapaInfoBasica";
 import { EtapaFiltros }     from "./etapas/EtapaFiltros";
+import { EtapaColumnas }    from "./etapas/EtapaColumnas";
 import { EtapaPlaceholder } from "./etapas/EtapaPlaceholder";
 import { EtapaRevision }    from "./etapas/EtapaRevision";
 
@@ -46,13 +48,17 @@ function isEtapaCompleta(id: EtapaId, datos: DatosConfigurador): boolean {
   if (id === "info-basica") return etapaInfoBasicaCompleta(datos.infoBasica);
   // "filtros" siempre es válida — array vacío = sin filtros (incluir todos)
   if (id === "filtros") return true;
-  // Etapas 03-06: se actualizará al desarrollar cada una
+  // "columnas" es válida si hay al menos una columna seleccionada, o si aún
+  // no se ha tocado ([] = todas por defecto)
+  if (id === "columnas") return true;
+  // Etapas 04-06: se actualizará al desarrollar cada una
   return false;
 }
 
 const DATOS_INICIAL: DatosConfigurador = {
   infoBasica: { ...DATOS_INFO_BASICA_INICIAL },
   filtros:    [],
+  columnas:   [],
 };
 
 // ─── Componente principal ────────────────────────────────────────────────────
@@ -107,6 +113,7 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
         activo:     false,
         frecuencia: "diaria" as const,
         filtros:    filtrosDB,
+        columnas:   datos.columnas,
       };
       if (borradorId) {
         await actualizarReporteAutomatico(borradorId, payload);
@@ -138,6 +145,7 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
         activo:     datos.infoBasica.activo,
         frecuencia: "diaria" as const,
         filtros:    filtrosDB,
+        columnas:   datos.columnas,
       };
       if (borradorId) {
         await actualizarReporteAutomatico(borradorId, payload);
@@ -160,7 +168,23 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
         return (
           <EtapaInfoBasica
             datos={datos.infoBasica}
-            onChange={infoBasica => setDatos(d => ({ ...d, infoBasica }))}
+            onChange={infoBasica => setDatos(d => {
+              // Al cambiar tipo_reporte, descartar columnas que ya no pertenecen
+              // al nuevo reporte para evitar claves huérfanas en el borrador.
+              if (infoBasica.tipo_reporte !== d.infoBasica.tipo_reporte) {
+                const keysValidas = new Set(
+                  buscarReporte(infoBasica.tipo_reporte)
+                    ?.campos.filter(c => c.seleccionableColumna)
+                    .map(c => c.key) ?? []
+                );
+                return {
+                  ...d,
+                  infoBasica,
+                  columnas: d.columnas.filter(k => keysValidas.has(k)),
+                };
+              }
+              return { ...d, infoBasica };
+            })}
           />
         );
       case "filtros":
@@ -169,6 +193,16 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
             filtros={datos.filtros}
             tipoReporte={datos.infoBasica.tipo_reporte}
             onChange={filtros => setDatos(d => ({ ...d, filtros }))}
+          />
+        );
+      case "columnas":
+        return (
+          // key={tipo_reporte} garantiza un remount limpio cuando cambia el reporte
+          <EtapaColumnas
+            key={datos.infoBasica.tipo_reporte}
+            columnas={datos.columnas}
+            tipoReporte={datos.infoBasica.tipo_reporte}
+            onChange={columnas => setDatos(d => ({ ...d, columnas }))}
           />
         );
       case "revision":
