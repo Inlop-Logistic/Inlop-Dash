@@ -1,10 +1,12 @@
-import { Mail, Plus, Pencil, Power } from "lucide-react";
+import { useState } from "react";
+import { Mail, Plus, Pencil, Power, Send } from "lucide-react";
 import {
   PageHeader, FilterBar, DataTable, Button,
   Badge, SidePanel, PanelSection, InfoRow,
 } from "@/components/ui";
 import type { Column } from "@/components/ui";
 import { FormReporteAutomatico } from "./components/FormReporteAutomatico";
+import { ModalEnviarReporte } from "./components/ModalEnviarReporte";
 import { useReportesAutomaticos } from "./hooks/useReportesAutomaticos";
 import {
   labelTipoReporte, labelFrecuencia, formatFechaCorta,
@@ -85,6 +87,7 @@ function ToggleActivoBtn({
 function buildColumns(
   onEditar:  (r: ReporteAutomatico) => void,
   onToggle:  (id: string, activo: boolean) => Promise<void>,
+  onEnviar:  (r: ReporteAutomatico) => void,
 ): Column<ReporteAutomatico>[] {
   return [
     {
@@ -140,11 +143,21 @@ function buildColumns(
     {
       key:    "_acciones",
       header: "",
-      width:  "72px",
+      width:  "96px",
       align:  "right",
       render: (r) => (
         <div className="flex items-center justify-end gap-1">
           <ToggleActivoBtn reporte={r} onToggle={onToggle} />
+          <button
+            type="button"
+            title="Enviar ahora"
+            aria-label="Enviar reporte ahora"
+            onClick={e => { e.stopPropagation(); onEnviar(r); }}
+            className="flex items-center justify-center w-7 h-7 rounded-lg transition-colors hover:bg-[var(--gray-100)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--navy)]"
+            style={{ color: "var(--gray-500)" }}
+          >
+            <Send className="w-3.5 h-3.5" />
+          </button>
           <button
             type="button"
             title="Editar"
@@ -172,9 +185,12 @@ export function ReportesAutomaticosPage({ onBack, onCrear }: Props) {
     guardando, toggleActivo, guardarEdicion,
   } = state;
 
+  const [reporteAEnviar, setReporteAEnviar] = useState<ReporteAutomatico | null>(null);
+
   const columns = buildColumns(
     (r) => setPanelId(r.id),
     toggleActivo,
+    (r) => setReporteAEnviar(r),
   );
 
   const hayBusqueda = busqueda.trim().length > 0;
@@ -266,6 +282,14 @@ export function ReportesAutomaticosPage({ onBack, onCrear }: Props) {
           </div>
         )}
       </SidePanel>
+
+      {/* Confirmación + ejecución de "Enviar ahora" (Fase 9E) */}
+      {reporteAEnviar && (
+        <ModalEnviarReporte
+          reporte={reporteAEnviar}
+          onClose={() => setReporteAEnviar(null)}
+        />
+      )}
 
     </div>
   );

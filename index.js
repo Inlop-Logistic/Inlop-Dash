@@ -13,6 +13,7 @@ import { getTripDetail, makeSbFetchAdapter } from './services/controlt-soap/trip
 import {
   transformarViajesActivos, transformarCentroGps,
 } from './services/reportes/datasetProvider.js';
+import { ejecutarReporteManual } from './services/reportes/envioManual.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -4918,6 +4919,45 @@ app.patch("/api/reportes-automaticos/:id/activo", async (req, res) => {
   } catch (e) {
     console.error("PATCH /api/reportes-automaticos/:id/activo error:", e.message);
     res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// POST /api/reportes-automaticos/:id/enviar — ejecución manual (Fase 9E).
+// Genera el archivo (Excel/HTML, según reporte.formato) con el pipeline de
+// 9B-9D y lo envía por correo a los destinatarios configurados. No toca
+// proxima_ejecucion ni recurrencia, no persiste historial de ejecución —
+// acción ad-hoc, fuera del scheduler (no implementado todavía).
+// requireInternalApiKey: mismo perímetro que el resto de endpoints
+// administrativos/internos del ERP (ej. GET /api/personal, arriba).
+const STATUS_POR_CODIGO_ENVIO = {
+  reporte_id_requerido: 400,
+  deps_incompletas:     500,
+  no_encontrado:        404,
+  borrador:              400,
+  inactivo:              400,
+  sin_destinatarios:    400,
+  error_generacion:     500,
+  error_envio:           502,
+};
+
+app.post("/api/reportes-automaticos/:id/enviar", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const resultado = await ejecutarReporteManual(id, {
+      sbFetch,
+      viajesCache:         cache.viajes.data,
+      tripCustomerCache,
+      extraerTelefono,
+      primerNombreCliente,
+    });
+    if (!resultado.ok) {
+      const status = STATUS_POR_CODIGO_ENVIO[resultado.codigo] ?? 500;
+      return res.status(status).json(resultado);
+    }
+    res.json(resultado);
+  } catch (e) {
+    console.error(`POST /api/reportes-automaticos/${req.params.id}/enviar error:`, e.message);
+    res.status(500).json({ ok: false, codigo: "error_interno", error: "Error interno al enviar el reporte" });
   }
 });
 

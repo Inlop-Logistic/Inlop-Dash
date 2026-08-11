@@ -3,7 +3,10 @@ import { lineaNegocio } from "@/utils/lineaNegocio";
 import { parseFechaTMS } from "@/utils/parseFecha";
 import { extraerFechaColombia } from "@/utils/date";
 import { buscarReporte, type CampoDataset } from "../catalogos/datasetsReportes";
-import type { ReporteAutomatico, ReporteBase, PersonalInlop, FiltroItem } from "../types";
+import type {
+  ReporteAutomatico, ReporteBase, PersonalInlop, FiltroItem,
+  ResultadoEnvioManual,
+} from "../types";
 
 // ─── Preview de datos del reporte ────────────────────────────────────────────
 
@@ -250,5 +253,24 @@ export function toggleReporteActivo(
   return req<{ ok: boolean; activo: boolean }>(
     `/api/reportes-automaticos/${encodeURIComponent(id)}/activo`,
     { method: "PATCH", body: JSON.stringify({ activo }) }
+  );
+}
+
+/**
+ * Ejecución manual (Fase 9E): genera el archivo del reporte (Excel/HTML,
+ * según su formato) y lo envía de inmediato por correo a sus destinatarios
+ * configurados — sin tocar `proxima_ejecucion` ni `recurrencia`, sin crear
+ * historial de ejecución.
+ *
+ * Los casos de rechazo del backend (reporte inexistente, borrador,
+ * inactivo, sin destinatarios válidos, fallo de generación o de envío)
+ * llegan como HTTP no-2xx — `req()` los convierte en una excepción con el
+ * mensaje ya redactado en español (`error.message`), listo para mostrar en
+ * la UI sin reinterpretar códigos.
+ */
+export function enviarReporteManual(id: string): Promise<ResultadoEnvioManual> {
+  return req<ResultadoEnvioManual>(
+    `/api/reportes-automaticos/${encodeURIComponent(id)}/enviar`,
+    { method: "POST" }
   );
 }

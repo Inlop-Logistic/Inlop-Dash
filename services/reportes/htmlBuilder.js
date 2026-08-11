@@ -41,7 +41,7 @@ const ZEBRA  = '#F8F9FB';
 // usuario (título de columna, nombre del reporte) — nunca se interpreta
 // como markup.
 
-function escapeHtml(valor) {
+export function escapeHtml(valor) {
   return String(valor)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

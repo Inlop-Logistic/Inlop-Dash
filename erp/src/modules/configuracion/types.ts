@@ -108,6 +108,27 @@ export interface PersonalInlop {
   email:  string;
 }
 
+/**
+ * Resultado de una ejecución manual de reporte (Fase 9E,
+ * POST /api/reportes-automaticos/:id/enviar). El backend siempre responde
+ * con `ok: true` en HTTP 200 — cualquier rechazo (reporte inexistente,
+ * borrador, inactivo, sin destinatarios, falla de generación o de envío)
+ * llega como HTTP no-2xx y `req()` lo convierte en una excepción, así que
+ * este tipo describe únicamente la forma del caso exitoso.
+ */
+export interface ResultadoEnvioManual {
+  ok:       true;
+  reporteId: string;
+  nombre:    string;
+  formato:   string;
+  filename:  string;
+  destinatarios: {
+    totalPersonal: number;
+    totalExternos: number;
+    totalEnviados: number;
+  };
+}
+
 // ─── Catálogos ────────────────────────────────────────────────────────────────
 
 // MODULOS y TIPOS_REPORTE se derivan de CATALOGO_REPORTES (ver
