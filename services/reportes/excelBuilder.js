@@ -16,28 +16,21 @@
  * `deps` de datos a mano.
  */
 import ExcelJS from 'exceljs';
-import { parseFechaTMS, fechaHoyColombia } from '../../utils/fechas.js';
 import { camposDe } from './catalogoDatasets.js';
 import { obtenerDatosReporte } from './index.js';
+import { valorFecha } from './valoresCelda.js';
+import { construirNombreArchivo } from './nombreArchivo.js';
 
 export const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+// Re-exportado para no romper imports existentes — la definición vive en
+// nombreArchivo.js, compartida con htmlBuilder.js (Fase 9D).
+export { construirNombreArchivo };
 
 // Navy corporativo del ERP (--navy: #012A6B) en ARGB para el fondo del encabezado.
 const COLOR_ENCABEZADO_FONDO = 'FF012A6B';
 const COLOR_ENCABEZADO_TEXTO = 'FFFFFFFF';
 
 // ─── Valores de celda por tipo de campo ────────────────────────────────────────
-
-/** Fecha real (Date) a partir del valor crudo, respetando el formato real de
- *  transporte del campo — mismo criterio que filterEngine.js (mdy/dmy/iso). */
-function valorFecha(valorCrudo, campoInfo) {
-  const formato = campoInfo?.formatoFecha ?? 'iso';
-  if (formato === 'iso') {
-    const d = new Date(valorCrudo);
-    return isNaN(d.getTime()) ? null : d;
-  }
-  return parseFechaTMS(valorCrudo, formato === 'mdy' ? 'MDY' : 'DMY');
-}
 
 /**
  * Convierte el valor crudo de una fila al tipo de dato Excel apropiado,
@@ -66,25 +59,6 @@ function valorCelda(valorCrudo, campoInfo) {
     default:
       return String(valorCrudo);
   }
-}
-
-// ─── Nombre de archivo ──────────────────────────────────────────────────────────
-
-/**
- * Nombre de archivo derivado del reporte y su fecha de ejecución — nunca un
- * literal hardcodeado. Prioriza `reporte.nombre` (el nombre que el usuario
- * le dio en el wizard); si no está disponible, usa `tipo_reporte`.
- * Ej.: "viajes_activos_diario_2026-08-11.xlsx".
- */
-export function construirNombreArchivo(reporte, metadata, extension) {
-  const fuente = (reporte?.nombre?.trim() || reporte?.tipo_reporte || metadata?.tipoReporte || 'reporte');
-  const base = fuente
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quita tildes/diacríticos
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '') || 'reporte';
-  const fecha = metadata?.fechaEjecucion || fechaHoyColombia();
-  return `${base}_${fecha}.${extension}`;
 }
 
 // ─── Builder ──────────────────────────────────────────────────────────────────
