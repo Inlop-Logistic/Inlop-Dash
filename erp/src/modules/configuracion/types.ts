@@ -1,4 +1,5 @@
 // ─── Tipos de Configuración → Parámetros → Reportes Automáticos ──────────────
+import { CATALOGO_REPORTES } from "./catalogos/datasetsReportes";
 
 // ─── Filtros ──────────────────────────────────────────────────────────────────
 
@@ -59,38 +60,35 @@ export interface ReporteBase {
 
 // ─── Catálogos ────────────────────────────────────────────────────────────────
 
-// Claves de máquina estables. Si el label visible cambia, solo cambia aquí;
-// los registros almacenados en DB usan modulo_id / tipo_reporte y no se rompen.
+// MODULOS y TIPOS_REPORTE se derivan de CATALOGO_REPORTES (ver
+// ./catalogos/datasetsReportes.ts) — esa es la fuente única de verdad para
+// la relación Módulo → Reporte → Campos. Este archivo NO declara la
+// relación por su cuenta; solo la proyecta al formato que usan los
+// selectores de Información básica.
 //
-// Relación en el wizard de Información básica:
-//   Módulo  → selector 1: agrupa los reportes por área funcional del ERP.
-//   Reporte → selector 2: lista solo los tipo_reporte del módulo seleccionado.
+// Claves de máquina estables. Si el label visible cambia, solo cambia en el
+// catálogo central; los registros almacenados en DB usan modulo_id /
+// tipo_reporte y no se rompen.
 //
-// Clave estable  :  value del módulo  = "gestion_logistica"
-// Label visible  :  "Gestión Logística"        (puede cambiar sin tocar la DB)
-//
-// Para agregar un nuevo módulo: añadir una entrada a MODULOS con una clave
-// nueva y agregar los tipo_reporte correspondientes a TIPOS_REPORTE con
-// moduloId apuntando a esa clave. Sin cambios estructurales.
+// Para agregar un módulo o un reporte: editar CATALOGO_REPORTES.
+// Este archivo y el wizard no requieren cambios.
 
-export const MODULOS = [
-  { value: "gestion_logistica", label: "Gestión Logística" },
-  // Para agregar nuevas áreas funcionales:
-  // { value: "administracion", label: "Administración" },
-  // { value: "comercial",      label: "Comercial"      },
-] as const;
+export const MODULOS = CATALOGO_REPORTES.map(m => ({
+  value: m.id,
+  label: m.label,
+}));
 
-export type Modulo = (typeof MODULOS)[number]["value"];
+export type Modulo = string;
 
-export const TIPOS_REPORTE = [
-  { value: "viajes_activos", moduloId: "gestion_logistica", label: "Viajes Activos" },
-  // Para agregar un nuevo reporte a Gestión Logística:
-  // { value: "solicitudes_activas", moduloId: "gestion_logistica", label: "Solicitudes Activas" },
-  // Para agregar un reporte de otro módulo:
-  // { value: "facturacion_mensual", moduloId: "administracion",    label: "Facturación Mensual" },
-] as const;
+export const TIPOS_REPORTE = CATALOGO_REPORTES.flatMap(modulo =>
+  modulo.reportes.map(reporte => ({
+    value:    reporte.id,
+    moduloId: modulo.id,
+    label:    reporte.label,
+  }))
+);
 
-export type TipoReporte = (typeof TIPOS_REPORTE)[number]["value"];
+export type TipoReporte = string;
 
 export const FORMATOS = [
   { value: "excel",         label: "Excel"           },
