@@ -132,6 +132,13 @@ const OP_SIN_VALOR: OperadorConfig   = { id: "sin_valor",    label: "sin valor",
 const OP_ANTES_DE: OperadorConfig    = { id: "antes_de",     label: "antes de",    tipoValor: "date"       };
 const OP_DESPUES_DE: OperadorConfig  = { id: "despues_de",   label: "después de",  tipoValor: "date"       };
 const OP_ENTRE: OperadorConfig       = { id: "entre",        label: "entre",       tipoValor: "date_range" };
+/**
+ * "es" para campos de tipo fecha — mismo id que OP_ES (persistencia estable),
+ * pero tipoValor "date": los campos fecha no declaran `opciones`, así que
+ * reutilizar OP_ES (tipoValor "select") deja el control de Valor vacío e
+ * inutilizable. Corrección auditoría Fase 8E.
+ */
+const OP_ES_FECHA: OperadorConfig    = { id: "es",          label: "es",          tipoValor: "date"       };
 
 // ─── Opciones compartidas entre reportes ─────────────────────────────────────
 
@@ -259,7 +266,7 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             tipo:   "fecha",
             origen: "TmsViaje.activated_on — fecha de activación reportada por el TMS (formato MDY del TMS)",
             filtrable:  true,
-            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
+            operadores: [OP_ES_FECHA, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
             seleccionableColumna: true,
             ordenable:            true,
           },
@@ -417,7 +424,7 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             tipo:   "fecha",
             origen: "Solicitud.creado_en — fecha de registro de la solicitud en el sistema",
             filtrable:  true,
-            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
+            operadores: [OP_ES_FECHA, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
             seleccionableColumna: true,
             ordenable:            true,
           },
@@ -441,7 +448,7 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             tipo:   "fecha",
             origen: "Solicitud.fecha_requerida — fecha de entrega solicitada por el cliente",
             filtrable:  true,
-            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
+            operadores: [OP_ES_FECHA, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
             seleccionableColumna: true,
             ordenable:            true,
           },
@@ -580,7 +587,7 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             tipo:   "fecha",
             origen: "ViajeResumen.schedulate_origin — fecha/hora programada de despacho en origen",
             filtrable:  true,
-            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
+            operadores: [OP_ES_FECHA, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
             seleccionableColumna: true,
             ordenable:            true,
           },
@@ -741,7 +748,7 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             tipo:   "fecha",
             origen: "CumplidoRecord.activated_on — fecha de inicio del viaje reportada por el TMS",
             filtrable:  true,
-            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
+            operadores: [OP_ES_FECHA, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
             seleccionableColumna: true,
             ordenable:            true,
           },
@@ -751,7 +758,7 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             tipo:   "fecha",
             origen: "CumplidoRecord.fecha_cumplido — fecha en que se registró el cumplido en el sistema",
             filtrable:  true,
-            operadores: [OP_ES, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
+            operadores: [OP_ES_FECHA, OP_ANTES_DE, OP_DESPUES_DE, OP_ENTRE],
             seleccionableColumna: true,
             ordenable:            true,
           },

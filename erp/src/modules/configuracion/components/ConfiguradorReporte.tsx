@@ -148,6 +148,10 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
       setErrorMsg("Completa el Nombre y el Asunto del correo antes de activar.");
       return;
     }
+    if (!etapaFrecuenciaCompleta(datos.frecuencia)) {
+      setErrorMsg("Completa los campos requeridos de Frecuencia antes de activar.");
+      return;
+    }
     if (!etapaDestinatariosCompleta(datos.destinatarios)) {
       setErrorMsg("Selecciona al menos un destinatario (Personal INLOP o correo externo) antes de activar.");
       return;
@@ -190,20 +194,24 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
           <EtapaInfoBasica
             datos={datos.infoBasica}
             onChange={infoBasica => setDatos(d => {
-              // Al cambiar tipo_reporte, descartar columnas que ya no pertenecen
-              // al nuevo reporte para evitar claves huérfanas en el borrador.
+              // Al cambiar tipo_reporte, descartar columnas y filtros que ya no
+              // pertenecen al nuevo reporte para evitar claves huérfanas en el
+              // borrador (y en la Vista previa de Revisión).
               if (infoBasica.tipo_reporte !== d.infoBasica.tipo_reporte) {
-                const keysValidas = new Set(
-                  buscarReporte(infoBasica.tipo_reporte)
-                    ?.campos.filter(c => c.seleccionableColumna)
-                    .map(c => c.key) ?? []
+                const nuevoReporte = buscarReporte(infoBasica.tipo_reporte);
+                const keysColumna  = new Set(
+                  nuevoReporte?.campos.filter(c => c.seleccionableColumna).map(c => c.key) ?? []
+                );
+                const keysFiltro = new Set(
+                  nuevoReporte?.campos.filter(c => c.filtrable).map(c => c.key) ?? []
                 );
                 return {
                   ...d,
                   infoBasica,
                   columnas: d.columnas
-                    .filter(c => keysValidas.has(c.campo))
+                    .filter(c => keysColumna.has(c.campo))
                     .map((c, i) => ({ ...c, orden: i })),
+                  filtros: d.filtros.filter(f => keysFiltro.has(f.campo)),
                 };
               }
               return { ...d, infoBasica };
