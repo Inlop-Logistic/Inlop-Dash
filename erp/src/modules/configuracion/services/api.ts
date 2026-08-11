@@ -1,11 +1,22 @@
 import { req } from "@/services/http";
 import { lineaNegocio } from "@/utils/lineaNegocio";
-import type { ReporteAutomatico, ReporteBase, PersonalInlop } from "../types";
+import { parseFechaTMS } from "@/utils/parseFecha";
+import { extraerFechaColombia } from "@/utils/date";
+import { buscarReporte, type CampoDataset } from "../catalogos/datasetsReportes";
+import type { ReporteAutomatico, ReporteBase, PersonalInlop, FiltroItem } from "../types";
 
 // ─── Preview de datos del reporte ────────────────────────────────────────────
 
 /** Límite de filas para la muestra de datos en el wizard (Revisión, etapa 06). */
 const LIMITE_PREVIEW = 10;
+
+/**
+ * Cuando hay filtros activos sobre `viajes_finalizados`, se pide un lote mayor
+ * al backend (mismo endpoint, mismo param `?limit=N` de Fase 8C) para tener
+ * suficientes candidatos sobre los que filtrar antes de recortar a
+ * LIMITE_PREVIEW. Sin filtros se mantiene el límite justo de 8C (10).
+ */
+const LIMITE_FETCH_CON_FILTROS = 200;
 
 /**
  * Mapeo tipo_reporte → endpoint interno.
@@ -55,18 +66,130 @@ function enriquecerFilas(
   });
 }
 
+// ─── Filtros (Fase 8D) ────────────────────────────────────────────────────────
+//
+// Aplica `datos.filtros` (Etapa 02) a las filas de la preview. Reutiliza
+// exclusivamente la metadata ya declarada en CATALOGO_REPORTES (via
+// buscarReporte) — campo, operador y opciones vienen de ahí, no se redefine
+// ningún catálogo de filtros aquí. Este módulo solo aporta la EVALUACIÓN
+// (comparar un valor de fila contra la condición), que no existía antes.
+
+/** Formato real de transporte de cada campo `fecha` filtrable, por reporte.
+ *  Necesario porque los distintos orígenes (TMS vivo vs Supabase) no
+ *  serializan las fechas de forma uniforme — ver erp/src/utils/parseFecha.ts
+ *  y docs/ERP_DATE_TIME_STANDARD.md (estándar corporativo de fechas).
+ *   - "mdy" → string TMS MM/DD/YYYY (activated_on)
+ *   - "dmy" → string TMS DD/MM/YYYY (schedulate_origin, fecha_cumplido)
+ *   - "iso" → timestamp ISO de Supabase (creado_en, fecha_requerida)
+ */
+const FORMATO_FECHA_POR_CAMPO: Record<string, Record<string, "iso" | "mdy" | "dmy">> = {
+  viajes_activos:     { activated_on: "mdy" },
+  solicitudes:        { creado_en: "iso", fecha_requerida: "iso" },
+  programacion:       { schedulate_origin: "dmy" },
+  viajes_finalizados: { activated_on: "mdy", fecha_cumplido: "dmy" },
+};
+
+/** Fecha de un campo, normalizada a YYYY-MM-DD en hora Colombia, o null si no es parseable. */
+function fechaCampoYMD(valor: unknown, tipoReporte: string, campo: string): string | null {
+  if (valor === null || valor === undefined || valor === "") return null;
+  const formato = FORMATO_FECHA_POR_CAMPO[tipoReporte]?.[campo] ?? "iso";
+  if (formato === "iso") {
+    const d = new Date(valor as string);
+    return isNaN(d.getTime()) ? null : extraerFechaColombia(d);
+  }
+  const d = parseFechaTMS(valor as string, formato === "mdy" ? "MDY" : "DMY");
+  return d ? extraerFechaColombia(d) : null;
+}
+
+/** Evalúa una condición de filtro contra una fila. Un filtro sin campo o sin
+ *  valor configurado (aún incompleto en el wizard) no restringe resultados. */
+function evaluaCondicion(
+  fila: Record<string, unknown>,
+  filtro: FiltroItem,
+  tipoReporte: string,
+  campoInfo: CampoDataset | undefined,
+): boolean {
+  if (!filtro.campo || !campoInfo) return true;
+
+  // ── Campos de fecha: comparación por día calendario (Colombia) ──────────
+  if (campoInfo.tipo === "fecha") {
+    const ymd = fechaCampoYMD(fila[filtro.campo], tipoReporte, filtro.campo);
+    switch (filtro.operador) {
+      case "es":
+        return !filtro.valor || (ymd !== null && ymd === filtro.valor);
+      case "antes_de":
+        return !filtro.valor || (ymd !== null && ymd < filtro.valor);
+      case "despues_de":
+        return !filtro.valor || (ymd !== null && ymd > filtro.valor);
+      case "entre": {
+        if (!filtro.valor_desde && !filtro.valor_hasta) return true;
+        if (ymd === null) return false;
+        if (filtro.valor_desde && ymd < filtro.valor_desde) return false;
+        if (filtro.valor_hasta && ymd > filtro.valor_hasta) return false;
+        return true;
+      }
+      default:
+        return true;
+    }
+  }
+
+  // ── Booleano: presencia/ausencia de valor ────────────────────────────────
+  if (filtro.operador === "tiene_valor" || filtro.operador === "sin_valor") {
+    const valor = fila[filtro.campo];
+    const tieneValor = valor !== null && valor !== undefined && valor !== "" && valor !== false;
+    return filtro.operador === "tiene_valor" ? tieneValor : !tieneValor;
+  }
+
+  // ── Texto / enum: igualdad exacta ────────────────────────────────────────
+  const valorStr = fila[filtro.campo] === null || fila[filtro.campo] === undefined
+    ? ""
+    : String(fila[filtro.campo]);
+  if (filtro.operador === "es")    return !filtro.valor || valorStr === filtro.valor;
+  if (filtro.operador === "no_es") return !filtro.valor || valorStr !== filtro.valor;
+
+  return true;
+}
+
+/**
+ * Aplica todos los `filtros` a `filas` en condición AND (mismo criterio que
+ * EtapaFiltros: "se aplicarán todos los filtros"). Ignora filtros cuyo campo
+ * no es filtrable para `tipoReporte` — evita restos de un reporte anterior.
+ * Sin filtros → devuelve las filas sin tocar.
+ */
+function aplicarFiltros(
+  filas: Record<string, unknown>[],
+  filtros: FiltroItem[],
+  tipoReporte: string,
+): Record<string, unknown>[] {
+  if (filtros.length === 0) return filas;
+
+  const campos = buscarReporte(tipoReporte)?.campos ?? [];
+  const campoPorKey = new Map(campos.filter(c => c.filtrable).map(c => [c.key, c]));
+
+  const activos = filtros.filter(f => f.campo && campoPorKey.has(f.campo));
+  if (activos.length === 0) return filas;
+
+  return filas.filter(fila =>
+    activos.every(f => evaluaCondicion(fila, f, tipoReporte, campoPorKey.get(f.campo)))
+  );
+}
+
 /**
  * Carga hasta `limit` filas del dataset real correspondiente al `tipo_reporte`
- * seleccionado en el wizard. Reutiliza los endpoints operativos existentes —
- * no crea datos ni genera archivos.
+ * seleccionado en el wizard, con los `filtros` del wizard ya aplicados.
+ * Reutiliza los endpoints operativos existentes — no crea datos ni genera
+ * archivos.
  *
  * Arquitectura:
  *  - viajes_activos / centro_gps: RAM cache (respuesta instantánea, sin param limit)
  *  - solicitudes / programacion:   DB con filtro de fecha por defecto (hoy)
- *  - viajes_finalizados:           DB con ?limit=N para no descargar todo
+ *  - viajes_finalizados:           DB con ?limit=N para no descargar todo;
+ *    con filtros activos se pide un lote mayor (LIMITE_FETCH_CON_FILTROS)
+ *    para tener candidatos suficientes antes de filtrar y recortar a `limit`.
  */
 export async function cargarPreviewReporte(
   tipoReporte: string,
+  filtros: FiltroItem[] = [],
   limit: number = LIMITE_PREVIEW
 ): Promise<Record<string, unknown>[]> {
   const endpoint = ENDPOINT_POR_REPORTE[tipoReporte];
@@ -75,15 +198,18 @@ export async function cargarPreviewReporte(
   }
 
   // Solo cumplidos acepta el param limit en el backend (evita scan completo).
-  // Los demás endpoints son cache o filtran por fecha por defecto — se limitan en el cliente.
-  const url =
+  // Los demás endpoints son cache o filtran por fecha por defecto.
+  const fetchLimit =
     tipoReporte === "viajes_finalizados"
-      ? `${endpoint}?limit=${limit}`
-      : endpoint;
+      ? (filtros.length > 0 ? LIMITE_FETCH_CON_FILTROS : limit)
+      : null;
+
+  const url = fetchLimit !== null ? `${endpoint}?limit=${fetchLimit}` : endpoint;
 
   const datos = await req<Record<string, unknown>[]>(url);
-  const filas = (datos ?? []).slice(0, limit);
-  return enriquecerFilas(filas);
+  const enriquecidas = enriquecerFilas(datos ?? []);
+  const filtradas = aplicarFiltros(enriquecidas, filtros, tipoReporte);
+  return filtradas.slice(0, limit);
 }
 
 export function listarReportesAutomaticos(): Promise<ReporteAutomatico[]> {

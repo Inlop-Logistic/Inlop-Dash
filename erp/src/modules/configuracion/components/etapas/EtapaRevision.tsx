@@ -6,14 +6,16 @@
  *     IZQUIERDA: resumen compacto de las 5 etapas con botón "Editar" por sección.
  *     DERECHA:   vista previa del correo (Fase 8B).
  *   FILA INFERIOR (full-width):
- *     Muestra de datos real del reporte seleccionado (Fase 8C).
+ *     Muestra de datos real del reporte seleccionado, con `datos.filtros` y
+ *     `datos.columnas` del wizard ya aplicados (Fase 8C + 8D).
  *
  * Principios:
  *  - Todo se deriva de `datos` o se consulta en tiempo real — sin datos inventados.
  *  - NO lista ítems individuales en las secciones de resumen — solo conteos.
  *  - NO hace fetch de /api/personal (conteo con .length).
  *  - Email preview: pura, stateless, sin fetch.
- *  - Tabla de datos: carga real; muestra máx. 10 filas sin filtros ni columnas configuradas.
+ *  - Tabla de datos: carga real, filtrada por `datos.filtros` y proyectada
+ *    según `datos.columnas` (título y orden); máx. 10 filas.
  *  - `onIrA` delega la navegación al ConfiguradorReporte (única fuente de verdad).
  */
 import { useState, useEffect, type ReactNode } from "react";
@@ -28,6 +30,8 @@ import {
   type EtapaId,
   type FinRecurrencia,
   type RecurrenciaReporte,
+  type FiltroItem,
+  type ColumnaReporte,
 } from "../../types";
 import { buscarReporte, type CampoDataset } from "../../catalogos/datasetsReportes";
 import { cargarPreviewReporte }              from "../../services/api";
@@ -288,23 +292,64 @@ function PreviewCorreo({ datos, totalColumnasCatalogo }: PreviewCorreoProps) {
   );
 }
 
+// ─── Resolución de columnas (Fase 8D) ──────────────────────────────────────────
+
+interface ColumnaResuelta {
+  campo:  string;
+  titulo: string;
+}
+
+/**
+ * Resuelve qué columnas mostrar y con qué título, a partir de `datos.columnas`
+ * (Etapa 03) — única fuente de verdad, sin redefinir catálogo propio:
+ *   - columnas = [] (o ninguna válida para este reporte) → todas las
+ *     seleccionableColumna del catálogo, en su orden y con su label.
+ *   - columnas configuradas → filtradas a las válidas para este reporte,
+ *     ordenadas por `orden`, con el `titulo` personalizado del usuario.
+ */
+function resolverColumnas(tipoReporte: string, columnas: ColumnaReporte[]): ColumnaResuelta[] {
+  const disponibles: CampoDataset[] =
+    buscarReporte(tipoReporte)?.campos.filter(c => c.seleccionableColumna) ?? [];
+  const porKey = new Map(disponibles.map(c => [c.key, c]));
+
+  const validas = columnas.filter(c => porKey.has(c.campo));
+  if (validas.length === 0) {
+    return disponibles.map(c => ({ campo: c.key, titulo: c.label }));
+  }
+
+  return [...validas]
+    .sort((a, b) => a.orden - b.orden)
+    .map(c => ({ campo: c.campo, titulo: c.titulo }));
+}
+
 // ─── PreviewTabla ─────────────────────────────────────────────────────────────
 //
-// Consulta el dataset real del reporte seleccionado y muestra los primeros 10
-// registros en una tabla básica. Sin filtros, sin columnas configuradas, sin
-// títulos personalizados — eso es Fase 8D.
+// Consulta el dataset real del reporte seleccionado, aplica `datos.filtros`
+// (Etapa 02) y muestra hasta 10 registros usando `datos.columnas` (Etapa 03)
+// — mismas columnas, títulos y orden que el reporte final.
 //
-// Se re-ejecuta automáticamente al cambiar `tipo_reporte`:
+// Se re-ejecuta automáticamente al cambiar `tipo_reporte` o `filtros`:
 //   - Limpia filas anteriores de inmediato.
 //   - Muestra estado "cargando" mientras espera.
 //   - Maneja vacío y error sin propagar al wizard.
+// El cambio de `columnas` es puramente de presentación — no dispara refetch.
 
 type EstadoTabla = "cargando" | "ok" | "vacio" | "error";
 
-function PreviewTabla({ tipoReporte }: { tipoReporte: string }) {
+interface PreviewTablaProps {
+  tipoReporte: string;
+  filtros:     FiltroItem[];
+  columnas:    ColumnaReporte[];
+}
+
+function PreviewTabla({ tipoReporte, filtros, columnas }: PreviewTablaProps) {
   const [estado,   setEstado]   = useState<EstadoTabla>("cargando");
   const [filas,    setFilas]    = useState<Record<string, unknown>[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Clave estable para detectar cambios reales de contenido en `filtros`
+  // (filtros configurados en otra etapa, al volver a Revisión).
+  const filtrosKey = JSON.stringify(filtros);
 
   useEffect(() => {
     let activo = true;
@@ -312,7 +357,7 @@ function PreviewTabla({ tipoReporte }: { tipoReporte: string }) {
     setFilas([]);
     setErrorMsg(null);
 
-    cargarPreviewReporte(tipoReporte)
+    cargarPreviewReporte(tipoReporte, filtros)
       .then(datos => {
         if (!activo) return;
         if (datos.length === 0) {
@@ -329,12 +374,14 @@ function PreviewTabla({ tipoReporte }: { tipoReporte: string }) {
       });
 
     return () => { activo = false; };
-  }, [tipoReporte]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipoReporte, filtrosKey]);
 
-  // Columnas del catálogo para este reporte (en orden de catálogo — Fase 8C)
-  const cols: CampoDataset[] =
-    buscarReporte(tipoReporte)?.campos.filter(c => c.seleccionableColumna) ?? [];
+  // Columnas a mostrar: datos.columnas si hay configuración válida, si no
+  // todas las seleccionableColumna del catálogo (Fase 8C).
+  const cols = resolverColumnas(tipoReporte, columnas);
 
+  const hayFiltrosActivos = filtros.some(f => f.campo);
   const labelReporte = labelTipoReporte(tipoReporte);
 
   return (
@@ -358,6 +405,14 @@ function PreviewTabla({ tipoReporte }: { tipoReporte: string }) {
           Muestra de datos · {labelReporte}
         </span>
         <span style={{ flex: "1 1 0" }} />
+        {hayFiltrosActivos && (
+          <span
+            className="text-[10.5px] font-medium px-1.5 py-0.5 rounded-md"
+            style={{ color: "var(--navy)", background: "rgba(1, 42, 107, 0.08)" }}
+          >
+            Filtros aplicados
+          </span>
+        )}
         {estado === "ok" && (
           <span className="text-[10.5px]" style={{ color: "var(--gray-400)" }}>
             {filas.length} registro{filas.length !== 1 ? "s" : ""} · máx. 10
@@ -399,7 +454,11 @@ function PreviewTabla({ tipoReporte }: { tipoReporte: string }) {
           style={{ color: "var(--gray-400)" }}
         >
           <Database className="w-4 h-4" />
-          <span className="text-[13px]">Sin registros para el período actual</span>
+          <span className="text-[13px]">
+            {hayFiltrosActivos
+              ? "Sin registros que cumplan los filtros configurados"
+              : "Sin registros para el período actual"}
+          </span>
         </div>
       )}
 
@@ -416,7 +475,7 @@ function PreviewTabla({ tipoReporte }: { tipoReporte: string }) {
               <tr style={{ background: "var(--gray-50)", borderBottom: "1.5px solid var(--gray-200)" }}>
                 {cols.map(c => (
                   <th
-                    key={c.key}
+                    key={c.campo}
                     style={{
                       padding:       "7px 12px",
                       textAlign:     "left",
@@ -429,7 +488,7 @@ function PreviewTabla({ tipoReporte }: { tipoReporte: string }) {
                       borderRight:   "1px solid var(--gray-100)",
                     }}
                   >
-                    {c.label}
+                    {c.titulo}
                   </th>
                 ))}
               </tr>
@@ -445,7 +504,7 @@ function PreviewTabla({ tipoReporte }: { tipoReporte: string }) {
                 >
                   {cols.map(c => (
                     <td
-                      key={c.key}
+                      key={c.campo}
                       style={{
                         padding:       "6px 12px",
                         fontSize:      "12.5px",
@@ -456,9 +515,9 @@ function PreviewTabla({ tipoReporte }: { tipoReporte: string }) {
                         textOverflow:  "ellipsis",
                         borderRight:   "1px solid var(--gray-100)",
                       }}
-                      title={String(fila[c.key] ?? "")}
+                      title={String(fila[c.campo] ?? "")}
                     >
-                      {formatCelda(fila[c.key])}
+                      {formatCelda(fila[c.campo])}
                     </td>
                   ))}
                 </tr>
@@ -637,12 +696,15 @@ export function EtapaRevision({ datos, onIrA }: Props) {
 
       </div>
 
-      {/* ── FILA INFERIOR: tabla de datos real (Fase 8C) ──────────────────── */}
+      {/* ── FILA INFERIOR: tabla de datos real (Fase 8C/8D) ────────────────── */}
       {/* key={tipo_reporte} garantiza que el componente se desmonta y remonta
-          al cambiar de reporte — limpia estado anterior sin condición extra. */}
+          al cambiar de reporte — limpia estado, filtros y columnas anteriores
+          sin condición extra. */}
       <PreviewTabla
         key={ib.tipo_reporte}
         tipoReporte={ib.tipo_reporte}
+        filtros={datos.filtros}
+        columnas={datos.columnas}
       />
 
     </div>
