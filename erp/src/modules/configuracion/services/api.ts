@@ -1,8 +1,17 @@
 import { req } from "@/services/http";
-import type { ReporteAutomatico, ReporteBase } from "../types";
+import type { ReporteAutomatico, ReporteBase, PersonalInlop } from "../types";
 
 export function listarReportesAutomaticos(): Promise<ReporteAutomatico[]> {
   return req<ReporteAutomatico[]>("/api/reportes-automaticos");
+}
+
+/**
+ * Personal INLOP disponible como destinatario de reportes — proyectado por
+ * el backend desde `profiles` (la tabla real de identidad del ERP, misma
+ * que usa AuthContext). Ver GET /api/personal en index.js.
+ */
+export function listarPersonal(): Promise<PersonalInlop[]> {
+  return req<PersonalInlop[]>("/api/personal");
 }
 
 export function crearReporteAutomatico(data: ReporteBase): Promise<ReporteAutomatico> {

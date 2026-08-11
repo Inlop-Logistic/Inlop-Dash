@@ -22,25 +22,27 @@ import {
   etapaInfoBasicaCompleta,
   etapaFrecuenciaCompleta,
   crearRecurrenciaInicial,
+  etapaDestinatariosCompleta,
+  crearDestinatariosInicial,
   type EtapaId,
   type EtapaConfig,
   type DatosConfigurador,
 } from "../types";
 import { buscarReporte }                                       from "../catalogos/datasetsReportes";
 import { crearReporteAutomatico, actualizarReporteAutomatico } from "../services/api";
-import { EtapaInfoBasica }  from "./etapas/EtapaInfoBasica";
-import { EtapaFiltros }     from "./etapas/EtapaFiltros";
-import { EtapaColumnas }    from "./etapas/EtapaColumnas";
-import { EtapaFrecuencia }  from "./etapas/EtapaFrecuencia";
-import { EtapaPlaceholder } from "./etapas/EtapaPlaceholder";
-import { EtapaRevision }    from "./etapas/EtapaRevision";
+import { EtapaInfoBasica }     from "./etapas/EtapaInfoBasica";
+import { EtapaFiltros }        from "./etapas/EtapaFiltros";
+import { EtapaColumnas }       from "./etapas/EtapaColumnas";
+import { EtapaFrecuencia }     from "./etapas/EtapaFrecuencia";
+import { EtapaDestinatarios }  from "./etapas/EtapaDestinatarios";
+import { EtapaPlaceholder }    from "./etapas/EtapaPlaceholder";
+import { EtapaRevision }       from "./etapas/EtapaRevision";
 
 // ─── Descripciones de las etapas placeholder ────────────────────────────────
 
 const PLACEHOLDER_DESC: Partial<Record<EtapaId, string>> = {
-  filtros:       "Define criterios para filtrar qué registros se incluyen en el reporte.",
-  columnas:      "Elige qué columnas aparecerán en el reporte y en qué orden.",
-  destinatarios: "Agrega los correos electrónicos que recibirán el reporte.",
+  filtros:  "Define criterios para filtrar qué registros se incluyen en el reporte.",
+  columnas: "Elige qué columnas aparecerán en el reporte y en qué orden.",
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -52,17 +54,18 @@ function isEtapaCompleta(id: EtapaId, datos: DatosConfigurador): boolean {
   // "columnas" es válida si hay al menos una columna seleccionada, o si aún
   // no se ha tocado ([] = todas por defecto)
   if (id === "columnas") return true;
-  if (id === "frecuencia") return etapaFrecuenciaCompleta(datos.frecuencia);
-  // Etapa 05 (Destinatarios): se actualizará al desarrollarla
+  if (id === "frecuencia")    return etapaFrecuenciaCompleta(datos.frecuencia);
+  if (id === "destinatarios") return etapaDestinatariosCompleta(datos.destinatarios);
   return false;
 }
 
 function datosInicial(): DatosConfigurador {
   return {
-    infoBasica: { ...DATOS_INFO_BASICA_INICIAL },
-    filtros:    [],
-    columnas:   [],
-    frecuencia: crearRecurrenciaInicial(),
+    infoBasica:    { ...DATOS_INFO_BASICA_INICIAL },
+    filtros:       [],
+    columnas:      [],
+    frecuencia:    crearRecurrenciaInicial(),
+    destinatarios: crearDestinatariosInicial(),
   };
 }
 
@@ -92,6 +95,11 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
   }
 
   function handleContinuar() {
+    // Destinatarios exige al menos un destinatario para poder avanzar.
+    if (etapaActiva === "destinatarios" && !etapaDestinatariosCompleta(datos.destinatarios)) {
+      setErrorMsg("Selecciona al menos un destinatario (Personal INLOP o correo externo) para continuar.");
+      return;
+    }
     if (!esUltimaEtapa) irA(ETAPAS[etapaIndex + 1].id);
   }
 
@@ -113,13 +121,14 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
       const filtrosDB = datos.filtros.map(({ id: _id, ...rest }) => rest);
       const payload = {
         ...datos.infoBasica,
-        cuerpo:      datos.infoBasica.cuerpo.trim() || null,
-        borrador:    true,
-        activo:      false,
-        frecuencia:  datos.frecuencia.tipo,
-        filtros:     filtrosDB,
-        columnas:    datos.columnas,
-        recurrencia: datos.frecuencia,
+        cuerpo:        datos.infoBasica.cuerpo.trim() || null,
+        borrador:      true,
+        activo:        false,
+        frecuencia:    datos.frecuencia.tipo,
+        filtros:       filtrosDB,
+        columnas:      datos.columnas,
+        recurrencia:   datos.frecuencia,
+        destinatarios: datos.destinatarios,
       };
       if (borradorId) {
         await actualizarReporteAutomatico(borradorId, payload);
@@ -139,6 +148,10 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
       setErrorMsg("Completa el Nombre y el Asunto del correo antes de activar.");
       return;
     }
+    if (!etapaDestinatariosCompleta(datos.destinatarios)) {
+      setErrorMsg("Selecciona al menos un destinatario (Personal INLOP o correo externo) antes de activar.");
+      return;
+    }
     setErrorMsg(null);
     setGuardando(true);
     try {
@@ -146,13 +159,14 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
       const filtrosDB = datos.filtros.map(({ id: _id, ...rest }) => rest);
       const payload = {
         ...datos.infoBasica,
-        cuerpo:      datos.infoBasica.cuerpo.trim() || null,
-        borrador:    false,
-        activo:      datos.infoBasica.activo,
-        frecuencia:  datos.frecuencia.tipo,
-        filtros:     filtrosDB,
-        columnas:    datos.columnas,
-        recurrencia: datos.frecuencia,
+        cuerpo:        datos.infoBasica.cuerpo.trim() || null,
+        borrador:      false,
+        activo:        datos.infoBasica.activo,
+        frecuencia:    datos.frecuencia.tipo,
+        filtros:       filtrosDB,
+        columnas:      datos.columnas,
+        recurrencia:   datos.frecuencia,
+        destinatarios: datos.destinatarios,
       };
       if (borradorId) {
         await actualizarReporteAutomatico(borradorId, payload);
@@ -219,6 +233,13 @@ export function ConfiguradorReporte({ onCreado, onCancelar }: Props) {
           <EtapaFrecuencia
             recurrencia={datos.frecuencia}
             onChange={frecuencia => setDatos(d => ({ ...d, frecuencia }))}
+          />
+        );
+      case "destinatarios":
+        return (
+          <EtapaDestinatarios
+            destinatarios={datos.destinatarios}
+            onChange={destinatarios => setDatos(d => ({ ...d, destinatarios }))}
           />
         );
       case "revision":

@@ -3,20 +3,20 @@
  *
  * Muestra un resumen de toda la configuración. La activación real
  * la ejecuta ConfiguradorReporte (botón "Activar reporte" en el footer).
- *
- * Al desarrollar la etapa 05 (Destinatarios), agregar su sección aquí.
  */
-import { CheckCircle2, AlertCircle } from "lucide-react";
+import { useEffect, useState }        from "react";
+import { CheckCircle2, AlertCircle }  from "lucide-react";
 import {
-  ETAPAS,
   labelModulo, labelTipoReporte, labelFormato, labelFrecuencia,
-  etapaInfoBasicaCompleta, etapaFrecuenciaCompleta,
+  etapaInfoBasicaCompleta, etapaFrecuenciaCompleta, etapaDestinatariosCompleta,
   DIAS_SEMANA,
   type DatosConfigurador,
   type FinRecurrencia,
+  type PersonalInlop,
 } from "../../types";
 import { CAMPOS_FILTRO }  from "./filtros/catalogoFiltros";
 import { buscarReporte }  from "../../catalogos/datasetsReportes";
+import { listarPersonal } from "../../services/api";
 
 interface Props {
   datos: DatosConfigurador;
@@ -60,10 +60,16 @@ export function EtapaRevision({ datos }: Props) {
     .map(d => d.label)
     .join(", ");
 
-  // Etapa 05 (Destinatarios): pendiente de implementar
-  const etapasPendientes = ETAPAS.filter(
-    e => !["info-basica", "filtros", "columnas", "frecuencia", "revision"].includes(e.id)
-  );
+  // Destinatarios: se necesitan nombre + correo del Personal INLOP
+  // seleccionado — solo se persisten los ids, así que se resuelven aquí
+  // contra la misma fuente real que usa la etapa 05 (GET /api/personal).
+  const [personal, setPersonal] = useState<PersonalInlop[]>([]);
+  useEffect(() => { listarPersonal().then(setPersonal).catch(() => {}); }, []);
+
+  const destinatarios = datos.destinatarios;
+  const destinatariosCompleta = etapaDestinatariosCompleta(destinatarios);
+  const personalSeleccionado = personal.filter(p => destinatarios.personal_ids.includes(p.id));
+  const totalDestinatarios = destinatarios.personal_ids.length + destinatarios.correos_externos.length;
 
   return (
     <div className="flex flex-col gap-5 max-w-lg">
@@ -314,29 +320,59 @@ export function EtapaRevision({ datos }: Props) {
         )}
       </section>
 
-      {/* ─── Etapa 05: pendiente ─── */}
-      {etapasPendientes.map(etapa => (
-        <section
-          key={etapa.id}
-          className="rounded-xl p-4"
-          style={{ border: "1.5px dashed var(--gray-200)" }}
-        >
-          <div className="flex items-center justify-between">
-            <span
-              className="text-[11px] font-bold uppercase tracking-wider"
-              style={{ color: "var(--gray-400)" }}
-            >
-              {String(etapa.numero).padStart(2, "0")} · {etapa.label}
-            </span>
-            <span
-              className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-              style={{ background: "var(--gray-100)", color: "var(--gray-400)" }}
-            >
-              Próximamente
-            </span>
-          </div>
-        </section>
-      ))}
+      {/* ─── Etapa 05: Destinatarios ─── */}
+      <section
+        className="rounded-xl p-4 flex flex-col gap-3"
+        style={{
+          border:     `1.5px solid ${destinatariosCompleta ? "var(--gray-200)" : "var(--danger-light)"}`,
+          background: destinatariosCompleta ? "var(--gray-50)" : "var(--danger-bg)",
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <span
+            className="text-[11px] font-bold uppercase tracking-wider"
+            style={{ color: destinatariosCompleta ? "var(--gray-500)" : "var(--inlop-red)" }}
+          >
+            05 · Destinatarios · {totalDestinatarios}
+          </span>
+          {destinatariosCompleta
+            ? <CheckCircle2 className="w-4 h-4" style={{ color: "var(--success)" }} />
+            : <AlertCircle  className="w-4 h-4" style={{ color: "var(--inlop-red)" }} />
+          }
+        </div>
+
+        {!destinatariosCompleta ? (
+          <p className="text-[13px]" style={{ color: "var(--inlop-red)" }}>
+            Sin destinatarios — vuelve a la etapa 05 y selecciona al menos uno.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {personalSeleccionado.map(p => (
+              <li key={p.id} className="flex items-center gap-2 text-[13px]" style={{ color: "var(--gray-700)" }}>
+                <span
+                  className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                  style={{ background: "rgba(1, 42, 107, 0.08)", color: "var(--navy)" }}
+                >
+                  INLOP
+                </span>
+                <span style={{ fontWeight: 500 }}>{p.nombre || p.email}</span>
+                <span style={{ color: "var(--gray-400)" }}>{p.email}</span>
+              </li>
+            ))}
+            {destinatarios.correos_externos.map(email => (
+              <li key={email} className="flex items-center gap-2 text-[13px]" style={{ color: "var(--gray-700)" }}>
+                <span
+                  className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                  style={{ background: "var(--gray-200)", color: "var(--gray-600)" }}
+                >
+                  EXTERNO
+                </span>
+                <span>{email}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
     </div>
   );

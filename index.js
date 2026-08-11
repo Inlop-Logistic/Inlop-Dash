@@ -4771,11 +4771,69 @@ app.patch("/api/clientes/:id/alias/:aliasId", requireInternalApiKey, async (req,
   }
 });
 
+// ─── PERSONAL INLOP ───────────────────────────────────────────────────────────
+// Fuente real de identidad interna del ERP: tabla `profiles` (misma que usa
+// AuthContext.tsx del frontend para resolver nombre/cargo/rol del usuario
+// autenticado). NO es usuarios_cliente (eso es el portal de clientes).
+//
+// profiles.email no siempre está poblado de forma confiable — el correo
+// canónico vive en Supabase Auth (auth.users). Se resuelve igual que en
+// GET /usuarios: profiles + admin/users, tomando el de Auth como prioritario.
+//
+// Usado por Configuración → Reportes Automáticos → Etapa 05 · Destinatarios
+// para poblar la lista de "Personal INLOP" seleccionable — nunca hardcodeada.
+app.get("/api/personal", async (req, res) => {
+  try {
+    const [perfiles, authData] = await Promise.all([
+      sbFetch("/profiles?select=id,nombre,cargo,email&order=nombre.asc"),
+      sbAuthAdmin("/admin/users?per_page=1000").catch(() => null),
+    ]);
+
+    const emailMap = {};
+    ((authData || {}).users || []).forEach(u => { if (u.id) emailMap[u.id] = u.email || ""; });
+
+    const vistos = new Set(); // dedupe por email (case-insensitive) — evita duplicados en la fuente
+    const personal = (perfiles ?? [])
+      .map(p => ({
+        id:     p.id,
+        nombre: p.nombre || "",
+        cargo:  p.cargo  || "",
+        email:  (emailMap[p.id] || p.email || "").trim(),
+      }))
+      .filter(p => p.email) // sin correo no puede ser destinatario
+      .filter(p => {
+        const clave = p.email.toLowerCase();
+        if (vistos.has(clave)) return false;
+        vistos.add(clave);
+        return true;
+      });
+
+    res.json(personal);
+  } catch (e) {
+    console.error("GET /api/personal error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
 // ─── REPORTES AUTOMÁTICOS ─────────────────────────────────────────────────────
 // Módulo: Configuración → Parámetros → Reportes Automáticos (Fase 2 — CRUD base)
 
 const FRECUENCIAS_VALIDAS_RA = new Set(["diaria", "semanal", "mensual"]);
 const FORMATOS_VALIDOS_RA    = new Set(["excel", "html_filas", "html_columnas"]);
+
+/** Valida la forma de `destinatarios` — { personal_ids: string[], correos_externos: string[] }. */
+function errorDestinatarios(destinatarios) {
+  if (typeof destinatarios !== "object" || destinatarios === null || Array.isArray(destinatarios)) {
+    return "destinatarios debe ser un objeto";
+  }
+  if (destinatarios.personal_ids !== undefined && !Array.isArray(destinatarios.personal_ids)) {
+    return "destinatarios.personal_ids debe ser un array";
+  }
+  if (destinatarios.correos_externos !== undefined && !Array.isArray(destinatarios.correos_externos)) {
+    return "destinatarios.correos_externos debe ser un array";
+  }
+  return null;
+}
 
 app.get("/api/reportes-automaticos", async (req, res) => {
   try {
@@ -4803,6 +4861,7 @@ app.post("/api/reportes-automaticos", async (req, res) => {
       filtros,
       columnas,
       recurrencia,
+      destinatarios,
     } = req.body ?? {};
 
     if (!nombre?.trim())       return res.status(400).json({ error: "El nombre es obligatorio" });
@@ -4823,6 +4882,10 @@ app.post("/api/reportes-automaticos", async (req, res) => {
     if (recurrencia !== undefined && (typeof recurrencia !== "object" || recurrencia === null || Array.isArray(recurrencia))) {
       return res.status(400).json({ error: "recurrencia debe ser un objeto" });
     }
+    if (destinatarios !== undefined) {
+      const err = errorDestinatarios(destinatarios);
+      if (err) return res.status(400).json({ error: err });
+    }
 
     const rows = await sbFetch("/reportes_automaticos", "POST", {
       nombre:       nombre.trim(),
@@ -4834,9 +4897,10 @@ app.post("/api/reportes-automaticos", async (req, res) => {
       activo:       typeof activo === "boolean" ? activo : true,
       borrador:     typeof borrador === "boolean" ? borrador : false,
       frecuencia,
-      filtros:      Array.isArray(filtros)  ? filtros  : [],
-      columnas:     Array.isArray(columnas) ? columnas : [],
-      recurrencia:  recurrencia ?? {},
+      filtros:       Array.isArray(filtros)  ? filtros  : [],
+      columnas:      Array.isArray(columnas) ? columnas : [],
+      recurrencia:   recurrencia ?? {},
+      destinatarios: destinatarios ?? { personal_ids: [], correos_externos: [] },
       created_by:   actor,
       updated_by:   actor,
     });
@@ -4852,7 +4916,7 @@ app.patch("/api/reportes-automaticos/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const actor = req.headers["x-user-email"] ?? "sistema";
-    const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, borrador, frecuencia, filtros, columnas, recurrencia } = req.body ?? {};
+    const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, borrador, frecuencia, filtros, columnas, recurrencia, destinatarios } = req.body ?? {};
 
     const patch = { updated_by: actor };
     if (nombre       !== undefined) patch.nombre       = nombre.trim();
@@ -4891,6 +4955,11 @@ app.patch("/api/reportes-automaticos/:id", async (req, res) => {
         return res.status(400).json({ error: "recurrencia debe ser un objeto" });
       }
       patch.recurrencia = recurrencia;
+    }
+    if (destinatarios !== undefined) {
+      const err = errorDestinatarios(destinatarios);
+      if (err) return res.status(400).json({ error: err });
+      patch.destinatarios = destinatarios;
     }
 
     const rows = await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}`, "PATCH", patch);

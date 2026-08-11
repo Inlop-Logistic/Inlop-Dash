@@ -36,6 +36,17 @@ export interface ColumnaReporte {
   orden:  number;
 }
 
+/**
+ * Los destinatarios del reporte, tal como se persisten en la columna JSONB
+ * `destinatarios` de la DB. Nunca una cadena de correos concatenada:
+ *   - personal_ids   → referencias a profiles.id (Personal INLOP real).
+ *   - correos_externos → correos externos agregados manualmente, validados.
+ */
+export interface DestinatariosReporte {
+  personal_ids:      string[];
+  correos_externos:  string[];
+}
+
 export interface ReporteAutomatico {
   id:                 string;
   nombre:             string;
@@ -52,6 +63,8 @@ export interface ReporteAutomatico {
   columnas:           ColumnaReporte[];
   /** Configuración estructurada de recurrencia (horas, días, rango). */
   recurrencia:        RecurrenciaReporte;
+  /** Destinatarios del reporte (Personal INLOP + correos externos). */
+  destinatarios:      DestinatariosReporte;
   proxima_ejecucion:  string | null;
   created_at:         string;
   updated_at:         string;
@@ -76,6 +89,20 @@ export interface ReporteBase {
   columnas?:    ColumnaReporte[];
   /** Configuración estructurada de recurrencia. Omitido = sin configurar. */
   recurrencia?: RecurrenciaReporte;
+  /** Destinatarios del reporte. Omitido = sin configurar. */
+  destinatarios?: DestinatariosReporte;
+}
+
+/**
+ * Una persona del Personal INLOP, proyectada desde `profiles` (la tabla
+ * real de identidad del ERP — ver AuthContext.tsx) por el endpoint
+ * GET /api/personal. Nunca hardcodeada ni inventada.
+ */
+export interface PersonalInlop {
+  id:     string;
+  nombre: string;
+  cargo:  string;
+  email:  string;
 }
 
 // ─── Catálogos ────────────────────────────────────────────────────────────────
@@ -262,6 +289,18 @@ export function etapaFrecuenciaCompleta(r: RecurrenciaReporte): boolean {
   return true;
 }
 
+// ─── Etapa 05 · Destinatarios ─────────────────────────────────────────────────
+
+/** Destinatarios vacíos al abrir la etapa por primera vez. */
+export function crearDestinatariosInicial(): DestinatariosReporte {
+  return { personal_ids: [], correos_externos: [] };
+}
+
+/** Devuelve true si hay al menos un destinatario (personal o externo). */
+export function etapaDestinatariosCompleta(d: DestinatariosReporte): boolean {
+  return d.personal_ids.length > 0 || d.correos_externos.length > 0;
+}
+
 /** Estado agregado del configurador (todas las etapas). */
 export interface DatosConfigurador {
   infoBasica: DatosInfoBasica;
@@ -275,7 +314,8 @@ export interface DatosConfigurador {
   columnas: ColumnaReporte[];
   /** Etapa 04 — periodicidad de ejecución del reporte. */
   frecuencia: RecurrenciaReporte;
-  // Etapa 05 (Destinatarios) se agregará aquí al desarrollarse.
+  /** Etapa 05 — destinatarios del reporte. Requiere al menos uno para activar. */
+  destinatarios: DestinatariosReporte;
 }
 
 /** Devuelve true si la etapa de Información básica cumple los requisitos mínimos. */
