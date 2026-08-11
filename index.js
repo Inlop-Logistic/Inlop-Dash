@@ -4792,7 +4792,7 @@ app.post("/api/reportes-automaticos", async (req, res) => {
     const actor = req.headers["x-user-email"] ?? "sistema";
     const {
       nombre,
-      modulo_id    = "viajes",
+      modulo_id    = "gestion_logistica",
       tipo_reporte,
       asunto,
       cuerpo,

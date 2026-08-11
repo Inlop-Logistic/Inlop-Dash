@@ -62,25 +62,32 @@ export interface ReporteBase {
 // Claves de máquina estables. Si el label visible cambia, solo cambia aquí;
 // los registros almacenados en DB usan modulo_id / tipo_reporte y no se rompen.
 //
-// Jerarquía en el sidebar:
-//   NavSection.id = "logistica"  → label "GESTIÓN LOGÍSTICA"  (categoría/agrupador)
-//   NavItem.id    = "viajes"     → label "Viajes Activos"      (módulo funcional)
+// Relación en el wizard de Información básica:
+//   Módulo  → selector 1: agrupa los reportes por área funcional del ERP.
+//   Reporte → selector 2: lista solo los tipo_reporte del módulo seleccionado.
 //
-// modulo_id almacena el NavItem.id, NO el NavSection.id.
+// Clave estable  :  value del módulo  = "gestion_logistica"
+// Label visible  :  "Gestión Logística"        (puede cambiar sin tocar la DB)
+//
+// Para agregar un nuevo módulo: añadir una entrada a MODULOS con una clave
+// nueva y agregar los tipo_reporte correspondientes a TIPOS_REPORTE con
+// moduloId apuntando a esa clave. Sin cambios estructurales.
 
 export const MODULOS = [
-  { value: "viajes", label: "Viajes Activos" },
-  // A medida que se agreguen reportes de otros módulos:
-  // { value: "solicitudes",  label: "Solicitudes"         },
-  // { value: "programacion", label: "Programación"        },
-  // { value: "cumplidos",    label: "Viajes Finalizados"  },
+  { value: "gestion_logistica", label: "Gestión Logística" },
+  // Para agregar nuevas áreas funcionales:
+  // { value: "administracion", label: "Administración" },
+  // { value: "comercial",      label: "Comercial"      },
 ] as const;
 
 export type Modulo = (typeof MODULOS)[number]["value"];
 
 export const TIPOS_REPORTE = [
-  // moduloId = NavItem.id del módulo al que pertenece el reporte
-  { value: "viajes_activos", moduloId: "viajes", label: "Viajes Activos" },
+  { value: "viajes_activos", moduloId: "gestion_logistica", label: "Viajes Activos" },
+  // Para agregar un nuevo reporte a Gestión Logística:
+  // { value: "solicitudes_activas", moduloId: "gestion_logistica", label: "Solicitudes Activas" },
+  // Para agregar un reporte de otro módulo:
+  // { value: "facturacion_mensual", moduloId: "administracion",    label: "Facturación Mensual" },
 ] as const;
 
 export type TipoReporte = (typeof TIPOS_REPORTE)[number]["value"];
