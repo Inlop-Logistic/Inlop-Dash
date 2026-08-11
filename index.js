@@ -10,6 +10,9 @@ import { normalizeExternalRef } from './services/normalizeExternalRef.js';
 import { fechaHoyColombia, parseFechaTMS, extraerFechaColombia } from './utils/fechas.js';
 import controltDiagRouter from './routes/controltDiag.js';
 import { getTripDetail, makeSbFetchAdapter } from './services/controlt-soap/tripService.js';
+import {
+  transformarViajesActivos, transformarCentroGps,
+} from './services/reportes/datasetProvider.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -613,37 +616,12 @@ function parseCreated(str) {
   return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:00`);
 }
 
-// Wrapper de compatibilidad — usa parseFechaTMS('MDY') con offset −05:00. RESUELVE H-05.
-function parseFechaMDY(str) {
-  return parseFechaTMS(str, 'MDY');
-}
-
-const GPS_THRESHOLD_DETENIDO     = 2;   // horas — coincide con frontend
-const GPS_THRESHOLD_DESCONECTADO = 6;   // horas — coincide con frontend
-
-const ESTADOS_MONITOREABLES = new Set([
-  'en transíto', 'iniciado', 'descargando', 'cargando', 'pernoctando',
-]);
-
 const ESTADOS_CUMPLIBLES = new Set(['completado', 'finalizado']);
 
-function derivarEstadoGps(v) {
-  const alarm = (v.last_alarm_name ?? '').toLowerCase();
-  if (alarm.includes('pánico') || alarm.includes('panico')) return 'panico';
-  if (v.last_alarm_name) return 'con_alarma';
-  const ts = parseFechaMDY(v.latest_gps_report);
-  if (!ts) return 'desconectado';
-  const horas = (Date.now() - ts.getTime()) / 3_600_000;
-  if (horas > GPS_THRESHOLD_DESCONECTADO) return 'desconectado';
-  if (horas > GPS_THRESHOLD_DETENIDO)     return 'detenido';
-  return 'activo';
-}
-
-function parseLatLon(str) {
-  if (!str) return null;
-  const n = parseFloat(str);
-  return isNaN(n) ? null : n;
-}
+// GPS_THRESHOLD_*, ESTADOS_MONITOREABLES, derivarEstadoGps() y parseLatLon()
+// se movieron a services/reportes/datasetProvider.js (Fase 9B) — su único
+// call site era GET /api/gps más abajo. Se importan de vuelta desde ahí para
+// no duplicar la lógica entre el endpoint y el generador de reportes.
 
 function primerNombreCliente(str) {
   return (str ?? '').split(',')[0].trim() || null;
@@ -1319,41 +1297,12 @@ app.get("/api/pendientes", requireLegacyOrInternal, async (req, res) => {
 // GET /api/viajes — datos del TMS normalizados para el módulo Viajes del ERP.
 // Convierte strings crudos (latitude, longitude, percentage_travel) a tipos seguros
 // y añade campos derivados (lat, lon, pct, cliente, conductor_tel).
+// Transformación en services/reportes/datasetProvider.js (Fase 9B) — la misma
+// función alimenta el generador de reportes automáticos, sin duplicarla.
 app.get('/api/viajes', requireInternalApiKey, (req, res) => {
-  const viajes = cache.viajes.data.map(v => {
-    const cached = tripCustomerCache.get(v.trip_number);
-    return {
-      trip_number:              v.trip_number,
-      id_monitoring_order:      v.id_monitoring_order      || null,
-      number_order:             v.number_order             || null,
-      license_plate:            v.license_plate            || null,
-      driver_name:              v.driver_name              || null,
-      driver_phone:             v.driver_phone             || null,
-      conductor_tel:            extraerTelefono(v.driver_phone, v.full_driver) || null,
-      cliente:                  primerNombreCliente(v.company_customer_name),
-      company_customer_name:    v.company_customer_name    || null,
-      empresa_cliente_id:       cached?.empresa_cliente_id ?? null,
-      razon_social:             cached?.razon_social        ?? null,
-      origin_city_name:         v.origin_city_name         || null,
-      destiny_city_name:        v.destiny_city_name        || null,
-      type_operation:           v.type_operation           || null,
-      stops:                    v.stops                    || null,
-      state_travel:             v.state_travel,
-      pct:                      v.percentage_travel != null ? (parseFloat(String(v.percentage_travel)) || 0) : null,
-      percentage_travel:        v.percentage_travel,
-      last_event:               v.last_event               || null,
-      appointment_fulfillment:  v.appointment_fulfillment  || null,
-      lat:                      parseLatLon(v.latitude),
-      lon:                      parseLatLon(v.longitude),
-      latest_gps_report:        v.latest_gps_report        || null,
-      current_address_location: v.current_address_location || null,
-      last_alarm_name:          v.last_alarm_name          || null,
-      created_on:               v.created_on               || null,
-      activated_on:             v.activated_on             || null,
-      schedulate_origin:        v.schedulate_origin        || null,
-    };
-  });
-  res.json(viajes);
+  res.json(transformarViajesActivos(cache.viajes.data, {
+    tripCustomerCache, extraerTelefono, primerNombreCliente,
+  }));
 });
 
 // ─── API CANÓNICA DEL VIAJE (Fase 6) ────────────────────────────────────────
@@ -1786,35 +1735,12 @@ app.patch('/api/cumplidos/:trip/estado', requireInternalApiKey, async (req, res)
 });
 
 // GET /api/gps — vehículos activos con estado GPS derivado y coordenadas como números.
-// Mueve al backend derivarEstadoGps(), parseLatLon() y el filtrado por ESTADOS_MONITOREABLES
-// que antes hacía erp/src/modules/gps/services/api.ts.
+// Transformación (derivarEstadoGps, parseLatLon, filtrado por
+// ESTADOS_MONITOREABLES) en services/reportes/datasetProvider.js (Fase 9B) —
+// la misma función alimenta el generador de reportes automáticos.
 app.get('/api/gps', requireInternalApiKey, (req, res) => {
-  const vehiculos = cache.viajes.data
-    .filter(v => ESTADOS_MONITOREABLES.has((v.state_travel ?? '').toLowerCase()))
-    .map(v => {
-      const cached = tripCustomerCache.get(v.trip_number);
-      return {
-        id:                       v.trip_number,
-        trip_number:              v.trip_number,
-        number_order:             v.number_order             || null,
-        license_plate:            v.license_plate            || null,
-        driver_name:              v.driver_name              || null,
-        company_customer_name:    v.company_customer_name    || null,
-        empresa_cliente_id:       cached?.empresa_cliente_id ?? null,
-        razon_social:             cached?.razon_social        ?? null,
-        origin_city_name:         v.origin_city_name         || null,
-        destiny_city_name:        v.destiny_city_name        || null,
-        state_travel:             v.state_travel,
-        lat:                      parseLatLon(v.latitude),
-        lon:                      parseLatLon(v.longitude),
-        latest_gps_report:        v.latest_gps_report        || null,
-        current_address_location: v.current_address_location || null,
-        last_alarm_name:          v.last_alarm_name          || null,
-        estadoGps:                derivarEstadoGps(v),
-      };
-    });
   res.set('Cache-Control', 'no-store');
-  res.json(vehiculos);
+  res.json(transformarCentroGps(cache.viajes.data, { tripCustomerCache }));
 });
 
 // ─── SOLICITUDES (Módulo de Demanda) ─────────────────────────────────────────
