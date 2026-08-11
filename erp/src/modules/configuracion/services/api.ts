@@ -1,4 +1,5 @@
 import { req } from "@/services/http";
+import { lineaNegocio } from "@/utils/lineaNegocio";
 import type { ReporteAutomatico, ReporteBase, PersonalInlop } from "../types";
 
 // ─── Preview de datos del reporte ────────────────────────────────────────────
@@ -45,10 +46,9 @@ function enriquecerFilas(
       }
     }
 
-    // linea_negocio
+    // linea_negocio — usa el mismo utility que los módulos operativos
     if (!fila.linea_negocio && fila.type_operation) {
-      const op = (fila.type_operation as string).toLowerCase();
-      fila.linea_negocio = op.includes("granel") ? "Carga Líquida" : "Carga Seca";
+      fila.linea_negocio = lineaNegocio(fila.type_operation as string);
     }
 
     return fila;
