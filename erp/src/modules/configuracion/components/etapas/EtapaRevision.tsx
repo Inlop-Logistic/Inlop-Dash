@@ -1,20 +1,25 @@
 /**
  * Etapa 06 — Revisión y activación
  *
- * Layout dos columnas:
- *   IZQUIERDA: resumen compacto de las 5 etapas con botón "Editar" por sección.
- *   DERECHA:   vista previa del correo derivada directamente de `datos`.
+ * Layout dos filas:
+ *   FILA SUPERIOR (flex):
+ *     IZQUIERDA: resumen compacto de las 5 etapas con botón "Editar" por sección.
+ *     DERECHA:   vista previa del correo (Fase 8B).
+ *   FILA INFERIOR (full-width):
+ *     Muestra de datos real del reporte seleccionado (Fase 8C).
  *
  * Principios:
- *  - Toda la información se deriva de `datos` — sin estado propio ni fetches.
- *  - NO lista ítems individuales (filtros, columnas, destinatarios) — solo conteos.
- *  - NO consulta Personal, no genera archivos, no envía nada.
- *  - El preview se actualiza automáticamente al cambiar cualquier etapa del wizard.
+ *  - Todo se deriva de `datos` o se consulta en tiempo real — sin datos inventados.
+ *  - NO lista ítems individuales en las secciones de resumen — solo conteos.
+ *  - NO hace fetch de /api/personal (conteo con .length).
+ *  - Email preview: pura, stateless, sin fetch.
+ *  - Tabla de datos: carga real; muestra máx. 10 filas sin filtros ni columnas configuradas.
  *  - `onIrA` delega la navegación al ConfiguradorReporte (única fuente de verdad).
  */
-import { type ReactNode }                                from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { CheckCircle2, AlertCircle, Pencil,
-         Mail, FileSpreadsheet, FileCode }                from "lucide-react";
+         Mail, FileSpreadsheet, FileCode,
+         Loader2, Database, AlertTriangle }          from "lucide-react";
 import {
   labelModulo, labelTipoReporte, labelFormato, labelFrecuencia,
   etapaInfoBasicaCompleta, etapaFrecuenciaCompleta, etapaDestinatariosCompleta,
@@ -24,7 +29,8 @@ import {
   type FinRecurrencia,
   type RecurrenciaReporte,
 } from "../../types";
-import { buscarReporte } from "../../catalogos/datasetsReportes";
+import { buscarReporte, type CampoDataset } from "../../catalogos/datasetsReportes";
+import { cargarPreviewReporte }              from "../../services/api";
 
 interface Props {
   datos: DatosConfigurador;
@@ -32,7 +38,7 @@ interface Props {
   onIrA: (id: EtapaId) => void;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers de resumen ────────────────────────────────────────────────────────
 
 /** "2026-08-11" → "11/08/2026" — evita el corrimiento de zona horaria de Date(). */
 function formatFechaISO(iso: string | undefined): string {
@@ -69,6 +75,22 @@ function resumenFrecuencia(r: RecurrenciaReporte): string {
   return partes.join(" · ");
 }
 
+// ─── Helper de formato de celda ───────────────────────────────────────────────
+
+/** Convierte un valor arbitrario de API en texto legible para la tabla de preview. */
+function formatCelda(valor: unknown): string {
+  if (valor === null || valor === undefined || valor === "") return "—";
+  if (typeof valor === "boolean") return valor ? "Sí" : "No";
+  const s = String(valor);
+  // ISO date o datetime: "YYYY-MM-DD..."
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const part = s.slice(0, 10);
+    const [y, m, d] = part.split("-");
+    return d && m && y ? `${d}/${m}/${y}` : s;
+  }
+  return s;
+}
+
 // ─── Extensiones por formato ──────────────────────────────────────────────────
 
 const EXT_FORMATO: Record<string, string> = {
@@ -97,7 +119,6 @@ function SeccionCard({ numero, titulo, completa, errorMsg, onEditar, children }:
         background: completa ? "var(--gray-50)" : "var(--danger-bg)",
       }}
     >
-      {/* Cabecera: número + título + icono + botón editar */}
       <div className="flex items-center gap-1.5">
         <span
           className="text-[10.5px] font-bold uppercase tracking-wider"
@@ -122,7 +143,6 @@ function SeccionCard({ numero, titulo, completa, errorMsg, onEditar, children }:
         </button>
       </div>
 
-      {/* Contenido */}
       {errorMsg ? (
         <p className="text-[12.5px]" style={{ color: "var(--inlop-red)" }}>
           {errorMsg}
@@ -135,9 +155,6 @@ function SeccionCard({ numero, titulo, completa, errorMsg, onEditar, children }:
 }
 
 // ─── PreviewCorreo ────────────────────────────────────────────────────────────
-//
-// Todo se deriva de `datos` — sin fetch, sin estado, sin generación de archivo.
-// Se re-renderiza automáticamente cuando el wizard actualiza `datos`.
 
 interface PreviewCorreoProps {
   datos:                DatosConfigurador;
@@ -147,7 +164,6 @@ interface PreviewCorreoProps {
 function PreviewCorreo({ datos, totalColumnasCatalogo }: PreviewCorreoProps) {
   const ib = datos.infoBasica;
 
-  // ── Destinatarios ─────────────────────────────────────────────────────────
   const nInlop    = datos.destinatarios.personal_ids.length;
   const nExternos = datos.destinatarios.correos_externos.length;
   const hayDestinatarios = nInlop + nExternos > 0;
@@ -155,19 +171,12 @@ function PreviewCorreo({ datos, totalColumnasCatalogo }: PreviewCorreoProps) {
     ? `${nInlop} destinatario${nInlop !== 1 ? "s" : ""} INLOP · ${nExternos} externo${nExternos !== 1 ? "s" : ""}`
     : "Sin destinatarios configurados";
 
-  // ── Adjunto derivado ──────────────────────────────────────────────────────
-  // Nombre → label del reporte (sin caracteres problemáticos)
-  // Extensión → según formato seleccionado
-  // Detalle  → cantidad de columnas + formato visible
   const ext         = EXT_FORMATO[ib.formato] ?? "xlsx";
   const reporteSlug = labelTipoReporte(ib.tipo_reporte).replace(/\s+/g, "_");
   const adjNombre   = `${reporteSlug}.${ext}`;
   const nCols       = datos.columnas.length === 0 ? totalColumnasCatalogo : datos.columnas.length;
-  const adjDetalle  =
-    `${nCols} columna${nCols !== 1 ? "s" : ""} · ${labelFormato(ib.formato)}`;
+  const adjDetalle  = `${nCols} columna${nCols !== 1 ? "s" : ""} · ${labelFormato(ib.formato)}`;
   const esExcel     = ib.formato === "excel";
-
-  // ── Fila de metadatos del email ───────────────────────────────────────────
 
   function FilaEmail({
     etiqueta,
@@ -208,21 +217,14 @@ function PreviewCorreo({ datos, totalColumnasCatalogo }: PreviewCorreoProps) {
         boxShadow:  "0 1px 6px rgba(0,0,0,0.05)",
       }}
     >
-      {/* De */}
       <FilaEmail etiqueta="De">
         Sistema de Reportes INLOP
       </FilaEmail>
 
-      {/* Para */}
       <FilaEmail etiqueta="Para" danger={!hayDestinatarios}>
-        {hayDestinatarios ? (
-          paraLabel
-        ) : (
-          <span className="italic">{paraLabel}</span>
-        )}
+        {hayDestinatarios ? paraLabel : <span className="italic">{paraLabel}</span>}
       </FilaEmail>
 
-      {/* Asunto */}
       <div
         className="px-4 py-3"
         style={{ borderBottom: "1px solid var(--gray-100)" }}
@@ -238,16 +240,12 @@ function PreviewCorreo({ datos, totalColumnasCatalogo }: PreviewCorreoProps) {
         )}
       </div>
 
-      {/* Cuerpo */}
       <div
         className="px-4 py-3"
-        style={{ minHeight: "80px", borderBottom: "1px solid var(--gray-100)" }}
+        style={{ minHeight: "60px", borderBottom: "1px solid var(--gray-100)" }}
       >
         {ib.cuerpo.trim() ? (
-          <p
-            className="text-[13px] whitespace-pre-wrap leading-relaxed"
-            style={{ color: "var(--gray-700)" }}
-          >
+          <p className="text-[13px] whitespace-pre-wrap leading-relaxed" style={{ color: "var(--gray-700)" }}>
             {ib.cuerpo}
           </p>
         ) : (
@@ -257,22 +255,18 @@ function PreviewCorreo({ datos, totalColumnasCatalogo }: PreviewCorreoProps) {
         )}
       </div>
 
-      {/* Adjunto */}
       <div className="px-4 py-3">
         <div
           className="flex items-center gap-2.5 rounded-lg px-3 py-2.5"
           style={{ background: "var(--gray-50)", border: "1px solid var(--gray-200)" }}
         >
-          {/* Ícono según formato */}
           <div
             className="shrink-0 flex items-center justify-center rounded-md"
             style={{
               width:      "30px",
               height:     "30px",
-              background: esExcel
-                ? "rgba(21, 128, 61, 0.10)"
-                : "rgba(37, 99, 235, 0.10)",
-              color: esExcel ? "#15803d" : "#2563eb",
+              background: esExcel ? "rgba(21,128,61,0.10)" : "rgba(37,99,235,0.10)",
+              color:      esExcel ? "#15803d" : "#2563eb",
             }}
           >
             {esExcel
@@ -280,13 +274,8 @@ function PreviewCorreo({ datos, totalColumnasCatalogo }: PreviewCorreoProps) {
               : <FileCode        style={{ width: "14px", height: "14px" }} />
             }
           </div>
-
           <div className="min-w-0">
-            <p
-              className="text-[12.5px] font-medium truncate"
-              style={{ color: "var(--gray-700)" }}
-              title={adjNombre}
-            >
+            <p className="text-[12.5px] font-medium truncate" style={{ color: "var(--gray-700)" }} title={adjNombre}>
               {adjNombre}
             </p>
             <p className="text-[11px] mt-0.5" style={{ color: "var(--gray-400)" }}>
@@ -295,6 +284,189 @@ function PreviewCorreo({ datos, totalColumnasCatalogo }: PreviewCorreoProps) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── PreviewTabla ─────────────────────────────────────────────────────────────
+//
+// Consulta el dataset real del reporte seleccionado y muestra los primeros 10
+// registros en una tabla básica. Sin filtros, sin columnas configuradas, sin
+// títulos personalizados — eso es Fase 8D.
+//
+// Se re-ejecuta automáticamente al cambiar `tipo_reporte`:
+//   - Limpia filas anteriores de inmediato.
+//   - Muestra estado "cargando" mientras espera.
+//   - Maneja vacío y error sin propagar al wizard.
+
+type EstadoTabla = "cargando" | "ok" | "vacio" | "error";
+
+function PreviewTabla({ tipoReporte }: { tipoReporte: string }) {
+  const [estado,   setEstado]   = useState<EstadoTabla>("cargando");
+  const [filas,    setFilas]    = useState<Record<string, unknown>[]>([]);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    let activo = true;
+    setEstado("cargando");
+    setFilas([]);
+    setErrorMsg(null);
+
+    cargarPreviewReporte(tipoReporte)
+      .then(datos => {
+        if (!activo) return;
+        if (datos.length === 0) {
+          setEstado("vacio");
+        } else {
+          setFilas(datos);
+          setEstado("ok");
+        }
+      })
+      .catch(err => {
+        if (!activo) return;
+        setErrorMsg((err as Error).message ?? "Error desconocido");
+        setEstado("error");
+      });
+
+    return () => { activo = false; };
+  }, [tipoReporte]);
+
+  // Columnas del catálogo para este reporte (en orden de catálogo — Fase 8C)
+  const cols: CampoDataset[] =
+    buscarReporte(tipoReporte)?.campos.filter(c => c.seleccionableColumna) ?? [];
+
+  const labelReporte = labelTipoReporte(tipoReporte);
+
+  return (
+    <div
+      className="rounded-xl overflow-hidden"
+      style={{ border: "1.5px solid var(--gray-200)" }}
+    >
+      {/* Cabecera */}
+      <div
+        className="flex items-center gap-2 px-4 py-2.5"
+        style={{
+          borderBottom: "1.5px solid var(--gray-200)",
+          background:   "var(--gray-50)",
+        }}
+      >
+        <Database className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--gray-400)" }} />
+        <span
+          className="text-[10.5px] font-bold uppercase tracking-wider"
+          style={{ color: "var(--gray-500)" }}
+        >
+          Muestra de datos · {labelReporte}
+        </span>
+        <span style={{ flex: "1 1 0" }} />
+        {estado === "ok" && (
+          <span className="text-[10.5px]" style={{ color: "var(--gray-400)" }}>
+            {filas.length} registro{filas.length !== 1 ? "s" : ""} · máx. 10
+          </span>
+        )}
+      </div>
+
+      {/* Cuerpo */}
+      {estado === "cargando" && (
+        <div
+          className="flex items-center justify-center gap-2 py-10"
+          style={{ color: "var(--gray-400)" }}
+        >
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span className="text-[13px]">Cargando datos de {labelReporte}…</span>
+        </div>
+      )}
+
+      {estado === "error" && (
+        <div
+          className="flex items-center gap-2.5 px-5 py-8"
+          style={{ color: "var(--inlop-red)" }}
+        >
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <div>
+            <p className="text-[13px] font-medium">No se pudieron cargar los datos</p>
+            {errorMsg && (
+              <p className="text-[12px] mt-0.5" style={{ color: "var(--gray-500)" }}>
+                {errorMsg}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {estado === "vacio" && (
+        <div
+          className="flex items-center justify-center gap-2 py-10"
+          style={{ color: "var(--gray-400)" }}
+        >
+          <Database className="w-4 h-4" />
+          <span className="text-[13px]">Sin registros para el período actual</span>
+        </div>
+      )}
+
+      {estado === "ok" && (
+        <div style={{ overflowX: "auto" }}>
+          <table
+            style={{
+              width:           "100%",
+              borderCollapse:  "collapse",
+              tableLayout:     "auto",
+            }}
+          >
+            <thead>
+              <tr style={{ background: "var(--gray-50)", borderBottom: "1.5px solid var(--gray-200)" }}>
+                {cols.map(c => (
+                  <th
+                    key={c.key}
+                    style={{
+                      padding:       "7px 12px",
+                      textAlign:     "left",
+                      fontSize:      "10.5px",
+                      fontWeight:    700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      color:         "var(--gray-500)",
+                      whiteSpace:    "nowrap",
+                      borderRight:   "1px solid var(--gray-100)",
+                    }}
+                  >
+                    {c.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filas.map((fila, idx) => (
+                <tr
+                  key={idx}
+                  style={{
+                    borderBottom: "1px solid var(--gray-100)",
+                    background:   idx % 2 === 0 ? "#fff" : "var(--gray-50)",
+                  }}
+                >
+                  {cols.map(c => (
+                    <td
+                      key={c.key}
+                      style={{
+                        padding:       "6px 12px",
+                        fontSize:      "12.5px",
+                        color:         "var(--gray-700)",
+                        whiteSpace:    "nowrap",
+                        maxWidth:      "200px",
+                        overflow:      "hidden",
+                        textOverflow:  "ellipsis",
+                        borderRight:   "1px solid var(--gray-100)",
+                      }}
+                      title={String(fila[c.key] ?? "")}
+                    >
+                      {formatCelda(fila[c.key])}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -308,12 +480,10 @@ export function EtapaRevision({ datos, onIrA }: Props) {
   const frecuenciaCompleta    = etapaFrecuenciaCompleta(datos.frecuencia);
   const destinatariosCompleta = etapaDestinatariosCompleta(datos.destinatarios);
 
-  // Total de columnas seleccionables del catálogo de este reporte
-  // (usado en el resumen izquierdo Y en el adjunto del preview)
   const totalColumnasCatalogo = buscarReporte(ib.tipo_reporte)
     ?.campos.filter(c => c.seleccionableColumna).length ?? 0;
 
-  // ── Resúmenes de una línea (columna izquierda) ─────────────────────────────
+  // ── Resúmenes de una línea ─────────────────────────────────────────────────
 
   const resumenFiltros = datos.filtros.length === 0
     ? "Sin filtros — se incluirán todos los registros"
@@ -330,148 +500,150 @@ export function EtapaRevision({ datos, onIrA }: Props) {
     `${nExternos} externo${nExternos !== 1 ? "s" : ""}`;
 
   return (
-    <div className="flex gap-5 min-h-full">
+    <div className="flex flex-col gap-5">
 
-      {/* ── IZQUIERDA — Resumen de configuración ──────────────────────────── */}
-      <div className="flex flex-col gap-3" style={{ flex: "0 0 52%", minWidth: 0 }}>
+      {/* ── FILA SUPERIOR: resumen + preview correo ───────────────────────── */}
+      <div className="flex gap-5">
 
-        <div className="mb-0.5">
-          <p className="font-semibold text-[14px]" style={{ color: "var(--navy)" }}>
-            Revisión del reporte
-          </p>
-          <p className="text-[12.5px] mt-0.5" style={{ color: "var(--gray-400)" }}>
-            Verifica la configuración antes de activar.
-          </p>
+        {/* IZQUIERDA — Resumen de configuración */}
+        <div className="flex flex-col gap-3" style={{ flex: "0 0 52%", minWidth: 0 }}>
+
+          <div className="mb-0.5">
+            <p className="font-semibold text-[14px]" style={{ color: "var(--navy)" }}>
+              Revisión del reporte
+            </p>
+            <p className="text-[12.5px] mt-0.5" style={{ color: "var(--gray-400)" }}>
+              Verifica la configuración antes de activar.
+            </p>
+          </div>
+
+          <SeccionCard
+            numero={1}
+            titulo="Información básica"
+            completa={infoCompleta}
+            errorMsg={infoCompleta ? undefined : "Completa el Nombre y el Asunto del correo."}
+            onEditar={() => onIrA("info-basica")}
+          >
+            <p className="font-semibold text-[13.5px]" style={{ color: "var(--gray-700)" }}>
+              {ib.nombre || "—"}
+            </p>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {[
+                labelModulo(ib.modulo_id),
+                labelTipoReporte(ib.tipo_reporte),
+                labelFormato(ib.formato),
+              ].map(tag => (
+                <span
+                  key={tag}
+                  className="px-2 py-0.5 rounded-full text-[11px] font-medium"
+                  style={{ background: "var(--gray-200)", color: "var(--gray-600)" }}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+            {ib.asunto && (
+              <p
+                className="text-[12px] mt-1.5 truncate"
+                style={{ color: "var(--gray-500)" }}
+                title={ib.asunto}
+              >
+                Asunto: {ib.asunto}
+              </p>
+            )}
+          </SeccionCard>
+
+          <SeccionCard
+            numero={2}
+            titulo="Filtros"
+            completa={true}
+            onEditar={() => onIrA("filtros")}
+          >
+            <p className="text-[13px]" style={{ color: "var(--gray-600)" }}>
+              {resumenFiltros}
+            </p>
+          </SeccionCard>
+
+          <SeccionCard
+            numero={3}
+            titulo="Columnas"
+            completa={true}
+            onEditar={() => onIrA("columnas")}
+          >
+            <p className="text-[13px]" style={{ color: "var(--gray-600)" }}>
+              {resumenColumnas}
+            </p>
+          </SeccionCard>
+
+          <SeccionCard
+            numero={4}
+            titulo="Frecuencia"
+            completa={frecuenciaCompleta}
+            errorMsg={frecuenciaCompleta ? undefined : "Completa los campos requeridos de frecuencia."}
+            onEditar={() => onIrA("frecuencia")}
+          >
+            <p className="text-[13px]" style={{ color: "var(--gray-600)" }}>
+              {resumenFrecuencia(datos.frecuencia)}
+            </p>
+          </SeccionCard>
+
+          <SeccionCard
+            numero={5}
+            titulo="Destinatarios"
+            completa={destinatariosCompleta}
+            errorMsg={destinatariosCompleta ? undefined : "Selecciona al menos un destinatario."}
+            onEditar={() => onIrA("destinatarios")}
+          >
+            <p className="text-[13px]" style={{ color: "var(--gray-600)" }}>
+              {resumenDestinatarios}
+            </p>
+          </SeccionCard>
+
         </div>
 
-        {/* 01 · Información básica */}
-        <SeccionCard
-          numero={1}
-          titulo="Información básica"
-          completa={infoCompleta}
-          errorMsg={infoCompleta ? undefined : "Completa el Nombre y el Asunto del correo."}
-          onEditar={() => onIrA("info-basica")}
-        >
-          <p className="font-semibold text-[13.5px]" style={{ color: "var(--gray-700)" }}>
-            {ib.nombre || "—"}
-          </p>
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            {[
-              labelModulo(ib.modulo_id),
-              labelTipoReporte(ib.tipo_reporte),
-              labelFormato(ib.formato),
-            ].map(tag => (
-              <span
-                key={tag}
-                className="px-2 py-0.5 rounded-full text-[11px] font-medium"
-                style={{ background: "var(--gray-200)", color: "var(--gray-600)" }}
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-          {ib.asunto && (
-            <p
-              className="text-[12px] mt-1.5 truncate"
-              style={{ color: "var(--gray-500)" }}
-              title={ib.asunto}
-            >
-              Asunto: {ib.asunto}
-            </p>
-          )}
-        </SeccionCard>
-
-        {/* 02 · Filtros — siempre válido (array vacío = sin filtros) */}
-        <SeccionCard
-          numero={2}
-          titulo="Filtros"
-          completa={true}
-          onEditar={() => onIrA("filtros")}
-        >
-          <p className="text-[13px]" style={{ color: "var(--gray-600)" }}>
-            {resumenFiltros}
-          </p>
-        </SeccionCard>
-
-        {/* 03 · Columnas — siempre válido (vacío = todas por defecto) */}
-        <SeccionCard
-          numero={3}
-          titulo="Columnas"
-          completa={true}
-          onEditar={() => onIrA("columnas")}
-        >
-          <p className="text-[13px]" style={{ color: "var(--gray-600)" }}>
-            {resumenColumnas}
-          </p>
-        </SeccionCard>
-
-        {/* 04 · Frecuencia */}
-        <SeccionCard
-          numero={4}
-          titulo="Frecuencia"
-          completa={frecuenciaCompleta}
-          errorMsg={frecuenciaCompleta ? undefined : "Completa los campos requeridos de frecuencia."}
-          onEditar={() => onIrA("frecuencia")}
-        >
-          <p className="text-[13px]" style={{ color: "var(--gray-600)" }}>
-            {resumenFrecuencia(datos.frecuencia)}
-          </p>
-        </SeccionCard>
-
-        {/* 05 · Destinatarios */}
-        <SeccionCard
-          numero={5}
-          titulo="Destinatarios"
-          completa={destinatariosCompleta}
-          errorMsg={destinatariosCompleta ? undefined : "Selecciona al menos un destinatario."}
-          onEditar={() => onIrA("destinatarios")}
-        >
-          <p className="text-[13px]" style={{ color: "var(--gray-600)" }}>
-            {resumenDestinatarios}
-          </p>
-        </SeccionCard>
-
-      </div>
-
-      {/* ── DERECHA — Vista previa del correo ─────────────────────────────── */}
-      <div
-        className="flex-1 flex flex-col rounded-xl overflow-hidden"
-        style={{
-          minWidth:   0,
-          minHeight:  "280px",
-          border:     "1.5px solid var(--gray-200)",
-          background: "var(--gray-50)",
-        }}
-      >
-        {/* Cabecera del panel */}
+        {/* DERECHA — Vista previa del correo (Fase 8B) */}
         <div
-          className="shrink-0 flex items-center gap-2 px-4 py-2.5"
+          className="flex-1 flex flex-col rounded-xl overflow-hidden"
           style={{
-            borderBottom: "1.5px solid var(--gray-200)",
-            background:   "var(--gray-50)",
+            minWidth:   0,
+            border:     "1.5px solid var(--gray-200)",
+            background: "var(--gray-50)",
           }}
         >
-          <Mail className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--gray-400)" }} />
-          <span
-            className="text-[10.5px] font-bold uppercase tracking-wider"
-            style={{ color: "var(--gray-500)" }}
+          <div
+            className="shrink-0 flex items-center gap-2 px-4 py-2.5"
+            style={{ borderBottom: "1.5px solid var(--gray-200)", background: "var(--gray-50)" }}
           >
-            Vista previa del correo
-          </span>
-          <span style={{ flex: "1 1 0" }} />
-          <span className="text-[10.5px]" style={{ color: "var(--gray-400)" }}>
-            Se actualiza con el wizard
-          </span>
+            <Mail className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--gray-400)" }} />
+            <span
+              className="text-[10.5px] font-bold uppercase tracking-wider"
+              style={{ color: "var(--gray-500)" }}
+            >
+              Vista previa del correo
+            </span>
+            <span style={{ flex: "1 1 0" }} />
+            <span className="text-[10.5px]" style={{ color: "var(--gray-400)" }}>
+              Se actualiza con el wizard
+            </span>
+          </div>
+
+          <div className="p-3">
+            <PreviewCorreo
+              datos={datos}
+              totalColumnasCatalogo={totalColumnasCatalogo}
+            />
+          </div>
         </div>
 
-        {/* Email preview — sin scroll propio, el wizard lo provee */}
-        <div className="p-3">
-          <PreviewCorreo
-            datos={datos}
-            totalColumnasCatalogo={totalColumnasCatalogo}
-          />
-        </div>
       </div>
+
+      {/* ── FILA INFERIOR: tabla de datos real (Fase 8C) ──────────────────── */}
+      {/* key={tipo_reporte} garantiza que el componente se desmonta y remonta
+          al cambiar de reporte — limpia estado anterior sin condición extra. */}
+      <PreviewTabla
+        key={ib.tipo_reporte}
+        tipoReporte={ib.tipo_reporte}
+      />
 
     </div>
   );

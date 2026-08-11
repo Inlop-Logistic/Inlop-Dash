@@ -1459,7 +1459,10 @@ app.get('/api/viajes/:tripNumber', requireInternalApiKey, async (req, res) => {
 // Paginación interna para soportar crecimiento indefinido de la tabla.
 app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
   try {
-    const SB_PAGE = 500;
+    // ?limit=N — limita resultados (útil para previews en el wizard de reportes).
+    // Si no se pasa, el comportamiento es el mismo de siempre (sin límite).
+    const limitParam = req.query.limit ? Math.min(Math.max(1, parseInt(req.query.limit, 10) || 500), 500) : null;
+    const SB_PAGE = limitParam ?? 500;
     let sbOffset = 0;
     const allRows = [];
     while (true) {
@@ -1468,6 +1471,7 @@ app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
       );
       if (!page || page.length === 0) break;
       allRows.push(...page);
+      if (limitParam && allRows.length >= limitParam) break; // stop early for preview
       if (page.length < SB_PAGE) break;
       sbOffset += SB_PAGE;
     }
