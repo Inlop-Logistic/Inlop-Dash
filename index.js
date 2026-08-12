@@ -1,6 +1,7 @@
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
+import { randomUUID } from "crypto";
 import { publishBusinessEvent } from './services/notificationOrchestrator.js';
 import { buildLookupMap, normalizeClient, resolveCustomer, resolveTrip, isPlaceholderTmsCustomer } from './services/customerResolver.js';
 import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } from './services/authScope.js';
@@ -9,6 +10,11 @@ import { normalizeExternalRef } from './services/normalizeExternalRef.js';
 import { fechaHoyColombia, parseFechaTMS, extraerFechaColombia } from './utils/fechas.js';
 import controltDiagRouter from './routes/controltDiag.js';
 import { getTripDetail, makeSbFetchAdapter } from './services/controlt-soap/tripService.js';
+import {
+  transformarViajesActivos, transformarCentroGps,
+} from './services/reportes/datasetProvider.js';
+import { ejecutarReporteManual } from './services/reportes/envioManual.js';
+import { ejecutarTickScheduler } from './services/reportes/scheduler.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -612,51 +618,95 @@ function parseCreated(str) {
   return new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T${hh.padStart(2,'0')}:${min}:00`);
 }
 
-// Wrapper de compatibilidad — usa parseFechaTMS('MDY') con offset −05:00. RESUELVE H-05.
-function parseFechaMDY(str) {
-  return parseFechaTMS(str, 'MDY');
-}
-
-const GPS_THRESHOLD_DETENIDO     = 2;   // horas — coincide con frontend
-const GPS_THRESHOLD_DESCONECTADO = 6;   // horas — coincide con frontend
-
-const ESTADOS_MONITOREABLES = new Set([
-  'en transíto', 'iniciado', 'descargando', 'cargando', 'pernoctando',
-]);
-
 const ESTADOS_CUMPLIBLES = new Set(['completado', 'finalizado']);
 
-function derivarEstadoGps(v) {
-  const alarm = (v.last_alarm_name ?? '').toLowerCase();
-  if (alarm.includes('pánico') || alarm.includes('panico')) return 'panico';
-  if (v.last_alarm_name) return 'con_alarma';
-  const ts = parseFechaMDY(v.latest_gps_report);
-  if (!ts) return 'desconectado';
-  const horas = (Date.now() - ts.getTime()) / 3_600_000;
-  if (horas > GPS_THRESHOLD_DESCONECTADO) return 'desconectado';
-  if (horas > GPS_THRESHOLD_DETENIDO)     return 'detenido';
-  return 'activo';
-}
-
-function parseLatLon(str) {
-  if (!str) return null;
-  const n = parseFloat(str);
-  return isNaN(n) ? null : n;
-}
+// GPS_THRESHOLD_*, ESTADOS_MONITOREABLES, derivarEstadoGps() y parseLatLon()
+// se movieron a services/reportes/datasetProvider.js (Fase 9B) — su único
+// call site era GET /api/gps más abajo. Se importan de vuelta desde ahí para
+// no duplicar la lógica entre el endpoint y el generador de reportes.
 
 function primerNombreCliente(str) {
   return (str ?? '').split(',')[0].trim() || null;
 }
 
-const DOCUMENTOS_BASE = [
-  { id: 'remision',        label: 'Remisión',              requerido: true  },
-  { id: 'manifiesto',      label: 'Manifiesto de carga',   requerido: true  },
-  { id: 'soporte_entrega', label: 'Soporte de entrega',    requerido: true  },
-  { id: 'fotos',           label: 'Registro fotográfico',  requerido: false },
-  { id: 'firma',           label: 'Firma del receptor',    requerido: true  },
-  { id: 'novedades',       label: 'Registro de novedades', requerido: false },
-  { id: 'observaciones',   label: 'Observaciones',         requerido: false },
+// ─── SOPORTES DE CUMPLIDO — fuente única de verdad de tipos documentales ────
+// Antes existían dos listas desconectadas (DOCUMENTOS_BASE en el backend,
+// nunca persistida, y TIPOS_BASE en ExpedienteDocumental.tsx, la que realmente
+// se usaba para nombrar archivos). Esta es la única lista ahora — el frontend
+// la usa para mostrar el progreso ("3/5 requeridos") y para inferir el tipo
+// documental a partir de la descripción que el usuario escribe al cargar.
+const TIPOS_DOCUMENTO_CUMPLIDO = [
+  { id: 'remesa',     label: 'Remesa',                  requerido: true  },
+  { id: 'cumplido',   label: 'Cumplido',                requerido: true  },
+  { id: 'manifiesto', label: 'Manifiesto',              requerido: true  },
+  { id: 'evidencias', label: 'Evidencias fotográficas', requerido: false },
+  { id: 'tiquete',    label: 'Tiquete báscula',         requerido: false },
 ];
+const TIPO_DOCUMENTO_GUT = { id: 'gut', label: 'GUT', requerido: true };
+
+function tiposDocumentoParaViaje(typeOperation) {
+  const esGranel = (typeOperation ?? '').trim().toLowerCase() === 'granel liquido';
+  return esGranel ? [...TIPOS_DOCUMENTO_CUMPLIDO, TIPO_DOCUMENTO_GUT] : TIPOS_DOCUMENTO_CUMPLIDO;
+}
+
+// Infiere el tipo documental a partir de la descripción opcional que el
+// usuario escribe al cargar (coincidencia por label, sin distinguir mayúsculas
+// ni acentos). Devuelve null cuando no hay descripción o no coincide con
+// ningún tipo conocido — el soporte queda como "general", sin tipo asignado.
+function normalizarTexto(str) {
+  return (str || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+function inferirTipoDocumento(descripcion) {
+  const norm = normalizarTexto(descripcion);
+  if (!norm) return null;
+  const todos = [...TIPOS_DOCUMENTO_CUMPLIDO, TIPO_DOCUMENTO_GUT];
+  const match = todos.find(t => norm.includes(normalizarTexto(t.label)) || norm.includes(t.id));
+  return match ? match.id : null;
+}
+
+// ─── Validación de archivos subidos como soporte de cumplido ───────────────
+const SOPORTE_EXT_PERMITIDAS  = new Set(['pdf', 'jpg', 'jpeg', 'png', 'webp']);
+const SOPORTE_MIME_PERMITIDOS = new Set([
+  'application/pdf', 'image/jpeg', 'image/png', 'image/webp',
+]);
+const SOPORTE_MAX_BYTES = 20 * 1024 * 1024; // 20 MB por archivo
+
+function validarArchivoSoporte({ ext, mime, size }) {
+  if (!SOPORTE_EXT_PERMITIDAS.has(ext)) {
+    return `Extensión ".${ext}" no permitida. Formatos válidos: ${[...SOPORTE_EXT_PERMITIDAS].join(', ')}.`;
+  }
+  if (!SOPORTE_MIME_PERMITIDOS.has(mime)) {
+    return `Tipo de archivo "${mime}" no permitido.`;
+  }
+  if (size > SOPORTE_MAX_BYTES) {
+    return `El archivo supera el límite de ${SOPORTE_MAX_BYTES / 1024 / 1024} MB.`;
+  }
+  if (size <= 0) {
+    return 'El archivo está vacío.';
+  }
+  return null;
+}
+
+// Sanitiza texto libre (descripción, usuario) para uso seguro en nombre de
+// archivo y en columnas de texto — quita caracteres de control y separadores
+// de ruta, colapsa espacios, y limita longitud.
+function sanitizarTextoLibre(str, maxLen = 80) {
+  return (str || '')
+    .replace(/[\/:*?"<>|]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLen);
+}
+
+// Genera el nombre legible del soporte: FECHA_TRIPNUMBER_PLACA_DESCRIPCION.ext
+// Este nombre es solo para mostrar en pantalla y como nombre de descarga —
+// nunca se usa como clave física en Storage (ver ruta_storage, basada en uuid).
+function generarNombreSoporte({ fecha, trip, placa, descripcion, ext }) {
+  const partes = [fecha, sanitizarTextoLibre(trip, 40) || trip, sanitizarTextoLibre(placa, 20) || 'SINPLACA'];
+  const desc = sanitizarTextoLibre(descripcion, 60);
+  if (desc) partes.push(desc);
+  return `${partes.join('_')}.${ext}`;
+}
 
 async function syncPendientes() {
   try {
@@ -865,19 +915,30 @@ async function syncPlaneados(motivo = 'scheduler') {
     const tLot = Date.now() - tLot0;
     console.log(`[SYNC #${syncId}] Lote | ${rows.length} filas preparadas | ${tLot}ms construcción`);
 
-    // ─── 5. Batch upsert ──────────────────────────────────────────────────────
+    // ─── 5. Deduplicar por trip_number ────────────────────────────────────────
+    // El TMS puede devolver el mismo trip_number más de una vez (estado intermedio,
+    // segmentos, retrasos de caché interna). PostgreSQL error 21000 ocurre cuando
+    // ON CONFLICT DO UPDATE intenta actualizar la misma fila dos veces en un solo batch.
+    // Solución: mantener la última aparición en el orden ya ordenado (schedulate_origin asc).
+    const rowsUniq  = [...new Map(rows.map(r => [r.trip_number, r])).values()];
+    const dupCount  = rows.length - rowsUniq.length;
+    if (dupCount > 0) {
+      console.warn(`[SYNC #${syncId}] ⚠️  ${dupCount} trip_number(s) duplicado(s) en el batch TMS — eliminados antes del upsert`);
+    }
+
+    // ─── 6. Batch upsert ──────────────────────────────────────────────────────
     // empresa_cliente_id se omite intencionalmente: merge-duplicates preserva el valor
     // existente en BD; nuevas filas lo dejan null (resuelto por el módulo Clientes).
     const tBatch0  = Date.now();
-    const batchRes = await sbFetch('/planeados', 'POST', rows);
+    const batchRes = await sbFetch('/planeados', 'POST', rowsUniq);
     const tBatch   = Date.now() - tBatch0;
     const retornadas = (batchRes || []).length;
-    console.log(`[SYNC #${syncId}] Batch | ${rows.length} enviadas → ${retornadas} retornadas por Supabase | ${tBatch}ms`);
+    console.log(`[SYNC #${syncId}] Batch | ${rowsUniq.length} enviadas → ${retornadas} retornadas por Supabase | ${tBatch}ms`);
     if (!batchRes) {
       console.log(`[SYNC #${syncId}] ⚠️  Batch retornó null — ver error Supabase encima de este log`);
     }
 
-    // ─── 6. Conteo BD post-batch (+0s / +2s / +5s) ───────────────────────────
+    // ─── 7. Conteo BD post-batch (+0s / +2s / +5s) ───────────────────────────
     const tP0 = Date.now();
     const post0 = (await sbFetch('/planeados?select=trip_number') || []).length;
     console.log(`[SYNC #${syncId}] BD POST-BATCH (+0s) | ${post0} filas | ${Date.now() - tP0}ms`);
@@ -1238,41 +1299,12 @@ app.get("/api/pendientes", requireLegacyOrInternal, async (req, res) => {
 // GET /api/viajes — datos del TMS normalizados para el módulo Viajes del ERP.
 // Convierte strings crudos (latitude, longitude, percentage_travel) a tipos seguros
 // y añade campos derivados (lat, lon, pct, cliente, conductor_tel).
+// Transformación en services/reportes/datasetProvider.js (Fase 9B) — la misma
+// función alimenta el generador de reportes automáticos, sin duplicarla.
 app.get('/api/viajes', requireInternalApiKey, (req, res) => {
-  const viajes = cache.viajes.data.map(v => {
-    const cached = tripCustomerCache.get(v.trip_number);
-    return {
-      trip_number:              v.trip_number,
-      id_monitoring_order:      v.id_monitoring_order      || null,
-      number_order:             v.number_order             || null,
-      license_plate:            v.license_plate            || null,
-      driver_name:              v.driver_name              || null,
-      driver_phone:             v.driver_phone             || null,
-      conductor_tel:            extraerTelefono(v.driver_phone, v.full_driver) || null,
-      cliente:                  primerNombreCliente(v.company_customer_name),
-      company_customer_name:    v.company_customer_name    || null,
-      empresa_cliente_id:       cached?.empresa_cliente_id ?? null,
-      razon_social:             cached?.razon_social        ?? null,
-      origin_city_name:         v.origin_city_name         || null,
-      destiny_city_name:        v.destiny_city_name        || null,
-      type_operation:           v.type_operation           || null,
-      stops:                    v.stops                    || null,
-      state_travel:             v.state_travel,
-      pct:                      v.percentage_travel != null ? (parseFloat(String(v.percentage_travel)) || 0) : null,
-      percentage_travel:        v.percentage_travel,
-      last_event:               v.last_event               || null,
-      appointment_fulfillment:  v.appointment_fulfillment  || null,
-      lat:                      parseLatLon(v.latitude),
-      lon:                      parseLatLon(v.longitude),
-      latest_gps_report:        v.latest_gps_report        || null,
-      current_address_location: v.current_address_location || null,
-      last_alarm_name:          v.last_alarm_name          || null,
-      created_on:               v.created_on               || null,
-      activated_on:             v.activated_on             || null,
-      schedulate_origin:        v.schedulate_origin        || null,
-    };
-  });
-  res.json(viajes);
+  res.json(transformarViajesActivos(cache.viajes.data, {
+    tripCustomerCache, extraerTelefono, primerNombreCliente,
+  }));
 });
 
 // ─── API CANÓNICA DEL VIAJE (Fase 6) ────────────────────────────────────────
@@ -1378,15 +1410,19 @@ app.get('/api/viajes/:tripNumber', requireInternalApiKey, async (req, res) => {
 // Paginación interna para soportar crecimiento indefinido de la tabla.
 app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
   try {
-    const SB_PAGE = 500;
+    // ?limit=N — limita resultados (útil para previews en el wizard de reportes).
+    // Si no se pasa, el comportamiento es el mismo de siempre (sin límite).
+    const limitParam = req.query.limit ? Math.min(Math.max(1, parseInt(req.query.limit, 10) || 500), 500) : null;
+    const SB_PAGE = limitParam ?? 500;
     let sbOffset = 0;
     const allRows = [];
     while (true) {
       const page = await sbFetch(
-        `/cumplidos?select=id,manifiesto,placa,conductor,conductor_tel,cliente,origen,destino,estado_controlt,pct,fecha_viaje,fecha_finalizacion,tipo_negocio,estado_cumplido,tiene_soporte,obs,link_soporte&order=fecha_viaje.desc&limit=${SB_PAGE}&offset=${sbOffset}`
+        `/cumplidos?select=id,manifiesto,placa,conductor,conductor_tel,cliente,origen,destino,estado_controlt,pct,fecha_viaje,fecha_finalizacion,tipo_negocio,estado_cumplido,tiene_soporte,estado_documental,obs,link_soporte&order=fecha_viaje.desc&limit=${SB_PAGE}&offset=${sbOffset}`
       );
       if (!page || page.length === 0) break;
       allRows.push(...page);
+      if (limitParam && allRows.length >= limitParam) break; // stop early for preview
       if (page.length < SB_PAGE) break;
       sbOffset += SB_PAGE;
     }
@@ -1405,20 +1441,12 @@ app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
       activated_on:          r.fecha_viaje || null,
       created_on:            null,
       fecha_cumplido:        r.fecha_finalizacion || null,
-      estado_documental:     'pendiente',
-      documentos:            DOCUMENTOS_BASE.map(d => ({
-        ...d,
-        presente: d.id === 'remision' ? !!r.manifiesto : false,
-      })),
+      estado_documental:     r.estado_documental || 'pendiente',
       type_operation:   r.tipo_negocio    || null,
       estado_cumplido:  r.estado_cumplido || null,
       tiene_soporte:    r.tiene_soporte   ?? false,
       obs:              r.obs             || null,
       link_soporte:     r.link_soporte    || null,
-      observaciones:    null,
-      responsable:      null,
-      fecha_validacion: null,
-      aprobado_por:     null,
     }));
 
     res.json(cumplidos);
@@ -1428,60 +1456,124 @@ app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
   }
 });
 
-// ─── DOCUMENTOS CUMPLIDOS (bucket Supabase Storage "cumplidos") ─────────────
+// ─── SOPORTES DE CUMPLIDO (bucket Supabase Storage "cumplidos" + tabla cumplidos_documentos) ─
+//
+// Arquitectura: el nombre físico del archivo en Storage es un UUID opaco
+// (cumplidos/{trip}/{id}.{ext}) — nunca se usa para lógica del sistema. Toda la
+// metadata (nombre legible, descripción, tipo, usuario, tamaño) vive en la
+// tabla cumplidos_documentos, identificada por ese mismo UUID. El frontend
+// referencia cada soporte por su id; nunca por nombre de archivo.
 
-// GET /api/cumplidos/:trip/documentos — lista archivos del bucket para el viaje.
+// Decodifica un header HTTP transmitido en base64 — evita que texto libre con
+// tildes/ñ (descripción, usuario, nombre original) se corrompa en tránsito,
+// ya que los headers HTTP no garantizan UTF-8 de punta a punta.
+function decodeB64Header(h) {
+  if (!h) return '';
+  try { return Buffer.from(String(h), 'base64').toString('utf8'); }
+  catch { return ''; }
+}
+
+// Recalcula tiene_soporte y avanza/revierte estado_documental entre
+// 'pendiente' y 'en_revision' según la presencia real de soportes. Estados
+// manuales más avanzados (con_observaciones / aprobado / rechazado /
+// listo_facturacion) nunca se tocan aquí — pertenecen a una fase futura de
+// revisión manual, para la que hoy no existe ninguna acción de UI.
+async function refrescarEstadoSoportes(trip) {
+  const docs = await sbFetch(`/cumplidos_documentos?trip_number=eq.${encodeURIComponent(trip)}&select=id`);
+  const tieneSoporte = !!(docs && docs.length > 0);
+  const actual = await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(trip)}&select=estado_documental`);
+  const estadoActual = actual?.[0]?.estado_documental || 'pendiente';
+  const patch = { tiene_soporte: tieneSoporte };
+  if (tieneSoporte && estadoActual === 'pendiente')    patch.estado_documental = 'en_revision';
+  if (!tieneSoporte && estadoActual === 'en_revision') patch.estado_documental = 'pendiente';
+  await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(trip)}`, 'PATCH', patch);
+}
+
+// GET /api/cumplidos/:trip/documentos — lista los soportes persistidos para el viaje.
 app.get('/api/cumplidos/:trip/documentos', requireInternalApiKey, async (req, res) => {
   try {
     const { trip } = req.params;
-    const result = await sbStorageFetch('/object/list/cumplidos', 'POST', {
-      prefix:  `${trip}/`,
-      limit:   100,
-      offset:  0,
-      sortBy:  { column: 'name', order: 'asc' },
-    });
-    const archivos = (result || [])
-      .filter(f => f.name && f.name !== '.emptyFolderPlaceholder')
-      .map(f => ({
-        nombre:     f.name,
-        ruta:       `${trip}/${f.name}`,
-        size:       f.metadata?.size     || 0,
-        mimetype:   f.metadata?.mimetype || 'application/octet-stream',
-        created_at: f.created_at         || null,
-        updated_at: f.updated_at         || null,
-      }));
-    res.json({ archivos });
+    const rows = await sbFetch(
+      `/cumplidos_documentos?trip_number=eq.${encodeURIComponent(trip)}` +
+      `&select=id,nombre_generado,nombre_original,descripcion,tipo_documento,tamano_bytes,mime_type,usuario,creado_en` +
+      `&order=creado_en.desc`
+    );
+    res.json({ documentos: rows || [] });
   } catch(e) {
     console.error('❌ GET /api/cumplidos/:trip/documentos:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
-// POST /api/cumplidos/:trip/documentos — sube un documento al bucket (proxy).
-// Headers esperados: X-Tipo-Documento, X-Placa, X-Filename, Content-Type.
+// POST /api/cumplidos/:trip/documentos — sube un soporte nuevo.
+// Headers esperados: X-Filename-B64, X-Descripcion-B64 (opcional), X-Usuario-B64
+// (opcional), X-Placa, Content-Type. El frontend hace una llamada por archivo
+// cuando el usuario selecciona varios en el diálogo de carga.
 app.post(
   '/api/cumplidos/:trip/documentos',
   requireInternalApiKey,
-  express.raw({ type: '*/*', limit: '50mb' }),
+  express.raw({ type: '*/*', limit: '21mb' }),
   async (req, res) => {
     try {
-      const { trip } = req.params;
-      const tipo     = (req.headers['x-tipo-documento'] || 'documento').replace(/[^a-z]/gi, '');
-      const placa    = (req.headers['x-placa'] || 'SINPLACA').replace(/[^A-Z0-9]/gi, '').toUpperCase();
-      const origName = req.headers['x-filename'] || 'archivo.bin';
-      const mime     = req.headers['content-type'] || 'application/octet-stream';
-      const ext      = origName.includes('.') ? origName.split('.').pop().toLowerCase() : 'bin';
-      const fecha    = fechaHoyColombia().replace(/-/g, '');
-      const filename = `${tipo}_${placa}_${fecha}_${Date.now()}.${ext}`;
-      const path     = `${trip}/${filename}`;
+      const { trip }     = req.params;
+      const origName     = decodeB64Header(req.headers['x-filename-b64']) || req.headers['x-filename'] || 'archivo.bin';
+      const descripcion  = decodeB64Header(req.headers['x-descripcion-b64']);
+      const usuario      = sanitizarTextoLibre(decodeB64Header(req.headers['x-usuario-b64']), 120);
+      const placa        = ((req.headers['x-placa'] || '').replace(/[^A-Z0-9]/gi, '').toUpperCase()) || 'SINPLACA';
+      const mime         = req.headers['content-type'] || 'application/octet-stream';
+      const ext          = origName.includes('.') ? origName.split('.').pop().toLowerCase() : '';
+      const size         = Buffer.isBuffer(req.body) ? req.body.length : 0;
 
-      await sbStorageFetch(`/object/cumplidos/${path}`, 'POST', req.body, {
+      const errorValidacion = validarArchivoSoporte({ ext, mime, size });
+      if (errorValidacion) return res.status(400).json({ error: errorValidacion });
+
+      // El viaje debe existir ya en la tabla cumplidos — lo garantiza syncCumplidos
+      // antes de que el panel de detalle esté disponible en el frontend.
+      const existeViaje = await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(trip)}&select=id`);
+      if (!existeViaje?.length) return res.status(404).json({ error: `Viaje ${trip} no encontrado` });
+
+      const fecha          = fechaHoyColombia().replace(/-/g, '');
+      const nombreGenerado = generarNombreSoporte({ fecha, trip, placa, descripcion, ext });
+      const tipoDocumento  = inferirTipoDocumento(descripcion);
+      const docId          = randomUUID();
+      const rutaStorage    = `${trip}/${docId}.${ext}`;
+
+      // sbStorageFetch devuelve null ante cualquier respuesta no-2xx de Storage
+      // (ver index.js:93-96) — sin este chequeo, un upload rechazado quedaba
+      // silencioso y la fila de metadata se creaba igual, apuntando a un
+      // objeto que nunca llegó a existir en el bucket.
+      const uploadResult = await sbStorageFetch(`/object/cumplidos/${rutaStorage}`, 'POST', req.body, {
         'Content-Type': mime,
         'x-upsert':     'true',
       });
-      // Marca tiene_soporte = true en la tabla cumplidos
-      await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(trip)}`, 'PATCH', { tiene_soporte: true });
-      res.json({ ok: true, filename, path });
+      if (!uploadResult) {
+        return res.status(502).json({ error: 'No se pudo subir el archivo a Storage. Intenta nuevamente.' });
+      }
+
+      await sbFetch('/cumplidos_documentos', 'POST', {
+        id:              docId,
+        trip_number:     trip,
+        ruta_storage:    rutaStorage,
+        nombre_generado: nombreGenerado,
+        nombre_original: origName.slice(0, 200),
+        descripcion:     descripcion || null,
+        tipo_documento:  tipoDocumento,
+        tamano_bytes:    size,
+        mime_type:       mime,
+        usuario:         usuario || null,
+      });
+
+      await refrescarEstadoSoportes(trip);
+
+      res.json({
+        ok: true,
+        documento: {
+          id: docId, nombre_generado: nombreGenerado, nombre_original: origName,
+          descripcion: descripcion || null, tipo_documento: tipoDocumento,
+          tamano_bytes: size, mime_type: mime, usuario: usuario || null,
+          creado_en: new Date().toISOString(),
+        },
+      });
     } catch(e) {
       console.error('❌ POST /api/cumplidos/:trip/documentos:', e.message);
       res.status(500).json({ error: e.message });
@@ -1489,31 +1581,141 @@ app.post(
   },
 );
 
-// DELETE /api/cumplidos/:trip/documentos/:filename — elimina un documento del bucket.
-app.delete('/api/cumplidos/:trip/documentos/:filename', requireInternalApiKey, async (req, res) => {
+// PUT /api/cumplidos/:trip/documentos/:id/reemplazar — elimina el soporte anterior
+// del Storage y de la base, y sube el nuevo en su lugar. Nunca deja duplicados
+// ni huérfanos: el borrado ocurre antes que la carga.
+app.put(
+  '/api/cumplidos/:trip/documentos/:id/reemplazar',
+  requireInternalApiKey,
+  express.raw({ type: '*/*', limit: '21mb' }),
+  async (req, res) => {
+    try {
+      const { trip, id } = req.params;
+      const rows = await sbFetch(
+        `/cumplidos_documentos?id=eq.${encodeURIComponent(id)}&trip_number=eq.${encodeURIComponent(trip)}` +
+        `&select=id,ruta_storage,descripcion,tipo_documento`
+      );
+      const anterior = rows?.[0];
+      if (!anterior) return res.status(404).json({ error: 'Documento no encontrado' });
+
+      const origName    = decodeB64Header(req.headers['x-filename-b64']) || req.headers['x-filename'] || 'archivo.bin';
+      // Si el cliente no envía una nueva descripción, conserva la del documento reemplazado.
+      const descripcion = req.headers['x-descripcion-b64'] !== undefined
+        ? decodeB64Header(req.headers['x-descripcion-b64'])
+        : (anterior.descripcion || '');
+      const usuario = sanitizarTextoLibre(decodeB64Header(req.headers['x-usuario-b64']), 120);
+      const placa   = ((req.headers['x-placa'] || '').replace(/[^A-Z0-9]/gi, '').toUpperCase()) || 'SINPLACA';
+      const mime    = req.headers['content-type'] || 'application/octet-stream';
+      const ext     = origName.includes('.') ? origName.split('.').pop().toLowerCase() : '';
+      const size    = Buffer.isBuffer(req.body) ? req.body.length : 0;
+
+      const errorValidacion = validarArchivoSoporte({ ext, mime, size });
+      if (errorValidacion) return res.status(400).json({ error: errorValidacion });
+
+      const fecha          = fechaHoyColombia().replace(/-/g, '');
+      const nombreGenerado = generarNombreSoporte({ fecha, trip, placa, descripcion, ext });
+      const tipoDocumento  = inferirTipoDocumento(descripcion) ?? anterior.tipo_documento ?? null;
+      const nuevoId        = randomUUID();
+      const rutaStorage    = `${trip}/${nuevoId}.${ext}`;
+
+      // 1) Subir primero el archivo nuevo y validar que Storage confirme éxito.
+      // sbStorageFetch devuelve null ante cualquier respuesta no-2xx de Storage
+      // (ver index.js:93-96) — si el upload falla, se corta aquí sin haber
+      // tocado el archivo ni la metadata anteriores: quedan intactos.
+      const uploadResult = await sbStorageFetch(`/object/cumplidos/${rutaStorage}`, 'POST', req.body, {
+        'Content-Type': mime,
+        'x-upsert':     'true',
+      });
+      if (!uploadResult) {
+        return res.status(502).json({ error: 'No se pudo subir el archivo a Storage. El documento anterior no fue modificado.' });
+      }
+
+      // 2) Solo tras confirmar el upload, eliminar el archivo anterior del
+      // Storage y actualizar la metadata para que apunte al nuevo archivo.
+      await sbStorageFetch('/object/cumplidos', 'DELETE', { prefixes: [anterior.ruta_storage] });
+      await sbFetch(`/cumplidos_documentos?id=eq.${encodeURIComponent(id)}`, 'DELETE');
+      await sbFetch('/cumplidos_documentos', 'POST', {
+        id:              nuevoId,
+        trip_number:     trip,
+        ruta_storage:    rutaStorage,
+        nombre_generado: nombreGenerado,
+        nombre_original: origName.slice(0, 200),
+        descripcion:     descripcion || null,
+        tipo_documento:  tipoDocumento,
+        tamano_bytes:    size,
+        mime_type:       mime,
+        usuario:         usuario || null,
+      });
+
+      await refrescarEstadoSoportes(trip);
+
+      res.json({
+        ok: true,
+        documento: {
+          id: nuevoId, nombre_generado: nombreGenerado, nombre_original: origName,
+          descripcion: descripcion || null, tipo_documento: tipoDocumento,
+          tamano_bytes: size, mime_type: mime, usuario: usuario || null,
+          creado_en: new Date().toISOString(),
+        },
+      });
+    } catch(e) {
+      console.error('❌ PUT /api/cumplidos/:trip/documentos/:id/reemplazar:', e.message);
+      res.status(500).json({ error: e.message });
+    }
+  },
+);
+
+// DELETE /api/cumplidos/:trip/documentos/:id — elimina un soporte (Storage + metadata)
+// y actualiza tiene_soporte / estado_documental si el viaje queda sin documentos.
+app.delete('/api/cumplidos/:trip/documentos/:id', requireInternalApiKey, async (req, res) => {
   try {
-    const { trip, filename } = req.params;
-    await sbStorageFetch('/object/cumplidos', 'DELETE', { prefixes: [`${trip}/${filename}`] });
+    const { trip, id } = req.params;
+    const rows = await sbFetch(
+      `/cumplidos_documentos?id=eq.${encodeURIComponent(id)}&trip_number=eq.${encodeURIComponent(trip)}&select=id,ruta_storage`
+    );
+    const doc = rows?.[0];
+    if (!doc) return res.status(404).json({ error: 'Documento no encontrado' });
+
+    await sbStorageFetch('/object/cumplidos', 'DELETE', { prefixes: [doc.ruta_storage] });
+    await sbFetch(`/cumplidos_documentos?id=eq.${encodeURIComponent(id)}`, 'DELETE');
+    await refrescarEstadoSoportes(trip);
+
     res.json({ ok: true });
   } catch(e) {
-    console.error('❌ DELETE /api/cumplidos/:trip/documentos:', e.message);
+    console.error('❌ DELETE /api/cumplidos/:trip/documentos/:id:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
-// GET /api/cumplidos/:trip/documentos/:filename/sign — URL firmada (1h) para ver/descargar.
-app.get('/api/cumplidos/:trip/documentos/:filename/sign', requireInternalApiKey, async (req, res) => {
+// GET /api/cumplidos/:trip/documentos/:id/sign — URL firmada (1h) para ver/descargar.
+// ?download=1 fuerza la descarga con el nombre legible (nombre_generado) en vez
+// del UUID físico del Storage.
+app.get('/api/cumplidos/:trip/documentos/:id/sign', requireInternalApiKey, async (req, res) => {
   try {
-    const { trip, filename } = req.params;
-    const path   = `${trip}/${filename}`;
-    const result = await sbStorageFetch(`/object/sign/cumplidos/${path}`, 'POST', { expiresIn: 3600 });
+    const { trip, id } = req.params;
+    const rows = await sbFetch(
+      `/cumplidos_documentos?id=eq.${encodeURIComponent(id)}&trip_number=eq.${encodeURIComponent(trip)}&select=ruta_storage,nombre_generado`
+    );
+    const doc = rows?.[0];
+    if (!doc) return res.status(404).json({ error: 'Documento no encontrado' });
+
+    const result = await sbStorageFetch(`/object/sign/cumplidos/${doc.ruta_storage}`, 'POST', { expiresIn: 3600 });
     if (!result?.signedURL) return res.status(404).json({ error: 'No se pudo generar URL firmada' });
-    const url = result.signedURL.startsWith('http')
+    // result.signedURL es un path relativo a /storage/v1 (ej. "/object/sign/cumplidos/{path}?token=..."),
+    // NO relativo a la raíz del dominio. Anteponer solo el dominio omite el
+    // segmento /storage/v1 y produce una ruta que Supabase Storage rechaza
+    // con "requested path is invalid". SB_STORAGE_URL ya incluye /storage/v1
+    // (línea 62) — es el mismo prefijo usado para todas las demás llamadas a
+    // Storage en este archivo (carga, reemplazo, eliminación, listado).
+    let url = result.signedURL.startsWith('http')
       ? result.signedURL
-      : `https://gtyydandwcgoaratmnqh.supabase.co${result.signedURL}`;
+      : `${SB_STORAGE_URL}${result.signedURL}`;
+    if (req.query.download === '1') {
+      url += (url.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(doc.nombre_generado);
+    }
     res.json({ url });
   } catch(e) {
-    console.error('❌ GET /api/cumplidos/:trip/documentos/:filename/sign:', e.message);
+    console.error('❌ GET /api/cumplidos/:trip/documentos/:id/sign:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -1535,35 +1737,12 @@ app.patch('/api/cumplidos/:trip/estado', requireInternalApiKey, async (req, res)
 });
 
 // GET /api/gps — vehículos activos con estado GPS derivado y coordenadas como números.
-// Mueve al backend derivarEstadoGps(), parseLatLon() y el filtrado por ESTADOS_MONITOREABLES
-// que antes hacía erp/src/modules/gps/services/api.ts.
+// Transformación (derivarEstadoGps, parseLatLon, filtrado por
+// ESTADOS_MONITOREABLES) en services/reportes/datasetProvider.js (Fase 9B) —
+// la misma función alimenta el generador de reportes automáticos.
 app.get('/api/gps', requireInternalApiKey, (req, res) => {
-  const vehiculos = cache.viajes.data
-    .filter(v => ESTADOS_MONITOREABLES.has((v.state_travel ?? '').toLowerCase()))
-    .map(v => {
-      const cached = tripCustomerCache.get(v.trip_number);
-      return {
-        id:                       v.trip_number,
-        trip_number:              v.trip_number,
-        number_order:             v.number_order             || null,
-        license_plate:            v.license_plate            || null,
-        driver_name:              v.driver_name              || null,
-        company_customer_name:    v.company_customer_name    || null,
-        empresa_cliente_id:       cached?.empresa_cliente_id ?? null,
-        razon_social:             cached?.razon_social        ?? null,
-        origin_city_name:         v.origin_city_name         || null,
-        destiny_city_name:        v.destiny_city_name        || null,
-        state_travel:             v.state_travel,
-        lat:                      parseLatLon(v.latitude),
-        lon:                      parseLatLon(v.longitude),
-        latest_gps_report:        v.latest_gps_report        || null,
-        current_address_location: v.current_address_location || null,
-        last_alarm_name:          v.last_alarm_name          || null,
-        estadoGps:                derivarEstadoGps(v),
-      };
-    });
   res.set('Cache-Control', 'no-store');
-  res.json(vehiculos);
+  res.json(transformarCentroGps(cache.viajes.data, { tripCustomerCache }));
 });
 
 // ─── SOLICITUDES (Módulo de Demanda) ─────────────────────────────────────────
@@ -3707,6 +3886,23 @@ app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
     // Índice de cache.viajes por trip_number para enriquecer con datos del TMS en vivo.
     const viajesIdx = new Map(cache.viajes.data.map(v => [v.trip_number, v]));
 
+    // Fallback de conductor_tel para viajes no activos en TMS (completados, sin_asignar…):
+    // solicitudes persiste el teléfono durante todo el ciclo de vida del viaje, mientras
+    // que cache.viajes solo contiene viajes activos en este instante.
+    // Una sola query batch — sin N+1.
+    const tripNums = rows.map(r => r.trip_number).filter(Boolean);
+    let solTelMap = {};
+    if (tripNums.length) {
+      const solRows = await sbFetch(
+        `/solicitudes?controlt_trip_number=in.(${tripNums.map(encodeURIComponent).join(',')})&select=controlt_trip_number,conductor_tel`
+      ) || [];
+      solRows.forEach(s => {
+        if (s.controlt_trip_number && s.conductor_tel) {
+          solTelMap[s.controlt_trip_number] = s.conductor_tel;
+        }
+      });
+    }
+
     const enriched = rows.map(r => {
       let nombre_cliente = null;
       if (r.empresa_cliente_id && empMap[r.empresa_cliente_id]) {
@@ -3728,7 +3924,11 @@ app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
         match_tms_pendiente: !r.empresa_cliente_id && isPlaceholderTmsCustomer(r.company_customer_name),
         tipo_servicio,
         type_operation: vivo?.type_operation || null,
-        conductor_tel: vivo ? (extraerTelefono(vivo.driver_phone, vivo.full_driver) || null) : null,
+        // Fuente primaria: TMS en vivo (vivo != null = viaje activo ahora mismo).
+        // Fallback: solicitudes.conductor_tel (persistido durante el ciclo de vida del viaje).
+        conductor_tel: vivo
+          ? (extraerTelefono(vivo.driver_phone, vivo.full_driver) || solTelMap[r.trip_number] || null)
+          : (solTelMap[r.trip_number] || null),
       };
     });
 
@@ -4503,6 +4703,297 @@ app.patch("/api/clientes/:id/alias/:aliasId", requireInternalApiKey, async (req,
   }
 });
 
+// ─── PERSONAL INLOP ───────────────────────────────────────────────────────────
+// Fuente oficial: tabla `personal` (SQL_04_personal.sql) — el maestro de
+// personal de INLOP, independiente de Auth y base futura de Talento Humano.
+// NO es `profiles` (cuenta de acceso al ERP, puede no existir) ni
+// `usuarios_cliente` (portal de clientes externos).
+//
+// Columnas reales de `personal`: id, nombre, cargo, area, correo_compartido
+// (el correo NO es individual — varias personas de una misma área pueden
+// compartir un solo correo institucional, ej. 3 controladores de tráfico →
+// trafico@inlop.com.co: es dato real, no se deduplica), observaciones,
+// profile_id (nullable, solo si la persona tiene acceso al ERP), activo.
+//
+// Protegido con requireInternalApiKey — mismo perímetro que el resto de
+// endpoints internos sensibles del ERP (/api/programacion, /api/planeados).
+//
+// Usado por Configuración → Reportes Automáticos → Etapa 05 · Destinatarios
+// para poblar la lista de "Personal INLOP" seleccionable — nunca hardcodeada.
+app.get("/api/personal", requireInternalApiKey, async (req, res) => {
+  try {
+    const rows = await sbFetch(
+      "/personal?select=id,nombre,cargo,correo_compartido&activo=eq.true&order=nombre.asc"
+    );
+
+    // Solo los campos necesarios para el selector de destinatarios. Se
+    // excluye personal inactivo (activo=eq.true arriba, estado real de la
+    // tabla) y personal sin correo asignado (no puede ser destinatario).
+    const personal = (rows ?? [])
+      .map(p => ({
+        id:     p.id,
+        nombre: p.nombre || "",
+        cargo:  p.cargo  || "",
+        email:  (p.correo_compartido || "").trim(),
+      }))
+      .filter(p => p.email);
+
+    res.json(personal);
+  } catch (e) {
+    console.error("GET /api/personal error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// ─── REPORTES AUTOMÁTICOS ─────────────────────────────────────────────────────
+// Módulo: Configuración → Parámetros → Reportes Automáticos (Fase 2 — CRUD base)
+
+const FRECUENCIAS_VALIDAS_RA = new Set(["diaria", "semanal", "mensual"]);
+const FORMATOS_VALIDOS_RA    = new Set(["excel", "html_filas", "html_columnas"]);
+
+/** Valida la forma de `destinatarios` — { personal_ids: string[], correos_externos: string[] }. */
+function errorDestinatarios(destinatarios) {
+  if (typeof destinatarios !== "object" || destinatarios === null || Array.isArray(destinatarios)) {
+    return "destinatarios debe ser un objeto";
+  }
+  if (destinatarios.personal_ids !== undefined && !Array.isArray(destinatarios.personal_ids)) {
+    return "destinatarios.personal_ids debe ser un array";
+  }
+  if (destinatarios.correos_externos !== undefined && !Array.isArray(destinatarios.correos_externos)) {
+    return "destinatarios.correos_externos debe ser un array";
+  }
+  return null;
+}
+
+app.get("/api/reportes-automaticos", requireInternalApiKey, async (req, res) => {
+  try {
+    const rows = await sbFetch("/reportes_automaticos?order=created_at.desc&limit=500");
+    res.json(rows ?? []);
+  } catch (e) {
+    console.error("GET /api/reportes-automaticos error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.post("/api/reportes-automaticos", requireInternalApiKey, async (req, res) => {
+  try {
+    const actor = req.headers["x-user-email"] ?? "sistema";
+    const {
+      nombre,
+      modulo_id    = "gestion_logistica",
+      tipo_reporte,
+      asunto,
+      cuerpo,
+      formato      = "excel",
+      activo       = true,
+      borrador     = false,
+      frecuencia   = "diaria",
+      filtros,
+      columnas,
+      recurrencia,
+      destinatarios,
+    } = req.body ?? {};
+
+    if (!nombre?.trim())       return res.status(400).json({ error: "El nombre es obligatorio" });
+    if (!tipo_reporte?.trim()) return res.status(400).json({ error: "El tipo de reporte es obligatorio" });
+    if (!modulo_id?.trim())    return res.status(400).json({ error: "El módulo es obligatorio" });
+    if (!FORMATOS_VALIDOS_RA.has(formato)) {
+      return res.status(400).json({ error: "Formato inválido. Use: excel, html_filas o html_columnas" });
+    }
+    if (!FRECUENCIAS_VALIDAS_RA.has(frecuencia)) {
+      return res.status(400).json({ error: "Frecuencia inválida. Use: diaria, semanal o mensual" });
+    }
+    if (filtros  !== undefined && !Array.isArray(filtros)) {
+      return res.status(400).json({ error: "filtros debe ser un array" });
+    }
+    if (columnas !== undefined && !Array.isArray(columnas)) {
+      return res.status(400).json({ error: "columnas debe ser un array" });
+    }
+    if (recurrencia !== undefined && (typeof recurrencia !== "object" || recurrencia === null || Array.isArray(recurrencia))) {
+      return res.status(400).json({ error: "recurrencia debe ser un objeto" });
+    }
+    if (destinatarios !== undefined) {
+      const err = errorDestinatarios(destinatarios);
+      if (err) return res.status(400).json({ error: err });
+    }
+
+    const rows = await sbFetch("/reportes_automaticos", "POST", {
+      nombre:       nombre.trim(),
+      modulo_id:    modulo_id.trim(),
+      tipo_reporte: tipo_reporte.trim(),
+      asunto:       asunto?.trim()  ?? null,
+      cuerpo:       cuerpo?.trim()  ?? null,
+      formato,
+      activo:       typeof activo === "boolean" ? activo : true,
+      borrador:     typeof borrador === "boolean" ? borrador : false,
+      frecuencia,
+      filtros:       Array.isArray(filtros)  ? filtros  : [],
+      columnas:      Array.isArray(columnas) ? columnas : [],
+      recurrencia:   recurrencia ?? {},
+      destinatarios: destinatarios ?? { personal_ids: [], correos_externos: [] },
+      created_by:   actor,
+      updated_by:   actor,
+    });
+    if (!rows?.[0]) return res.status(502).json({ error: "No se pudo crear el reporte" });
+    res.status(201).json(rows[0]);
+  } catch (e) {
+    console.error("POST /api/reportes-automaticos error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.patch("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const actor = req.headers["x-user-email"] ?? "sistema";
+    const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, borrador, frecuencia, filtros, columnas, recurrencia, destinatarios } = req.body ?? {};
+
+    const patch = { updated_by: actor };
+    if (nombre       !== undefined) patch.nombre       = nombre.trim();
+    if (modulo_id    !== undefined) patch.modulo_id    = modulo_id.trim();
+    if (tipo_reporte !== undefined) patch.tipo_reporte = tipo_reporte.trim();
+    if (asunto       !== undefined) patch.asunto       = asunto?.trim() ?? null;
+    if (cuerpo       !== undefined) patch.cuerpo       = cuerpo?.trim() ?? null;
+    if (activo       !== undefined) patch.activo       = Boolean(activo);
+    if (borrador     !== undefined) patch.borrador     = Boolean(borrador);
+    if (formato !== undefined) {
+      if (!FORMATOS_VALIDOS_RA.has(formato)) {
+        return res.status(400).json({ error: "Formato inválido. Use: excel, html_filas o html_columnas" });
+      }
+      patch.formato = formato;
+    }
+    if (frecuencia !== undefined) {
+      if (!FRECUENCIAS_VALIDAS_RA.has(frecuencia)) {
+        return res.status(400).json({ error: "Frecuencia inválida. Use: diaria, semanal o mensual" });
+      }
+      patch.frecuencia = frecuencia;
+    }
+    if (filtros !== undefined) {
+      if (!Array.isArray(filtros)) {
+        return res.status(400).json({ error: "filtros debe ser un array" });
+      }
+      patch.filtros = filtros;
+    }
+    if (columnas !== undefined) {
+      if (!Array.isArray(columnas)) {
+        return res.status(400).json({ error: "columnas debe ser un array" });
+      }
+      patch.columnas = columnas;
+    }
+    if (recurrencia !== undefined) {
+      if (typeof recurrencia !== "object" || recurrencia === null || Array.isArray(recurrencia)) {
+        return res.status(400).json({ error: "recurrencia debe ser un objeto" });
+      }
+      patch.recurrencia = recurrencia;
+      // Fase 9G — hallazgo de auditoría: si no se limpia proxima_ejecucion
+      // aquí, un reporte activo cuya recurrencia se edita conserva el
+      // próximo disparo calculado con el horario ANTERIOR (ej. seguía
+      // "diaria 08:00" aunque el usuario ya cambió a "semanal lunes 14:00")
+      // — el scheduler lo dispararía una vez con el timing viejo antes de
+      // corregirse solo. Poniéndolo en null, el scheduler.js#
+      // inicializarPendientes() recalcula desde cero con la recurrencia
+      // nueva en su próximo tick — mismo camino que ya usa un reporte
+      // recién activado, sin lógica nueva.
+      patch.proxima_ejecucion = null;
+    }
+    if (destinatarios !== undefined) {
+      const err = errorDestinatarios(destinatarios);
+      if (err) return res.status(400).json({ error: err });
+      patch.destinatarios = destinatarios;
+    }
+
+    const rows = await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}`, "PATCH", patch);
+    if (!rows?.[0]) return res.status(404).json({ error: "Reporte no encontrado" });
+    res.json(rows[0]);
+  } catch (e) {
+    console.error("PATCH /api/reportes-automaticos/:id error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.patch("/api/reportes-automaticos/:id/activo", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const actor = req.headers["x-user-email"] ?? "sistema";
+    const { activo } = req.body ?? {};
+
+    if (typeof activo !== "boolean") {
+      return res.status(400).json({ error: "'activo' debe ser boolean" });
+    }
+    const rows = await sbFetch(
+      `/reportes_automaticos?id=eq.${encodeURIComponent(id)}`,
+      "PATCH",
+      { activo, updated_by: actor }
+    );
+    if (!rows?.[0]) return res.status(404).json({ error: "Reporte no encontrado" });
+    res.json({ ok: true, activo: rows[0].activo });
+  } catch (e) {
+    console.error("PATCH /api/reportes-automaticos/:id/activo error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// DELETE /api/reportes-automaticos/:id — eliminación definitiva (Fase 9I).
+// No toca el motor de generación/envío/scheduler: un reporte eliminado deja
+// de existir en reportes_automaticos, así que scheduler.js (que solo procesa
+// filas existentes con proxima_ejecucion vencida) simplemente nunca vuelve a
+// encontrarlo — no requiere ninguna lógica adicional de "cancelación".
+// sbFetch(..., "DELETE") siempre devuelve null (ver sbFetch arriba), así que
+// primero se verifica existencia — mismo patrón que
+// DELETE /api/cumplidos/:trip/documentos/:id más arriba.
+app.delete("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existente = await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}&select=id`);
+    if (!existente?.[0]) return res.status(404).json({ error: "Reporte no encontrado" });
+
+    await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}`, "DELETE");
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("DELETE /api/reportes-automaticos/:id error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// POST /api/reportes-automaticos/:id/enviar — ejecución manual (Fase 9E).
+// Genera el archivo (Excel/HTML, según reporte.formato) con el pipeline de
+// 9B-9D y lo envía por correo a los destinatarios configurados. No toca
+// proxima_ejecucion ni recurrencia, no persiste historial de ejecución —
+// acción ad-hoc, fuera del scheduler (no implementado todavía).
+// requireInternalApiKey: mismo perímetro que el resto de endpoints
+// administrativos/internos del ERP (ej. GET /api/personal, arriba).
+const STATUS_POR_CODIGO_ENVIO = {
+  reporte_id_requerido: 400,
+  deps_incompletas:     500,
+  no_encontrado:        404,
+  borrador:              400,
+  inactivo:              400,
+  sin_destinatarios:    400,
+  error_generacion:     500,
+  error_envio:           502,
+};
+
+app.post("/api/reportes-automaticos/:id/enviar", requireInternalApiKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const resultado = await ejecutarReporteManual(id, {
+      sbFetch,
+      viajesCache:         cache.viajes.data,
+      tripCustomerCache,
+      extraerTelefono,
+      primerNombreCliente,
+    });
+    if (!resultado.ok) {
+      const status = STATUS_POR_CODIGO_ENVIO[resultado.codigo] ?? 500;
+      return res.status(status).json(resultado);
+    }
+    res.json(resultado);
+  } catch (e) {
+    console.error(`POST /api/reportes-automaticos/${req.params.id}/enviar error:`, e.message);
+    res.status(500).json({ ok: false, codigo: "error_interno", error: "Error interno al enviar el reporte" });
+  }
+});
+
 // Health check
 app.get("/health", (req, res) => {
   const estados = {};
@@ -4573,11 +5064,56 @@ app.delete('/push/suscripcion', requireClienteAuth, async (req, res) => {
 // ─── DIAGNÓSTICO CONTROLT SOAP ───────────────────────────────────────────────
 app.use('/api/controlt', requireInternalApiKey, controltDiagRouter);
 
+// ─── MANEJADOR DE ERRORES — respuestas JSON limpias para fallos de body-parser ──
+// (ej. archivo de soporte que excede el límite de express.raw). Sin este
+// handler, Express respondería con una página HTML de error por defecto.
+app.use((err, req, res, next) => {
+  if (err && (err.type === 'entity.too.large' || err.status === 413)) {
+    return res.status(413).json({ error: 'El archivo enviado excede el tamaño máximo permitido.' });
+  }
+  console.error('❌ Error no manejado:', err?.message || err);
+  res.status(err?.status || 500).json({ error: err?.message || 'Error interno del servidor' });
+});
+
+// ─── SCHEDULER DE REPORTES AUTOMÁTICOS (Fase 9F) ────────────────────────────
+// Wrapper delgado: toda la lógica (qué reportes están vencidos, cómo se
+// calcula la próxima ejecución, el mutex de un tick a la vez) vive en
+// services/reportes/scheduler.js — aquí solo se inyectan las dependencias
+// del proceso (sbFetch, caché de viajes, helpers) y se registra el log,
+// mismo patrón que el bloque de syncPlaneados de abajo.
+async function tickSchedulerReportes(origen) {
+  try {
+    const resultado = await ejecutarTickScheduler({
+      sbFetch,
+      viajesCache: cache.viajes.data,
+      tripCustomerCache,
+      extraerTelefono,
+      primerNombreCliente,
+    });
+    if (!resultado.ok) {
+      if (resultado.motivo !== 'tick_en_curso') {
+        console.warn(`[SCHEDULER REPORTES] (${origen}) tick omitido: ${resultado.motivo}`);
+      }
+      return;
+    }
+    if (resultado.inicializados.length || resultado.ejecutados.length) {
+      const exitosos = resultado.ejecutados.filter(r => r.ok).length;
+      const fallidos  = resultado.ejecutados.length - exitosos;
+      console.log(
+        `[SCHEDULER REPORTES] (${origen}) inicializados: ${resultado.inicializados.length} | ` +
+        `ejecutados: ${resultado.ejecutados.length} (ok: ${exitosos}, error: ${fallidos})`
+      );
+    }
+  } catch (e) {
+    console.error(`[SCHEDULER REPORTES] (${origen}) Error inesperado:`, e.message);
+  }
+}
+
 // ─── INICIO ─────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`🚀 INLOP Torre de Control — Servidor iniciado en puerto ${PORT}`);
-  console.log(`📊 Sync: viajes cada 60s | solicitudes cada 65s | planeados cada 5min`);
+  console.log(`📊 Sync: viajes cada 60s | solicitudes cada 65s | planeados cada 5min | reportes automáticos cada 60s`);
 
   try {
     await refreshCustomerLookup();
@@ -4592,6 +5128,8 @@ app.listen(PORT, async () => {
     console.error("❌ Error inicialización:", e.message);
   }
 
+  await tickSchedulerReportes('inicio-servidor');
+
   setInterval(refreshCustomerLookup, 10 * 60 * 1000);
   setInterval(syncViajes,             60 * 1000);
   setInterval(syncAlarmas,            70 * 1000);
@@ -4604,4 +5142,5 @@ app.listen(PORT, async () => {
   }, 5 * 60 * 1000);
   setInterval(syncCumplidos,          60 * 1000);
   setInterval(syncSolicitudes,        65 * 1000);
+  setInterval(() => tickSchedulerReportes('scheduler'), 60 * 1000);
 });

@@ -1,40 +1,41 @@
 import { req } from "@/services/http";
-import type { CumplidoRecord, DocumentoArchivo } from "../types";
+import type { CumplidoRecord, SoporteCumplido } from "../types";
 
 export function listarCumplidos(): Promise<CumplidoRecord[]> {
   return req<CumplidoRecord[]>("/api/cumplidos");
 }
 
-export function listarDocumentosCumplido(
+export function listarSoportesCumplido(
   trip: string,
-): Promise<{ archivos: DocumentoArchivo[] }> {
-  return req<{ archivos: DocumentoArchivo[] }>(
+): Promise<{ documentos: SoporteCumplido[] }> {
+  return req<{ documentos: SoporteCumplido[] }>(
     `/api/cumplidos/${encodeURIComponent(trip)}/documentos`,
   );
 }
 
-export async function subirDocumentoCumplido(
-  trip:  string,
-  tipo:  string,
-  placa: string,
-  file:  File,
-): Promise<{ ok: boolean; filename: string; path: string }> {
+// Los headers HTTP no garantizan tránsito UTF-8 — texto libre con tildes/ñ se
+// codifica en base64 antes de enviarse, y el backend lo decodifica.
+function toB64(str: string): string {
+  return btoa(unescape(encodeURIComponent(str)));
+}
+
+function headersSoporte(file: File, descripcion: string, usuario: string): HeadersInit {
+  return {
+    "Content-Type":        file.type || "application/octet-stream",
+    "X-Filename-B64":      toB64(file.name),
+    "X-Descripcion-B64":   toB64(descripcion),
+    "X-Usuario-B64":       toB64(usuario),
+  };
+}
+
+async function fetchBinario(path: string, method: string, file: File, headers: HeadersInit) {
   const API_URL = import.meta.env.VITE_API_URL as string;
   const KEY     = import.meta.env.VITE_INTERNAL_API_KEY as string | undefined;
-  const res = await fetch(
-    `${API_URL}/api/cumplidos/${encodeURIComponent(trip)}/documentos`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type":       file.type || "application/octet-stream",
-        "X-Tipo-Documento":   tipo,
-        "X-Placa":            placa,
-        "X-Filename":         file.name,
-        ...(KEY ? { "X-Internal-Api-Key": KEY } : {}),
-      },
-      body: file,
-    },
-  );
+  const res = await fetch(`${API_URL}${path}`, {
+    method,
+    headers: { ...headers, ...(KEY ? { "X-Internal-Api-Key": KEY } : {}) },
+    body: file,
+  });
   if (!res.ok) {
     const b = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(b.error ?? `HTTP ${res.status}`);
@@ -42,22 +43,59 @@ export async function subirDocumentoCumplido(
   return res.json();
 }
 
-export function eliminarDocumentoCumplido(
-  trip:     string,
-  filename: string,
+export function subirSoporteCumplido(
+  trip:        string,
+  file:        File,
+  descripcion: string,
+  usuario:     string,
+  placa:       string,
+): Promise<{ ok: boolean; documento: SoporteCumplido }> {
+  return fetchBinario(
+    `/api/cumplidos/${encodeURIComponent(trip)}/documentos`,
+    "POST",
+    file,
+    { ...headersSoporte(file, descripcion, usuario), "X-Placa": placa },
+  );
+}
+
+export function reemplazarSoporteCumplido(
+  trip:        string,
+  id:          string,
+  file:        File,
+  usuario:     string,
+  placa:       string,
+): Promise<{ ok: boolean; documento: SoporteCumplido }> {
+  return fetchBinario(
+    `/api/cumplidos/${encodeURIComponent(trip)}/documentos/${encodeURIComponent(id)}/reemplazar`,
+    "PUT",
+    file,
+    {
+      "Content-Type":   file.type || "application/octet-stream",
+      "X-Filename-B64": toB64(file.name),
+      "X-Usuario-B64":  toB64(usuario),
+      "X-Placa":        placa,
+    },
+  );
+}
+
+export function eliminarSoporteCumplido(
+  trip: string,
+  id:   string,
 ): Promise<{ ok: boolean }> {
   return req<{ ok: boolean }>(
-    `/api/cumplidos/${encodeURIComponent(trip)}/documentos/${encodeURIComponent(filename)}`,
+    `/api/cumplidos/${encodeURIComponent(trip)}/documentos/${encodeURIComponent(id)}`,
     { method: "DELETE" },
   );
 }
 
-export function urlFirmadaDocumento(
-  trip:     string,
-  filename: string,
+export function urlFirmadaSoporte(
+  trip:      string,
+  id:        string,
+  descargar = false,
 ): Promise<{ url: string }> {
   return req<{ url: string }>(
-    `/api/cumplidos/${encodeURIComponent(trip)}/documentos/${encodeURIComponent(filename)}/sign`,
+    `/api/cumplidos/${encodeURIComponent(trip)}/documentos/${encodeURIComponent(id)}/sign` +
+    (descargar ? "?download=1" : ""),
   );
 }
 

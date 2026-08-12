@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import {
   Search, X, Clock, ArrowRight,
-  LayoutDashboard, ClipboardList, Truck, Map, AlertTriangle, Building2,
+  LayoutDashboard, ClipboardList, Truck, Map, AlertTriangle, Building2, Settings,
 } from "lucide-react";
 
 // ── Módulos disponibles en la búsqueda estática ───────────────────────────
@@ -22,7 +22,8 @@ const MODULES: SearchModule[] = [
   { id: "viajes",      label: "Viajes",       description: "Control y seguimiento de viajes",  icon: <Truck           className="w-[17px] h-[17px]" /> },
   { id: "mapa",        label: "Mapa GPS",     description: "Seguimiento en tiempo real",       icon: <Map             className="w-[17px] h-[17px]" /> },
   { id: "alarmas",     label: "Alarmas",      description: "Sistema de alertas del ERP",       icon: <AlertTriangle   className="w-[17px] h-[17px]" /> },
-  { id: "clientes",   label: "Clientes",     description: "Maestro de Clientes Comerciales",  icon: <Building2       className="w-[17px] h-[17px]" /> },
+  { id: "clientes",       label: "Clientes",    description: "Maestro de Clientes Comerciales",   icon: <Building2 className="w-[17px] h-[17px]" /> },
+  { id: "configuracion", label: "Parámetros", description: "Configuraciones funcionales del ERP", icon: <Settings  className="w-[17px] h-[17px]" /> },
 ];
 
 // Detectar Mac para mostrar ⌘K vs Ctrl K

@@ -10,7 +10,8 @@ export type ModuloId =
   | "gps"
   | "conductores"
   | "clientes"
-  | "facturacion";
+  | "facturacion"
+  | "configuracion";
 
 /** Módulos con navegación activa en este build. */
 export const MODULOS_IMPLEMENTADOS: ReadonlySet<ModuloId> = new Set<ModuloId>([
@@ -20,6 +21,7 @@ export const MODULOS_IMPLEMENTADOS: ReadonlySet<ModuloId> = new Set<ModuloId>([
   "cumplidos",
   "mapa",
   "clientes",
+  "configuracion",
 ]);
 
 /** Contexto operativo que se transporta entre módulos. */

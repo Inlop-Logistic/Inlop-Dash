@@ -7,25 +7,28 @@ export type EstadoDocumental =
   | "rechazado"
   | "listo_facturacion";
 
-/** Tipos de documento del bucket Supabase `cumplidos` (según TorreControl). */
+/**
+ * Tipos de documento conocidos — misma lista que usa el backend
+ * (TIPOS_DOCUMENTO_CUMPLIDO en index.js) para inferir el tipo a partir de la
+ * descripción. `null` significa "soporte general", sin tipo asignado.
+ */
 export type TipoDocumento = "remesa" | "cumplido" | "manifiesto" | "evidencias" | "tiquete" | "gut";
 
-/** Archivo almacenado en el bucket `cumplidos` para un viaje. */
-export interface DocumentoArchivo {
-  nombre:     string;
-  ruta:       string;
-  size:       number;
-  mimetype:   string;
-  created_at: string | null;
-  updated_at: string | null;
-}
-
-/** Ítem individual del checklist documental. */
-export interface DocumentoCheck {
-  id:         string;
-  label:      string;
-  requerido:  boolean;
-  presente:   boolean;
+/**
+ * Soporte de cumplido — metadata persistida en la tabla `cumplidos_documentos`.
+ * El archivo físico vive en Storage bajo un nombre UUID opaco; este objeto es
+ * la única fuente de verdad que el frontend usa para mostrarlo y operarlo.
+ */
+export interface SoporteCumplido {
+  id:              string;
+  nombre_generado: string;
+  nombre_original: string;
+  descripcion:     string | null;
+  tipo_documento:  TipoDocumento | null;
+  tamano_bytes:    number;
+  mime_type:       string | null;
+  usuario:         string | null;
+  creado_en:       string;
 }
 
 /** Registro de cumplido: combina datos del viaje con expediente documental. */
@@ -49,22 +52,17 @@ export interface CumplidoRecord {
   created_on:            string | null;
   fecha_cumplido:        string | null;
 
-  // Expediente documental (ERP)
+  /** Estado real del expediente documental — persistido en Supabase (ver refrescarEstadoSoportes en index.js). */
   estado_documental:  EstadoDocumental;
-  documentos:         DocumentoCheck[];
-  observaciones:      string | null;
-  responsable:        string | null;
-  fecha_validacion:   string | null;
-  aprobado_por:       string | null;
 
   // Campos del sistema TorreControl (bucket Supabase)
   /** Estado operativo según TorreControl: PENDIENTE / SOLICITADO / CUMPLIDO RECIBIDO / etc. */
   estado_cumplido:  string | null;
-  /** Indica si hay al menos un documento subido al bucket. */
+  /** Indica si hay al menos un soporte cargado. */
   tiene_soporte:    boolean;
   /** Observaciones libres registradas en TorreControl. */
   obs:              string | null;
-  /** URL del soporte registrado en TorreControl. */
+  /** URL del soporte registrado en TorreControl (campo legado, solo lectura). */
   link_soporte:     string | null;
 }
 

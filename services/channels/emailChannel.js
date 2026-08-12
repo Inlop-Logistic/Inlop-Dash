@@ -110,4 +110,42 @@ async function _registrarIntento(deliveryId, { numIntento, resultado, error, lat
   }]);
 }
 
+/**
+ * Envío directo con adjunto — mismo cliente Resend y mismo remitente
+ * (OPS_FROM) que send(), pero FUERA del flujo de BusinessEvent/delivery
+ * tracking del Notification Orchestrator: no crea fila en
+ * notification_deliveries ni en delivery_attempts, no recibe `delivery` ni
+ * `event`. Pensado para acciones puntuales que ya conocen exactamente a
+ * quién, qué asunto y qué adjunto enviar (Reportes Automáticos — envío
+ * manual, Fase 9E) y que explícitamente no persisten historial de envío.
+ *
+ * @param {{to: string[], subject: string, html: string,
+ *   attachments?: Array<{filename: string, content: string}>}} params
+ *   `attachments[].content` en base64 (formato esperado por el SDK de Resend).
+ * @returns {Promise<{ok: boolean, id?: string, skipped?: boolean, error?: string}>}
+ */
+async function sendWithAttachment({ to, subject, html, attachments }) {
+  if (!EMAIL_CONFIGURADO) {
+    return { ok: false, skipped: true, error: 'RESEND_API_KEY no configurada — envío deshabilitado' };
+  }
+  if (!Array.isArray(to) || to.length === 0) {
+    return { ok: false, skipped: true, error: 'Sin destinatarios' };
+  }
+  try {
+    const { data, error } = await _getClient().emails.send({
+      from: OPS_FROM,
+      to,
+      subject,
+      html,
+      ...(attachments?.length ? { attachments } : {}),
+    });
+    if (error) throw new Error(error.message || 'Resend rechazó el envío');
+    return { ok: true, id: data?.id ?? null };
+  } catch (err) {
+    console.error('[emailChannel] ❌ sendWithAttachment:', err.message);
+    return { ok: false, error: err.message };
+  }
+}
+
 export default { send };
+export { sendWithAttachment };
