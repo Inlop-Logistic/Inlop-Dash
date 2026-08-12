@@ -227,10 +227,28 @@ export async function ejecutarReporteManual(reporteId, deps = {}) {
   // 6. Enviar por Resend (emailChannel.js) con el archivo adjunto. El
   // asunto configurado por el usuario nunca se modifica.
   const asunto = reporte.asunto?.trim() || reporte.nombre || 'Reporte INLOP';
+  const htmlSinCta = construirCuerpoCorreo(reporte, null);
+  const html       = construirCuerpoCorreo(reporte, enlaceGps);
+
+  // ─── DIAGNÓSTICO TEMPORAL (retirar tras confirmar la causa raíz) ──────────
+  // Solo booleans/longitudes/conteos — nunca URL, correo, token ni placa.
+  // Buscar "[envioManual][DIAG-TEMP]" para ubicar/retirar esta línea.
+  try {
+    console.log('[envioManual][DIAG-TEMP]', JSON.stringify({
+      reporteId,
+      enlaceCreado:        Boolean(enlaceGps),
+      urlPresente:         Boolean(enlaceGps?.url),
+      ctaIncluidoEnHtml:   html.includes('Ver seguimiento GPS'),
+      longitudHtmlSinCta:  htmlSinCta.length,
+      longitudHtmlConCta:  html.length,
+      cantidadDestinatarios: destinatarios.correosEnvio.length,
+    }));
+  } catch { /* el diagnóstico nunca debe romper el flujo de envío */ }
+
   const envio = await sendWithAttachment({
     to:      destinatarios.correosEnvio,
     subject: asunto,
-    html:    construirCuerpoCorreo(reporte, enlaceGps),
+    html,
     attachments: [{
       filename: archivo.filename,
       content:  archivo.buffer.toString('base64'),
