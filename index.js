@@ -9,6 +9,7 @@ import { getUserPreferences, updatePreference, KNOWN_CHANNELS } from './services
 import { normalizeExternalRef } from './services/normalizeExternalRef.js';
 import { fechaHoyColombia, parseFechaTMS, extraerFechaColombia } from './utils/fechas.js';
 import controltDiagRouter from './routes/controltDiag.js';
+import crearRouterGpsSeguimiento from './routes/gpsSeguimiento.js';
 import { getTripDetail, makeSbFetchAdapter } from './services/controlt-soap/tripService.js';
 import {
   transformarViajesActivos, transformarCentroGps,
@@ -5063,6 +5064,16 @@ app.delete('/push/suscripcion', requireClienteAuth, async (req, res) => {
 
 // ─── DIAGNÓSTICO CONTROLT SOAP ───────────────────────────────────────────────
 app.use('/api/controlt', requireInternalApiKey, controltDiagRouter);
+
+// ─── SEGUIMIENTO GPS EXTERNO (Fase 10B) ──────────────────────────────────────
+// Rutas PÚBLICAS (sin requireInternalApiKey — decisión cerrada de Fase 10B:
+// el enlace/OTP/sesión son su propio mecanismo de autorización, nunca la
+// clave interna del ERP). `cache` se pasa completo (no `cache.viajes.data`)
+// para que el router siempre lea el snapshot más reciente — ver
+// routes/gpsSeguimiento.js.
+app.use('/api/seguimiento-gps', crearRouterGpsSeguimiento({
+  sbFetch, cache, tripCustomerCache, extraerTelefono, primerNombreCliente,
+}));
 
 // ─── MANEJADOR DE ERRORES — respuestas JSON limpias para fallos de body-parser ──
 // (ej. archivo de soporte que excede el límite de express.raw). Sin este
