@@ -591,3 +591,56 @@ test('resolverDestinatarios (11B): expone correosInternos por separado, sin afec
   assert.deepEqual(out.correosInternos, ['ana@inlop.com.co']);
   assert.deepEqual(out.correosEnvio.sort(), ['ana@inlop.com.co', 'ext@x.com']);
 });
+
+// ── Fase 11C — CTA presente en el cuerpo en los 3 formatos + Content-Type
+// del adjunto (evita que el cliente de correo previsualice el HTML adjunto
+// en vez de mostrar el cuerpo real con el CTA) ──────────────────────────────
+
+for (const formato of ['excel', 'html_filas', 'html_columnas']) {
+  test(`GPS (11C): formato=${formato} → el CTA SIEMPRE llega en el html del cuerpo`, async () => {
+    const reporte = reporteGpsBase({ formato });
+    const deps = depsGpsBase({ reporte });
+
+    const out = await ejecutarReporteManual('RG1', deps);
+
+    assert.equal(out.ok, true);
+    assert.equal(out.seguimientoGps, true);
+    assert.match(deps.sendWithAttachment.llamadas[0].html, /Ver seguimiento GPS/);
+  });
+}
+
+test('11C: el adjunto Excel declara su mimeType real como contentType', async () => {
+  const reporte = reporteGpsBase({ formato: 'excel' });
+  const deps = depsGpsBase({ reporte });
+
+  await ejecutarReporteManual('RG1', deps);
+
+  const adjunto = deps.sendWithAttachment.llamadas[0].attachments[0];
+  assert.equal(adjunto.contentType, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+});
+
+for (const formato of ['html_filas', 'html_columnas']) {
+  test(`11C: el adjunto ${formato} declara contentType=application/octet-stream (nunca text/html) — evita la vista previa inline de Gmail`, async () => {
+    const reporte = reporteGpsBase({ formato });
+    const deps = depsGpsBase({ reporte });
+
+    await ejecutarReporteManual('RG1', deps);
+
+    const adjunto = deps.sendWithAttachment.llamadas[0].attachments[0];
+    assert.equal(adjunto.contentType, 'application/octet-stream');
+    assert.notEqual(adjunto.contentType, 'text/html');
+    // El contenido y el nombre del archivo NO cambian — solo el Content-Type declarado.
+    assert.match(adjunto.filename, /\.html$/);
+    assert.ok(adjunto.content.length > 0);
+  });
+}
+
+test('11C: ningún adjunto lleva contentId — evita que Resend lo marque como inline (ver JSDoc de contentTypeAdjunto)', async () => {
+  const reporte = reporteGpsBase({ formato: 'html_columnas' });
+  const deps = depsGpsBase({ reporte });
+
+  await ejecutarReporteManual('RG1', deps);
+
+  const adjunto = deps.sendWithAttachment.llamadas[0].attachments[0];
+  assert.equal(adjunto.contentId, undefined);
+});

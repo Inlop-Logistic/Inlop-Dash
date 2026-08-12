@@ -7,7 +7,9 @@
  *             → Excel/HTML según reporte.formato     [Fase 9C/9D]
  *             → resolver destinatarios (personal + externos, deduplicados)
  *             → enlace de Seguimiento GPS, si aplica [Fase 10D — ver enlaceGps.js]
- *             → sendWithAttachment() (emailChannel.js, Resend)
+ *             → sendWithAttachment() (emailChannel.js, Resend) — el adjunto
+ *               declara su Content-Type explícitamente [Fase 11C, ver
+ *               contentTypeAdjunto() más abajo]
  *             → resultado { ok, ... } | { ok: false, codigo, error }
  *
  * Motor ÚNICO de ejecución — lo llaman tanto la ruta manual
@@ -33,6 +35,36 @@ const FORMATOS_HTML = new Set(['html_filas', 'html_columnas']);
 
 const NAVY = '#012A6B';
 const GRAY = '#6B7280';
+
+// ─── Content-Type del adjunto (Fase 11C) ────────────────────────────────────
+//
+// Auditoría Fase 11C confirmó (ver services/reportes/envioManual.test.js,
+// "AUDIT 11C") que el CTA GPS SIEMPRE llega correcto en el `html` del
+// cuerpo del correo, en los 3 formatos (excel, html_filas, html_columnas):
+// el pipeline de generación nunca lo pierde. El síntoma reportado ("el CTA
+// no aparece en HTML") es de RENDERIZADO del cliente de correo: el adjunto
+// de un reporte HTML (htmlBuilder.js) es literalmente text/html — el MISMO
+// tipo que el cuerpo del correo — y algunos clientes (notablemente Gmail)
+// ofrecen una vista previa/inline de adjuntos text/html; el destinatario
+// puede terminar viendo esa vista en vez del cuerpo real (donde está el CTA).
+//
+// El SDK de Resend en uso (`resend` ^6.17.2 — ver node_modules/resend/dist/
+// index.d.mts, interface Attachment) NO expone un campo de disposition
+// explícito e independiente para adjuntos salientes: solo `contentType` y
+// `contentId` (este último, si se define, fuerza disposition "inline" —
+// se deja sin definir a propósito, en ambos formatos). Sin una palanca de
+// disposition dedicada, declarar el adjunto HTML como
+// `application/octet-stream` es la única forma real de que el cliente de
+// correo deje de reconocerlo como HTML previsualizable — el CONTENIDO del
+// archivo y su nombre (que sigue terminando en .html) no cambian en
+// absoluto, solo el Content-Type con el que Resend lo transporta.
+//
+// Excel no tiene esta ambigüedad (su mimeType real ya es un tipo binario
+// inconfundible) — se declara explícitamente su mimeType real en vez de
+// dejar que Resend lo infiera del nombre de archivo, por robustez.
+function contentTypeAdjunto(formatoReporte, mimeTypeReal) {
+  return FORMATOS_HTML.has(formatoReporte) ? 'application/octet-stream' : mimeTypeReal;
+}
 
 // ─── Destinatarios ────────────────────────────────────────────────────────────
 
@@ -263,6 +295,9 @@ export async function ejecutarReporteManual(reporteId, deps = {}) {
     attachments: [{
       filename: archivo.filename,
       content:  archivo.buffer.toString('base64'),
+      // Fase 11C — ver contentTypeAdjunto() arriba: evita que el cliente de
+      // correo confunda el adjunto HTML con el cuerpo del mensaje.
+      contentType: contentTypeAdjunto(reporte.formato, archivo.mimeType),
     }],
   });
 
