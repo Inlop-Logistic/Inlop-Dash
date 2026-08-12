@@ -16,6 +16,27 @@
  */
 import { crearEnlace, MODULO_PERMITIDO, extraerPlacas } from '../gps/index.js';
 
+// ─── DIAGNÓSTICO TEMPORAL (retirar tras confirmar la causa raíz en Railway) ──
+// Un único log estructurado por invocación, con SOLO campos no sensibles:
+// nunca correo, placa, token, OTP, URL completa ni clave alguna. Buscar por
+// "[enlaceGps][DIAG-TEMP]" para ubicar/retirar estas líneas cuando ya no
+// hagan falta.
+function logDiagTemp(reporte, datos, deps, motivo) {
+  try {
+    console.log('[enlaceGps][DIAG-TEMP]', JSON.stringify({
+      reporteId:            reporte?.id ?? null,
+      moduloId:             reporte?.modulo_id ?? null,
+      seguimientoGps:       reporte?.seguimiento_gps === true,
+      cantidadRegistros:    Array.isArray(datos?.registros) ? datos.registros.length : 0,
+      cantidadPlacas:       extraerPlacas(datos?.registros, reporte?.tipo_reporte).length,
+      cantidadDestExternos: Array.isArray(reporte?.destinatarios?.correos_externos)
+        ? reporte.destinatarios.correos_externos.length : 0,
+      seguimientoGpsUrlConfigurada: Boolean(deps?.seguimientoGpsUrl),
+      motivo,
+    }));
+  } catch { /* el diagnóstico nunca debe romper el flujo de envío */ }
+}
+
 /**
  * @param {object} reporte — fila de reportes_automaticos ya validada
  *   (existe, activo, no borrador) por ejecutarReporteManual(). Debe incluir
@@ -32,10 +53,17 @@ import { crearEnlace, MODULO_PERMITIDO, extraerPlacas } from '../gps/index.js';
  * @returns {Promise<{url: string} | null>}
  */
 export async function resolverEnlaceGps(reporte, datos, deps = {}) {
-  if (reporte?.modulo_id !== MODULO_PERMITIDO) return null;
-  if (reporte?.seguimiento_gps !== true) return null;
+  if (reporte?.modulo_id !== MODULO_PERMITIDO) {
+    logDiagTemp(reporte, datos, deps, 'modulo_no_permitido');
+    return null;
+  }
+  if (reporte?.seguimiento_gps !== true) {
+    logDiagTemp(reporte, datos, deps, 'seguimiento_gps_no_es_true');
+    return null;
+  }
 
   if (!deps.seguimientoGpsUrl) {
+    logDiagTemp(reporte, datos, deps, 'seguimiento_gps_url_ausente');
     console.warn(
       `[enlaceGps] Reporte ${reporte.id} tiene seguimiento_gps activo pero no hay ` +
       'seguimientoGpsUrl configurada (SEGUIMIENTO_GPS_URL) — se omite el enlace de esta ejecución.'
@@ -44,7 +72,12 @@ export async function resolverEnlaceGps(reporte, datos, deps = {}) {
   }
 
   const placas = extraerPlacas(datos?.registros, reporte.tipo_reporte);
-  if (placas.length === 0) return null; // decisión cerrada 10D: sin placas, no se crea enlace
+  if (placas.length === 0) {
+    logDiagTemp(reporte, datos, deps, 'cero_placas'); // decisión cerrada 10D: sin placas, no se crea enlace
+    return null;
+  }
+
+  logDiagTemp(reporte, datos, deps, 'continua_a_crearEnlace');
 
   try {
     const resultado = await crearEnlace(
@@ -52,15 +85,18 @@ export async function resolverEnlaceGps(reporte, datos, deps = {}) {
       deps,
     );
     if (!resultado.ok) {
+      logDiagTemp(reporte, datos, deps, `crearEnlace_fallo:${resultado.codigo}`);
       console.error(
         `[enlaceGps] No se pudo crear el enlace GPS del reporte ${reporte.id}: ` +
         `${resultado.codigo} — ${resultado.error}`
       );
       return null;
     }
+    logDiagTemp(reporte, datos, deps, 'enlace_creado_ok');
     const base = deps.seguimientoGpsUrl.replace(/\/+$/, '');
     return { url: `${base}/t/${resultado.token}` };
   } catch (err) {
+    logDiagTemp(reporte, datos, deps, 'excepcion_inesperada');
     console.error(`[enlaceGps] Error inesperado creando el enlace GPS del reporte ${reporte.id}:`, err.message);
     return null;
   }
