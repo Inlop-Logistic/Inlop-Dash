@@ -63,7 +63,21 @@ export function Mapa({ vehiculos, placaSeleccionada, onSeleccionar }: Props) {
     L.tileLayer(TILE_OSM, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(map);
     L.control.zoom({ position: "bottomright" }).addTo(map);
     mapRef.current = map;
-    return () => { map.remove(); mapRef.current = null; };
+
+    // El contenedor cambia de tamaño sin que la ventana cambie de tamaño:
+    // la hoja inferior (móvil) se redimensiona al pasar de lista a detalle,
+    // el panel lateral (desktop/tablet) puede angostarse, y el teclado
+    // virtual del OTP ya quedó atrás pero el primer layout puede asentarse
+    // un frame después del montaje. Leaflet cachea el tamaño que midió al
+    // iniciar — sin volver a decírselo, un contenedor que crece/encoge
+    // después queda con tiles mal recortados o con el mapa "congelado" en
+    // el tamaño viejo. ResizeObserver es la fuente de verdad — más fiable
+    // que escuchar solo `resize` de window, que no dispara por cambios de
+    // layout internos (ej. abrir el detalle de un vehículo).
+    const observer = new ResizeObserver(() => map.invalidateSize());
+    observer.observe(containerRef.current);
+
+    return () => { observer.disconnect(); map.remove(); mapRef.current = null; };
   }, []);
 
   // Sync markers
@@ -122,5 +136,9 @@ export function Mapa({ vehiculos, placaSeleccionada, onSeleccionar }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placaSeleccionada]);
 
-  return <div ref={containerRef} className="w-full h-full" role="application" aria-label="Mapa de seguimiento GPS" />;
+  // flex-1 (no h-full): el padre directo (PantallaSeguimiento) es ahora un
+  // `flex flex-col` — flex-grow entre contenedor y ítem flex se resuelve en
+  // una sola pasada; un `height:100%` aquí podía quedar en 0px según cómo
+  // el padre haya llegado a su propio alto (ver nota en PantallaSeguimiento).
+  return <div ref={containerRef} className="w-full flex-1 min-h-0" role="application" aria-label="Mapa de seguimiento GPS" />;
 }

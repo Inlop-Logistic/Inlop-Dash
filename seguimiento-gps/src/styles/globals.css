@@ -107,7 +107,18 @@ body {
   border-top: 1px solid var(--gray-200);
   border-radius: 20px 20px 0 0;
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
-  max-height: 58vh;
+  /* Fase 10F — altura real de 3 estados (peek/medio/lleno), controlada por
+     useHojaInferior.ts vía esta variable; 58vh es solo el valor de
+     arranque antes de que React monte (evita un salto visual en el primer
+     paint). `height` fija (no `max-height`): una hoja arrastrable debe
+     quedar exactamente donde el usuario la soltó incluso si el contenido
+     es corto (ej. 1-2 vehículos) — igual que cualquier bottom sheet nativo;
+     con `max-height` los 3 estados eran indistinguibles cuando el
+     contenido no llegaba a llenar ni el más chico. Transición suave al
+     soltar el handle; durante el arrastre en vivo, PantallaSeguimiento.tsx
+     la desactiva en línea para seguir el dedo sin retraso. */
+  height: var(--sheet-max-h, 58vh);
+  transition: height 280ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 @media (min-width: 768px) {
   .panel-vehiculos {
@@ -115,7 +126,8 @@ body {
     border-left: 1px solid var(--gray-200);
     border-radius: 0;
     box-shadow: none;
-    max-height: none;
+    height: 100%;
+    transition: none;
   }
 }
 
