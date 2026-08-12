@@ -65,10 +65,9 @@ componentes nuevo).
   la complejidad de clustering que sí usa Centro GPS en el ERP (que
   muestra toda la flota).
 - **`server.js`** (Express estático + fallback SPA) existe para poder
-  construir y previsualizar el build de producción localmente — **no**
-  implica ningún cambio de Railway; el despliegue real (nuevo servicio,
-  dominio, `ALLOWED_ORIGINS`) es una decisión explícita de una fase
-  posterior (10E), no de esta.
+  construir y previsualizar el build de producción localmente — el
+  despliegue real como servicio de Railway (`Dockerfile` + `railway.json`,
+  mismo patrón que `erp/`) se agregó en Fase 10E, ver más abajo.
 
 ## Pendiente / fuera de alcance de esta fase
 
@@ -84,6 +83,29 @@ componentes nuevo).
   "cero vehículos GPS" (array vacío) y "vehículo sin señal" (item con
   lat/lon nulos) con los datos ya disponibles, sin pedir cambios a 10B.
 - **Integración con Reportes Automáticos** (botón "Seguimiento GPS" en el
-  ERP, enlace en el correo del reporte): Fase 10D, explícitamente fuera de
-  alcance aquí.
-- **Despliegue en Railway**: Fase 10E.
+  ERP, enlace en el correo del reporte): implementada en Fase 10D — ver
+  `services/reportes/enlaceGps.js`.
+
+## Despliegue en Railway (Fase 10E)
+
+Servicio propio, independiente del backend y de `erp/` — mismo patrón que
+`erp/` (`Dockerfile` con builder `DOCKERFILE`, ver `railway.json`).
+
+**Variable de build (Railway → Settings → Variables del servicio):**
+
+| Variable       | Valor                                                        |
+|----------------|---------------------------------------------------------------|
+| `VITE_API_URL` | URL pública del backend (`Inlop-Dash`), ej. `https://api.inlop.com.co` — sin ella el cliente llama a rutas relativas a su propio dominio, que no existen ahí. |
+
+No necesita ninguna otra variable — esta app no habla con Supabase ni
+firma nada con `INTERNAL_API_KEY`; toda su autorización pasa por el token
+del enlace/OTP/sesión contra la API pública de 10B.
+
+**Requisito en el backend (`Inlop-Dash`, no en este proyecto):** el dominio
+donde quede publicado este servicio debe agregarse a la variable
+`ALLOWED_ORIGINS` del backend (CORS, ver `index.js`). Sin esto, el
+navegador bloquea toda llamada de esta app a `/api/seguimiento-gps/*` por
+CORS — el enlace del correo cargaría pero la pantalla de verificación de
+correo nunca podría enviar el OTP. `ALLOWED_ORIGINS` ya existe como
+mecanismo (comparte variable con `CLIENT_PORTAL_URL`); esto es agregar un
+valor a una lista existente, no una variable nueva.
