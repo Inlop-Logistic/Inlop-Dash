@@ -1,0 +1,17 @@
+/*
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * Seguimiento GPS INLOP — Entry Point CSS (Fase 10C)
+ *
+ * Reutiliza el Design System del ERP por RUTA RELATIVA — nunca copiado —
+ * para que ambas superficies compartan la misma fuente de verdad de marca
+ * (docs/ARQUITECTURA.md § 3.3) sin riesgo de que diverjan con el tiempo.
+ * Esta app es un proyecto Vite independiente (ver vite.config.ts) — el
+ * import relativo funciona igual porque Vite resuelve CSS por sistema de
+ * archivos, no por "pertenencia" al paquete.
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ */
+
+@import "tailwindcss";
+@import "../../erp/src/styles/typography.css";
+@import "../../erp/src/styles/tokens.css";
+@import "./styles/globals.css";
