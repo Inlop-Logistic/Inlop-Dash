@@ -51,6 +51,7 @@ const GRAY = '#6B7280';
  * @param {{sbFetch: Function}} deps
  * @returns {Promise<{
  *   correosEnvio: string[],
+ *   correosInternos: string[],
  *   totalPersonal: number,
  *   totalExternos: number,
  *   personalSinCorreo: number,
@@ -82,6 +83,13 @@ export async function resolverDestinatarios(destinatarios, deps) {
 
   return {
     correosEnvio,
+    // Fase 11B — subconjunto de correosEnvio que vino de personal_ids (ya
+    // resuelto, activo=true), reutilizado por resolverEnlaceGps() para
+    // congelar la whitelist interna del enlace sin una segunda consulta a
+    // `personal`. Nunca se recorta/deduplica más allá de lo que ya hace
+    // correosPersonal — crearEnlace() normaliza y deduplica otra vez, igual
+    // que ya hace con correos_externos.
+    correosInternos: correosPersonal,
     totalPersonal: personalIds.length,
     totalExternos: correosExternos.length,
     personalSinCorreo: Math.max(personalSinCorreo, 0),
@@ -220,9 +228,12 @@ export async function ejecutarReporteManual(reporteId, deps = {}) {
     return { ok: false, codigo: 'error_generacion', error: `No se pudo generar el reporte: ${err.message}` };
   }
 
-  // 5. Seguimiento GPS (Fase 10D) — opcional, nunca bloquea el envío: un
-  // fallo aquí solo significa "sin CTA en este correo", nunca "sin correo".
-  const enlaceGps = await resolverEnlaceGps(reporte, datos, deps);
+  // 5. Seguimiento GPS (Fase 10D; internos sin OTP agregado en Fase 11B) —
+  // opcional, nunca bloquea el envío: un fallo aquí solo significa "sin CTA
+  // en este correo", nunca "sin correo". Se reutiliza `destinatarios` (ya
+  // resuelto arriba) para que un enlace con SOLO destinatarios internos
+  // también se cree — antes de 11B se perdía por "sin_destinatarios_externos".
+  const enlaceGps = await resolverEnlaceGps(reporte, datos, deps, destinatarios);
 
   // 6. Enviar por Resend (emailChannel.js) con el archivo adjunto. El
   // asunto configurado por el usuario nunca se modifica.

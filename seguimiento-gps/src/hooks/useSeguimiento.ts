@@ -9,7 +9,7 @@
  * pedir verificación, nunca se "confía" en que sigue siendo válida.
  */
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import { ApiError, validarEnlace, solicitarOtp, validarOtp, obtenerVehiculos } from "../api";
+import { ApiError, validarEnlace, iniciarAcceso, solicitarOtp, validarOtp, obtenerVehiculos } from "../api";
 import { guardarSesion, leerSesionParaEnlace, limpiarSesion } from "../session";
 import { INTERVALO_POLL_MS } from "../constants";
 import type { VehiculoPublico } from "../types";
@@ -38,6 +38,7 @@ type Accion =
   | { t: "SESION_RECUPERADA"; correo: string; sesionToken: string }
   | { t: "CORREO_ENVIANDO" }
   | { t: "CORREO_OK"; correo: string; totalVehiculos: number }
+  | { t: "CORREO_ACCESO_DIRECTO"; correo: string; sesionToken: string }
   | { t: "CORREO_ERROR"; error: string }
   | { t: "CORREO_ENLACE_MURIO" }
   | { t: "OTP_VALIDANDO" }
@@ -68,6 +69,11 @@ function reducir(estado: Estado, accion: Accion): Estado {
         : estado;
     case "CORREO_OK":
       return { ...estado, fase: { tipo: "otp", correo: accion.correo, totalVehiculos: accion.totalVehiculos, validando: false, error: null, mensaje: null } };
+    // Fase 11B — acceso interno: el backend concedió sesión directa, sin
+    // pasar nunca por la pantalla de OTP (mismo estado final "sesion" que
+    // OTP_OK, solo que se llega sin código).
+    case "CORREO_ACCESO_DIRECTO":
+      return { ...estado, fase: { tipo: "sesion", correo: accion.correo, sesionToken: accion.sesionToken } };
     case "CORREO_ERROR":
       return estado.fase.tipo === "verificar_correo"
         ? { ...estado, fase: { ...estado.fase, enviando: false, error: accion.error } }
@@ -143,16 +149,24 @@ export function useSeguimiento(token: string) {
 
   useEffect(() => { validar(); }, [validar]);
 
-  // ── Solicitar OTP ─────────────────────────────────────────────────────────
+  // ── Enviar correo — primer paso compartido de internos y externos (Fase
+  // 11B). El backend decide el método de autenticación: interno → sesión
+  // directa (sin código); externo → mismo flujo OTP de siempre. Este hook
+  // nunca decide localmente cuál aplica, solo interpreta `modo`.
   const enviarCorreo = useCallback(async (correo: string) => {
     dispatch({ t: "CORREO_ENVIANDO" });
     try {
-      await solicitarOtp(token, correo);
+      const resp = await iniciarAcceso(token, correo);
+      if (resp.modo === "interno") {
+        guardarSesionSilenciosa({ enlaceToken: token, sesionToken: resp.sesion, expiraEn: resp.expiraEn, correo });
+        dispatch({ t: "CORREO_ACCESO_DIRECTO", correo, sesionToken: resp.sesion });
+        return;
+      }
       const totalVehiculos = estado.fase.tipo === "verificar_correo" ? estado.fase.totalVehiculos : 0;
       dispatch({ t: "CORREO_OK", correo, totalVehiculos });
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) { dispatch({ t: "CORREO_ENLACE_MURIO" }); return; }
-      const msg = err instanceof ApiError ? err.message : "No se pudo enviar el código. Inténtalo de nuevo.";
+      const msg = err instanceof ApiError ? err.message : "No se pudo continuar. Inténtalo de nuevo.";
       dispatch({ t: "CORREO_ERROR", error: msg });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

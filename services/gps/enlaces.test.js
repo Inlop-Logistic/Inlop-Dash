@@ -78,11 +78,51 @@ test('crearEnlace: solo aplica a Gestión Logística — otro módulo se rechaza
   assert.equal(MODULO_PERMITIDO, 'gestion_logistica');
 });
 
-test('crearEnlace: sin destinatarios externos rechazado', async () => {
+test('crearEnlace: sin destinatarios (ni externos ni internos) rechazado', async () => {
+  // personal_ids no resuelve destinatariosInternosAutorizados por sí solo
+  // (ver JSDoc de crearEnlace) — sin ese input explícito, y sin
+  // correos_externos, no hay nadie a quien autorizar.
   const reporte = reporteBase({ destinatarios: { personal_ids: ['P1'], correos_externos: [] } });
   const out = await crearEnlace({ reporteId: 'R1' }, depsBase({ reportes: [reporte] }));
   assert.equal(out.ok, false);
-  assert.equal(out.codigo, 'sin_destinatarios_externos');
+  assert.equal(out.codigo, 'sin_destinatarios');
+});
+
+// ── Fase 11B — destinatarios internos ────────────────────────────────────────
+
+test('crearEnlace: destinatariosInternosAutorizados solos (sin externos) SÍ crea el enlace', async () => {
+  const reporte = reporteBase({ destinatarios: { personal_ids: ['P1'], correos_externos: [] } });
+  const out = await crearEnlace(
+    { reporteId: 'R1', destinatariosInternosAutorizados: ['Interno@Inlop.com.co'] },
+    depsBase({ reportes: [reporte] }),
+  );
+  assert.equal(out.ok, true);
+  assert.deepEqual(out.destinatariosAutorizados, []);
+  assert.deepEqual(out.destinatariosInternosAutorizados, ['interno@inlop.com.co']); // normalizado
+});
+
+test('crearEnlace: persiste destinatarios_internos_autorizados normalizados y deduplicados', async () => {
+  const reporte = reporteBase({ destinatarios: { personal_ids: [], correos_externos: [] } });
+  const deps = depsBase({ reportes: [reporte] });
+  const out = await crearEnlace(
+    { reporteId: 'R1', destinatariosInternosAutorizados: [' Ana@Inlop.com.co ', 'ana@inlop.com.co'] },
+    deps,
+  );
+  assert.equal(out.ok, true);
+  const fila = deps.sbFetch.tablas.reportes_gps_enlaces.find(e => e.id === out.enlaceId);
+  assert.deepEqual(fila.destinatarios_internos_autorizados, ['ana@inlop.com.co']);
+});
+
+test('crearEnlace: internos + externos coexisten en el mismo enlace, cada lista con lo suyo', async () => {
+  const reporte = reporteBase({ destinatarios: { personal_ids: ['P1'], correos_externos: ['ext@x.com'] } });
+  const deps = depsBase({ reportes: [reporte] });
+  const out = await crearEnlace(
+    { reporteId: 'R1', destinatariosInternosAutorizados: ['interno@inlop.com.co'] },
+    deps,
+  );
+  assert.equal(out.ok, true);
+  assert.deepEqual(out.destinatariosAutorizados, ['ext@x.com']);
+  assert.deepEqual(out.destinatariosInternosAutorizados, ['interno@inlop.com.co']);
 });
 
 // ── crearEnlace — éxito ──────────────────────────────────────────────────────

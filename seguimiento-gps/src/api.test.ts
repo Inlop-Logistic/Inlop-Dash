@@ -8,7 +8,7 @@
  */
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { ApiError, validarEnlace, solicitarOtp, obtenerVehiculos } from "./api.ts";
+import { ApiError, validarEnlace, iniciarAcceso, solicitarOtp, obtenerVehiculos } from "./api.ts";
 
 const fetchOriginal = globalThis.fetch;
 afterEach(() => { globalThis.fetch = fetchOriginal; });
@@ -38,6 +38,18 @@ test("validarEnlace: 404 lanza ApiError con el mensaje del backend", async () =>
       return true;
     },
   );
+});
+
+test("iniciarAcceso: modo interno se devuelve tal cual (Fase 11B)", async () => {
+  mockFetch(200, { ok: true, modo: "interno", sesion: "tok-sesion", expiraEn: "2026-08-13T00:00:00.000Z" });
+  const out = await iniciarAcceso("tok", "interno@inlop.com.co");
+  assert.deepEqual(out, { ok: true, modo: "interno", sesion: "tok-sesion", expiraEn: "2026-08-13T00:00:00.000Z" });
+});
+
+test("iniciarAcceso: modo externo se devuelve tal cual (mismo mensaje anti-enumeración que solicitarOtp)", async () => {
+  mockFetch(200, { ok: true, modo: "externo", mensaje: "Si el correo está autorizado, recibirás un código de verificación." });
+  const out = await iniciarAcceso("tok", "externo@x.com");
+  assert.equal(out.modo, "externo");
 });
 
 test("solicitarOtp: 429 (rate limit) lanza ApiError con status 429", async () => {

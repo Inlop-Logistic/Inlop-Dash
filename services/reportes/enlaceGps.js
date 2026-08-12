@@ -50,9 +50,16 @@ function logDiagTemp(reporte, datos, deps, motivo) {
  *   process.env.SEGUIMIENTO_GPS_URL — services/reportes/* nunca lee
  *   process.env directamente, mismo criterio que todo este módulo) +
  *   `origenEjecucion` ('manual' | 'scheduler', puramente informativo).
+ * @param {{correosInternos?: string[]} | null} destinatariosResueltos — Fase
+ *   11B: salida de resolverDestinatarios() (envioManual.js), YA calculada
+ *   para el envío del correo de esta misma ejecución — se reutiliza
+ *   `correosInternos` para congelar la whitelist interna del enlace, sin
+ *   una segunda consulta a `personal` (esa resolución ya se hizo una vez).
+ *   `null`/omitido = sin destinatarios internos para este enlace (mismo
+ *   comportamiento que antes de 11B).
  * @returns {Promise<{url: string} | null>}
  */
-export async function resolverEnlaceGps(reporte, datos, deps = {}) {
+export async function resolverEnlaceGps(reporte, datos, deps = {}, destinatariosResueltos = null) {
   if (reporte?.modulo_id !== MODULO_PERMITIDO) {
     logDiagTemp(reporte, datos, deps, 'modulo_no_permitido');
     return null;
@@ -81,7 +88,15 @@ export async function resolverEnlaceGps(reporte, datos, deps = {}) {
 
   try {
     const resultado = await crearEnlace(
-      { reporteId: reporte.id, reporte, datos, origen: deps.origenEjecucion ?? null },
+      {
+        reporteId: reporte.id,
+        reporte,
+        datos,
+        origen: deps.origenEjecucion ?? null,
+        // Fase 11B — ver JSDoc de arriba: un reporte con SOLO destinatarios
+        // internos ya no se queda sin enlace (antes: 'sin_destinatarios_externos').
+        destinatariosInternosAutorizados: destinatariosResueltos?.correosInternos ?? [],
+      },
       deps,
     );
     if (!resultado.ok) {

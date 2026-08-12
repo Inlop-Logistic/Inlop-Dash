@@ -7,6 +7,7 @@
  */
 export { crearEnlace, validarEnlace, revocarEnlace, MODULO_PERMITIDO, TTL_HORAS_DEFECTO } from './enlaces.js';
 export { solicitarOtp, validarOtp, OTP_TTL_MINUTOS, OTP_MAX_INTENTOS } from './otp.js';
+export { resolverAccesoInterno } from './accesoInterno.js';
 export { crearSesion, validarSesion, TTL_HORAS_SESION_DEFECTO } from './sesiones.js';
 export { obtenerVehiculosAutorizados } from './gpsSeguimiento.js';
 export { extraerPlacas, CAMPO_PLACA_POR_REPORTE } from './vehiculos.js';

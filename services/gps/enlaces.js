@@ -1,9 +1,14 @@
 /**
- * services/gps/enlaces.js — Enlaces de Seguimiento GPS externo (Fase 10B)
+ * services/gps/enlaces.js — Enlaces de Seguimiento GPS (Fase 10B; interno
+ * sin OTP agregado en Fase 11B)
  *
- * Crea y valida el enlace temporal que un destinatario externo de un
- * Reporte Automático de Gestión Logística puede usar para ver, en modo solo
- * lectura, únicamente las placas incluidas en ESE reporte.
+ * Crea y valida el enlace temporal que un destinatario de un Reporte
+ * Automático de Gestión Logística puede usar para ver, en modo solo
+ * lectura, únicamente las placas incluidas en ESE reporte — misma
+ * aplicación (seguimiento-gps/) y mismo token para destinatarios internos y
+ * externos; solo cambia el método de autenticación (ver
+ * services/gps/accesoInterno.js para internos, services/gps/otp.js para
+ * externos, sin cambios).
  *
  * Patrón de inyección de dependencias — igual que services/reportes/*: este
  * módulo nunca importa el index.js raíz (evita ejecutar app.listen()).
@@ -40,6 +45,12 @@ function normalizarCorreo(correo) {
  *                                           // el motor de envío ya lo hizo para el
  *                                           // Excel/HTML de esa misma ejecución).
  *   destinatariosAutorizados?: string[],   // omitido = reporte.destinatarios.correos_externos
+ *   destinatariosInternosAutorizados?: string[], // Fase 11B — correos internos ya
+ *     resueltos (personal.correo_compartido, vía resolverDestinatarios() en
+ *     envioManual.js). Sin default derivado de reporte.destinatarios.personal_ids
+ *     aquí a propósito: personal_ids son IDs, no correos — resolverlos requeriría
+ *     una segunda consulta a `personal` que el llamador (envioManual.js) YA hizo
+ *     para el envío del correo; se reutiliza ese resultado en vez de duplicarla.
  *   origen?: string,                        // 'manual' | 'scheduler' — informativo
  *   creadoPor?: string,
  *   ttlHoras?: number,
@@ -49,7 +60,8 @@ function normalizarCorreo(correo) {
  *   `input.reporte`/`input.datos` no vienen ya resueltos.
  * @returns {Promise<
  *   {ok: true, enlaceId: string, token: string, placas: string[],
- *    destinatariosAutorizados: string[], expiraEn: string}
+ *    destinatariosAutorizados: string[], destinatariosInternosAutorizados: string[],
+ *    expiraEn: string}
  *   | {ok: false, codigo: string, error: string}
  * >}
  */
@@ -83,11 +95,19 @@ export async function crearEnlace(input = {}, deps = {}) {
         .filter(Boolean)
     ),
   ];
-  if (autorizados.length === 0) {
+  // Fase 11B: un enlace ya no requiere destinatarios EXTERNOS específicamente
+  // — internos y externos comparten el mismo enlace/aplicación, así que
+  // basta con que exista AL MENOS UNO de los dos grupos. (Antes de 11B esta
+  // condición solo miraba `autorizados` — el bug reportado: un reporte con
+  // solo destinatarios internos terminaba en 'sin_destinatarios_externos'.)
+  const autorizadosInternos = [
+    ...new Set((input.destinatariosInternosAutorizados ?? []).map(normalizarCorreo).filter(Boolean)),
+  ];
+  if (autorizados.length === 0 && autorizadosInternos.length === 0) {
     return {
       ok: false,
-      codigo: 'sin_destinatarios_externos',
-      error: 'El reporte no tiene destinatarios externos autorizados para el enlace',
+      codigo: 'sin_destinatarios',
+      error: 'El reporte no tiene destinatarios (internos ni externos) autorizados para el enlace',
     };
   }
 
@@ -105,14 +125,15 @@ export async function crearEnlace(input = {}, deps = {}) {
   const expiraEn  = new Date(Date.now() + ttlHoras * 3_600_000).toISOString();
 
   const filasEnlace = await sbFetch('/reportes_gps_enlaces', 'POST', {
-    reporte_id:                  reporteId,
-    token_hash:                  tokenHash,
+    reporte_id:                          reporteId,
+    token_hash:                          tokenHash,
     placas,
-    destinatarios_autorizados:   autorizados,
-    expira_en:                   expiraEn,
-    revocado:                    false,
+    destinatarios_autorizados:           autorizados,
+    destinatarios_internos_autorizados:  autorizadosInternos,
+    expira_en:                           expiraEn,
+    revocado:                            false,
     origen,
-    creado_por:                  creadoPor,
+    creado_por:                          creadoPor,
   });
   const enlace = filasEnlace?.[0];
   if (!enlace) return { ok: false, codigo: 'error_persistencia', error: 'No se pudo crear el enlace' };
@@ -123,6 +144,7 @@ export async function crearEnlace(input = {}, deps = {}) {
     token,                 // en claro — única vez que se devuelve, nunca se persiste así
     placas,
     destinatariosAutorizados: autorizados,
+    destinatariosInternosAutorizados: autorizadosInternos,
     expiraEn,
   };
 }

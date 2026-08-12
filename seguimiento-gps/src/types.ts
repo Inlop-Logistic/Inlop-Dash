@@ -42,6 +42,19 @@ export interface RespuestaSolicitarOtp {
   mensaje: string;
 }
 
+/**
+ * Respuesta de POST /enlaces/:token/acceso (Fase 11B) — primer paso
+ * compartido de internos y externos ("pedir correo"). El backend intenta
+ * acceso interno sin OTP primero (personal activo, autorizado para este
+ * enlace); si no aplica, cae al flujo OTP externo de siempre.
+ *   - modo:"interno" → sesión concedida de inmediato, sin código.
+ *   - modo:"externo" → mismo mensaje/forma que solicitarOtp() de siempre
+ *     (anti-enumeración: no revela si el correo está autorizado o no).
+ */
+export type RespuestaIniciarAcceso =
+  | { ok: true; modo: "interno"; sesion: string; expiraEn: string }
+  | { ok: true; modo: "externo"; mensaje: string };
+
 export interface RespuestaValidarOtp {
   ok: true;
   sesion: string;

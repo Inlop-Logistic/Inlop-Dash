@@ -523,3 +523,71 @@ test('GPS: reporte sin el campo seguimiento_gps (undefined) se comporta exactame
   assert.doesNotMatch(deps.sendWithAttachment.llamadas[0].html, /Ver seguimiento GPS/);
   assert.equal(deps.sbFetch.tablas.reportes_gps_enlaces?.length ?? 0, 0);
 });
+
+// ── Fase 11B — acceso GPS interno/externo ────────────────────────────────────
+// Corrige el bug reportado: un reporte con SOLO destinatarios internos ya no
+// se queda sin enlace por "sin_destinatarios_externos" — internos y
+// externos comparten el mismo enlace/aplicación (seguimiento-gps/), solo
+// cambia el método de autenticación dentro de esa app (ver
+// services/gps/accesoInterno.js).
+
+test('GPS (11B): solo destinatarios internos → SÍ crea el enlace y el correo incluye el CTA', async () => {
+  const reporte = reporteGpsBase({ destinatarios: { personal_ids: ['P1'], correos_externos: [] } });
+  const deps = depsGpsBase({
+    reporte,
+    personal: [{ id: 'P1', nombre: 'Ana', correo_compartido: 'interno@inlop.com.co', activo: true }],
+  });
+
+  const out = await ejecutarReporteManual('RG1', deps);
+
+  assert.equal(out.ok, true);
+  assert.equal(out.seguimientoGps, true);
+  const filaEnlace = deps.sbFetch.tablas.reportes_gps_enlaces[0];
+  assert.ok(filaEnlace);
+  assert.deepEqual(filaEnlace.destinatarios_autorizados, []); // sin externos
+  assert.deepEqual(filaEnlace.destinatarios_internos_autorizados, ['interno@inlop.com.co']);
+  assert.match(deps.sendWithAttachment.llamadas[0].html, /Ver seguimiento GPS/);
+});
+
+test('GPS (11B): solo destinatarios externos → sin cambios respecto al comportamiento previo (regresión)', async () => {
+  const reporte = reporteGpsBase({ destinatarios: { personal_ids: [], correos_externos: ['ext@x.com'] } });
+  const deps = depsGpsBase({ reporte });
+
+  const out = await ejecutarReporteManual('RG1', deps);
+
+  assert.equal(out.ok, true);
+  assert.equal(out.seguimientoGps, true);
+  const filaEnlace = deps.sbFetch.tablas.reportes_gps_enlaces[0];
+  assert.deepEqual(filaEnlace.destinatarios_autorizados, ['ext@x.com']);
+  assert.deepEqual(filaEnlace.destinatarios_internos_autorizados, []);
+});
+
+test('GPS (11B): internos + externos → un único enlace/CTA compartido para ambos grupos', async () => {
+  const reporte = reporteGpsBase({ destinatarios: { personal_ids: ['P1'], correos_externos: ['ext@x.com'] } });
+  const deps = depsGpsBase({
+    reporte,
+    personal: [{ id: 'P1', nombre: 'Ana', correo_compartido: 'interno@inlop.com.co', activo: true }],
+  });
+
+  const out = await ejecutarReporteManual('RG1', deps);
+
+  assert.equal(out.ok, true);
+  const filaEnlace = deps.sbFetch.tablas.reportes_gps_enlaces[0];
+  assert.deepEqual(filaEnlace.destinatarios_autorizados, ['ext@x.com']);
+  assert.deepEqual(filaEnlace.destinatarios_internos_autorizados, ['interno@inlop.com.co']);
+  // Mismo enlace para todos — un único correo compartido (mismo html/url para ambos)
+  assert.equal(deps.sendWithAttachment.llamadas.length, 1);
+  assert.deepEqual(deps.sendWithAttachment.llamadas[0].to.sort(), ['ext@x.com', 'interno@inlop.com.co']);
+});
+
+test('resolverDestinatarios (11B): expone correosInternos por separado, sin afectar correosEnvio', async () => {
+  const sbFetch = crearSbFetch({
+    personal: [{ id: 'P1', correo_compartido: 'ana@inlop.com.co' }],
+  });
+  const out = await resolverDestinatarios(
+    { personal_ids: ['P1'], correos_externos: ['ext@x.com'] },
+    { sbFetch }
+  );
+  assert.deepEqual(out.correosInternos, ['ana@inlop.com.co']);
+  assert.deepEqual(out.correosEnvio.sort(), ['ana@inlop.com.co', 'ext@x.com']);
+});

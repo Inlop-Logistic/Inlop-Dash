@@ -22,6 +22,7 @@
 import { Router } from 'express';
 import { validarEnlace } from '../services/gps/enlaces.js';
 import { solicitarOtp, validarOtp } from '../services/gps/otp.js';
+import { resolverAccesoInterno } from '../services/gps/accesoInterno.js';
 import { obtenerVehiculosAutorizados } from '../services/gps/gpsSeguimiento.js';
 import { verificarLimite } from '../services/gps/rateLimiter.js';
 import { registrarAcceso } from '../services/gps/accesos.js';
@@ -67,7 +68,46 @@ export default function crearRouterGpsSeguimiento(deps) {
     res.json({ ok: true, vehiculos: (resultado.enlace.placas ?? []).length });
   });
 
-  // POST /enlaces/:token/otp — solicitar OTP { correo }
+  // POST /enlaces/:token/acceso — Fase 11B: primer paso compartido de
+  // internos y externos ("pedir correo"). Intenta acceso interno (sin OTP)
+  // primero; si el correo no califica (no es de `personal`, no está
+  // activo, o no está autorizado para ESTE enlace), cae exactamente al
+  // flujo externo de siempre (solicitarOtp, sin tocar) — misma respuesta
+  // anti-enumeración que ya tenía ese flujo. otp.js no se modifica.
+  router.post('/enlaces/:token/acceso', async (req, res) => {
+    const ip = ipDe(req);
+    const limite = verificarLimite(`ip-acceso:${ip}`, { maxIntentos: 30, ventanaMs: 3_600_000 });
+    if (!limite.permitido) return res.status(429).json({ error: MENSAJE_LIMITE });
+
+    const correo = req.body?.correo;
+    if (typeof correo !== 'string' || !RE_CORREO.test(correo.trim())) {
+      return res.status(400).json({ error: 'Correo inválido' });
+    }
+
+    const interno = await resolverAccesoInterno({ token: req.params.token, correo }, deps);
+    if (interno.ok) {
+      return res.json({ ok: true, modo: 'interno', sesion: interno.sesionToken, expiraEn: interno.expiraEn });
+    }
+    if (interno.codigo === 'rate_limited') {
+      return res.status(429).json({ error: MENSAJE_LIMITE });
+    }
+
+    // No calificó para acceso interno — trata el intento como externo,
+    // exactamente igual que POST /enlaces/:token/otp de siempre.
+    const externo = await solicitarOtp({ token: req.params.token, correo }, deps);
+    if (!externo.ok && externo.codigo === 'rate_limited') {
+      return res.status(429).json({ error: MENSAJE_LIMITE });
+    }
+    if (!externo.ok) {
+      return res.status(404).json({ error: MENSAJE_ENLACE_INVALIDO });
+    }
+    res.json({ ok: true, modo: 'externo', mensaje: 'Si el correo está autorizado, recibirás un código de verificación.' });
+  });
+
+  // POST /enlaces/:token/otp — solicitar OTP { correo }. Se mantiene tal
+  // cual (usado hoy por /acceso arriba, y por "reenviar código" desde la
+  // pantalla de OTP — reenviarCodigo() en el frontend llama este endpoint
+  // directamente, ya no pasa por /acceso).
   router.post('/enlaces/:token/otp', async (req, res) => {
     const ip = ipDe(req);
     const limite = verificarLimite(`ip-otp-solicitar:${ip}`, { maxIntentos: 30, ventanaMs: 3_600_000 });

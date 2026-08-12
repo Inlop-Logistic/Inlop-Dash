@@ -10,6 +10,7 @@
  */
 import type {
   RespuestaValidarEnlace, RespuestaSolicitarOtp, RespuestaValidarOtp, RespuestaVehiculos,
+  RespuestaIniciarAcceso,
 } from "./types";
 
 // `import.meta.env` solo existe bajo Vite — al correr src/api.test.ts
@@ -52,6 +53,20 @@ export function validarEnlace(token: string): Promise<RespuestaValidarEnlace> {
 
 export function solicitarOtp(token: string, correo: string): Promise<RespuestaSolicitarOtp> {
   return pedir(`/enlaces/${encodeURIComponent(token)}/otp`, {
+    method: "POST",
+    body: JSON.stringify({ correo }),
+  });
+}
+
+/**
+ * Primer paso compartido de internos y externos (Fase 11B): "pedir correo".
+ * El backend decide si el correo califica para acceso interno directo (sin
+ * OTP) o si debe pasar por el flujo OTP externo de siempre — este cliente
+ * nunca decide localmente cuál aplica, solo interpreta `modo` en la
+ * respuesta (ver useSeguimiento.ts).
+ */
+export function iniciarAcceso(token: string, correo: string): Promise<RespuestaIniciarAcceso> {
+  return pedir(`/enlaces/${encodeURIComponent(token)}/acceso`, {
     method: "POST",
     body: JSON.stringify({ correo }),
   });

@@ -43,7 +43,8 @@ export function PantallaVerificarCorreo({ totalVehiculos, enviando, error, onEnv
               Ingresa el correo al que te enviaron este enlace para ver el
               seguimiento{totalVehiculos > 0 && (
                 <> de {totalVehiculos === 1 ? "tu vehículo" : `tus ${totalVehiculos} vehículos`}</>
-              )}.
+              )}. Según el correo, es posible que te pidamos un código de
+              verificación adicional.
             </p>
           </div>
 
@@ -80,7 +81,7 @@ export function PantallaVerificarCorreo({ totalVehiculos, enviando, error, onEnv
               className="mt-1 inline-flex items-center justify-center gap-2 font-semibold text-[15px] rounded-xl py-3.5 transition-transform active:scale-[0.98] disabled:opacity-60"
               style={{ background: "var(--navy)", color: "#fff" }}
             >
-              {enviando ? "Enviando código…" : "Enviar código de verificación"}
+              {enviando ? "Verificando…" : "Continuar"}
             </button>
           </form>
 
