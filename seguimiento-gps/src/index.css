@@ -1,17 +1,21 @@
 /*
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * Seguimiento GPS INLOP — Entry Point CSS (Fase 10C)
+ * Seguimiento GPS INLOP — Entry Point CSS (Fase 10C; tokens vendidos en el
+ * Hotfix de despliegue posterior a Fase 10E)
  *
- * Reutiliza el Design System del ERP por RUTA RELATIVA — nunca copiado —
- * para que ambas superficies compartan la misma fuente de verdad de marca
- * (docs/ARQUITECTURA.md § 3.3) sin riesgo de que diverjan con el tiempo.
- * Esta app es un proyecto Vite independiente (ver vite.config.ts) — el
- * import relativo funciona igual porque Vite resuelve CSS por sistema de
- * archivos, no por "pertenencia" al paquete.
+ * El Design System del ERP se reutilizaba por RUTA RELATIVA (../../erp/...)
+ * para que ambas superficies compartieran la misma fuente de verdad de
+ * marca (docs/ARQUITECTURA.md § 3.3) sin riesgo de que divergiera con el
+ * tiempo. Railway despliega este proyecto con Root Directory=/seguimiento-gps
+ * — el contexto de build de Docker no incluye /erp, así que ese import deja
+ * de resolver ahí. styles/tokens.css y styles/typography.css son ahora
+ * copias LITERALES (no un fork de diseño) — ver la nota en cada uno de esos
+ * archivos. Esta app sigue siendo un proyecto Vite independiente (ver
+ * vite.config.ts).
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  */
 
 @import "tailwindcss";
-@import "../../erp/src/styles/typography.css";
-@import "../../erp/src/styles/tokens.css";
+@import "./styles/typography.css";
+@import "./styles/tokens.css";
 @import "./styles/globals.css";

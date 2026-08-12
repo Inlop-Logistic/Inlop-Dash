@@ -50,13 +50,20 @@ componentes nuevo).
   usa `sessionStorage` (se borra al cerrar la pestaña; sobrevive a un
   refresh) con fallback en memoria si el navegador lo bloquea (modo
   privado agresivo de Safari/iOS) — ver `src/session.ts`.
-- **Reutilización real, no reimplementación**: los design tokens
-  (`erp/src/styles/tokens.css`, `typography.css`) y el estándar de fechas
-  TMS (`erp/src/utils/parseFecha.ts` — `parseFechaTMS`/`gpsRelativo`/
-  `fmtTms`) se importan por **ruta relativa** desde este proyecto, nunca se
-  copian — ver `src/index.css` y `src/fecha.ts`. La lógica GPS en sí
+- **Reutilización real, no reimplementación**: la lógica GPS en sí
   (`transformarCentroGps`, `derivarEstadoGps`) nunca se toca ni se
   reimplementa: vive únicamente en el backend (Fase 9B/10B).
+  Los design tokens (`erp/src/styles/tokens.css`, `typography.css`) y el
+  estándar de fechas TMS (`erp/src/utils/parseFecha.ts` — solo
+  `parseFechaTMS`/`gpsRelativo`, que es todo lo que esta app consume) se
+  reutilizaban originalmente por **ruta relativa** desde `erp/`. Un Hotfix
+  posterior a Fase 10E los convirtió en **copias literales** dentro de este
+  proyecto (`src/styles/tokens.css`, `typography.css`, `src/fecha.ts`) —
+  Railway despliega este servicio con Root Directory=`/seguimiento-gps`, y
+  el contexto de build de Docker no incluye `/erp`, así que una ruta
+  relativa hacia allá no resuelve. Cada archivo copiado documenta el
+  motivo y remite a la fuente original en `erp/` para mantenerlos en
+  sincronía a mano si el Design System o el estándar de fechas cambian.
 - **Sin react-router**: una sola pantalla real (`/t/<token>`), leída
   directo de `window.location.pathname` en `App.tsx` — una librería de
   ruteo sería peso sin beneficio para un solo path.
