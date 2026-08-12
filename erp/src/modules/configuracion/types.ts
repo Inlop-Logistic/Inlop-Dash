@@ -13,6 +13,13 @@ export interface FiltroDB {
   valor?:       string | null;
   valor_desde?: string | null;
   valor_hasta?: string | null;
+  /**
+   * Fase 11A — valores elegidos para operadores de selección múltiple (hoy
+   * solo "en", usado por el filtro "Cliente"). Vacío o ausente = "Todos",
+   * sin restricción — mismo criterio que un reporte creado antes de esta
+   * fase, que nunca tuvo esta propiedad.
+   */
+  valores?:     string[] | null;
 }
 
 /**
@@ -138,6 +145,18 @@ export interface ResultadoEnvioManual {
   };
   /** Fase 10D — true si esta ejecución generó un enlace de Seguimiento GPS. */
   seguimientoGps?: boolean;
+}
+
+/**
+ * Una opción del selector "Cliente" del filtro (Fase 11A,
+ * GET /api/reportes-automaticos/clientes). `value` es la clave normalizada
+ * (lo que realmente se persiste en filtros[].valores y se compara en el
+ * Filter Engine); `label` es el nombre real más corto encontrado para esa
+ * clave, para mostrar al usuario — nunca la clave normalizada en mayúsculas.
+ */
+export interface ClienteFiltroOpcion {
+  value: string;
+  label: string;
 }
 
 // ─── Catálogos ────────────────────────────────────────────────────────────────

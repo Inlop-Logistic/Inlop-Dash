@@ -12,7 +12,7 @@ import controltDiagRouter from './routes/controltDiag.js';
 import crearRouterGpsSeguimiento from './routes/gpsSeguimiento.js';
 import { getTripDetail, makeSbFetchAdapter } from './services/controlt-soap/tripService.js';
 import {
-  transformarViajesActivos, transformarCentroGps,
+  transformarViajesActivos, transformarCentroGps, listarClientesDataset,
 } from './services/reportes/datasetProvider.js';
 import { ejecutarReporteManual } from './services/reportes/envioManual.js';
 import { ejecutarTickScheduler } from './services/reportes/scheduler.js';
@@ -4987,6 +4987,31 @@ app.delete("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, r
     res.json({ ok: true });
   } catch (e) {
     console.error("DELETE /api/reportes-automaticos/:id error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// GET /api/reportes-automaticos/clientes?tipo_reporte=X — Fase 11A: lista de
+// clientes disponibles para el selector "Cliente" del wizard (etapa
+// Filtros), derivada del MISMO dataset y la MISMA normalización que aplica
+// el filtro real en generación (ver services/reportes/datasetProvider.js —
+// listarClientesDataset / cliente_normalizado) — nunca un catálogo aparte
+// que pueda desalinearse de lo que el filtro realmente hace.
+app.get("/api/reportes-automaticos/clientes", requireInternalApiKey, async (req, res) => {
+  try {
+    const tipoReporte = String(req.query.tipo_reporte ?? "").trim();
+    if (!tipoReporte) return res.status(400).json({ error: "tipo_reporte es obligatorio" });
+
+    const clientes = await listarClientesDataset(tipoReporte, {
+      sbFetch,
+      viajesCache: cache.viajes.data,
+      tripCustomerCache,
+      extraerTelefono,
+      primerNombreCliente,
+    });
+    res.json(clientes);
+  } catch (e) {
+    console.error("GET /api/reportes-automaticos/clientes error:", e.message);
     res.status(500).json({ error: "Error interno" });
   }
 });

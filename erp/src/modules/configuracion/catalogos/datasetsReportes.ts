@@ -54,7 +54,13 @@ import { ESTADO_GPS_CFG }                         from "@/modules/gps/constants"
 
 // ─── Tipos de campo ───────────────────────────────────────────────────────────
 
-export type TipoDatoCampo = "texto" | "numero" | "fecha" | "booleano" | "enum";
+/**
+ * "cliente" (Fase 11A) — igual que "texto" para casi todo propósito, pero
+ * sus opciones NO se declaran en el catálogo (no son estáticas: dependen de
+ * los clientes reales del dataset) y se cargan en vivo desde
+ * GET /api/reportes-automaticos/clientes — ver SelectorClientes.tsx.
+ */
+export type TipoDatoCampo = "texto" | "numero" | "fecha" | "booleano" | "enum" | "cliente";
 
 export type OperadorId =
   | "es"
@@ -63,14 +69,16 @@ export type OperadorId =
   | "sin_valor"
   | "antes_de"
   | "despues_de"
-  | "entre";
+  | "entre"
+  | "en";
 
 /** Qué tipo de control necesita el campo Valor para este operador. */
 export type TipoValorControl =
-  | "ninguno"      // operadores booleanos (tiene_valor / sin_valor) — sin input de valor
-  | "select"       // elige de un catálogo de opciones (campo.opciones)
-  | "date"         // un solo date input
-  | "date_range";  // dos date inputs (desde / hasta)
+  | "ninguno"       // operadores booleanos (tiene_valor / sin_valor) — sin input de valor
+  | "select"        // elige de un catálogo de opciones (campo.opciones)
+  | "date"          // un solo date input
+  | "date_range"    // dos date inputs (desde / hasta)
+  | "multiselect";  // selección múltiple contra opciones cargadas en vivo (Fase 11A — Cliente)
 
 export interface OperadorConfig {
   id:        OperadorId;
@@ -139,6 +147,13 @@ const OP_ENTRE: OperadorConfig       = { id: "entre",        label: "entre",    
  * inutilizable. Corrección auditoría Fase 8E.
  */
 const OP_ES_FECHA: OperadorConfig    = { id: "es",          label: "es",          tipoValor: "date"       };
+/**
+ * Único operador del campo sintético "Cliente" (tipo "cliente", Fase 11A):
+ * selección múltiple contra los clientes reales del dataset, cargados en
+ * vivo (ver SelectorClientes.tsx) — no hay "es"/"no_es" porque el punto es
+ * poder elegir varios clientes a la vez con condición OR entre ellos.
+ */
+const OP_EN: OperadorConfig          = { id: "en",          label: "es alguno de", tipoValor: "multiselect" };
 
 // ─── Opciones compartidas entre reportes ─────────────────────────────────────
 
@@ -305,6 +320,19 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             seleccionableColumna: true,
             ordenable:            false,
           },
+
+          // ── Solo filtro — campo derivado (Fase 11A) ──────────────────────
+
+          {
+            key:    "cliente_normalizado",
+            label:  "Cliente",
+            tipo:   "cliente",
+            origen: "Derivado de razon_social ?? company_customer_name, normalizado para reconocer variantes del mismo cliente (ver services/reportes/clienteFiltro.js)",
+            filtrable:  true,
+            operadores: [OP_EN],
+            seleccionableColumna: false,
+            ordenable:            false,
+          },
         ],
       },
 
@@ -466,6 +494,19 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             seleccionableColumna: true,
             ordenable:            true,
           },
+
+          // ── Solo filtro — campo derivado (Fase 11A) ──────────────────────
+
+          {
+            key:    "cliente_normalizado",
+            label:  "Cliente",
+            tipo:   "cliente",
+            origen: "Derivado de Solicitud.cliente, normalizado para reconocer variantes del mismo cliente (ver services/reportes/clienteFiltro.js)",
+            filtrable:  true,
+            operadores: [OP_EN],
+            seleccionableColumna: false,
+            ordenable:            false,
+          },
         ],
       },
 
@@ -624,6 +665,19 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             filtrable:  true,
             operadores: [OP_TIENE_VALOR, OP_SIN_VALOR],
             seleccionableColumna: true,
+            ordenable:            false,
+          },
+
+          // ── Solo filtro — campo derivado (Fase 11A) ──────────────────────
+
+          {
+            key:    "cliente_normalizado",
+            label:  "Cliente",
+            tipo:   "cliente",
+            origen: "Derivado de ViajeResumen.nombre_cliente, normalizado para reconocer variantes del mismo cliente (ver services/reportes/clienteFiltro.js)",
+            filtrable:  true,
+            operadores: [OP_EN],
+            seleccionableColumna: false,
             ordenable:            false,
           },
         ],
@@ -811,6 +865,19 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             seleccionableColumna: true,
             ordenable:            false,
           },
+
+          // ── Solo filtro — campo derivado (Fase 11A) ──────────────────────
+
+          {
+            key:    "cliente_normalizado",
+            label:  "Cliente",
+            tipo:   "cliente",
+            origen: "Derivado de CumplidoRecord.company_customer_name, normalizado para reconocer variantes del mismo cliente (ver services/reportes/clienteFiltro.js)",
+            filtrable:  true,
+            operadores: [OP_EN],
+            seleccionableColumna: false,
+            ordenable:            false,
+          },
         ],
       },
 
@@ -953,6 +1020,19 @@ export const CATALOGO_REPORTES: ModuloDataset[] = [
             filtrable:  true,
             operadores: [OP_TIENE_VALOR, OP_SIN_VALOR],
             seleccionableColumna: true,
+            ordenable:            false,
+          },
+
+          // ── Solo filtro — campo derivado (Fase 11A) ──────────────────────
+
+          {
+            key:    "cliente_normalizado",
+            label:  "Cliente",
+            tipo:   "cliente",
+            origen: "Derivado de razon_social ?? company_customer_name, normalizado para reconocer variantes del mismo cliente (ver services/reportes/clienteFiltro.js)",
+            filtrable:  true,
+            operadores: [OP_EN],
+            seleccionableColumna: false,
             ordenable:            false,
           },
         ],

@@ -9,6 +9,7 @@ import { Trash2 } from "lucide-react";
 import type { FiltroItem }              from "../../../types";
 import type { CampoFiltroConfig, OperadorConfig } from "./catalogoFiltros";
 import { CAMPOS_FILTRO }               from "./catalogoFiltros";
+import { SelectorClientes }            from "./SelectorClientes";
 
 // ─── Estilos compartidos ──────────────────────────────────────────────────────
 
@@ -53,6 +54,7 @@ export function FiltroRow({ filtro, tipoReporte, onChange, onEliminar }: FiltroR
       valor:       null,
       valor_desde: null,
       valor_hasta: null,
+      valores:     undefined,
     });
   }
 
@@ -63,6 +65,7 @@ export function FiltroRow({ filtro, tipoReporte, onChange, onEliminar }: FiltroR
       valor:       null,
       valor_desde: null,
       valor_hasta: null,
+      valores:     undefined,
     });
   }
 
@@ -107,6 +110,7 @@ export function FiltroRow({ filtro, tipoReporte, onChange, onEliminar }: FiltroR
           campoCfg={campoCfg}
           operadorCfg={operadorCfg}
           filtro={filtro}
+          tipoReporte={tipoReporte}
           onChange={onChange}
         />
       )}
@@ -136,16 +140,28 @@ function ValorControl({
   campoCfg,
   operadorCfg,
   filtro,
+  tipoReporte,
   onChange,
 }: {
   campoCfg:    CampoFiltroConfig;
   operadorCfg: OperadorConfig;
   filtro:      FiltroItem;
+  tipoReporte: string;
   onChange:    (f: FiltroItem) => void;
 }) {
   switch (operadorCfg.tipoValor) {
     case "ninguno":
       return null;
+
+    // Fase 11A — filtro "Cliente": opciones cargadas en vivo, no del catálogo.
+    case "multiselect":
+      return (
+        <SelectorClientes
+          tipoReporte={tipoReporte}
+          valores={filtro.valores ?? []}
+          onChange={valores => onChange({ ...filtro, valores })}
+        />
+      );
 
     case "select":
       return (

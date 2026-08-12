@@ -9,7 +9,12 @@ import { camposDe } from './catalogoDatasets.js';
 
 test('columnas=[] devuelve todas las seleccionableColumna en el orden del catálogo', () => {
   const out = resolverColumnas('centro_gps', []);
-  const esperadas = Object.keys(camposDe('centro_gps'));
+  // Fase 11A: cliente_normalizado es filtrable pero NO seleccionableColumna
+  // (campo derivado solo para el filtro "Cliente", nunca una columna del
+  // reporte) — "esperadas" debe filtrar igual que resolverColumnas().
+  const esperadas = Object.entries(camposDe('centro_gps'))
+    .filter(([, c]) => c.seleccionableColumna)
+    .map(([campo]) => campo);
   assert.deepEqual(out.map(c => c.campo), esperadas);
   assert.deepEqual(out.map(c => c.titulo), esperadas.map(k => camposDe('centro_gps')[k].label));
 });
@@ -38,10 +43,20 @@ test('columna con campo inválido para el reporte actual se descarta', () => {
 test('si ninguna columna configurada es válida, cae a todas las disponibles', () => {
   const columnas = [{ campo: 'estado_documental', titulo: 'Restante', orden: 0 }]; // ajeno a centro_gps
   const out = resolverColumnas('centro_gps', columnas);
-  assert.deepEqual(out.map(c => c.campo), Object.keys(camposDe('centro_gps')));
+  const esperadas = Object.entries(camposDe('centro_gps'))
+    .filter(([, c]) => c.seleccionableColumna)
+    .map(([campo]) => campo);
+  assert.deepEqual(out.map(c => c.campo), esperadas);
 });
 
 test('tipo_reporte desconocido no lanza — devuelve arreglo vacío', () => {
   const out = resolverColumnas('inexistente', []);
   assert.deepEqual(out, []);
+});
+
+test('cliente_normalizado (Fase 11A) nunca aparece como columna — es solo-filtro', () => {
+  for (const tipoReporte of ['viajes_activos', 'solicitudes', 'programacion', 'viajes_finalizados', 'centro_gps']) {
+    const out = resolverColumnas(tipoReporte, []);
+    assert.ok(!out.some(c => c.campo === 'cliente_normalizado'), `cliente_normalizado no debería ser columna de ${tipoReporte}`);
+  }
 });
