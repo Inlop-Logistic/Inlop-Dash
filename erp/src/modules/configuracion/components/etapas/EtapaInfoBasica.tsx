@@ -43,6 +43,10 @@ export function EtapaInfoBasica({ datos, onChange }: Props) {
       ...datos,
       modulo_id:    nuevoModulo,
       tipo_reporte: primero?.value ?? datos.tipo_reporte,
+      // Seguimiento GPS solo existe para Gestión Logística — al cambiar a
+      // otro módulo se descarta para no dejar un `true` invisible que el
+      // backend rechazaría al guardar (valida modulo_id === "gestion_logistica").
+      seguimiento_gps: nuevoModulo === "gestion_logistica" ? datos.seguimiento_gps : false,
     });
   }
 
@@ -158,6 +162,45 @@ export function EtapaInfoBasica({ datos, onChange }: Props) {
           <option value="inactivo">Inactivo al publicar</option>
         </select>
       </div>
+
+      {/* Seguimiento GPS — exclusivo de Gestión Logística */}
+      {datos.modulo_id === "gestion_logistica" && (
+        <div>
+          <label
+            className="flex items-center gap-2.5 cursor-pointer"
+            style={{ fontSize: "13px", color: "var(--gray-700)" }}
+          >
+            <span
+              aria-hidden="true"
+              className="shrink-0 flex items-center justify-center rounded"
+              style={{
+                width: "18px", height: "18px",
+                border: `2px solid ${datos.seguimiento_gps ? "var(--navy)" : "var(--gray-300)"}`,
+                background: datos.seguimiento_gps ? "var(--navy)" : "transparent",
+                color: "#fff",
+              }}
+            >
+              {datos.seguimiento_gps && (
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <path d="M1.5 5l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </span>
+            <input
+              type="checkbox"
+              checked={datos.seguimiento_gps}
+              onChange={e => set("seguimiento_gps", e.target.checked)}
+              className="sr-only"
+              aria-label="Incluir seguimiento GPS"
+            />
+            <span className="font-medium">Incluir seguimiento GPS</span>
+          </label>
+          <p className="text-[11.5px]" style={{ color: "var(--gray-400)", marginTop: "6px", marginLeft: "26px" }}>
+            Cada envío de este reporte incluirá un enlace temporal para que los destinatarios
+            externos sigan en vivo, solo de lectura, los vehículos de esa ejecución.
+          </p>
+        </div>
+      )}
 
     </div>
   );

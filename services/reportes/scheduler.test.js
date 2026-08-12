@@ -5,6 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ejecutarTickScheduler, _resetMutexParaTests } from './scheduler.js';
+import { crearAlmacen as crearAlmacenGps } from '../gps/testStore.js';
 
 // ── Mock sbFetch — interpreta los filtros reales de PostgREST usados por el
 // scheduler (eq., is.null, lte., in.(...)) sobre un almacén en memoria, para
@@ -302,4 +303,52 @@ test('múltiples reportes vencidos se procesan todos en el mismo tick', async ()
   assert.equal(out.ejecutados.length, 3);
   assert.deepEqual(out.ejecutados.map(r => r.reporteId).sort(), ['R1', 'R2', 'R3']);
   assert.equal(deps.sendWithAttachment.llamadas.length, 3);
+});
+
+// ── Seguimiento GPS (Fase 10D) — el scheduler reutiliza ejecutarReporteManual
+// tal cual, así que un reporte vencido con seguimiento_gps activo debe generar
+// el enlace/CTA sin ningún cambio en scheduler.js. Usa el almacén genérico de
+// services/gps/testStore.js (en vez del mock local de este archivo) porque
+// crearEnlace() hace un POST real a reportes_gps_enlaces. ─────────────────────
+
+test('GPS (Fase 10D): el scheduler también genera el enlace/CTA cuando el reporte tiene seguimiento_gps activo — sin lógica nueva en scheduler.js', async () => {
+  const vencido = new Date(Date.now() - 3600_000).toISOString();
+  const reporte = reporteBase({
+    modulo_id: 'gestion_logistica',
+    seguimiento_gps: true,
+    proxima_ejecucion: vencido,
+    destinatarios: { personal_ids: [], correos_externos: ['ops@externo.com'] },
+  });
+  const sbFetch = crearAlmacenGps({ reportes_automaticos: [reporte], personal: [] });
+  const llamadasEnvio = [];
+  const sendWithAttachment = async (params) => {
+    llamadasEnvio.push(params);
+    return { ok: true, id: 'msg_1' };
+  };
+  const deps = {
+    sbFetch,
+    viajesCache: [
+      { trip_number: 'T1', license_plate: 'ABC123', state_travel: 'en transíto', origin_city_name: 'Bogotá', destiny_city_name: 'Cali' },
+    ],
+    tripCustomerCache: new Map(),
+    extraerTelefono: () => null,
+    primerNombreCliente: () => null,
+    sendWithAttachment,
+    seguimientoGpsUrl: 'https://seguimiento.inlop.com.co',
+    origenEjecucion: 'scheduler',
+  };
+
+  const out = await ejecutarTickScheduler(deps);
+
+  assert.equal(out.ok, true);
+  assert.equal(out.ejecutados.length, 1);
+  assert.equal(out.ejecutados[0].ok, true);
+  assert.equal(llamadasEnvio.length, 1);
+  assert.match(llamadasEnvio[0].html, /Ver seguimiento GPS/);
+
+  const filaEnlace = sbFetch.tablas.reportes_gps_enlaces?.[0];
+  assert.ok(filaEnlace);
+  assert.equal(filaEnlace.reporte_id, 'R1');
+  assert.equal(filaEnlace.origen, 'scheduler');
+  assert.deepEqual(filaEnlace.placas, ['ABC123']);
 });

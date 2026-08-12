@@ -109,6 +109,42 @@ test('crearEnlace: éxito — congela placas del dataset y destinatarios externo
   assert.equal(fila.reporte_id, 'R1');
 });
 
+// ── Reuso de reporte/datos ya resueltos (Fase 10D — evita doble fetch) ──────
+
+test('crearEnlace: con input.reporte no vuelve a consultar reportes_automaticos', async () => {
+  const reporte = reporteBase();
+  const deps = depsBase({ reportes: [reporte] }); // sbFetch SIN el reporte precargado
+  deps.sbFetch.tablas.reportes_automaticos = []; // si crearEnlace lo buscara, fallaría con "no_encontrado"
+
+  const out = await crearEnlace({ reporteId: 'R1', reporte }, deps);
+  assert.equal(out.ok, true);
+  const llamadasAReportes = deps.sbFetch.llamadas.filter(l => l.qs.startsWith('/reportes_automaticos?id=eq.'));
+  assert.equal(llamadasAReportes.length, 0);
+});
+
+test('crearEnlace: input.reporte que no corresponde a reporteId se rechaza', async () => {
+  const reporte = reporteBase({ id: 'OTRO_ID' });
+  const deps = depsBase({ reportes: [reporte] });
+  const out = await crearEnlace({ reporteId: 'R1', reporte }, deps);
+  assert.equal(out.ok, false);
+  assert.equal(out.codigo, 'reporte_no_coincide');
+});
+
+test('crearEnlace: con input.datos no vuelve a resolver el dataset (mismo criterio de reuso)', async () => {
+  const reporte = reporteBase();
+  const deps = depsBase({ reportes: [reporte] });
+  const datosPrecalculados = {
+    columnas: [{ campo: 'license_plate', titulo: 'Placa' }],
+    registros: [{ license_plate: 'PRECALC1' }],
+    metadata: { tipoReporte: 'centro_gps' },
+  };
+
+  const out = await crearEnlace({ reporteId: 'R1', reporte, datos: datosPrecalculados }, deps);
+  assert.equal(out.ok, true);
+  // Las placas vienen de datosPrecalculados, no de deps.viajesCache (que trae ABC123/XYZ789).
+  assert.deepEqual(out.placas, ['PRECALC1']);
+});
+
 test('crearEnlace acepta destinatariosAutorizados explícitos, sin depender de reporte.destinatarios', async () => {
   const reporte = reporteBase({ destinatarios: { personal_ids: [], correos_externos: ['default@x.com'] } });
   const deps = depsBase({ reportes: [reporte] });

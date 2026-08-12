@@ -1,14 +1,17 @@
 /**
- * services/gps/testStore.js — mock sbFetch multi-tabla para los tests de
- * este módulo (Fase 10B). No termina en `.test.js` a propósito: no es una
- * suite en sí, es el helper que varias suites del módulo comparten (mismo
- * espíritu que el mock de scheduler.test.js, generalizado a varias tablas
- * porque el flujo de enlace→OTP→sesión toca 4 tablas distintas).
+ * services/gps/testStore.js — mock sbFetch multi-tabla para tests (Fase 10B,
+ * reutilizado también por services/reportes/*.test.js en Fase 10D para
+ * probar la integración con Seguimiento GPS). No termina en `.test.js` a
+ * propósito: no es una suite en sí, es el helper que varias suites
+ * comparten (mismo espíritu que el mock de scheduler.test.js, generalizado
+ * a varias tablas porque el flujo de enlace→OTP→sesión toca 4 tablas
+ * distintas, y ahora también reportes_automaticos/personal para 10D).
  *
- * Interpreta los filtros PostgREST reales que usa services/gps/*.js
- * (eq., is.null, lte., gte.) sobre un almacén en memoria por tabla, y
- * soporta GET/POST/PATCH/DELETE — para que los tests validen la consulta
- * real que se envía, no solo la orquestación.
+ * Interpreta los filtros PostgREST reales que usa services/gps/*.js y
+ * services/reportes/*.js (eq., is.null, lte., gte., in.()) sobre un
+ * almacén en memoria por tabla, y soporta GET/POST/PATCH/DELETE — para que
+ * los tests validen la consulta real que se envía, no solo la
+ * orquestación.
  */
 import { randomUUID } from 'crypto';
 
@@ -27,6 +30,10 @@ function aplicaFiltro(valor, condicion) {
   if (condicion.startsWith('gte.')) {
     if (valor === null || valor === undefined) return false;
     return new Date(valor).getTime() >= new Date(decodeURIComponent(condicion.slice(4))).getTime();
+  }
+  if (condicion.startsWith('in.(') && condicion.endsWith(')')) {
+    const lista = condicion.slice(4, -1).split(',').map(decodeURIComponent);
+    return lista.includes(String(valor));
   }
   return true; // select=, order=, limit= — metadatos, no filtran
 }

@@ -66,6 +66,13 @@ export interface ReporteAutomatico {
   recurrencia:        RecurrenciaReporte;
   /** Destinatarios del reporte (Personal INLOP + correos externos). */
   destinatarios:      DestinatariosReporte;
+  /**
+   * Fase 10D — solo tiene efecto en reportes de modulo_id="gestion_logistica".
+   * Si es true, cada ejecución (manual o por scheduler) genera un enlace
+   * temporal de Seguimiento GPS externo para los destinatarios externos de
+   * ESA ejecución, con las placas realmente incluidas en ella.
+   */
+  seguimiento_gps:    boolean;
   proxima_ejecucion:  string | null;
   created_at:         string;
   updated_at:         string;
@@ -92,6 +99,8 @@ export interface ReporteBase {
   recurrencia?: RecurrenciaReporte;
   /** Destinatarios del reporte. Omitido = sin configurar. */
   destinatarios?: DestinatariosReporte;
+  /** Fase 10D — solo aplica cuando modulo_id="gestion_logistica". Omitido = false. */
+  seguimiento_gps?: boolean;
 }
 
 /**
@@ -127,6 +136,8 @@ export interface ResultadoEnvioManual {
     totalExternos: number;
     totalEnviados: number;
   };
+  /** Fase 10D — true si esta ejecución generó un enlace de Seguimiento GPS. */
+  seguimientoGps?: boolean;
 }
 
 // ─── Catálogos ────────────────────────────────────────────────────────────────
@@ -211,6 +222,8 @@ export interface DatosInfoBasica {
   cuerpo:       string;
   formato:      Formato;
   activo:       boolean;
+  /** Fase 10D — solo se muestra/aplica cuando modulo_id="gestion_logistica". */
+  seguimiento_gps: boolean;
 }
 
 export const DATOS_INFO_BASICA_INICIAL: DatosInfoBasica = {
@@ -221,6 +234,7 @@ export const DATOS_INFO_BASICA_INICIAL: DatosInfoBasica = {
   cuerpo:       "",
   formato:      "excel",
   activo:       true,
+  seguimiento_gps: false,
 };
 
 // ─── Etapa 04 · Frecuencia — recurrencia estructurada ────────────────────────
@@ -377,6 +391,7 @@ export function datosConfiguradorDesdeReporte(r: ReporteAutomatico): DatosConfig
       cuerpo:       r.cuerpo ?? "",
       formato:      r.formato,
       activo:       r.activo,
+      seguimiento_gps: r.seguimiento_gps ?? false,
     },
     filtros:       (r.filtros ?? []).map(f => ({ ...f, id: idLocal() })),
     columnas:      r.columnas ?? [],

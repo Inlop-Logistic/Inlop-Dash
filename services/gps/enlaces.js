@@ -31,13 +31,22 @@ function normalizarCorreo(correo) {
 /**
  * @param {{
  *   reporteId: string,
- *   destinatariosAutorizados?: string[],  // omitido = reporte.destinatarios.correos_externos
- *   origen?: string,                       // 'manual' | 'scheduler' — informativo
+ *   reporte?: object,                      // fila de reportes_automaticos YA resuelta
+ *                                           // (evita un segundo sbFetch — Fase 10D,
+ *                                           // ejecutarReporteManual ya la tiene). Se
+ *                                           // valida que reporte.id === reporteId.
+ *   datos?: {columnas, registros, metadata}, // salida YA resuelta de obtenerDatosReporte()
+ *                                           // (evita recalcular el dataset — Fase 10D,
+ *                                           // el motor de envío ya lo hizo para el
+ *                                           // Excel/HTML de esa misma ejecución).
+ *   destinatariosAutorizados?: string[],   // omitido = reporte.destinatarios.correos_externos
+ *   origen?: string,                        // 'manual' | 'scheduler' — informativo
  *   creadoPor?: string,
  *   ttlHoras?: number,
  * }} input
  * @param {object} deps — sbFetch + las deps de obtenerDatosReporte (viajesCache,
- *   tripCustomerCache, extraerTelefono, primerNombreCliente).
+ *   tripCustomerCache, extraerTelefono, primerNombreCliente) — solo se usan si
+ *   `input.reporte`/`input.datos` no vienen ya resueltos.
  * @returns {Promise<
  *   {ok: true, enlaceId: string, token: string, placas: string[],
  *    destinatariosAutorizados: string[], expiraEn: string}
@@ -51,8 +60,11 @@ export async function crearEnlace(input = {}, deps = {}) {
   if (!reporteId) return { ok: false, codigo: 'reporte_id_requerido', error: 'reporteId es obligatorio' };
   if (!sbFetch)    return { ok: false, codigo: 'deps_incompletas',   error: 'crearEnlace requiere sbFetch en deps' };
 
-  const filas = await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(reporteId)}&limit=1`);
-  const reporte = filas?.[0];
+  if (input.reporte && input.reporte.id !== reporteId) {
+    return { ok: false, codigo: 'reporte_no_coincide', error: 'input.reporte no corresponde a reporteId' };
+  }
+  const reporte = input.reporte
+    ?? (await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(reporteId)}&limit=1`))?.[0];
   if (!reporte) return { ok: false, codigo: 'no_encontrado', error: 'Reporte no encontrado' };
   if (reporte.borrador) return { ok: false, codigo: 'borrador', error: 'El reporte es un borrador' };
   if (!reporte.activo)  return { ok: false, codigo: 'inactivo', error: 'El reporte está inactivo' };
@@ -81,7 +93,7 @@ export async function crearEnlace(input = {}, deps = {}) {
 
   let datos;
   try {
-    datos = await obtenerDatosReporte(reporte, deps);
+    datos = input.datos ?? await obtenerDatosReporte(reporte, deps);
   } catch (err) {
     return { ok: false, codigo: 'error_dataset', error: `No se pudo resolver el dataset del reporte: ${err.message}` };
   }

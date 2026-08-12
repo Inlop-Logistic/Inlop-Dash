@@ -134,6 +134,16 @@ if (!CLIENT_PORTAL_URL) {
   );
 }
 
+// URL pública base de seguimiento-gps/ (Fase 10C) — usada por
+// services/reportes/enlaceGps.js (Fase 10D) para armar el CTA "Ver
+// seguimiento GPS" del correo de un reporte. Sin esta variable, el CTA
+// simplemente no se agrega (log de advertencia en el momento de un envío
+// con seguimiento_gps activo) — el resto del envío no se ve afectado. No
+// tiene fallback de warning al arranque porque, a diferencia de
+// CLIENT_PORTAL_URL, todavía no hay ningún reporte usando la función salvo
+// que un usuario la active explícitamente.
+const SEGUIMIENTO_GPS_URL = process.env.SEGUIMIENTO_GPS_URL || "";
+
 const SB_HEADERS = {
   "apikey": SB_ANON_KEY,
   "Authorization": `Bearer ${SB_KEY}`,
@@ -4751,6 +4761,11 @@ app.get("/api/personal", requireInternalApiKey, async (req, res) => {
 
 const FRECUENCIAS_VALIDAS_RA = new Set(["diaria", "semanal", "mensual"]);
 const FORMATOS_VALIDOS_RA    = new Set(["excel", "html_filas", "html_columnas"]);
+// Mismo valor que services/gps/enlaces.js#MODULO_PERMITIDO (Fase 10B) y que
+// el default de modulo_id un poco más abajo — repetido aquí como literal
+// para no tener que importar todo services/gps/* en index.js solo por esta
+// constante de validación del CRUD (Fase 10D).
+const MODULO_GESTION_LOGISTICA = "gestion_logistica";
 
 /** Valida la forma de `destinatarios` — { personal_ids: string[], correos_externos: string[] }. */
 function errorDestinatarios(destinatarios) {
@@ -4793,6 +4808,7 @@ app.post("/api/reportes-automaticos", requireInternalApiKey, async (req, res) =>
       columnas,
       recurrencia,
       destinatarios,
+      seguimiento_gps = false,
     } = req.body ?? {};
 
     if (!nombre?.trim())       return res.status(400).json({ error: "El nombre es obligatorio" });
@@ -4817,6 +4833,9 @@ app.post("/api/reportes-automaticos", requireInternalApiKey, async (req, res) =>
       const err = errorDestinatarios(destinatarios);
       if (err) return res.status(400).json({ error: err });
     }
+    if (seguimiento_gps === true && modulo_id.trim() !== MODULO_GESTION_LOGISTICA) {
+      return res.status(400).json({ error: "El seguimiento GPS solo aplica a reportes de Gestión Logística" });
+    }
 
     const rows = await sbFetch("/reportes_automaticos", "POST", {
       nombre:       nombre.trim(),
@@ -4832,6 +4851,7 @@ app.post("/api/reportes-automaticos", requireInternalApiKey, async (req, res) =>
       columnas:      Array.isArray(columnas) ? columnas : [],
       recurrencia:   recurrencia ?? {},
       destinatarios: destinatarios ?? { personal_ids: [], correos_externos: [] },
+      seguimiento_gps: typeof seguimiento_gps === "boolean" ? seguimiento_gps : false,
       created_by:   actor,
       updated_by:   actor,
     });
@@ -4847,7 +4867,7 @@ app.patch("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, re
   try {
     const { id } = req.params;
     const actor = req.headers["x-user-email"] ?? "sistema";
-    const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, borrador, frecuencia, filtros, columnas, recurrencia, destinatarios } = req.body ?? {};
+    const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, borrador, frecuencia, filtros, columnas, recurrencia, destinatarios, seguimiento_gps } = req.body ?? {};
 
     const patch = { updated_by: actor };
     if (nombre       !== undefined) patch.nombre       = nombre.trim();
@@ -4901,6 +4921,21 @@ app.patch("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, re
       const err = errorDestinatarios(destinatarios);
       if (err) return res.status(400).json({ error: err });
       patch.destinatarios = destinatarios;
+    }
+    if (seguimiento_gps !== undefined) {
+      if (typeof seguimiento_gps !== "boolean") {
+        return res.status(400).json({ error: "'seguimiento_gps' debe ser boolean" });
+      }
+      // Solo se valida contra el modulo_id de ESTA misma solicitud — el
+      // wizard (Etapa 01) siempre envía ambos juntos (Fase 10D). La
+      // verdadera barrera de seguridad no es esta validación de guardado:
+      // es que la ejecución (services/reportes/enlaceGps.js) vuelve a
+      // comprobar modulo_id === 'gestion_logistica' cada vez, sin importar
+      // lo que haya quedado persistido aquí.
+      if (seguimiento_gps && modulo_id !== undefined && modulo_id.trim() !== MODULO_GESTION_LOGISTICA) {
+        return res.status(400).json({ error: "El seguimiento GPS solo aplica a reportes de Gestión Logística" });
+      }
+      patch.seguimiento_gps = seguimiento_gps;
     }
 
     const rows = await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}`, "PATCH", patch);
@@ -4983,6 +5018,8 @@ app.post("/api/reportes-automaticos/:id/enviar", requireInternalApiKey, async (r
       tripCustomerCache,
       extraerTelefono,
       primerNombreCliente,
+      seguimientoGpsUrl:   SEGUIMIENTO_GPS_URL, // Fase 10D — ver services/reportes/enlaceGps.js
+      origenEjecucion:     "manual",
     });
     if (!resultado.ok) {
       const status = STATUS_POR_CODIGO_ENVIO[resultado.codigo] ?? 500;
@@ -5100,6 +5137,8 @@ async function tickSchedulerReportes(origen) {
       tripCustomerCache,
       extraerTelefono,
       primerNombreCliente,
+      seguimientoGpsUrl: SEGUIMIENTO_GPS_URL, // Fase 10D — ver services/reportes/enlaceGps.js
+      origenEjecucion:   "scheduler",
     });
     if (!resultado.ok) {
       if (resultado.motivo !== 'tick_en_curso') {
