@@ -36,6 +36,15 @@ const FORMATOS_HTML = new Set(['html_filas', 'html_columnas']);
 const NAVY = '#012A6B';
 const GRAY = '#6B7280';
 
+// ─── Marca de runtime (Fase 11H) ─────────────────────────────────────────────
+// Literal de código — a propósito NO se deriva de process.env (Railway u
+// otro) ni de git: si esta cadena aparece en un log de Railway, es prueba
+// directa de que el proceso en ejecución cargó y ejecutó ESTE archivo tal
+// como está commiteado en este momento. Si el commit desplegado difiere,
+// esta cadena difiere con él (se actualiza a mano en cada fase que la usa).
+// Ver ejecutarReporteManual() más abajo — retirar junto con ese diagnóstico.
+const MARCA_RUNTIME_11H = 'envioManual.js@11H-a15bcff+1';
+
 // ─── Content-Type del adjunto (Fase 11C) ────────────────────────────────────
 //
 // Auditoría Fase 11C confirmó (ver services/reportes/envioManual.test.js,
@@ -216,6 +225,23 @@ function construirCuerpoCorreo(reporte, enlaceGps = null) {
  * >}
  */
 export async function ejecutarReporteManual(reporteId, deps = {}) {
+  // ─── DIAGNÓSTICO TEMPORAL (Fase 11H — retirar tras confirmar el runtime
+  // real en Railway) ──────────────────────────────────────────────────────
+  // Primera instrucción de la función, ANTES de cualquier validación o
+  // return temprano — así queda evidencia de toda entrada a esta función,
+  // sin excepción, sin importar cómo termine la ejecución. Objetivo:
+  // demostrar con un log real si la ejecución automática de las 16:46
+  // (Fase 11G/11H) realmente llegó hasta acá. Solo reporteId + el string
+  // informativo origenEjecucion + la marca de versión de arriba — nunca
+  // correo, token, placa ni secreto.
+  try {
+    console.log('[envioManual][DIAG-TEMP-11H]', JSON.stringify({
+      reporteId,
+      origenEjecucion: deps?.origenEjecucion ?? null,
+      marca: MARCA_RUNTIME_11H,
+    }));
+  } catch { /* el diagnóstico nunca debe romper el flujo de envío */ }
+
   const { sbFetch } = deps;
   const sendWithAttachment = deps.sendWithAttachment ?? sendWithAttachmentReal;
   if (!reporteId) return { ok: false, codigo: 'reporte_id_requerido', error: 'reporteId es obligatorio' };
