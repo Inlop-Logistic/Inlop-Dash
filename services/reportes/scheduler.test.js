@@ -192,21 +192,48 @@ test('proxima_ejecucion queda en null cuando la recurrencia ya no tiene slots fu
   assert.equal(actualizado.proxima_ejecucion, null);
 });
 
-test('inicializa proxima_ejecucion para un reporte activo recién configurado (sin proxima_ejecucion)', async () => {
+test('Fase 11D — inicializa proxima_ejecucion para un reporte activo recién configurado (sin proxima_ejecucion), SIN ejecutarlo en el mismo tick', async () => {
+  // fecha_inicio muy en el pasado (equivalente a "hoy" con una hora que ya
+  // pasó, el caso real del wizard — fecha_inicio por defecto es hoy): antes
+  // de Fase 11D, el primer slot bootstrapped caía vencido y este MISMO tick
+  // lo ejecutaba de inmediato — exactamente el bug reportado ("guardar
+  // configuración ≠ ejecutar reporte"). Ahora debe quedar programado hacia
+  // el futuro, sin disparar ningún envío todavía.
   const reporte = reporteBase({
     proxima_ejecucion: null,
     recurrencia: { tipo: 'diaria', horas: ['08:00'], fecha_inicio: '2020-01-01', fin: { modo: 'nunca' } },
   });
   const sbFetch = crearAlmacen([reporte]);
-  const out = await ejecutarTickScheduler(depsBase(sbFetch));
+  const deps = depsBase(sbFetch);
+  const antes = Date.now();
+
+  const out = await ejecutarTickScheduler(deps);
 
   assert.equal(out.inicializados.length, 1);
   assert.equal(out.inicializados[0].reporteId, 'R1');
-  // fecha_inicio queda muy en el pasado → la primera ejecución también
-  // queda vencida y se ejecuta en el MISMO tick (inicializar corre antes
-  // de consultar los vencidos).
-  assert.equal(out.ejecutados.length, 1);
-  assert.equal(out.ejecutados[0].reporteId, 'R1');
+  assert.ok(new Date(out.inicializados[0].proximaEjecucion).getTime() > antes, 'proxima_ejecucion debe quedar en el futuro');
+
+  assert.equal(out.ejecutados.length, 0, 'un reporte recién inicializado no debe ejecutarse en el mismo tick');
+  assert.equal(deps.sendWithAttachment.llamadas.length, 0, 'guardar/activar nunca debe disparar un envío');
+
+  const actualizado = sbFetch.reportes.find(r => r.id === 'R1');
+  assert.ok(new Date(actualizado.proxima_ejecucion).getTime() > antes);
+});
+
+test('Fase 11D — un reporte con fecha_inicio genuinamente futura se inicializa sin ejecutarse (regresión)', async () => {
+  const enUnaSemana = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+  const reporte = reporteBase({
+    proxima_ejecucion: null,
+    recurrencia: { tipo: 'diaria', horas: ['08:00'], fecha_inicio: enUnaSemana, fin: { modo: 'nunca' } },
+  });
+  const sbFetch = crearAlmacen([reporte]);
+  const deps = depsBase(sbFetch);
+
+  const out = await ejecutarTickScheduler(deps);
+
+  assert.equal(out.ejecutados.length, 0);
+  assert.equal(deps.sendWithAttachment.llamadas.length, 0);
+  assert.equal(out.inicializados[0].proximaEjecucion.slice(0, 10), enUnaSemana);
 });
 
 // ── Evitar doble ejecución ───────────────────────────────────────────────────
@@ -351,4 +378,86 @@ test('GPS (Fase 10D): el scheduler también genera el enlace/CTA cuando el repor
   assert.equal(filaEnlace.reporte_id, 'R1');
   assert.equal(filaEnlace.origen, 'scheduler');
   assert.deepEqual(filaEnlace.placas, ['ABC123']);
+});
+
+test('GPS + Fase 11D: un reporte con GPS recién configurado NO envía (ni CTA ni Excel) en el mismo tick que se inicializa', async () => {
+  const reporte = reporteBase({
+    modulo_id: 'gestion_logistica',
+    seguimiento_gps: true,
+    proxima_ejecucion: null, // recién activado — sin proxima_ejecucion todavía
+    recurrencia: { tipo: 'diaria', horas: ['08:00'], fecha_inicio: '2020-01-01', fin: { modo: 'nunca' } },
+    destinatarios: { personal_ids: [], correos_externos: ['ops@externo.com'] },
+  });
+  const sbFetch = crearAlmacenGps({ reportes_automaticos: [reporte], personal: [] });
+  const llamadasEnvio = [];
+  const sendWithAttachment = async (params) => { llamadasEnvio.push(params); return { ok: true, id: 'msg_1' }; };
+  const deps = {
+    sbFetch,
+    viajesCache: [
+      { trip_number: 'T1', license_plate: 'ABC123', state_travel: 'en transíto', origin_city_name: 'Bogotá', destiny_city_name: 'Cali' },
+    ],
+    tripCustomerCache: new Map(), extraerTelefono: () => null, primerNombreCliente: () => null,
+    sendWithAttachment, seguimientoGpsUrl: 'https://seguimiento.inlop.com.co', origenEjecucion: 'scheduler',
+  };
+
+  const out = await ejecutarTickScheduler(deps);
+
+  assert.equal(out.ejecutados.length, 0);
+  assert.equal(llamadasEnvio.length, 0);
+  assert.equal(sbFetch.tablas.reportes_gps_enlaces?.length ?? 0, 0); // ni siquiera se creó el enlace GPS
+});
+
+// ── Fase 11D — editar recalcula, nunca ejecuta de inmediato ─────────────────
+// Mismo camino que un reporte recién activado: PATCH /:id con recurrencia
+// nueva pone proxima_ejecucion=null (index.js, Fase 9G) — el siguiente tick
+// debe reprogramar sin ejecutar, exactamente igual que la inicialización.
+
+test('Fase 11D — cambiar la recurrencia (proxima_ejecucion reseteada a null) NO ejecuta en el siguiente tick, aunque el nuevo horario ya "hubiera pasado" hoy', async () => {
+  const reporte = reporteBase({
+    // Simula el estado justo después de un PATCH que cambió la recurrencia
+    // (index.js ya puso proxima_ejecucion en null — Fase 9G).
+    proxima_ejecucion: null,
+    recurrencia: { tipo: 'diaria', horas: ['06:00'], fecha_inicio: '2020-01-01', fin: { modo: 'nunca' } },
+  });
+  const sbFetch = crearAlmacen([reporte]);
+  const deps = depsBase(sbFetch);
+
+  const out = await ejecutarTickScheduler(deps);
+
+  assert.equal(out.ejecutados.length, 0);
+  assert.equal(deps.sendWithAttachment.llamadas.length, 0);
+  assert.ok(new Date(out.inicializados[0].proximaEjecucion).getTime() > Date.now());
+});
+
+// ── Fase 11D — reporte incompleto nunca se ejecuta automáticamente ─────────
+
+test('Fase 11D — recurrencia incompleta/mal formada nunca genera una proxima_ejecucion, nunca se ejecuta', async () => {
+  const reporte = reporteBase({
+    proxima_ejecucion: null,
+    recurrencia: { tipo: 'diaria', horas: [], fecha_inicio: '2026-08-11', fin: { modo: 'nunca' } }, // sin horas
+  });
+  const sbFetch = crearAlmacen([reporte]);
+  const deps = depsBase(sbFetch);
+
+  const out = await ejecutarTickScheduler(deps);
+
+  assert.equal(out.inicializados.length, 1);
+  assert.equal(out.inicializados[0].proximaEjecucion, null);
+  assert.equal(out.ejecutados.length, 0);
+  assert.equal(deps.sendWithAttachment.llamadas.length, 0);
+
+  const actualizado = sbFetch.reportes.find(r => r.id === 'R1');
+  assert.equal(actualizado.proxima_ejecucion, null);
+});
+
+test('Fase 11D — borrador nunca se inicializa ni se ejecuta, aunque esté activo', async () => {
+  const reporte = reporteBase({ activo: true, borrador: true, proxima_ejecucion: null });
+  const sbFetch = crearAlmacen([reporte]);
+  const deps = depsBase(sbFetch);
+
+  const out = await ejecutarTickScheduler(deps);
+
+  assert.equal(out.inicializados.length, 0); // la consulta ya filtra borrador=eq.false
+  assert.equal(out.ejecutados.length, 0);
+  assert.equal(deps.sendWithAttachment.llamadas.length, 0);
 });

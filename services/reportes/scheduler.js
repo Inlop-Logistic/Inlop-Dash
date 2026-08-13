@@ -4,7 +4,13 @@
  * Flujo por tick:
  *   1. Inicializar: reportes activos/no-borrador con proxima_ejecucion aún
  *      sin calcular (NULL) reciben su primer slot — no se ejecutan en este
- *      paso, solo se programan.
+ *      paso, solo se programan. Regla de producto (Fase 11D): "guardar
+ *      configuración ≠ ejecutar reporte" — ese primer slot NUNCA puede
+ *      quedar ya vencido en el momento de calcularlo (ver
+ *      inicializarPendientes() más abajo), o el paso 2 de este MISMO tick
+ *      lo tomaría por vencido y lo ejecutaría de inmediato — exactamente el
+ *      bug reportado: crear/editar/activar un reporte disparaba un correo
+ *      al toque, sin esperar al scheduler.
  *   2. Ejecutar: reportes activos/no-borrador con proxima_ejecucion <= ahora
  *      se ejecutan uno por uno, vía ejecutarReporteManual() (Fase 9E) — el
  *      MISMO motor que la ejecución manual, sin ninguna lógica de
@@ -46,7 +52,34 @@ export function _resetMutexParaTests() {
 
 // ─── Inicialización de reportes sin proxima_ejecucion ──────────────────────
 
-async function inicializarPendientes(deps) {
+/**
+ * Calcula el primer slot de un reporte recién activado/reconfigurado —
+ * SIEMPRE hacia adelante desde `ahora`, nunca un slot ya vencido.
+ *
+ * calcularProximaEjecucion(recurrencia, null) (recurrencia.js) busca el
+ * primer slot válido desde `fecha_inicio`, IGNORANDO la hora actual por
+ * diseño — necesario para que `fin.modo:"repeticiones"` cuente el ordinal
+ * correcto desde el origen real de la recurrencia (ver recurrencia.test.js).
+ * Pero como el wizard por defecto fija `fecha_inicio` en HOY, ese primer
+ * slot cae fácilmente en el pasado (ej. "diaria 08:00" configurada a las
+ * 3pm) — usado tal cual aquí, ese slot ya vencido sería tomado por
+ * `procesarVencidos()` en este MISMO tick y el reporte se enviaría de
+ * inmediato al guardar (Fase 11D, bug reportado). Por eso, si el primer
+ * slot bootstrapped ya pasó, se recalcula con `ahora` como referencia — el
+ * mismo camino que ya usa un reporte tras ejecutarse (ver
+ * procesarUnReporte() más abajo) — para obtener el verdadero próximo slot
+ * futuro, sin tocar la semántica de calcularProximaEjecucion() en sí (sigue
+ * intacta para `fin.modo:"repeticiones"` y cualquier otro llamador).
+ */
+function primerSlotFuturo(recurrencia, ahora) {
+  const bootstrap = calcularProximaEjecucion(recurrencia, null);
+  if (bootstrap && bootstrap <= ahora) {
+    return calcularProximaEjecucion(recurrencia, ahora);
+  }
+  return bootstrap;
+}
+
+async function inicializarPendientes(deps, ahora) {
   const { sbFetch } = deps;
   const sinProgramar = await sbFetch(
     '/reportes_automaticos?activo=eq.true&borrador=eq.false&proxima_ejecucion=is.null&select=id,recurrencia'
@@ -54,7 +87,7 @@ async function inicializarPendientes(deps) {
 
   const inicializados = [];
   for (const r of sinProgramar) {
-    const siguiente = calcularProximaEjecucion(r.recurrencia, null);
+    const siguiente = primerSlotFuturo(r.recurrencia, ahora);
     await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(r.id)}`, 'PATCH', {
       proxima_ejecucion: siguiente ? siguiente.toISOString() : null,
     });
@@ -143,7 +176,7 @@ export async function ejecutarTickScheduler(deps = {}) {
   tickEnCurso = true;
   try {
     const ahora = new Date();
-    const inicializados = await inicializarPendientes(deps);
+    const inicializados = await inicializarPendientes(deps, ahora);
     const ejecutados = await procesarVencidos(ahora, deps);
     return { ok: true, inicializados, ejecutados };
   } finally {

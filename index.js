@@ -4956,10 +4956,25 @@ app.patch("/api/reportes-automaticos/:id/activo", requireInternalApiKey, async (
     if (typeof activo !== "boolean") {
       return res.status(400).json({ error: "'activo' debe ser boolean" });
     }
+    const patch = { activo, updated_by: actor };
+    // Fase 11D — mismo criterio que el cambio de recurrencia (Fase 9G, ver
+    // PATCH /:id más abajo): al REACTIVAR un reporte, proxima_ejecucion
+    // puede seguir apuntando a un slot calculado antes de pausarlo — si ese
+    // slot ya quedó en el pasado mientras estaba inactivo, reactivarlo lo
+    // dejaría "vencido" y el scheduler lo ejecutaría de inmediato en su
+    // próximo tick ("Activar → NO enviar" es una regla de producto, no solo
+    // para la primera activación). Limpiándolo aquí, scheduler.js#
+    // inicializarPendientes() lo recalcula desde "ahora" en el siguiente
+    // tick — mismo camino ya usado y corregido en Fase 11D, sin lógica
+    // nueva. Al desactivar no aplica: activo=false ya excluye al reporte de
+    // ambas consultas del scheduler, sin importar qué traiga proxima_ejecucion.
+    if (activo === true) {
+      patch.proxima_ejecucion = null;
+    }
     const rows = await sbFetch(
       `/reportes_automaticos?id=eq.${encodeURIComponent(id)}`,
       "PATCH",
-      { activo, updated_by: actor }
+      patch
     );
     if (!rows?.[0]) return res.status(404).json({ error: "Reporte no encontrado" });
     res.json({ ok: true, activo: rows[0].activo });
