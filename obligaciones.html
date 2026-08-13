@@ -1970,14 +1970,12 @@ textarea.field-inp{height:56px;padding:8px 10px;resize:none}
 
 <!-- ══════════════════════════════════════════════
      SCRIPTS — orden obligatorio
-     Detección automática de entorno:
-       GitHub Pages → inlop-logistic.github.io  → js/
-       cPanel       → inloplogistica.com/app/    → ../js/
+     obligaciones.html está en la raíz del repo junto con js/
+     → la ruta relativa correcta es siempre "js/" en todos los entornos.
 ══════════════════════════════════════════════ -->
 <script>
 (function(){
-  var isGitHubPages = window.location.hostname.indexOf('github.io') !== -1;
-  window._OB_JS_BASE = isGitHubPages ? 'js/' : '../js/';
+  window._OB_JS_BASE = 'js/';
   function s(name){
     document.write('<script src="' + window._OB_JS_BASE + name + '"><\/script>');
   }
