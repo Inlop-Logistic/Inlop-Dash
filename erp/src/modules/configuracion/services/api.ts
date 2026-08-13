@@ -6,7 +6,7 @@ import { normalizarClienteFiltro } from "../utils/normalizarCliente";
 import { buscarReporte, type CampoDataset } from "../catalogos/datasetsReportes";
 import type {
   ReporteAutomatico, ReporteBase, PersonalInlop, FiltroItem,
-  ResultadoEnvioManual, ClienteFiltroOpcion,
+  ResultadoEnvioManual, ClienteFiltroOpcion, AvisoProgramacion,
 } from "../types";
 
 // ─── Preview de datos del reporte ────────────────────────────────────────────
@@ -275,8 +275,14 @@ export function listarPersonal(): Promise<PersonalInlop[]> {
   return req<PersonalInlop[]>("/api/personal");
 }
 
-export function crearReporteAutomatico(data: ReporteBase): Promise<ReporteAutomatico> {
-  return req<ReporteAutomatico>("/api/reportes-automaticos", {
+/**
+ * Fase 11D.1: la respuesta trae `proxima_ejecucion` ya calculado de forma
+ * sincrónica (no hay que esperar al scheduler para verlo en la tabla) y,
+ * cuando la recurrencia se recalculó en esta misma solicitud,
+ * `slotDeHoyVencido` — ver AvisoProgramacion en types.ts.
+ */
+export function crearReporteAutomatico(data: ReporteBase): Promise<ReporteAutomatico & AvisoProgramacion> {
+  return req<ReporteAutomatico & AvisoProgramacion>("/api/reportes-automaticos", {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -285,8 +291,8 @@ export function crearReporteAutomatico(data: ReporteBase): Promise<ReporteAutoma
 export function actualizarReporteAutomatico(
   id: string,
   data: Partial<ReporteBase>
-): Promise<ReporteAutomatico> {
-  return req<ReporteAutomatico>(`/api/reportes-automaticos/${encodeURIComponent(id)}`, {
+): Promise<ReporteAutomatico & AvisoProgramacion> {
+  return req<ReporteAutomatico & AvisoProgramacion>(`/api/reportes-automaticos/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
@@ -295,8 +301,8 @@ export function actualizarReporteAutomatico(
 export function toggleReporteActivo(
   id: string,
   activo: boolean
-): Promise<{ ok: boolean; activo: boolean }> {
-  return req<{ ok: boolean; activo: boolean }>(
+): Promise<{ ok: boolean; activo: boolean; proxima_ejecucion: string | null } & AvisoProgramacion> {
+  return req<{ ok: boolean; activo: boolean; proxima_ejecucion: string | null } & AvisoProgramacion>(
     `/api/reportes-automaticos/${encodeURIComponent(id)}/activo`,
     { method: "PATCH", body: JSON.stringify({ activo }) }
   );

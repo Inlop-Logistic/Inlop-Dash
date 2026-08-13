@@ -14,8 +14,9 @@
  *   4. Implementar isEtapaCompleta() para esa etapa
  */
 import { useState } from "react";
-import { Check } from "lucide-react";
+import { Check, Info } from "lucide-react";
 import { Button } from "@/components/ui";
+import { formatearFecha } from "@/utils/date";
 import {
   ETAPAS,
   DATOS_INFO_BASICA_INICIAL,
@@ -72,7 +73,13 @@ function datosInicial(): DatosConfigurador {
 // ─── Componente principal ────────────────────────────────────────────────────
 
 interface Props {
-  onCreado:   () => void;
+  /**
+   * Invocado tras persistir con éxito. `aviso` (Fase 11D.1) es el mensaje
+   * "la hora de hoy ya pasó..." cuando aplica — el caller (la página de
+   * listado, tras la navegación) lo muestra; el wizard mismo se desmonta
+   * de inmediato, así que no alcanza a mostrarlo por su cuenta.
+   */
+  onCreado:   (aviso?: string) => void;
   onCancelar: () => void;
   /**
    * Modo edición (Fase 9I) — "Editar configuración completa" desde el panel
@@ -94,6 +101,14 @@ export function ConfiguradorReporte({ onCreado, onCancelar, reporteId, datosInic
   const [borradorId,  setBorradorId]  = useState<string | null>(reporteId ?? null);
   const [guardando,   setGuardando]   = useState(false);
   const [errorMsg,    setErrorMsg]    = useState<string | null>(null);
+  // Fase 11D.1 — aviso no bloqueante: "la hora de hoy ya pasó, el próximo
+  // envío es [fecha]". Nunca bloquea ni ejecuta nada, solo informa.
+  const [avisoProgramacion, setAvisoProgramacion] = useState<string | null>(null);
+
+  function mensajeAvisoSiAplica(resultado: { slotDeHoyVencido?: boolean; proxima_ejecucion: string | null }): string | undefined {
+    if (!resultado.slotDeHoyVencido || !resultado.proxima_ejecucion) return undefined;
+    return `La hora programada de hoy ya pasó. El próximo envío será el ${formatearFecha(resultado.proxima_ejecucion, "fecha")} a las ${formatearFecha(resultado.proxima_ejecucion, "hora")}.`;
+  }
 
   const etapaIndex     = ETAPAS.findIndex(e => e.id === etapaActiva);
   const esUltimaEtapa  = etapaIndex === ETAPAS.length - 1;
@@ -143,10 +158,12 @@ export function ConfiguradorReporte({ onCreado, onCancelar, reporteId, datosInic
         destinatarios: datos.destinatarios,
       };
       if (borradorId) {
-        await actualizarReporteAutomatico(borradorId, payload);
+        const actualizado = await actualizarReporteAutomatico(borradorId, payload);
+        setAvisoProgramacion(mensajeAvisoSiAplica(actualizado) ?? null);
       } else {
         const nuevo = await crearReporteAutomatico(payload);
         setBorradorId(nuevo.id);
+        setAvisoProgramacion(mensajeAvisoSiAplica(nuevo) ?? null);
       }
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "Error al guardar borrador");
@@ -184,12 +201,10 @@ export function ConfiguradorReporte({ onCreado, onCancelar, reporteId, datosInic
         recurrencia:   datos.frecuencia,
         destinatarios: datos.destinatarios,
       };
-      if (borradorId) {
-        await actualizarReporteAutomatico(borradorId, payload);
-      } else {
-        await crearReporteAutomatico(payload);
-      }
-      onCreado();
+      const resultado = borradorId
+        ? await actualizarReporteAutomatico(borradorId, payload)
+        : await crearReporteAutomatico(payload);
+      onCreado(mensajeAvisoSiAplica(resultado));
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "Error al activar el reporte");
     } finally {
@@ -346,6 +361,16 @@ export function ConfiguradorReporte({ onCreado, onCancelar, reporteId, datosInic
           >
             {errorMsg}
           </p>
+        )}
+
+        {/* Aviso no bloqueante (Fase 11D.1) — nunca ejecuta nada, solo informa */}
+        {!errorMsg && avisoProgramacion && (
+          <div className="flex items-start gap-1.5" style={{ flex: "1 1 0" }}>
+            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: "var(--gray-400)" }} />
+            <p className="text-[12px]" style={{ color: "var(--gray-500)" }}>
+              {avisoProgramacion}
+            </p>
+          </div>
         )}
 
         <div style={{ flex: "1 1 0" }} />

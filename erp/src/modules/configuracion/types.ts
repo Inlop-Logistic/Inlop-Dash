@@ -87,6 +87,19 @@ export interface ReporteAutomatico {
   updated_by:         string | null;
 }
 
+/**
+ * Aviso no bloqueante (Fase 11D.1): true cuando, al guardar/activar, la
+ * recurrencia sí tenía un slot programado para HOY pero su hora ya pasó —
+ * `proxima_ejecucion` en la respuesta ya salta al día siguiente. NUNCA
+ * indica que algo se ejecutó ni se usa para decidir ejecución — solo para
+ * mostrar el mensaje informativo en la UI. Ausente/false en cualquier
+ * guardado que no haya recalculado la recurrencia (ej. editar solo
+ * destinatarios sin pasar por la etapa Frecuencia).
+ */
+export interface AvisoProgramacion {
+  slotDeHoyVencido?: boolean;
+}
+
 /** Campos para crear o editar un reporte. */
 export interface ReporteBase {
   nombre:       string;

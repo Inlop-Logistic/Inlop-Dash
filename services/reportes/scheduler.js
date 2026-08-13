@@ -41,7 +41,8 @@
  * cache.viajes.data en memoria, sin coordinación entre instancias).
  */
 import { ejecutarReporteManual } from './envioManual.js';
-import { calcularProximaEjecucion } from './recurrencia.js';
+import { calcularProximaEjecucion, esFechaValida } from './recurrencia.js';
+import { extraerFechaColombia } from '../../utils/fechas.js';
 
 let tickEnCurso = false;
 
@@ -70,13 +71,51 @@ export function _resetMutexParaTests() {
  * procesarUnReporte() más abajo) — para obtener el verdadero próximo slot
  * futuro, sin tocar la semántica de calcularProximaEjecucion() en sí (sigue
  * intacta para `fin.modo:"repeticiones"` y cualquier otro llamador).
+ *
+ * Exportada (Fase 11D.1): index.js la reutiliza para calcular
+ * `proxima_ejecucion` de forma SÍNCRONA al crear/editar/reactivar un
+ * reporte, en vez de escribir `null` y esperar hasta 60s al siguiente tick
+ * del scheduler — misma función, mismo resultado, sin duplicar el cálculo.
  */
-function primerSlotFuturo(recurrencia, ahora) {
+export function primerSlotFuturo(recurrencia, ahora) {
   const bootstrap = calcularProximaEjecucion(recurrencia, null);
   if (bootstrap && bootstrap <= ahora) {
     return calcularProximaEjecucion(recurrencia, ahora);
   }
   return bootstrap;
+}
+
+/**
+ * Programación sincrónica al guardar (Fase 11D.1) — crear/editar/reactivar
+ * un reporte calcula `proxima_ejecucion` de inmediato (index.js, rutas
+ * POST/PATCH de reportes-automaticos), en vez de escribir `null` y esperar
+ * hasta 60s al siguiente tick del scheduler. Reutiliza `primerSlotFuturo()`
+ * de arriba — la MISMA función que ya usa `inicializarPendientes()` — así
+ * que la garantía de "nunca un slot ya vencido" es la misma con o sin este
+ * atajo síncrono. Vive aquí (no en index.js) para mantener una única fuente
+ * de verdad de todo el cálculo de recurrencias/programación, y quedar
+ * testeable sin depender de Express.
+ *
+ * `slotDeHoyVencido` es puramente informativo, para que el frontend pueda
+ * mostrar el aviso "la hora de hoy ya pasó, el próximo envío es [fecha]" —
+ * NUNCA se usa para decidir si algo se ejecuta. true cuando HOY era un día
+ * válido de la recurrencia pero ya se agotaron todas sus horas
+ * configuradas (la próxima ejecución real cae en un día posterior).
+ *
+ * @param {object|null} recurrencia
+ * @param {Date} [ahora]
+ * @returns {{proximaEjecucion: Date|null, slotDeHoyVencido: boolean}}
+ */
+export function calcularProgramacionAlGuardar(recurrencia, ahora = new Date()) {
+  const siguiente = primerSlotFuturo(recurrencia, ahora);
+  const hoyYMD = extraerFechaColombia(ahora);
+  // Cortocircuito `siguiente &&`: si es null (recurrencia incompleta/mal
+  // formada, o sin más slots futuros), esFechaValida() ni se llama —
+  // evita tocar recurrencia.fecha_inicio cuando recurrencia es null/{}.
+  const slotDeHoyVencido = Boolean(
+    siguiente && esFechaValida(hoyYMD, recurrencia) && extraerFechaColombia(siguiente) !== hoyYMD
+  );
+  return { proximaEjecucion: siguiente, slotDeHoyVencido };
 }
 
 async function inicializarPendientes(deps, ahora) {

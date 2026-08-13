@@ -3,8 +3,12 @@ import { PageHeader } from "@/components/ui";
 import { ConfiguradorReporte } from "./ConfiguradorReporte";
 
 interface Props {
-  /** Invocado tras persistir con éxito — el caller navega al listado. */
-  onCreado:   () => void;
+  /**
+   * Invocado tras persistir con éxito — el caller navega al listado.
+   * `aviso` (Fase 11D.1): mensaje "la hora de hoy ya pasó..." cuando
+   * aplica, para que el listado lo muestre tras la navegación.
+   */
+  onCreado:   (aviso?: string) => void;
   onCancelar: () => void;
 }
 

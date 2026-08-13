@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ejecutarTickScheduler, _resetMutexParaTests } from './scheduler.js';
+import { ejecutarTickScheduler, calcularProgramacionAlGuardar, _resetMutexParaTests } from './scheduler.js';
 import { crearAlmacen as crearAlmacenGps } from '../gps/testStore.js';
 
 // ── Mock sbFetch — interpreta los filtros reales de PostgREST usados por el
@@ -234,6 +234,79 @@ test('Fase 11D — un reporte con fecha_inicio genuinamente futura se inicializa
   assert.equal(out.ejecutados.length, 0);
   assert.equal(deps.sendWithAttachment.llamadas.length, 0);
   assert.equal(out.inicializados[0].proximaEjecucion.slice(0, 10), enUnaSemana);
+});
+
+// ── Fase 11D.1 — calcularProgramacionAlGuardar() ────────────────────────────
+// Ejemplo de negocio exacto del prompt: recurrencia diaria 08:00, reloj
+// controlado (Date explícito, sin depender de la hora real de ejecución del
+// test) — nunca "ahora" implícito.
+
+test('11D.1: guardar ANTES del slot de hoy (07:30, diaria 08:00) → próxima ejecución = HOY 08:00, sin aviso', () => {
+  const rec = { tipo: 'diaria', horas: ['08:00'], fecha_inicio: '2026-08-13', fin: { modo: 'nunca' } };
+  const ahora = new Date('2026-08-13T07:30:00-05:00');
+
+  const { proximaEjecucion, slotDeHoyVencido } = calcularProgramacionAlGuardar(rec, ahora);
+
+  assert.equal(proximaEjecucion.toISOString(), new Date('2026-08-13T08:00:00-05:00').toISOString());
+  assert.equal(slotDeHoyVencido, false);
+});
+
+test('11D.1: guardar DESPUÉS del slot de hoy (08:23, diaria 08:00) → próxima ejecución = MAÑANA 08:00, con aviso', () => {
+  const rec = { tipo: 'diaria', horas: ['08:00'], fecha_inicio: '2026-08-13', fin: { modo: 'nunca' } };
+  const ahora = new Date('2026-08-13T08:23:00-05:00');
+
+  const { proximaEjecucion, slotDeHoyVencido } = calcularProgramacionAlGuardar(rec, ahora);
+
+  assert.equal(proximaEjecucion.toISOString(), new Date('2026-08-14T08:00:00-05:00').toISOString());
+  assert.equal(slotDeHoyVencido, true);
+});
+
+test('11D.1: guardar exactamente en el instante del slot (08:00:00 en punto) cuenta como ya vencido — nunca se re-ejecuta ese mismo instante', () => {
+  const rec = { tipo: 'diaria', horas: ['08:00'], fecha_inicio: '2026-08-13', fin: { modo: 'nunca' } };
+  const ahora = new Date('2026-08-13T08:00:00-05:00');
+
+  const { proximaEjecucion, slotDeHoyVencido } = calcularProgramacionAlGuardar(rec, ahora);
+
+  assert.equal(proximaEjecucion.toISOString(), new Date('2026-08-14T08:00:00-05:00').toISOString());
+  assert.equal(slotDeHoyVencido, true);
+});
+
+test('11D.1: sin aviso cuando "hoy" no es un día válido de la recurrencia (semanal, otro día de la semana)', () => {
+  // 2026-08-13 es jueves. dias_semana=[1] (solo lunes) — hoy nunca fue un
+  // slot de este reporte, así que "la hora de hoy ya pasó" sería engañoso.
+  const rec = { tipo: 'semanal', horas: ['08:00'], dias_semana: [1], fecha_inicio: '2026-08-01', fin: { modo: 'nunca' } };
+  const ahora = new Date('2026-08-13T20:00:00-05:00');
+
+  const { proximaEjecucion, slotDeHoyVencido } = calcularProgramacionAlGuardar(rec, ahora);
+
+  assert.ok(proximaEjecucion);
+  assert.equal(slotDeHoyVencido, false);
+});
+
+test('11D.1: múltiples horas — aviso solo si TODAS las horas de hoy ya pasaron', () => {
+  const rec = { tipo: 'diaria', horas: ['08:00', '18:00'], fecha_inicio: '2026-08-13', fin: { modo: 'nunca' } };
+
+  // 10:00 — ya pasó 08:00, pero 18:00 sigue siendo hoy: sin aviso.
+  const antesDeLaSegunda = calcularProgramacionAlGuardar(rec, new Date('2026-08-13T10:00:00-05:00'));
+  assert.equal(antesDeLaSegunda.proximaEjecucion.toISOString(), new Date('2026-08-13T18:00:00-05:00').toISOString());
+  assert.equal(antesDeLaSegunda.slotDeHoyVencido, false);
+
+  // 19:00 — ya pasaron ambas horas de hoy: con aviso, salta a mañana.
+  const trasLaUltima = calcularProgramacionAlGuardar(rec, new Date('2026-08-13T19:00:00-05:00'));
+  assert.equal(trasLaUltima.proximaEjecucion.toISOString(), new Date('2026-08-14T08:00:00-05:00').toISOString());
+  assert.equal(trasLaUltima.slotDeHoyVencido, true);
+});
+
+test('11D.1: recurrencia incompleta/mal formada → sin próxima ejecución, sin aviso, no lanza', () => {
+  const { proximaEjecucion, slotDeHoyVencido } = calcularProgramacionAlGuardar({ tipo: 'diaria', horas: [], fecha_inicio: '2026-08-13' }, new Date());
+  assert.equal(proximaEjecucion, null);
+  assert.equal(slotDeHoyVencido, false);
+});
+
+test('11D.1: recurrencia null (reporte sin recurrencia configurada aún) no lanza', () => {
+  const { proximaEjecucion, slotDeHoyVencido } = calcularProgramacionAlGuardar(null, new Date());
+  assert.equal(proximaEjecucion, null);
+  assert.equal(slotDeHoyVencido, false);
 });
 
 // ── Evitar doble ejecución ───────────────────────────────────────────────────

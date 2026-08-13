@@ -15,7 +15,7 @@ import {
   transformarViajesActivos, transformarCentroGps, listarClientesDataset,
 } from './services/reportes/datasetProvider.js';
 import { ejecutarReporteManual } from './services/reportes/envioManual.js';
-import { ejecutarTickScheduler } from './services/reportes/scheduler.js';
+import { ejecutarTickScheduler, calcularProgramacionAlGuardar } from './services/reportes/scheduler.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -4837,6 +4837,11 @@ app.post("/api/reportes-automaticos", requireInternalApiKey, async (req, res) =>
       return res.status(400).json({ error: "El seguimiento GPS solo aplica a reportes de Gestión Logística" });
     }
 
+    const recurrenciaFinal = recurrencia ?? {};
+    // Fase 11D.1 — calcula proxima_ejecucion de una vez, en vez de dejarla
+    // en null a la espera del siguiente tick del scheduler (hasta 60s).
+    const { proximaEjecucion, slotDeHoyVencido } = calcularProgramacionAlGuardar(recurrenciaFinal);
+
     const rows = await sbFetch("/reportes_automaticos", "POST", {
       nombre:       nombre.trim(),
       modulo_id:    modulo_id.trim(),
@@ -4849,14 +4854,15 @@ app.post("/api/reportes-automaticos", requireInternalApiKey, async (req, res) =>
       frecuencia,
       filtros:       Array.isArray(filtros)  ? filtros  : [],
       columnas:      Array.isArray(columnas) ? columnas : [],
-      recurrencia:   recurrencia ?? {},
+      recurrencia:   recurrenciaFinal,
+      proxima_ejecucion: proximaEjecucion ? proximaEjecucion.toISOString() : null,
       destinatarios: destinatarios ?? { personal_ids: [], correos_externos: [] },
       seguimiento_gps: typeof seguimiento_gps === "boolean" ? seguimiento_gps : false,
       created_by:   actor,
       updated_by:   actor,
     });
     if (!rows?.[0]) return res.status(502).json({ error: "No se pudo crear el reporte" });
-    res.status(201).json(rows[0]);
+    res.status(201).json({ ...rows[0], slotDeHoyVencido });
   } catch (e) {
     console.error("POST /api/reportes-automaticos error:", e.message);
     res.status(500).json({ error: "Error interno" });
@@ -4870,6 +4876,7 @@ app.patch("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, re
     const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, borrador, frecuencia, filtros, columnas, recurrencia, destinatarios, seguimiento_gps } = req.body ?? {};
 
     const patch = { updated_by: actor };
+    let slotDeHoyVencido = false; // Fase 11D.1 — solo se vuelve true si esta solicitud recalcula recurrencia
     if (nombre       !== undefined) patch.nombre       = nombre.trim();
     if (modulo_id    !== undefined) patch.modulo_id    = modulo_id.trim();
     if (tipo_reporte !== undefined) patch.tipo_reporte = tipo_reporte.trim();
@@ -4906,16 +4913,18 @@ app.patch("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, re
         return res.status(400).json({ error: "recurrencia debe ser un objeto" });
       }
       patch.recurrencia = recurrencia;
-      // Fase 9G — hallazgo de auditoría: si no se limpia proxima_ejecucion
+      // Fase 9G — hallazgo de auditoría: si no se recalcula proxima_ejecucion
       // aquí, un reporte activo cuya recurrencia se edita conserva el
       // próximo disparo calculado con el horario ANTERIOR (ej. seguía
-      // "diaria 08:00" aunque el usuario ya cambió a "semanal lunes 14:00")
-      // — el scheduler lo dispararía una vez con el timing viejo antes de
-      // corregirse solo. Poniéndolo en null, el scheduler.js#
-      // inicializarPendientes() recalcula desde cero con la recurrencia
-      // nueva en su próximo tick — mismo camino que ya usa un reporte
-      // recién activado, sin lógica nueva.
-      patch.proxima_ejecucion = null;
+      // "diaria 08:00" aunque el usuario ya cambió a "semanal lunes 14:00").
+      // Fase 11D.1 — antes se ponía en null y se esperaba hasta 60s al
+      // siguiente tick del scheduler; ahora se recalcula de una vez con la
+      // MISMA función que usa el scheduler (calcularProgramacionAlGuardar
+      // → primerSlotFuturo), con la misma garantía de nunca dejar un slot
+      // ya vencido.
+      const programacion = calcularProgramacionAlGuardar(recurrencia);
+      patch.proxima_ejecucion = programacion.proximaEjecucion ? programacion.proximaEjecucion.toISOString() : null;
+      slotDeHoyVencido = programacion.slotDeHoyVencido;
     }
     if (destinatarios !== undefined) {
       const err = errorDestinatarios(destinatarios);
@@ -4940,7 +4949,7 @@ app.patch("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, re
 
     const rows = await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}`, "PATCH", patch);
     if (!rows?.[0]) return res.status(404).json({ error: "Reporte no encontrado" });
-    res.json(rows[0]);
+    res.json({ ...rows[0], slotDeHoyVencido });
   } catch (e) {
     console.error("PATCH /api/reportes-automaticos/:id error:", e.message);
     res.status(500).json({ error: "Error interno" });
@@ -4957,19 +4966,29 @@ app.patch("/api/reportes-automaticos/:id/activo", requireInternalApiKey, async (
       return res.status(400).json({ error: "'activo' debe ser boolean" });
     }
     const patch = { activo, updated_by: actor };
+    let slotDeHoyVencido = false;
     // Fase 11D — mismo criterio que el cambio de recurrencia (Fase 9G, ver
-    // PATCH /:id más abajo): al REACTIVAR un reporte, proxima_ejecucion
+    // PATCH /:id más arriba): al REACTIVAR un reporte, proxima_ejecucion
     // puede seguir apuntando a un slot calculado antes de pausarlo — si ese
     // slot ya quedó en el pasado mientras estaba inactivo, reactivarlo lo
     // dejaría "vencido" y el scheduler lo ejecutaría de inmediato en su
     // próximo tick ("Activar → NO enviar" es una regla de producto, no solo
-    // para la primera activación). Limpiándolo aquí, scheduler.js#
-    // inicializarPendientes() lo recalcula desde "ahora" en el siguiente
-    // tick — mismo camino ya usado y corregido en Fase 11D, sin lógica
-    // nueva. Al desactivar no aplica: activo=false ya excluye al reporte de
-    // ambas consultas del scheduler, sin importar qué traiga proxima_ejecucion.
+    // para la primera activación). Al desactivar no aplica: activo=false ya
+    // excluye al reporte de ambas consultas del scheduler, sin importar qué
+    // traiga proxima_ejecucion.
+    //
+    // Fase 11D.1 — antes se ponía en null y se esperaba hasta 60s al
+    // siguiente tick del scheduler; ahora se recalcula de una vez con la
+    // recurrencia actual del reporte (este endpoint no la recibe en el
+    // body, así que se lee de la fila existente) usando la MISMA función
+    // que usa el scheduler (calcularProgramacionAlGuardar →
+    // primerSlotFuturo) — sin duplicar el cálculo.
     if (activo === true) {
-      patch.proxima_ejecucion = null;
+      const filaActual = await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}&select=recurrencia`);
+      const recurrenciaActual = filaActual?.[0]?.recurrencia ?? null;
+      const programacion = calcularProgramacionAlGuardar(recurrenciaActual);
+      patch.proxima_ejecucion = programacion.proximaEjecucion ? programacion.proximaEjecucion.toISOString() : null;
+      slotDeHoyVencido = programacion.slotDeHoyVencido;
     }
     const rows = await sbFetch(
       `/reportes_automaticos?id=eq.${encodeURIComponent(id)}`,
@@ -4977,7 +4996,7 @@ app.patch("/api/reportes-automaticos/:id/activo", requireInternalApiKey, async (
       patch
     );
     if (!rows?.[0]) return res.status(404).json({ error: "Reporte no encontrado" });
-    res.json({ ok: true, activo: rows[0].activo });
+    res.json({ ok: true, activo: rows[0].activo, proxima_ejecucion: rows[0].proxima_ejecucion, slotDeHoyVencido });
   } catch (e) {
     console.error("PATCH /api/reportes-automaticos/:id/activo error:", e.message);
     res.status(500).json({ error: "Error interno" });
