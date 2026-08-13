@@ -43,6 +43,24 @@ function logDiagTemp(reporte, datos, deps, motivo) {
       // no para cambiar comportamiento (no se usa en ninguna decisión),
       // solo para que el equipo pueda correlacionar.
       origenEjecucion:      deps?.origenEjecucion ?? null,
+      // Fase 11F — una tercera auditoría (estática, línea por línea de todo
+      // el camino index.js→scheduler.js→envioManual.js→enlaceGps.js→
+      // emailChannel.js, más una prueba empírica nueva de contaminación
+      // cruzada entre reportes del mismo tick) sigue sin encontrar ninguna
+      // rama de código que trate manual y scheduler distinto — ver el
+      // commit de esta fase para el detalle completo. La única variable que
+      // legítimamente puede diferir entre ambos orígenes es el ESTADO de
+      // `cache.viajes.data` en el instante exacto de la decisión: un
+      // scheduler no atendido dispara a una hora fija (podría coincidir con
+      // una caché recién vaciada/repoblándose), mientras que un envío
+      // manual lo hace una persona en horario laboral con la caché ya
+      // caliente. `cantidadRegistros`/`cantidadPlacas` de arriba ya
+      // reflejan el dataset DESPUÉS de filtros — este campo agrega el
+      // tamaño CRUDO de la caché de viajes ANTES de cualquier filtro, para
+      // poder distinguir en Railway "la caché en sí estaba vacía en ese
+      // instante" de "el reporte legítimamente no tenía placas para ese
+      // filtro/cliente".
+      cantidadViajesEnCache: Array.isArray(deps?.viajesCache) ? deps.viajesCache.length : null,
       motivo,
     }));
   } catch { /* el diagnóstico nunca debe romper el flujo de envío */ }
