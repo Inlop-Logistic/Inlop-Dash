@@ -480,6 +480,120 @@ test('GPS + Fase 11D: un reporte con GPS recién configurado NO envía (ni CTA n
   assert.equal(sbFetch.tablas.reportes_gps_enlaces?.length ?? 0, 0); // ni siquiera se creó el enlace GPS
 });
 
+// ── Fase 11E — GPS/CTA vía scheduler: cobertura que antes solo existía para
+// ejecución manual (envioManual.test.js). La auditoría de 11E (estática +
+// una comparación empírica directa) no encontró ninguna divergencia de
+// código entre manual y scheduler — ambos llaman a ejecutarReporteManual()
+// con el mismo deps — así que estos tests solo cierran el hueco de
+// cobertura, no corrigen ningún comportamiento nuevo. ──────────────────────
+
+function reporteGpsSchedulerBase(overrides = {}) {
+  const vencido = new Date(Date.now() - 3600_000).toISOString();
+  return reporteBase({
+    modulo_id: 'gestion_logistica',
+    seguimiento_gps: true,
+    proxima_ejecucion: vencido,
+    destinatarios: { personal_ids: [], correos_externos: ['ops@externo.com'] },
+    ...overrides,
+  });
+}
+
+function depsGpsScheduler({ reporte, personal = [], viajesCache } = {}) {
+  const sbFetch = crearAlmacenGps({ reportes_automaticos: [reporte], personal });
+  const llamadasEnvio = [];
+  const sendWithAttachment = async (params) => {
+    llamadasEnvio.push(params);
+    return { ok: true, id: 'msg_1' };
+  };
+  sendWithAttachment.llamadas = llamadasEnvio;
+  return {
+    sbFetch,
+    viajesCache: viajesCache ?? [
+      { trip_number: 'T1', license_plate: 'ABC123', company_customer_name: 'Cliente A', state_travel: 'en transíto', origin_city_name: 'Bogotá', destiny_city_name: 'Cali' },
+      { trip_number: 'T2', license_plate: 'XYZ789', company_customer_name: 'Cliente B', state_travel: 'en transíto', origin_city_name: 'Bogotá', destiny_city_name: 'Medellín' },
+    ],
+    tripCustomerCache: new Map(),
+    extraerTelefono: () => null,
+    primerNombreCliente: () => null,
+    sendWithAttachment,
+    seguimientoGpsUrl: 'https://seguimiento.inlop.com.co',
+    origenEjecucion: 'scheduler',
+  };
+}
+
+test('Fase 11E — GPS vía scheduler + formato=html_filas: el CTA aparece en el cuerpo del correo', async () => {
+  const reporte = reporteGpsSchedulerBase({ formato: 'html_filas' });
+  const deps = depsGpsScheduler({ reporte });
+
+  const out = await ejecutarTickScheduler(deps);
+
+  assert.equal(out.ejecutados.length, 1);
+  assert.equal(out.ejecutados[0].ok, true);
+  assert.match(deps.sendWithAttachment.llamadas[0].html, /Ver seguimiento GPS/);
+  assert.ok(deps.sbFetch.tablas.reportes_gps_enlaces?.[0]);
+});
+
+test('Fase 11E — GPS vía scheduler + formato=html_columnas: el CTA aparece en el cuerpo del correo', async () => {
+  const reporte = reporteGpsSchedulerBase({ formato: 'html_columnas' });
+  const deps = depsGpsScheduler({ reporte });
+
+  const out = await ejecutarTickScheduler(deps);
+
+  assert.equal(out.ejecutados.length, 1);
+  assert.equal(out.ejecutados[0].ok, true);
+  assert.match(deps.sendWithAttachment.llamadas[0].html, /Ver seguimiento GPS/);
+  assert.ok(deps.sbFetch.tablas.reportes_gps_enlaces?.[0]);
+});
+
+test('Fase 11E — GPS vía scheduler + SOLO destinatarios internos: crea el enlace con la whitelist interna congelada (Fase 11B)', async () => {
+  const reporte = reporteGpsSchedulerBase({ destinatarios: { personal_ids: ['P1'], correos_externos: [] } });
+  const deps = depsGpsScheduler({
+    reporte,
+    personal: [{ id: 'P1', nombre: 'Ana', correo_compartido: 'interno@inlop.com.co', activo: true }],
+  });
+
+  const out = await ejecutarTickScheduler(deps);
+
+  assert.equal(out.ejecutados.length, 1);
+  const filaEnlace = deps.sbFetch.tablas.reportes_gps_enlaces[0];
+  assert.ok(filaEnlace);
+  assert.deepEqual(filaEnlace.destinatarios_autorizados, []); // sin externos
+  assert.deepEqual(filaEnlace.destinatarios_internos_autorizados, ['interno@inlop.com.co']);
+  assert.match(deps.sendWithAttachment.llamadas[0].html, /Ver seguimiento GPS/);
+  assert.deepEqual(deps.sendWithAttachment.llamadas[0].to, ['interno@inlop.com.co']);
+});
+
+test('Fase 11E — GPS vía scheduler + destinatarios MIXTOS (interno + externo): un único enlace/CTA compartido', async () => {
+  const reporte = reporteGpsSchedulerBase({ destinatarios: { personal_ids: ['P1'], correos_externos: ['ext@x.com'] } });
+  const deps = depsGpsScheduler({
+    reporte,
+    personal: [{ id: 'P1', nombre: 'Ana', correo_compartido: 'interno@inlop.com.co', activo: true }],
+  });
+
+  const out = await ejecutarTickScheduler(deps);
+
+  assert.equal(out.ejecutados.length, 1);
+  const filaEnlace = deps.sbFetch.tablas.reportes_gps_enlaces[0];
+  assert.deepEqual(filaEnlace.destinatarios_autorizados, ['ext@x.com']);
+  assert.deepEqual(filaEnlace.destinatarios_internos_autorizados, ['interno@inlop.com.co']);
+  assert.equal(deps.sendWithAttachment.llamadas.length, 1); // mismo correo, mismo enlace para ambos grupos
+  assert.deepEqual(deps.sendWithAttachment.llamadas[0].to.sort(), ['ext@x.com', 'interno@inlop.com.co']);
+});
+
+test('Fase 11E — GPS vía scheduler + filtro Cliente (Fase 11A): el enlace solo congela las placas del cliente filtrado', async () => {
+  const reporte = reporteGpsSchedulerBase({
+    filtros: [{ campo: 'cliente_normalizado', operador: 'en', valores: ['CLIENTE A'] }],
+  });
+  const deps = depsGpsScheduler({ reporte }); // 2 clientes en viajesCache: Cliente A (ABC123) y Cliente B (XYZ789)
+
+  const out = await ejecutarTickScheduler(deps);
+
+  assert.equal(out.ejecutados.length, 1);
+  const filaEnlace = deps.sbFetch.tablas.reportes_gps_enlaces[0];
+  assert.ok(filaEnlace);
+  assert.deepEqual(filaEnlace.placas, ['ABC123']); // nunca XYZ789 (Cliente B) — aislamiento por reporte
+});
+
 // ── Fase 11D — editar recalcula, nunca ejecuta de inmediato ─────────────────
 // Mismo camino que un reporte recién activado: PATCH /:id con recurrencia
 // nueva pone proxima_ejecucion=null (index.js, Fase 9G) — el siguiente tick

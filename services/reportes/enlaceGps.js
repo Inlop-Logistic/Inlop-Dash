@@ -32,6 +32,17 @@ function logDiagTemp(reporte, datos, deps, motivo) {
       cantidadDestExternos: Array.isArray(reporte?.destinatarios?.correos_externos)
         ? reporte.destinatarios.correos_externos.length : 0,
       seguimientoGpsUrlConfigurada: Boolean(deps?.seguimientoGpsUrl),
+      // Fase 11E — el pipeline es un único motor compartido (ver JSDoc de
+      // ejecutarReporteManual): auditoría + una comparación empírica directa
+      // (manual vs. scheduler, mismos datos) no encontraron ninguna
+      // divergencia de código. Sin `origenEjecucion` en este log, los
+      // registros de Railway no permiten distinguir en producción si una
+      // entrada concreta vino de un envío manual o de un tick del scheduler
+      // — hacía imposible confirmar/descartar el síntoma reportado
+      // comparando ejecuciones reales del MISMO reporte. Se agrega aquí,
+      // no para cambiar comportamiento (no se usa en ninguna decisión),
+      // solo para que el equipo pueda correlacionar.
+      origenEjecucion:      deps?.origenEjecucion ?? null,
       motivo,
     }));
   } catch { /* el diagnóstico nunca debe romper el flujo de envío */ }

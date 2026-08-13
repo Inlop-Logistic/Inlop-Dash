@@ -285,6 +285,11 @@ export async function ejecutarReporteManual(reporteId, deps = {}) {
       longitudHtmlSinCta:  htmlSinCta.length,
       longitudHtmlConCta:  html.length,
       cantidadDestinatarios: destinatarios.correosEnvio.length,
+      // Fase 11E — mismo motivo que enlaceGps.js#logDiagTemp(): permite
+      // correlacionar en Railway si una ejecución concreta vino de un envío
+      // manual o de un tick del scheduler. Puramente informativo, nunca se
+      // usa para decidir nada.
+      origenEjecucion:     deps?.origenEjecucion ?? null,
     }));
   } catch { /* el diagnóstico nunca debe romper el flujo de envío */ }
 
