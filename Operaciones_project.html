@@ -7061,8 +7061,25 @@ var SH=(function(){
     btn.style.display='inline-flex';
   }
 
+  /* ── Helpers de fecha activa ───────────────────────────── */
+  function satStr(){return toStr(_saturday);}
+  function sunStr(){var d=new Date(_saturday);d.setDate(_saturday.getDate()+1);return toStr(d);}
+
+  /* ── Busca assignment por código de template y día (ISO date).
+     Compatibilidad regresiva: acepta valores simbólicos pre-migración.
+     Prioridad: ISO date exacta → valor simbólico ('saturday'/'sunday'/'both'). ── */
   function getA(code,day){
-    return _assignments.find(function(a){return a.template_code===code&&(a.shift_day===day||a.shift_day==='both');});
+    var hit=_assignments.find(function(a){return a.template_code===code&&a.shift_day===day;});
+    if(hit)return hit;
+    /* Datos pre-migración: mapear ISO al valor simbólico equivalente */
+    var ss=satStr(),su=sunStr();
+    if(day===ss){
+      return _assignments.find(function(a){return a.template_code===code&&(a.shift_day==='saturday'||a.shift_day==='both');});
+    }
+    if(day===su){
+      return _assignments.find(function(a){return a.template_code===code&&a.shift_day==='sunday';});
+    }
+    return undefined;
   }
 
   function renderGrid(){
@@ -7082,8 +7099,8 @@ var SH=(function(){
     var missing=0;
     _templates.forEach(function(t){
       if(!t.is_critical)return;
-      if(t.covers_both_days){if(!getA(t.area_code,'both')&&!getA(t.area_code,'saturday'))missing++;}
-      else{if(!getA(t.area_code,'saturday'))missing++;if(!getA(t.area_code,'sunday'))missing++;}
+      if(t.covers_both_days){if(!getA(t.area_code,satStr()))missing++;}
+      else{if(!getA(t.area_code,satStr()))missing++;if(!getA(t.area_code,sunStr()))missing++;}
       // Festivos de la semana también requieren cobertura en templates críticos
       _weekHolidays.forEach(function(h){if(!getA(t.area_code,h.dayKey))missing++;});
     });
@@ -7124,8 +7141,8 @@ var SH=(function(){
     }
 
     if(t.covers_both_days){
-      var a=getA(t.area_code,'both')||getA(t.area_code,'saturday');
-      var clickAttr=editable?'onclick="SH.openModal(\''+t.area_code+'\',\'both\',\''+esc(t.area_nombre)+'\')"':'';
+      var a=getA(t.area_code,satStr());
+      var clickAttr=editable?'onclick="SH.openModal(\''+t.area_code+'\',\''+satStr()+'\',\''+esc(t.area_nombre)+'\')"':'';
       if(wh.length===0){
         /* Comportamiento original — sin festivos */
         return'<div class="shift-slot" '+clickAttr+'>'+
@@ -7149,10 +7166,10 @@ var SH=(function(){
         '</div>';
       }
     }else{
-      var aSat=getA(t.area_code,'saturday');
-      var aSun=getA(t.area_code,'sunday');
-      var cSat=editable?'class="slot-day-col clickable" onclick="SH.openModal(\''+t.area_code+'\',\'saturday\',\''+esc(t.area_nombre)+' · Sábado\')"':'class="slot-day-col"';
-      var cSun=editable?'class="slot-day-col clickable" onclick="SH.openModal(\''+t.area_code+'\',\'sunday\',\''+esc(t.area_nombre)+' · Domingo\')"':'class="slot-day-col"';
+      var aSat=getA(t.area_code,satStr());
+      var aSun=getA(t.area_code,sunStr());
+      var cSat=editable?'class="slot-day-col clickable" onclick="SH.openModal(\''+t.area_code+'\',\''+satStr()+'\',\''+esc(t.area_nombre)+' · Sábado\')"':'class="slot-day-col"';
+      var cSun=editable?'class="slot-day-col clickable" onclick="SH.openModal(\''+t.area_code+'\',\''+sunStr()+'\',\''+esc(t.area_nombre)+' · Domingo\')"':'class="slot-day-col"';
       return'<div class="shift-slot two-day">'+
         '<div class="slot-area" style="'+colorBar+'">'+esc(t.area_nombre)+'</div>'+
         '<div class="slot-two-day-grid" style="grid-template-columns:repeat('+(2+wh.length)+',1fr)">'+
