@@ -721,6 +721,10 @@ input[type=file]{display:none}
 .slot-day-col.clickable:hover{background:rgba(1,42,107,.22)}
 .slot-day-label{font-size:.62rem;color:var(--w4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
 .shift-incomplete-alert{background:var(--amber3);border:1px solid var(--amber2);border-radius:8px;padding:8px 14px;font-size:.8rem;color:var(--amber);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.slot-day-col.holiday{background:rgba(217,119,6,.05)}
+.slot-day-col.holiday.clickable:hover{background:rgba(217,119,6,.13)}
+.slot-day-label.holiday-label{color:var(--amber)}
+.slot-holiday-badge{display:block;font-size:.58rem;font-weight:700;color:var(--amber);text-transform:none;letter-spacing:.02em;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px}
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 
@@ -6884,6 +6888,95 @@ var CM=(function(){
   };
 })();
 
+/* ── Festivos Colombia (Ley 51 de 1983) ──────────────────
+   Motor de cálculo dinámico por año.
+   Expone: window.__colombianHolidays(year) → [{date,nombre}]
+           window.__getWeekHolidays(sat)    → [{date,nombre,dayKey,weekdayName}]
+   Ventana de búsqueda por turno: Martes(Sat-4) … Lunes(Sat+2), excluyendo Sáb/Dom.
+   ──────────────────────────────────────────────────────── */
+(function(){
+  /* Domingo de Pascua — algoritmo anónimo gregoriano */
+  function easterSunday(y){
+    var a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,
+        f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
+        h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,
+        l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),
+        mo=Math.floor((h+l-7*m+114)/31)-1,
+        da=((h+l-7*m+114)%31)+1;
+    return new Date(y,mo,da);
+  }
+  function addDays(d,n){var r=new Date(d);r.setDate(r.getDate()+n);return r;}
+  function nextMonday(d){
+    var dow=d.getDay();
+    if(dow===1)return new Date(d);
+    return addDays(d,dow===0?1:8-dow);
+  }
+  function localStr(d){
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+
+  function getColombianHolidays(year){
+    var h=[];
+    function addF(mo,da,n){h.push({date:new Date(year,mo,da),nombre:n});}
+    function addT(mo,da,n){h.push({date:nextMonday(new Date(year,mo,da)),nombre:n});}
+    /* Fijos (no se trasladan) */
+    addF(0,1,'Año Nuevo');
+    addF(4,1,'Día del Trabajo');
+    addF(6,20,'Día de la Independencia');
+    addF(7,7,'Batalla de Boyacá');
+    addF(11,8,'Inmaculada Concepción');
+    addF(11,25,'Navidad');
+    /* Trasladables al lunes siguiente */
+    addT(0,6,'Reyes Magos');
+    addT(2,19,'San José');
+    addT(5,29,'San Pedro y San Pablo');
+    addT(6,16,'Virgen del Carmen');
+    addT(7,15,'Asunción de la Virgen');
+    addT(9,12,'Día de la Raza');
+    addT(10,1,'Todos los Santos');
+    addT(10,11,'Independencia de Cartagena');
+    /* Relativos a Pascua */
+    var easter=easterSunday(year);
+    h.push({date:addDays(easter,-3),nombre:'Jueves Santo'});
+    h.push({date:addDays(easter,-2),nombre:'Viernes Santo'});
+    h.push({date:nextMonday(addDays(easter,39)),nombre:'Ascensión del Señor'});
+    h.push({date:nextMonday(addDays(easter,60)),nombre:'Corpus Christi'});
+    h.push({date:nextMonday(addDays(easter,68)),nombre:'Sagrado Corazón'});
+    h.sort(function(a,b){return a.date-b.date;});
+    return h;
+  }
+
+  var _cache={};
+  window.__colombianHolidays=function(year){
+    if(!_cache[year])_cache[year]=getColombianHolidays(year);
+    return _cache[year];
+  };
+
+  var DAYS_ES=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+
+  /* Retorna festivos dentro de la ventana del turno:
+     Martes(sat-4) … Lunes(sat+2), excluyendo el sábado y domingo ya mostrados. */
+  window.__getWeekHolidays=function(sat){
+    var satMs=sat.getTime();
+    var winStart=new Date(satMs-4*86400000); // Martes
+    var winEnd  =new Date(satMs+2*86400000); // Lunes siguiente
+    var satStr  =localStr(sat);
+    var sunStr  =localStr(new Date(satMs+86400000));
+    var years=new Set([winStart.getFullYear(),winEnd.getFullYear()]);
+    var all=[];
+    years.forEach(function(y){all=all.concat(window.__colombianHolidays(y));});
+    var seen={};
+    var result=[];
+    all.forEach(function(h){
+      var s=localStr(h.date);
+      if(h.date<winStart||h.date>winEnd||s===satStr||s===sunStr)return;
+      if(seen[s]){seen[s].nombre+=' / '+h.nombre;}
+      else{var e={date:h.date,nombre:h.nombre,dayKey:s,weekdayName:DAYS_ES[h.date.getDay()]};seen[s]=e;result.push(e);}
+    });
+    return result;
+  };
+})();
+
 /* ════════════════════════════════════════════════════════
    MÓDULO SH — Turnos Fin de Semana
    ════════════════════════════════════════════════════════ */
@@ -6892,6 +6985,7 @@ var SH=(function(){
   var _shift=null;
   var _assignments=[];
   var _saturday=null;
+  var _weekHolidays=[]; // [{date,nombre,dayKey,weekdayName}] festivos de la semana activa
 
   function getSat(date){
     var d=new Date(date);
@@ -6914,9 +7008,17 @@ var SH=(function(){
 
   async function loadShift(sat){
     _saturday=sat;
+    _weekHolidays=window.__getWeekHolidays(sat);
     var dateStr=toStr(sat);
     var lbl=document.getElementById('shift-week-label');
-    if(lbl)lbl.textContent=fmtWE(sat);
+    if(lbl){
+      if(_weekHolidays.length){
+        var festNames=_weekHolidays.map(function(h){return h.weekdayName+': '+h.nombre;}).join(' · ');
+        lbl.innerHTML=esc(fmtWE(sat))+'<br><span style="font-size:.72rem;color:var(--amber);letter-spacing:.02em">'+esc(festNames)+'</span>';
+      }else{
+        lbl.textContent=fmtWE(sat);
+      }
+    }
     var rows=await dbGet('weekend_shifts','weekend_start=eq.'+dateStr);
     if(rows&&rows.length){
       _shift=rows[0];
@@ -6982,6 +7084,8 @@ var SH=(function(){
       if(!t.is_critical)return;
       if(t.covers_both_days){if(!getA(t.area_code,'both')&&!getA(t.area_code,'saturday'))missing++;}
       else{if(!getA(t.area_code,'saturday'))missing++;if(!getA(t.area_code,'sunday'))missing++;}
+      // Festivos de la semana también requieren cobertura en templates críticos
+      _weekHolidays.forEach(function(h){if(!getA(t.area_code,h.dayKey))missing++;});
     });
     var notice=document.getElementById('shift-incomplete-notice');
     var noticeMsg=document.getElementById('shift-incomplete-msg');
@@ -7003,15 +7107,47 @@ var SH=(function(){
 
   function renderSlot(t,editable){
     var colorBar='border-left:3px solid '+t.color_hex+';';
+    var wh=_weekHolidays;
+
+    /* Columnas de festivos reutilizables por ambos tipos de slot */
+    function mkHolidayCols(code,areaLabel){
+      return wh.map(function(h){
+        var aH=getA(code,h.dayKey);
+        var clickH=editable?
+          'class="slot-day-col holiday clickable" onclick="SH.openModal(\''+code+'\',\''+h.dayKey+'\',\''+esc(areaLabel)+' · '+esc(h.weekdayName)+' ('+esc(h.nombre)+')\')"':
+          'class="slot-day-col holiday"';
+        return'<div '+clickH+'>'+
+          '<div class="slot-day-label holiday-label">'+h.weekdayName.toUpperCase()+'<span class="slot-holiday-badge">'+esc(h.nombre)+'</span></div>'+
+          '<div class="slot-person'+(aH?'':' empty')+'"><i class="ti '+(aH?'ti-user-check':'ti-user-plus')+'"></i> '+(aH?esc(aH.assigned_nombre):'Asignar')+'</div>'+
+        '</div>';
+      }).join('');
+    }
+
     if(t.covers_both_days){
       var a=getA(t.area_code,'both')||getA(t.area_code,'saturday');
       var clickAttr=editable?'onclick="SH.openModal(\''+t.area_code+'\',\'both\',\''+esc(t.area_nombre)+'\')"':'';
-      return'<div class="shift-slot" '+clickAttr+'>'+
-        '<div class="slot-area" style="'+colorBar+'">'+esc(t.area_nombre)+'</div>'+
-        '<div class="slot-days-label">Sáb + Dom</div>'+
-        '<div class="slot-person'+(a?'':' empty')+'"><i class="ti '+(a?'ti-user-check':'ti-user-plus')+'"></i> '+(a?esc(a.assigned_nombre):'Sin asignar')+'</div>'+
-        (a&&a.confirmed?'<div class="slot-confirmed">✓ Confirmó</div>':'')+
+      if(wh.length===0){
+        /* Comportamiento original — sin festivos */
+        return'<div class="shift-slot" '+clickAttr+'>'+
+          '<div class="slot-area" style="'+colorBar+'">'+esc(t.area_nombre)+'</div>'+
+          '<div class="slot-days-label">Sáb + Dom</div>'+
+          '<div class="slot-person'+(a?'':' empty')+'"><i class="ti '+(a?'ti-user-check':'ti-user-plus')+'"></i> '+(a?esc(a.assigned_nombre):'Sin asignar')+'</div>'+
+          (a&&a.confirmed?'<div class="slot-confirmed">✓ Confirmó</div>':'')+
+          '</div>';
+      }else{
+        /* Con festivos: bloque "Sáb+Dom" + columnas de festivos */
+        return'<div class="shift-slot two-day">'+
+          '<div class="slot-area" style="'+colorBar+'">'+esc(t.area_nombre)+'</div>'+
+          '<div class="slot-two-day-grid" style="grid-template-columns:repeat('+(1+wh.length)+',1fr)">'+
+            '<div class="slot-day-col'+(editable?' clickable':'')+'" '+clickAttr+'>'+
+              '<div class="slot-day-label">SÁB + DOM</div>'+
+              '<div class="slot-person'+(a?'':' empty')+'"><i class="ti '+(a?'ti-user-check':'ti-user-plus')+'"></i> '+(a?esc(a.assigned_nombre):'Sin asignar')+'</div>'+
+              (a&&a.confirmed?'<div class="slot-confirmed">✓ Confirmó</div>':'')+
+            '</div>'+
+            mkHolidayCols(t.area_code,t.area_nombre)+
+          '</div>'+
         '</div>';
+      }
     }else{
       var aSat=getA(t.area_code,'saturday');
       var aSun=getA(t.area_code,'sunday');
@@ -7019,9 +7155,10 @@ var SH=(function(){
       var cSun=editable?'class="slot-day-col clickable" onclick="SH.openModal(\''+t.area_code+'\',\'sunday\',\''+esc(t.area_nombre)+' · Domingo\')"':'class="slot-day-col"';
       return'<div class="shift-slot two-day">'+
         '<div class="slot-area" style="'+colorBar+'">'+esc(t.area_nombre)+'</div>'+
-        '<div class="slot-two-day-grid">'+
+        '<div class="slot-two-day-grid" style="grid-template-columns:repeat('+(2+wh.length)+',1fr)">'+
           '<div '+cSat+'><div class="slot-day-label">SÁBADO</div><div class="slot-person'+(aSat?'':' empty')+'"><i class="ti '+(aSat?'ti-user-check':'ti-user-plus')+'"></i> '+(aSat?esc(aSat.assigned_nombre):'Asignar')+'</div></div>'+
           '<div '+cSun+'><div class="slot-day-label">DOMINGO</div><div class="slot-person'+(aSun?'':' empty')+'"><i class="ti '+(aSun?'ti-user-check':'ti-user-plus')+'"></i> '+(aSun?esc(aSun.assigned_nombre):'Asignar')+'</div></div>'+
+          mkHolidayCols(t.area_code,t.area_nombre)+
         '</div></div>';
     }
   }
