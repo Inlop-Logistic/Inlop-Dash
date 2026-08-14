@@ -48,6 +48,7 @@ export const CATALOGO_DATASETS = {
       linea_negocio:           { label: 'Línea de negocio',          tipo: 'enum',     filtrable: true,  seleccionableColumna: true },
       state_travel:            { label: 'Estado del viaje',          tipo: 'enum',     filtrable: true,  seleccionableColumna: true },
       last_alarm_name:         { label: 'Con novedad',               tipo: 'booleano', filtrable: true,  seleccionableColumna: true },
+      cliente_normalizado:     { label: 'Cliente',                   tipo: 'cliente',   filtrable: true,  seleccionableColumna: false },
     },
   },
 
@@ -68,6 +69,7 @@ export const CATALOGO_DATASETS = {
       tipo_operacion:      { label: 'Tipo de operación',      tipo: 'enum',   filtrable: true,  seleccionableColumna: true },
       fecha_requerida:     { label: 'Fecha requerida',        tipo: 'fecha',  filtrable: true,  seleccionableColumna: true, formatoFecha: 'iso' },
       estado:              { label: 'Estado',                  tipo: 'enum',   filtrable: true,  seleccionableColumna: true },
+      cliente_normalizado: { label: 'Cliente',                 tipo: 'cliente', filtrable: true,  seleccionableColumna: false },
     },
   },
 
@@ -88,6 +90,7 @@ export const CATALOGO_DATASETS = {
       linea_negocio:            { label: 'Línea de negocio',          tipo: 'enum',     filtrable: true,  seleccionableColumna: true },
       estado_programacion:      { label: 'Estado de programación',    tipo: 'enum',     filtrable: true,  seleccionableColumna: true },
       activo_en_resume:         { label: 'Activo en programación',    tipo: 'booleano', filtrable: true,  seleccionableColumna: true },
+      cliente_normalizado:      { label: 'Cliente',                   tipo: 'cliente',   filtrable: true,  seleccionableColumna: false },
     },
   },
 
@@ -110,6 +113,7 @@ export const CATALOGO_DATASETS = {
       estado_documental:         { label: 'Estado documental',            tipo: 'enum',     filtrable: true,  seleccionableColumna: true },
       state_travel:              { label: 'Estado del viaje (TMS)',       tipo: 'enum',     filtrable: true,  seleccionableColumna: true },
       tiene_soporte:             { label: 'Tiene soporte cargado',        tipo: 'booleano', filtrable: true,  seleccionableColumna: true },
+      cliente_normalizado:       { label: 'Cliente',                      tipo: 'cliente',   filtrable: true,  seleccionableColumna: false },
     },
   },
 
@@ -128,6 +132,7 @@ export const CATALOGO_DATASETS = {
       estadoGps:                  { label: 'Estado GPS',                tipo: 'enum',     filtrable: true,  seleccionableColumna: true },
       state_travel:                { label: 'Estado del viaje (TMS)',    tipo: 'enum',     filtrable: true,  seleccionableColumna: true },
       last_alarm_name:             { label: 'Con alarma activa',         tipo: 'booleano', filtrable: true,  seleccionableColumna: true },
+      cliente_normalizado:         { label: 'Cliente',                   tipo: 'cliente',   filtrable: true,  seleccionableColumna: false },
     },
   },
 

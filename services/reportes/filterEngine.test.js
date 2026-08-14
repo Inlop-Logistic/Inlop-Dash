@@ -165,3 +165,60 @@ test('evaluaCondicion sobre linea_negocio usa el valor ya derivado por enriquece
   assert.equal(evaluaCondicion(filaLiquida, filtro, campoInfo), true);
   assert.equal(evaluaCondicion(filaSeca,     filtro, campoInfo), false);
 });
+
+// ── Cliente multi-selección — operador "en" (Fase 11A) ──────────────────────
+
+const VIAJES_CLIENTE = [
+  { trip_number: 'C1', cliente_normalizado: 'PRODUCTOS RAMO SAS' },
+  { trip_number: 'C2', cliente_normalizado: 'TRANSPORTES RUEDA'  },
+  { trip_number: 'C3', cliente_normalizado: 'CONQUERS'           },
+];
+
+test('"en" sin valores elegidos ("Todos") no restringe', () => {
+  const campoInfo = camposDe('viajes_activos').cliente_normalizado;
+  const filtros = [{ campo: 'cliente_normalizado', operador: 'en', valores: [] }];
+  const out = aplicarFiltros(VIAJES_CLIENTE, filtros, 'viajes_activos');
+  assert.equal(out.length, 3);
+  assert.equal(evaluaCondicion(VIAJES_CLIENTE[0], { campo: 'cliente_normalizado', operador: 'en' }, campoInfo), true);
+});
+
+test('"en" con un solo cliente elegido filtra por ese cliente exacto', () => {
+  const filtros = [{ campo: 'cliente_normalizado', operador: 'en', valores: ['PRODUCTOS RAMO SAS'] }];
+  const out = aplicarFiltros(VIAJES_CLIENTE, filtros, 'viajes_activos');
+  assert.deepEqual(out.map(v => v.trip_number), ['C1']);
+});
+
+test('"en" con varios clientes elegidos actúa como OR entre ellos (selección múltiple)', () => {
+  const filtros = [{ campo: 'cliente_normalizado', operador: 'en', valores: ['PRODUCTOS RAMO SAS', 'CONQUERS'] }];
+  const out = aplicarFiltros(VIAJES_CLIENTE, filtros, 'viajes_activos');
+  assert.deepEqual(out.map(v => v.trip_number), ['C1', 'C3']);
+});
+
+test('"en" reconoce variantes del mismo cliente porque compara la clave YA normalizada', () => {
+  // enriquecerFilas ya convirtió "Productos Ramo S.A.S." y "Productos Ramo SAS"
+  // a la misma clave antes de llegar aquí — el filtro solo compara claves.
+  const filas = [
+    { trip_number: 'V1', cliente_normalizado: 'PRODUCTOS RAMO SAS' }, // vino de "Productos Ramo SAS"
+    { trip_number: 'V2', cliente_normalizado: 'PRODUCTOS RAMO SAS' }, // vino de "Productos Ramo S A S"
+    { trip_number: 'V3', cliente_normalizado: 'OTRO CLIENTE SAS' },
+  ];
+  const filtros = [{ campo: 'cliente_normalizado', operador: 'en', valores: ['PRODUCTOS RAMO SAS'] }];
+  const out = aplicarFiltros(filas, filtros, 'viajes_activos');
+  assert.deepEqual(out.map(v => v.trip_number), ['V1', 'V2']);
+});
+
+test('"en" — aislamiento entre clientes: un reporte de Cliente A nunca incluye filas de Cliente B', () => {
+  const filas = [
+    { trip_number: 'A1', cliente_normalizado: 'CLIENTE A' },
+    { trip_number: 'B1', cliente_normalizado: 'CLIENTE B' },
+  ];
+  const filtros = [{ campo: 'cliente_normalizado', operador: 'en', valores: ['CLIENTE A'] }];
+  const out = aplicarFiltros(filas, filtros, 'viajes_activos');
+  assert.deepEqual(out.map(v => v.trip_number), ['A1']);
+  assert.ok(!out.some(v => v.cliente_normalizado === 'CLIENTE B'));
+});
+
+test('reportes sin filtro de cliente configurado (filtros=[]) siguen incluyendo todos los clientes — regresión', () => {
+  const out = aplicarFiltros(VIAJES_CLIENTE, [], 'viajes_activos');
+  assert.equal(out, VIAJES_CLIENTE);
+});

@@ -9,12 +9,13 @@ import { getUserPreferences, updatePreference, KNOWN_CHANNELS } from './services
 import { normalizeExternalRef } from './services/normalizeExternalRef.js';
 import { fechaHoyColombia, parseFechaTMS, extraerFechaColombia } from './utils/fechas.js';
 import controltDiagRouter from './routes/controltDiag.js';
+import crearRouterGpsSeguimiento from './routes/gpsSeguimiento.js';
 import { getTripDetail, makeSbFetchAdapter } from './services/controlt-soap/tripService.js';
 import {
-  transformarViajesActivos, transformarCentroGps,
+  transformarViajesActivos, transformarCentroGps, listarClientesDataset,
 } from './services/reportes/datasetProvider.js';
 import { ejecutarReporteManual } from './services/reportes/envioManual.js';
-import { ejecutarTickScheduler } from './services/reportes/scheduler.js';
+import { ejecutarTickScheduler, calcularProgramacionAlGuardar } from './services/reportes/scheduler.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -132,6 +133,16 @@ if (!CLIENT_PORTAL_URL) {
     "propio — configura esta variable en Railway."
   );
 }
+
+// URL pública base de seguimiento-gps/ (Fase 10C) — usada por
+// services/reportes/enlaceGps.js (Fase 10D) para armar el CTA "Ver
+// seguimiento GPS" del correo de un reporte. Sin esta variable, el CTA
+// simplemente no se agrega (log de advertencia en el momento de un envío
+// con seguimiento_gps activo) — el resto del envío no se ve afectado. No
+// tiene fallback de warning al arranque porque, a diferencia de
+// CLIENT_PORTAL_URL, todavía no hay ningún reporte usando la función salvo
+// que un usuario la active explícitamente.
+const SEGUIMIENTO_GPS_URL = process.env.SEGUIMIENTO_GPS_URL || "";
 
 const SB_HEADERS = {
   "apikey": SB_ANON_KEY,
@@ -4750,6 +4761,11 @@ app.get("/api/personal", requireInternalApiKey, async (req, res) => {
 
 const FRECUENCIAS_VALIDAS_RA = new Set(["diaria", "semanal", "mensual"]);
 const FORMATOS_VALIDOS_RA    = new Set(["excel", "html_filas", "html_columnas"]);
+// Mismo valor que services/gps/enlaces.js#MODULO_PERMITIDO (Fase 10B) y que
+// el default de modulo_id un poco más abajo — repetido aquí como literal
+// para no tener que importar todo services/gps/* en index.js solo por esta
+// constante de validación del CRUD (Fase 10D).
+const MODULO_GESTION_LOGISTICA = "gestion_logistica";
 
 /** Valida la forma de `destinatarios` — { personal_ids: string[], correos_externos: string[] }. */
 function errorDestinatarios(destinatarios) {
@@ -4792,6 +4808,7 @@ app.post("/api/reportes-automaticos", requireInternalApiKey, async (req, res) =>
       columnas,
       recurrencia,
       destinatarios,
+      seguimiento_gps = false,
     } = req.body ?? {};
 
     if (!nombre?.trim())       return res.status(400).json({ error: "El nombre es obligatorio" });
@@ -4816,6 +4833,14 @@ app.post("/api/reportes-automaticos", requireInternalApiKey, async (req, res) =>
       const err = errorDestinatarios(destinatarios);
       if (err) return res.status(400).json({ error: err });
     }
+    if (seguimiento_gps === true && modulo_id.trim() !== MODULO_GESTION_LOGISTICA) {
+      return res.status(400).json({ error: "El seguimiento GPS solo aplica a reportes de Gestión Logística" });
+    }
+
+    const recurrenciaFinal = recurrencia ?? {};
+    // Fase 11D.1 — calcula proxima_ejecucion de una vez, en vez de dejarla
+    // en null a la espera del siguiente tick del scheduler (hasta 60s).
+    const { proximaEjecucion, slotDeHoyVencido } = calcularProgramacionAlGuardar(recurrenciaFinal);
 
     const rows = await sbFetch("/reportes_automaticos", "POST", {
       nombre:       nombre.trim(),
@@ -4829,13 +4854,15 @@ app.post("/api/reportes-automaticos", requireInternalApiKey, async (req, res) =>
       frecuencia,
       filtros:       Array.isArray(filtros)  ? filtros  : [],
       columnas:      Array.isArray(columnas) ? columnas : [],
-      recurrencia:   recurrencia ?? {},
+      recurrencia:   recurrenciaFinal,
+      proxima_ejecucion: proximaEjecucion ? proximaEjecucion.toISOString() : null,
       destinatarios: destinatarios ?? { personal_ids: [], correos_externos: [] },
+      seguimiento_gps: typeof seguimiento_gps === "boolean" ? seguimiento_gps : false,
       created_by:   actor,
       updated_by:   actor,
     });
     if (!rows?.[0]) return res.status(502).json({ error: "No se pudo crear el reporte" });
-    res.status(201).json(rows[0]);
+    res.status(201).json({ ...rows[0], slotDeHoyVencido });
   } catch (e) {
     console.error("POST /api/reportes-automaticos error:", e.message);
     res.status(500).json({ error: "Error interno" });
@@ -4846,9 +4873,10 @@ app.patch("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, re
   try {
     const { id } = req.params;
     const actor = req.headers["x-user-email"] ?? "sistema";
-    const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, borrador, frecuencia, filtros, columnas, recurrencia, destinatarios } = req.body ?? {};
+    const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, borrador, frecuencia, filtros, columnas, recurrencia, destinatarios, seguimiento_gps } = req.body ?? {};
 
     const patch = { updated_by: actor };
+    let slotDeHoyVencido = false; // Fase 11D.1 — solo se vuelve true si esta solicitud recalcula recurrencia
     if (nombre       !== undefined) patch.nombre       = nombre.trim();
     if (modulo_id    !== undefined) patch.modulo_id    = modulo_id.trim();
     if (tipo_reporte !== undefined) patch.tipo_reporte = tipo_reporte.trim();
@@ -4885,26 +4913,43 @@ app.patch("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, re
         return res.status(400).json({ error: "recurrencia debe ser un objeto" });
       }
       patch.recurrencia = recurrencia;
-      // Fase 9G — hallazgo de auditoría: si no se limpia proxima_ejecucion
+      // Fase 9G — hallazgo de auditoría: si no se recalcula proxima_ejecucion
       // aquí, un reporte activo cuya recurrencia se edita conserva el
       // próximo disparo calculado con el horario ANTERIOR (ej. seguía
-      // "diaria 08:00" aunque el usuario ya cambió a "semanal lunes 14:00")
-      // — el scheduler lo dispararía una vez con el timing viejo antes de
-      // corregirse solo. Poniéndolo en null, el scheduler.js#
-      // inicializarPendientes() recalcula desde cero con la recurrencia
-      // nueva en su próximo tick — mismo camino que ya usa un reporte
-      // recién activado, sin lógica nueva.
-      patch.proxima_ejecucion = null;
+      // "diaria 08:00" aunque el usuario ya cambió a "semanal lunes 14:00").
+      // Fase 11D.1 — antes se ponía en null y se esperaba hasta 60s al
+      // siguiente tick del scheduler; ahora se recalcula de una vez con la
+      // MISMA función que usa el scheduler (calcularProgramacionAlGuardar
+      // → primerSlotFuturo), con la misma garantía de nunca dejar un slot
+      // ya vencido.
+      const programacion = calcularProgramacionAlGuardar(recurrencia);
+      patch.proxima_ejecucion = programacion.proximaEjecucion ? programacion.proximaEjecucion.toISOString() : null;
+      slotDeHoyVencido = programacion.slotDeHoyVencido;
     }
     if (destinatarios !== undefined) {
       const err = errorDestinatarios(destinatarios);
       if (err) return res.status(400).json({ error: err });
       patch.destinatarios = destinatarios;
     }
+    if (seguimiento_gps !== undefined) {
+      if (typeof seguimiento_gps !== "boolean") {
+        return res.status(400).json({ error: "'seguimiento_gps' debe ser boolean" });
+      }
+      // Solo se valida contra el modulo_id de ESTA misma solicitud — el
+      // wizard (Etapa 01) siempre envía ambos juntos (Fase 10D). La
+      // verdadera barrera de seguridad no es esta validación de guardado:
+      // es que la ejecución (services/reportes/enlaceGps.js) vuelve a
+      // comprobar modulo_id === 'gestion_logistica' cada vez, sin importar
+      // lo que haya quedado persistido aquí.
+      if (seguimiento_gps && modulo_id !== undefined && modulo_id.trim() !== MODULO_GESTION_LOGISTICA) {
+        return res.status(400).json({ error: "El seguimiento GPS solo aplica a reportes de Gestión Logística" });
+      }
+      patch.seguimiento_gps = seguimiento_gps;
+    }
 
     const rows = await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}`, "PATCH", patch);
     if (!rows?.[0]) return res.status(404).json({ error: "Reporte no encontrado" });
-    res.json(rows[0]);
+    res.json({ ...rows[0], slotDeHoyVencido });
   } catch (e) {
     console.error("PATCH /api/reportes-automaticos/:id error:", e.message);
     res.status(500).json({ error: "Error interno" });
@@ -4920,13 +4965,38 @@ app.patch("/api/reportes-automaticos/:id/activo", requireInternalApiKey, async (
     if (typeof activo !== "boolean") {
       return res.status(400).json({ error: "'activo' debe ser boolean" });
     }
+    const patch = { activo, updated_by: actor };
+    let slotDeHoyVencido = false;
+    // Fase 11D — mismo criterio que el cambio de recurrencia (Fase 9G, ver
+    // PATCH /:id más arriba): al REACTIVAR un reporte, proxima_ejecucion
+    // puede seguir apuntando a un slot calculado antes de pausarlo — si ese
+    // slot ya quedó en el pasado mientras estaba inactivo, reactivarlo lo
+    // dejaría "vencido" y el scheduler lo ejecutaría de inmediato en su
+    // próximo tick ("Activar → NO enviar" es una regla de producto, no solo
+    // para la primera activación). Al desactivar no aplica: activo=false ya
+    // excluye al reporte de ambas consultas del scheduler, sin importar qué
+    // traiga proxima_ejecucion.
+    //
+    // Fase 11D.1 — antes se ponía en null y se esperaba hasta 60s al
+    // siguiente tick del scheduler; ahora se recalcula de una vez con la
+    // recurrencia actual del reporte (este endpoint no la recibe en el
+    // body, así que se lee de la fila existente) usando la MISMA función
+    // que usa el scheduler (calcularProgramacionAlGuardar →
+    // primerSlotFuturo) — sin duplicar el cálculo.
+    if (activo === true) {
+      const filaActual = await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}&select=recurrencia`);
+      const recurrenciaActual = filaActual?.[0]?.recurrencia ?? null;
+      const programacion = calcularProgramacionAlGuardar(recurrenciaActual);
+      patch.proxima_ejecucion = programacion.proximaEjecucion ? programacion.proximaEjecucion.toISOString() : null;
+      slotDeHoyVencido = programacion.slotDeHoyVencido;
+    }
     const rows = await sbFetch(
       `/reportes_automaticos?id=eq.${encodeURIComponent(id)}`,
       "PATCH",
-      { activo, updated_by: actor }
+      patch
     );
     if (!rows?.[0]) return res.status(404).json({ error: "Reporte no encontrado" });
-    res.json({ ok: true, activo: rows[0].activo });
+    res.json({ ok: true, activo: rows[0].activo, proxima_ejecucion: rows[0].proxima_ejecucion, slotDeHoyVencido });
   } catch (e) {
     console.error("PATCH /api/reportes-automaticos/:id/activo error:", e.message);
     res.status(500).json({ error: "Error interno" });
@@ -4951,6 +5021,31 @@ app.delete("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, r
     res.json({ ok: true });
   } catch (e) {
     console.error("DELETE /api/reportes-automaticos/:id error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// GET /api/reportes-automaticos/clientes?tipo_reporte=X — Fase 11A: lista de
+// clientes disponibles para el selector "Cliente" del wizard (etapa
+// Filtros), derivada del MISMO dataset y la MISMA normalización que aplica
+// el filtro real en generación (ver services/reportes/datasetProvider.js —
+// listarClientesDataset / cliente_normalizado) — nunca un catálogo aparte
+// que pueda desalinearse de lo que el filtro realmente hace.
+app.get("/api/reportes-automaticos/clientes", requireInternalApiKey, async (req, res) => {
+  try {
+    const tipoReporte = String(req.query.tipo_reporte ?? "").trim();
+    if (!tipoReporte) return res.status(400).json({ error: "tipo_reporte es obligatorio" });
+
+    const clientes = await listarClientesDataset(tipoReporte, {
+      sbFetch,
+      viajesCache: cache.viajes.data,
+      tripCustomerCache,
+      extraerTelefono,
+      primerNombreCliente,
+    });
+    res.json(clientes);
+  } catch (e) {
+    console.error("GET /api/reportes-automaticos/clientes error:", e.message);
     res.status(500).json({ error: "Error interno" });
   }
 });
@@ -4982,6 +5077,8 @@ app.post("/api/reportes-automaticos/:id/enviar", requireInternalApiKey, async (r
       tripCustomerCache,
       extraerTelefono,
       primerNombreCliente,
+      seguimientoGpsUrl:   SEGUIMIENTO_GPS_URL, // Fase 10D — ver services/reportes/enlaceGps.js
+      origenEjecucion:     "manual",
     });
     if (!resultado.ok) {
       const status = STATUS_POR_CODIGO_ENVIO[resultado.codigo] ?? 500;
@@ -5064,6 +5161,16 @@ app.delete('/push/suscripcion', requireClienteAuth, async (req, res) => {
 // ─── DIAGNÓSTICO CONTROLT SOAP ───────────────────────────────────────────────
 app.use('/api/controlt', requireInternalApiKey, controltDiagRouter);
 
+// ─── SEGUIMIENTO GPS EXTERNO (Fase 10B) ──────────────────────────────────────
+// Rutas PÚBLICAS (sin requireInternalApiKey — decisión cerrada de Fase 10B:
+// el enlace/OTP/sesión son su propio mecanismo de autorización, nunca la
+// clave interna del ERP). `cache` se pasa completo (no `cache.viajes.data`)
+// para que el router siempre lea el snapshot más reciente — ver
+// routes/gpsSeguimiento.js.
+app.use('/api/seguimiento-gps', crearRouterGpsSeguimiento({
+  sbFetch, cache, tripCustomerCache, extraerTelefono, primerNombreCliente,
+}));
+
 // ─── MANEJADOR DE ERRORES — respuestas JSON limpias para fallos de body-parser ──
 // (ej. archivo de soporte que excede el límite de express.raw). Sin este
 // handler, Express respondería con una página HTML de error por defecto.
@@ -5089,6 +5196,8 @@ async function tickSchedulerReportes(origen) {
       tripCustomerCache,
       extraerTelefono,
       primerNombreCliente,
+      seguimientoGpsUrl: SEGUIMIENTO_GPS_URL, // Fase 10D — ver services/reportes/enlaceGps.js
+      origenEjecucion:   "scheduler",
     });
     if (!resultado.ok) {
       if (resultado.motivo !== 'tick_en_curso') {

@@ -4,7 +4,13 @@
  * Flujo por tick:
  *   1. Inicializar: reportes activos/no-borrador con proxima_ejecucion aún
  *      sin calcular (NULL) reciben su primer slot — no se ejecutan en este
- *      paso, solo se programan.
+ *      paso, solo se programan. Regla de producto (Fase 11D): "guardar
+ *      configuración ≠ ejecutar reporte" — ese primer slot NUNCA puede
+ *      quedar ya vencido en el momento de calcularlo (ver
+ *      inicializarPendientes() más abajo), o el paso 2 de este MISMO tick
+ *      lo tomaría por vencido y lo ejecutaría de inmediato — exactamente el
+ *      bug reportado: crear/editar/activar un reporte disparaba un correo
+ *      al toque, sin esperar al scheduler.
  *   2. Ejecutar: reportes activos/no-borrador con proxima_ejecucion <= ahora
  *      se ejecutan uno por uno, vía ejecutarReporteManual() (Fase 9E) — el
  *      MISMO motor que la ejecución manual, sin ninguna lógica de
@@ -35,7 +41,8 @@
  * cache.viajes.data en memoria, sin coordinación entre instancias).
  */
 import { ejecutarReporteManual } from './envioManual.js';
-import { calcularProximaEjecucion } from './recurrencia.js';
+import { calcularProximaEjecucion, esFechaValida } from './recurrencia.js';
+import { extraerFechaColombia } from '../../utils/fechas.js';
 
 let tickEnCurso = false;
 
@@ -46,7 +53,72 @@ export function _resetMutexParaTests() {
 
 // ─── Inicialización de reportes sin proxima_ejecucion ──────────────────────
 
-async function inicializarPendientes(deps) {
+/**
+ * Calcula el primer slot de un reporte recién activado/reconfigurado —
+ * SIEMPRE hacia adelante desde `ahora`, nunca un slot ya vencido.
+ *
+ * calcularProximaEjecucion(recurrencia, null) (recurrencia.js) busca el
+ * primer slot válido desde `fecha_inicio`, IGNORANDO la hora actual por
+ * diseño — necesario para que `fin.modo:"repeticiones"` cuente el ordinal
+ * correcto desde el origen real de la recurrencia (ver recurrencia.test.js).
+ * Pero como el wizard por defecto fija `fecha_inicio` en HOY, ese primer
+ * slot cae fácilmente en el pasado (ej. "diaria 08:00" configurada a las
+ * 3pm) — usado tal cual aquí, ese slot ya vencido sería tomado por
+ * `procesarVencidos()` en este MISMO tick y el reporte se enviaría de
+ * inmediato al guardar (Fase 11D, bug reportado). Por eso, si el primer
+ * slot bootstrapped ya pasó, se recalcula con `ahora` como referencia — el
+ * mismo camino que ya usa un reporte tras ejecutarse (ver
+ * procesarUnReporte() más abajo) — para obtener el verdadero próximo slot
+ * futuro, sin tocar la semántica de calcularProximaEjecucion() en sí (sigue
+ * intacta para `fin.modo:"repeticiones"` y cualquier otro llamador).
+ *
+ * Exportada (Fase 11D.1): index.js la reutiliza para calcular
+ * `proxima_ejecucion` de forma SÍNCRONA al crear/editar/reactivar un
+ * reporte, en vez de escribir `null` y esperar hasta 60s al siguiente tick
+ * del scheduler — misma función, mismo resultado, sin duplicar el cálculo.
+ */
+export function primerSlotFuturo(recurrencia, ahora) {
+  const bootstrap = calcularProximaEjecucion(recurrencia, null);
+  if (bootstrap && bootstrap <= ahora) {
+    return calcularProximaEjecucion(recurrencia, ahora);
+  }
+  return bootstrap;
+}
+
+/**
+ * Programación sincrónica al guardar (Fase 11D.1) — crear/editar/reactivar
+ * un reporte calcula `proxima_ejecucion` de inmediato (index.js, rutas
+ * POST/PATCH de reportes-automaticos), en vez de escribir `null` y esperar
+ * hasta 60s al siguiente tick del scheduler. Reutiliza `primerSlotFuturo()`
+ * de arriba — la MISMA función que ya usa `inicializarPendientes()` — así
+ * que la garantía de "nunca un slot ya vencido" es la misma con o sin este
+ * atajo síncrono. Vive aquí (no en index.js) para mantener una única fuente
+ * de verdad de todo el cálculo de recurrencias/programación, y quedar
+ * testeable sin depender de Express.
+ *
+ * `slotDeHoyVencido` es puramente informativo, para que el frontend pueda
+ * mostrar el aviso "la hora de hoy ya pasó, el próximo envío es [fecha]" —
+ * NUNCA se usa para decidir si algo se ejecuta. true cuando HOY era un día
+ * válido de la recurrencia pero ya se agotaron todas sus horas
+ * configuradas (la próxima ejecución real cae en un día posterior).
+ *
+ * @param {object|null} recurrencia
+ * @param {Date} [ahora]
+ * @returns {{proximaEjecucion: Date|null, slotDeHoyVencido: boolean}}
+ */
+export function calcularProgramacionAlGuardar(recurrencia, ahora = new Date()) {
+  const siguiente = primerSlotFuturo(recurrencia, ahora);
+  const hoyYMD = extraerFechaColombia(ahora);
+  // Cortocircuito `siguiente &&`: si es null (recurrencia incompleta/mal
+  // formada, o sin más slots futuros), esFechaValida() ni se llama —
+  // evita tocar recurrencia.fecha_inicio cuando recurrencia es null/{}.
+  const slotDeHoyVencido = Boolean(
+    siguiente && esFechaValida(hoyYMD, recurrencia) && extraerFechaColombia(siguiente) !== hoyYMD
+  );
+  return { proximaEjecucion: siguiente, slotDeHoyVencido };
+}
+
+async function inicializarPendientes(deps, ahora) {
   const { sbFetch } = deps;
   const sinProgramar = await sbFetch(
     '/reportes_automaticos?activo=eq.true&borrador=eq.false&proxima_ejecucion=is.null&select=id,recurrencia'
@@ -54,7 +126,7 @@ async function inicializarPendientes(deps) {
 
   const inicializados = [];
   for (const r of sinProgramar) {
-    const siguiente = calcularProximaEjecucion(r.recurrencia, null);
+    const siguiente = primerSlotFuturo(r.recurrencia, ahora);
     await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(r.id)}`, 'PATCH', {
       proxima_ejecucion: siguiente ? siguiente.toISOString() : null,
     });
@@ -143,7 +215,7 @@ export async function ejecutarTickScheduler(deps = {}) {
   tickEnCurso = true;
   try {
     const ahora = new Date();
-    const inicializados = await inicializarPendientes(deps);
+    const inicializados = await inicializarPendientes(deps, ahora);
     const ejecutados = await procesarVencidos(ahora, deps);
     return { ok: true, inicializados, ejecutados };
   } finally {

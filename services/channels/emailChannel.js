@@ -120,8 +120,16 @@ async function _registrarIntento(deliveryId, { numIntento, resultado, error, lat
  * manual, Fase 9E) y que explícitamente no persisten historial de envío.
  *
  * @param {{to: string[], subject: string, html: string,
- *   attachments?: Array<{filename: string, content: string}>}} params
+ *   attachments?: Array<{filename: string, content: string, contentType?: string}>}} params
  *   `attachments[].content` en base64 (formato esperado por el SDK de Resend).
+ *   `attachments[].contentType` (Fase 11C) se reenvía tal cual al SDK de
+ *   Resend (`Attachment.contentType`, ver node_modules/resend/dist/
+ *   index.d.mts) — el llamador (envioManual.js) es quien decide su valor;
+ *   este canal nunca lo infiere ni lo sobreescribe. Ningún `contentId` se
+ *   agrega aquí — el SDK de Resend documenta que su sola presencia fuerza
+ *   disposition "inline"; dejarlo ausente es lo que mantiene el adjunto
+ *   como archivo descargable (Resend no expone un campo de disposition
+ *   explícito e independiente para adjuntos salientes).
  * @returns {Promise<{ok: boolean, id?: string, skipped?: boolean, error?: string}>}
  */
 async function sendWithAttachment({ to, subject, html, attachments }) {

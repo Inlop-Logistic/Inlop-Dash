@@ -1,0 +1,155 @@
+/*
+ * Seguimiento GPS INLOP — Global Base Styles (Fase 10C)
+ * Reset mínimo + fundamentos propios de esta app (Tailwind preflight cubre
+ * el resto). Mismo criterio que erp/src/styles/globals.css: solo estilos
+ * base de documento aquí, nada de utilidades sueltas.
+ */
+
+@import "leaflet/dist/leaflet.css";
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Evita el "double-tap zoom" del navegador — esta app se controla con
+     tap simple, nunca necesita zoom accidental en los controles. */
+  touch-action: manipulation;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
+  line-height: var(--leading-normal);
+  color: var(--gray-700);
+  background-color: var(--gray-50);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior-y: none; /* evita el "pull to refresh" nativo tapando el mapa */
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+/* ── Safe areas (notch / home indicator) ─────────────────────────────────── */
+
+.safe-top    { padding-top:    max(env(safe-area-inset-top), 0px); }
+.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+
+/* ── Foco visible — accesibilidad de teclado, nunca se suprime ──────────── */
+
+:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Leaflet — tematización mínima acorde a INLOP ────────────────────────── */
+
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: var(--gray-100);
+}
+.leaflet-popup-content-wrapper {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+.leaflet-popup-content {
+  margin: 10px 12px;
+  font-size: var(--text-md);
+}
+.leaflet-control-zoom a {
+  color: var(--navy) !important;
+}
+
+/* Marcador de vehículo — divIcon (ver Mapa.tsx) */
+.marcador-vehiculo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--duration-base) var(--ease-standard);
+}
+.marcador-vehiculo.seleccionado { transform: scale(1.18); }
+
+/* ── Skeleton shimmer — estado de carga ──────────────────────────────────── */
+
+@keyframes shimmer {
+  0%   { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 37%, var(--gray-100) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: var(--radius-md);
+}
+
+/* ── Bottom sheet (móvil) ─────────────────────────────────────────────────── */
+
+@keyframes sheet-in {
+  from { transform: translateY(12px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.hoja-inferior {
+  animation: sheet-in var(--duration-slow) var(--ease-enter);
+}
+
+/* Panel de vehículos — hoja inferior anclada en móvil, costado fijo en
+   desktop (breakpoint md de Tailwind = 768px, mismo valor aquí para que
+   ambas reglas cambien en el mismo punto). */
+.panel-vehiculos {
+  border-top: 1px solid var(--gray-200);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
+  /* Fase 10F — altura real de 3 estados (peek/medio/lleno), controlada por
+     useHojaInferior.ts vía esta variable; 58vh es solo el valor de
+     arranque antes de que React monte (evita un salto visual en el primer
+     paint). `height` fija (no `max-height`): una hoja arrastrable debe
+     quedar exactamente donde el usuario la soltó incluso si el contenido
+     es corto (ej. 1-2 vehículos) — igual que cualquier bottom sheet nativo;
+     con `max-height` los 3 estados eran indistinguibles cuando el
+     contenido no llegaba a llenar ni el más chico. Transición suave al
+     soltar el handle; durante el arrastre en vivo, PantallaSeguimiento.tsx
+     la desactiva en línea para seguir el dedo sin retraso. */
+  height: var(--sheet-max-h, 58vh);
+  transition: height 280ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+@media (min-width: 768px) {
+  .panel-vehiculos {
+    border-top: none;
+    border-left: 1px solid var(--gray-200);
+    border-radius: 0;
+    box-shadow: none;
+    height: 100%;
+    transition: none;
+  }
+}
+
+/* ── Pulso GPS (marcador "activo") ───────────────────────────────────────── */
+
+@keyframes pulso-gps {
+  0%   { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.45); }
+  100% { box-shadow: 0 0 0 14px rgba(5, 150, 105, 0); }
+}
+.pulso-activo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  animation: pulso-gps 1.8s var(--ease-standard) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

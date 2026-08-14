@@ -66,6 +66,20 @@ export function evaluaCondicion(fila, filtro, campoInfo) {
     return filtro.operador === 'tiene_valor' ? tieneValor : !tieneValor;
   }
 
+  // ── Multi-selección ("en"): coincide si el valor de la fila está entre
+  // los elegidos (Fase 11A — filtro "Cliente"). Para tipo "cliente" compara
+  // contra `cliente_normalizado` (agregado por enriquecerFilas en
+  // datasetProvider.js), no contra el nombre crudo — así "Productos Ramo
+  // SAS" y "Productos Ramo S.A.S." cuentan como el mismo cliente elegido.
+  // Sin valores elegidos ("Todos" en el wizard) no restringe.
+  if (filtro.operador === 'en') {
+    if (!filtro.valores || filtro.valores.length === 0) return true;
+    const valorComparar = campoInfo.tipo === 'cliente'
+      ? String(fila.cliente_normalizado ?? '')
+      : String(fila[filtro.campo] ?? '');
+    return filtro.valores.includes(valorComparar);
+  }
+
   // ── Texto / enum: igualdad exacta ────────────────────────────────────────
   const valorStr = fila[filtro.campo] === null || fila[filtro.campo] === undefined
     ? ''

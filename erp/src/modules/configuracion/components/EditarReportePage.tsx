@@ -13,8 +13,12 @@ import { datosConfiguradorDesdeReporte, type ReporteAutomatico } from "../types"
 
 interface Props {
   reporte:    ReporteAutomatico;
-  /** Invocado tras guardar con éxito — el caller navega al listado. */
-  onGuardado: () => void;
+  /**
+   * Invocado tras guardar con éxito — el caller navega al listado.
+   * `aviso` (Fase 11D.1): mensaje "la hora de hoy ya pasó..." cuando
+   * aplica, para que el listado lo muestre tras la navegación.
+   */
+  onGuardado: (aviso?: string) => void;
   onCancelar: () => void;
 }
 

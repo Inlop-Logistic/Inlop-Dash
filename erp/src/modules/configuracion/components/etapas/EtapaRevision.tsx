@@ -257,6 +257,20 @@ function PreviewCorreo({ datos, totalColumnasCatalogo }: PreviewCorreoProps) {
             Sin cuerpo de mensaje — se enviará solo el archivo adjunto.
           </p>
         )}
+        {ib.seguimiento_gps && (
+          // Fase 10E — representa el CTA real que agrega
+          // services/reportes/envioManual.js#construirCtaGps() cuando el
+          // reporte tiene seguimiento GPS activo. Solo una vista previa: el
+          // HTML real del envío no cambia por esto.
+          <div style={{ marginTop: "14px" }}>
+            <span
+              className="inline-flex items-center gap-1.5 rounded-md text-[12.5px] font-semibold"
+              style={{ background: "var(--navy)", color: "#fff", padding: "8px 14px" }}
+            >
+              📍 Ver seguimiento GPS
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="px-4 py-3">

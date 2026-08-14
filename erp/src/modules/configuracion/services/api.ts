@@ -2,10 +2,11 @@ import { req } from "@/services/http";
 import { lineaNegocio } from "@/utils/lineaNegocio";
 import { parseFechaTMS } from "@/utils/parseFecha";
 import { extraerFechaColombia } from "@/utils/date";
+import { normalizarClienteFiltro } from "../utils/normalizarCliente";
 import { buscarReporte, type CampoDataset } from "../catalogos/datasetsReportes";
 import type {
   ReporteAutomatico, ReporteBase, PersonalInlop, FiltroItem,
-  ResultadoEnvioManual,
+  ResultadoEnvioManual, ClienteFiltroOpcion, AvisoProgramacion,
 } from "../types";
 
 // ─── Preview de datos del reporte ────────────────────────────────────────────
@@ -42,10 +43,28 @@ const ENDPOINT_POR_REPORTE: Record<string, string> = {
  *
  * Solo completa campos que el API no devuelve (`!fila[campo]`).
  * No modifica campos que ya vienen poblados (ej. programacion sí devuelve tipo_servicio).
+ *
+ * `cliente_normalizado` (Fase 11A) requiere `tipoReporte` porque el campo
+ * crudo del nombre del cliente vive en una clave distinta según el dataset
+ * — mismo mapeo (CAMPO_CLIENTE_POR_REPORTE) y mismo algoritmo de
+ * normalización que services/reportes/datasetProvider.js#enriquecerFilas en
+ * el backend, para que la Preview refleje el mismo filtro que se aplica de
+ * verdad en generación.
  */
+const CAMPO_CLIENTE_POR_REPORTE: Record<string, (fila: Record<string, unknown>) => unknown> = {
+  viajes_activos:     f => f.razon_social ?? f.company_customer_name,
+  solicitudes:        f => f.cliente,
+  programacion:       f => f.nombre_cliente,
+  viajes_finalizados: f => f.company_customer_name,
+  centro_gps:         f => f.razon_social ?? f.company_customer_name,
+};
+
 function enriquecerFilas(
-  filas: Record<string, unknown>[]
+  filas: Record<string, unknown>[],
+  tipoReporte: string
 ): Record<string, unknown>[] {
+  const obtenerCliente = CAMPO_CLIENTE_POR_REPORTE[tipoReporte];
+
   return filas.map(r => {
     const fila: Record<string, unknown> = { ...r };
 
@@ -63,6 +82,11 @@ function enriquecerFilas(
     // linea_negocio — usa el mismo utility que los módulos operativos
     if (!fila.linea_negocio && fila.type_operation) {
       fila.linea_negocio = lineaNegocio(fila.type_operation as string);
+    }
+
+    // cliente_normalizado (Fase 11A) — ver comentario de la función arriba
+    if (obtenerCliente) {
+      fila.cliente_normalizado = normalizarClienteFiltro(obtenerCliente(fila) as string | null | undefined);
     }
 
     return fila;
@@ -143,6 +167,16 @@ function evaluaCondicion(
     return filtro.operador === "tiene_valor" ? tieneValor : !tieneValor;
   }
 
+  // ── Multi-selección ("en") — mismo criterio que filterEngine.js (backend),
+  // Fase 11A: sin valores elegidos ("Todos") no restringe.
+  if (filtro.operador === "en") {
+    if (!filtro.valores || filtro.valores.length === 0) return true;
+    const valorComparar = campoInfo.tipo === "cliente"
+      ? String(fila.cliente_normalizado ?? "")
+      : String(fila[filtro.campo] ?? "");
+    return filtro.valores.includes(valorComparar);
+  }
+
   // ── Texto / enum: igualdad exacta ────────────────────────────────────────
   const valorStr = fila[filtro.campo] === null || fila[filtro.campo] === undefined
     ? ""
@@ -210,9 +244,21 @@ export async function cargarPreviewReporte(
   const url = fetchLimit !== null ? `${endpoint}?limit=${fetchLimit}` : endpoint;
 
   const datos = await req<Record<string, unknown>[]>(url);
-  const enriquecidas = enriquecerFilas(datos ?? []);
+  const enriquecidas = enriquecerFilas(datos ?? [], tipoReporte);
   const filtradas = aplicarFiltros(enriquecidas, filtros, tipoReporte);
   return filtradas.slice(0, limit);
+}
+
+/**
+ * Clientes disponibles para el selector "Cliente" del filtro (Fase 11A),
+ * derivados del MISMO dataset y normalización que aplica el filtro real en
+ * generación — ver GET /api/reportes-automaticos/clientes (index.js) y
+ * services/reportes/datasetProvider.js#listarClientesDataset.
+ */
+export function listarClientesReporte(tipoReporte: string): Promise<ClienteFiltroOpcion[]> {
+  return req<ClienteFiltroOpcion[]>(
+    `/api/reportes-automaticos/clientes?tipo_reporte=${encodeURIComponent(tipoReporte)}`
+  );
 }
 
 export function listarReportesAutomaticos(): Promise<ReporteAutomatico[]> {
@@ -229,8 +275,14 @@ export function listarPersonal(): Promise<PersonalInlop[]> {
   return req<PersonalInlop[]>("/api/personal");
 }
 
-export function crearReporteAutomatico(data: ReporteBase): Promise<ReporteAutomatico> {
-  return req<ReporteAutomatico>("/api/reportes-automaticos", {
+/**
+ * Fase 11D.1: la respuesta trae `proxima_ejecucion` ya calculado de forma
+ * sincrónica (no hay que esperar al scheduler para verlo en la tabla) y,
+ * cuando la recurrencia se recalculó en esta misma solicitud,
+ * `slotDeHoyVencido` — ver AvisoProgramacion en types.ts.
+ */
+export function crearReporteAutomatico(data: ReporteBase): Promise<ReporteAutomatico & AvisoProgramacion> {
+  return req<ReporteAutomatico & AvisoProgramacion>("/api/reportes-automaticos", {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -239,8 +291,8 @@ export function crearReporteAutomatico(data: ReporteBase): Promise<ReporteAutoma
 export function actualizarReporteAutomatico(
   id: string,
   data: Partial<ReporteBase>
-): Promise<ReporteAutomatico> {
-  return req<ReporteAutomatico>(`/api/reportes-automaticos/${encodeURIComponent(id)}`, {
+): Promise<ReporteAutomatico & AvisoProgramacion> {
+  return req<ReporteAutomatico & AvisoProgramacion>(`/api/reportes-automaticos/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
@@ -249,8 +301,8 @@ export function actualizarReporteAutomatico(
 export function toggleReporteActivo(
   id: string,
   activo: boolean
-): Promise<{ ok: boolean; activo: boolean }> {
-  return req<{ ok: boolean; activo: boolean }>(
+): Promise<{ ok: boolean; activo: boolean; proxima_ejecucion: string | null } & AvisoProgramacion> {
+  return req<{ ok: boolean; activo: boolean; proxima_ejecucion: string | null } & AvisoProgramacion>(
     `/api/reportes-automaticos/${encodeURIComponent(id)}/activo`,
     { method: "PATCH", body: JSON.stringify({ activo }) }
   );

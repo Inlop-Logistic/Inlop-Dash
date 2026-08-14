@@ -46,12 +46,22 @@ export function useReportesAutomaticos() {
 
   // ── Mutaciones ────────────────────────────────────────────────────────────
 
-  /** Activa o desactiva un reporte y actualiza el estado local de forma optimista. */
+  /**
+   * Activa o desactiva un reporte y actualiza el estado local de forma
+   * optimista. Al reactivar (Fase 11D.1), el backend recalcula
+   * `proxima_ejecucion` de una vez — se sincroniza aquí para que la tabla
+   * la muestre sin esperar una recarga completa, y se devuelve
+   * `slotDeHoyVencido` para que el llamador pueda mostrar el aviso.
+   */
   const toggleActivo = useCallback(async (id: string, activo: boolean) => {
     // Actualización optimista
     setData(prev => prev.map(r => r.id === id ? { ...r, activo } : r));
     try {
-      await toggleReporteActivo(id, activo);
+      const resultado = await toggleReporteActivo(id, activo);
+      if (resultado.proxima_ejecucion !== undefined) {
+        setData(prev => prev.map(r => r.id === id ? { ...r, proxima_ejecucion: resultado.proxima_ejecucion } : r));
+      }
+      return resultado;
     } catch (e) {
       // Revertir si falla
       setData(prev => prev.map(r => r.id === id ? { ...r, activo: !activo } : r));

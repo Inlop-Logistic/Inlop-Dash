@@ -13,6 +13,7 @@ import {
   obtenerProgramacionCompleta,
   obtenerCumplidosCompletos,
   obtenerDatasetCompleto,
+  listarClientesDataset,
   derivarEstadoGps,
   parseLatLon,
   ESTADOS_MONITOREABLES,
@@ -50,6 +51,41 @@ test('enriquecerFilas no modifica el objeto original (inmutable)', () => {
   const fila = { origin_city_name: 'Bogotá', destiny_city_name: 'Bogotá' };
   enriquecerFilas([fila]);
   assert.equal(fila.tipo_servicio, undefined);
+});
+
+// ── cliente_normalizado (Fase 11A) ──────────────────────────────────────────
+
+test('enriquecerFilas sin tipoReporte no agrega cliente_normalizado (compatibilidad con llamadas existentes)', () => {
+  const out = enriquecerFilas([{ company_customer_name: 'ACME SAS' }]);
+  assert.equal(out[0].cliente_normalizado, undefined);
+});
+
+test('enriquecerFilas agrega cliente_normalizado leyendo el campo crudo correcto por tipoReporte', () => {
+  assert.equal(
+    enriquecerFilas([{ company_customer_name: 'Productos Ramo SAS' }], 'viajes_activos')[0].cliente_normalizado,
+    'PRODUCTOS RAMO SAS'
+  );
+  assert.equal(
+    enriquecerFilas([{ razon_social: 'Productos Ramo S.A.S.', company_customer_name: 'RAMO SUCURSAL X' }], 'viajes_activos')[0].cliente_normalizado,
+    'PRODUCTOS RAMO SAS' // prefiere razon_social (ya canónica) sobre el nombre crudo del TMS
+  );
+  assert.equal(
+    enriquecerFilas([{ cliente: 'Productos Ramo S A S' }], 'solicitudes')[0].cliente_normalizado,
+    'PRODUCTOS RAMO SAS'
+  );
+  assert.equal(
+    enriquecerFilas([{ nombre_cliente: 'PRODUCTOS RAMO SAS' }], 'programacion')[0].cliente_normalizado,
+    'PRODUCTOS RAMO SAS'
+  );
+  assert.equal(
+    enriquecerFilas([{ company_customer_name: 'Productos Ramo SAS' }], 'viajes_finalizados')[0].cliente_normalizado,
+    'PRODUCTOS RAMO SAS'
+  );
+});
+
+test('enriquecerFilas: cliente_normalizado es cadena vacía cuando no hay nombre de cliente', () => {
+  assert.equal(enriquecerFilas([{}], 'viajes_activos')[0].cliente_normalizado, '');
+  assert.equal(enriquecerFilas([{ cliente: '—' }], 'solicitudes')[0].cliente_normalizado, '');
 });
 
 // ── transformarViajesActivos ─────────────────────────────────────────────────
@@ -214,4 +250,32 @@ test('obtenerDatasetCompleto respeta un filtro de fecha explícito (push-down)',
   await obtenerDatasetCompleto('solicitudes', { filtros, fechaEjecucion: '2026-08-11' }, { sbFetch });
   assert.ok(llamadas[0].includes('creado_en=gte.2026-01-01'));
   assert.ok(!llamadas[0].includes('creado_en=lte.')); // despues_de es abierto por arriba
+});
+
+const DEPS_VIAJES_BASE = { tripCustomerCache: new Map(), extraerTelefono: () => null, primerNombreCliente: (s) => (s ?? '').split(',')[0] };
+
+test('obtenerDatasetCompleto agrega cliente_normalizado a las filas de todos los tipos de reporte', async () => {
+  const viajesCache = [{ trip_number: 'T1', company_customer_name: 'Productos Ramo S A S', state_travel: 'en transíto' }];
+  const outActivos = await obtenerDatasetCompleto('viajes_activos', {}, { viajesCache, ...DEPS_VIAJES_BASE });
+  assert.equal(outActivos[0].cliente_normalizado, 'PRODUCTOS RAMO SAS');
+
+  const outGps = await obtenerDatasetCompleto('centro_gps', {}, { viajesCache, ...DEPS_VIAJES_BASE });
+  assert.equal(outGps[0].cliente_normalizado, 'PRODUCTOS RAMO SAS');
+});
+
+// ── listarClientesDataset (Fase 11A) — opciones del selector "Cliente" ─────
+
+test('listarClientesDataset devuelve un cliente por clave normalizada, con la etiqueta más corta', async () => {
+  const viajesCache = [
+    { trip_number: 'T1', company_customer_name: 'Productos Ramo SAS',    state_travel: 'en transíto' },
+    { trip_number: 'T2', company_customer_name: 'Productos Ramo S.A.S.', state_travel: 'en transíto' }, // misma clave, etiqueta más larga
+    { trip_number: 'T3', company_customer_name: 'Transportes Rueda',     state_travel: 'en transíto' },
+  ];
+  const out = await listarClientesDataset('viajes_activos', { viajesCache, ...DEPS_VIAJES_BASE });
+  assert.deepEqual(out.map(c => c.label).sort(), ['Productos Ramo SAS', 'Transportes Rueda']);
+  assert.ok(out.every(c => typeof c.value === 'string' && c.value.length > 0));
+});
+
+test('listarClientesDataset devuelve [] para un tipo_reporte sin campo de cliente configurado', async () => {
+  assert.deepEqual(await listarClientesDataset('inexistente', {}), []);
 });

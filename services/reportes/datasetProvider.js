@@ -36,6 +36,7 @@
  */
 import { parseFechaTMS, fechaHoyColombia } from '../../utils/fechas.js';
 import { isPlaceholderTmsCustomer } from '../customerResolver.js';
+import { normalizarClienteFiltro } from './clienteFiltro.js';
 
 // ─── Centro GPS — constantes y helper movidos desde index.js (único call site) ──
 
@@ -318,6 +319,11 @@ export async function obtenerCumplidosCompletos(_contexto, deps = {}) {
 //  - `linea_negocio` → misma regla exacta que erp/src/utils/lineaNegocio.ts y
 //    que index.js (tiposDocumentoParaViaje): match exacto "granel liquido",
 //    no substring.
+//  - `cliente_normalizado` (Fase 11A) → clave estable para el filtro
+//    multi-selección "Cliente" (ver clienteFiltro.js). Requiere `tipoReporte`
+//    porque el nombre crudo del cliente vive en un campo distinto según el
+//    dataset (ver CAMPO_CLIENTE_POR_REPORTE) — sin tipoReporte no se agrega
+//    (mantiene compatibilidad con los call sites/tests que aún no lo pasan).
 // Solo completa campos que el dataset no trae ya resueltos (`!fila[campo]`).
 
 function lineaNegocio(raw) {
@@ -325,7 +331,25 @@ function lineaNegocio(raw) {
   return String(raw).trim().toLowerCase() === 'granel liquido' ? 'Carga Líquida' : 'Carga Seca';
 }
 
-export function enriquecerFilas(filas) {
+/**
+ * Campo(s) crudo(s) que representan el nombre del cliente en cada dataset,
+ * por orden de preferencia: primero la razón social ya resuelta contra el
+ * maestro `empresas_cliente` (cuando el dataset la trae), luego el nombre
+ * crudo del TMS/Supabase como respaldo. Mismos campos que ya usa cada
+ * transformador de este archivo (`razon_social`, `cliente`, `nombre_cliente`,
+ * `company_customer_name`) — no se agrega ninguna fuente de dato nueva.
+ */
+export const CAMPO_CLIENTE_POR_REPORTE = {
+  viajes_activos:      fila => fila.razon_social || fila.company_customer_name,
+  solicitudes:         fila => fila.cliente,
+  programacion:        fila => fila.nombre_cliente,
+  viajes_finalizados:  fila => fila.company_customer_name,
+  centro_gps:          fila => fila.razon_social || fila.company_customer_name,
+};
+
+export function enriquecerFilas(filas, tipoReporte) {
+  const obtenerCliente = CAMPO_CLIENTE_POR_REPORTE[tipoReporte];
+
   return filas.map(r => {
     const fila = { ...r };
 
@@ -339,6 +363,10 @@ export function enriquecerFilas(filas) {
 
     if (!fila.linea_negocio && fila.type_operation) {
       fila.linea_negocio = lineaNegocio(fila.type_operation);
+    }
+
+    if (obtenerCliente) {
+      fila.cliente_normalizado = normalizarClienteFiltro(obtenerCliente(fila));
     }
 
     return fila;
@@ -400,29 +428,59 @@ export async function obtenerDatasetCompleto(tipoReporte, contexto = {}, deps = 
 
   switch (tipoReporte) {
     case 'viajes_activos':
-      return enriquecerFilas(transformarViajesActivos(deps.viajesCache, deps));
+      return enriquecerFilas(transformarViajesActivos(deps.viajesCache, deps), tipoReporte);
 
     case 'centro_gps':
-      return enriquecerFilas(transformarCentroGps(deps.viajesCache, deps));
+      return enriquecerFilas(transformarCentroGps(deps.viajesCache, deps), tipoReporte);
 
     case 'solicitudes': {
       const pushdown = calcularRangoPushdown(filtros, CAMPO_PUSHDOWN_FECHA.solicitudes);
       const desde = pushdown ? pushdown.desde : fechaEjecucion;
       const hasta = pushdown ? pushdown.hasta : fechaEjecucion;
-      return enriquecerFilas(await obtenerSolicitudesCompletas({ desde, hasta }, deps));
+      return enriquecerFilas(await obtenerSolicitudesCompletas({ desde, hasta }, deps), tipoReporte);
     }
 
     case 'programacion': {
       const pushdown = calcularRangoPushdown(filtros, CAMPO_PUSHDOWN_FECHA.programacion);
       const desde = pushdown ? pushdown.desde : fechaEjecucion;
       const hasta = pushdown ? pushdown.hasta : fechaEjecucion;
-      return enriquecerFilas(await obtenerProgramacionCompleta({ desde, hasta }, deps));
+      return enriquecerFilas(await obtenerProgramacionCompleta({ desde, hasta }, deps), tipoReporte);
     }
 
     case 'viajes_finalizados':
-      return enriquecerFilas(await obtenerCumplidosCompletos(contexto, deps));
+      return enriquecerFilas(await obtenerCumplidosCompletos(contexto, deps), tipoReporte);
 
     default:
       throw new Error(`Sin fuente de datos configurada para: ${tipoReporte}`);
   }
+}
+
+// ─── Clientes disponibles (Fase 11A) ─────────────────────────────────────────
+// Alimenta el selector "Cliente" del wizard con los clientes REALES del
+// dataset — nunca un catálogo aparte que pueda desalinearse del filtro que
+// de verdad se aplica en generación. Un cliente por clave normalizada
+// (cliente_normalizado), con la variante cruda más corta como etiqueta —
+// suele ser la razón social "limpia" en vez de un sufijo ruidoso del TMS.
+
+export async function listarClientesDataset(tipoReporte, deps = {}) {
+  if (!CAMPO_CLIENTE_POR_REPORTE[tipoReporte]) return [];
+
+  const filas = await obtenerDatasetCompleto(tipoReporte, {}, deps);
+  const obtenerCliente = CAMPO_CLIENTE_POR_REPORTE[tipoReporte];
+  const porClave = new Map();
+
+  for (const fila of filas) {
+    const clave = fila.cliente_normalizado;
+    if (!clave) continue;
+    const etiqueta = obtenerCliente(fila);
+    if (!etiqueta) continue;
+    const actual = porClave.get(clave);
+    if (!actual || etiqueta.length < actual.length) {
+      porClave.set(clave, etiqueta);
+    }
+  }
+
+  return [...porClave.entries()]
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'es'));
 }

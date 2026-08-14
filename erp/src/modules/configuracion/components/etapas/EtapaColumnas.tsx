@@ -41,6 +41,9 @@ function TipoBadge({ tipo }: { tipo: CampoDataset["tipo"] }) {
     fecha:    { label: "Fecha",    color: "#065F46",          bg: "#D1FAE5"            },
     booleano: { label: "Sí / No",  color: "#7C3AED",          bg: "#EDE9FE"            },
     enum:     { label: "Opciones", color: "#92400E",          bg: "#FEF3C7"            },
+    // Fase 11A — cliente_normalizado es filtrable, no seleccionableColumna:
+    // nunca debería renderizarse aquí, pero el Record debe ser exhaustivo.
+    cliente:  { label: "Cliente",  color: "var(--gray-600)",  bg: "var(--gray-100)"    },
   };
   const { label, color, bg } = MAP[tipo] ?? MAP.texto;
   return (

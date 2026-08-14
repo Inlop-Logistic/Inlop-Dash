@@ -13,6 +13,13 @@ export interface FiltroDB {
   valor?:       string | null;
   valor_desde?: string | null;
   valor_hasta?: string | null;
+  /**
+   * Fase 11A — valores elegidos para operadores de selección múltiple (hoy
+   * solo "en", usado por el filtro "Cliente"). Vacío o ausente = "Todos",
+   * sin restricción — mismo criterio que un reporte creado antes de esta
+   * fase, que nunca tuvo esta propiedad.
+   */
+  valores?:     string[] | null;
 }
 
 /**
@@ -66,11 +73,31 @@ export interface ReporteAutomatico {
   recurrencia:        RecurrenciaReporte;
   /** Destinatarios del reporte (Personal INLOP + correos externos). */
   destinatarios:      DestinatariosReporte;
+  /**
+   * Fase 10D — solo tiene efecto en reportes de modulo_id="gestion_logistica".
+   * Si es true, cada ejecución (manual o por scheduler) genera un enlace
+   * temporal de Seguimiento GPS externo para los destinatarios externos de
+   * ESA ejecución, con las placas realmente incluidas en ella.
+   */
+  seguimiento_gps:    boolean;
   proxima_ejecucion:  string | null;
   created_at:         string;
   updated_at:         string;
   created_by:         string | null;
   updated_by:         string | null;
+}
+
+/**
+ * Aviso no bloqueante (Fase 11D.1): true cuando, al guardar/activar, la
+ * recurrencia sí tenía un slot programado para HOY pero su hora ya pasó —
+ * `proxima_ejecucion` en la respuesta ya salta al día siguiente. NUNCA
+ * indica que algo se ejecutó ni se usa para decidir ejecución — solo para
+ * mostrar el mensaje informativo en la UI. Ausente/false en cualquier
+ * guardado que no haya recalculado la recurrencia (ej. editar solo
+ * destinatarios sin pasar por la etapa Frecuencia).
+ */
+export interface AvisoProgramacion {
+  slotDeHoyVencido?: boolean;
 }
 
 /** Campos para crear o editar un reporte. */
@@ -92,6 +119,8 @@ export interface ReporteBase {
   recurrencia?: RecurrenciaReporte;
   /** Destinatarios del reporte. Omitido = sin configurar. */
   destinatarios?: DestinatariosReporte;
+  /** Fase 10D — solo aplica cuando modulo_id="gestion_logistica". Omitido = false. */
+  seguimiento_gps?: boolean;
 }
 
 /**
@@ -127,6 +156,20 @@ export interface ResultadoEnvioManual {
     totalExternos: number;
     totalEnviados: number;
   };
+  /** Fase 10D — true si esta ejecución generó un enlace de Seguimiento GPS. */
+  seguimientoGps?: boolean;
+}
+
+/**
+ * Una opción del selector "Cliente" del filtro (Fase 11A,
+ * GET /api/reportes-automaticos/clientes). `value` es la clave normalizada
+ * (lo que realmente se persiste en filtros[].valores y se compara en el
+ * Filter Engine); `label` es el nombre real más corto encontrado para esa
+ * clave, para mostrar al usuario — nunca la clave normalizada en mayúsculas.
+ */
+export interface ClienteFiltroOpcion {
+  value: string;
+  label: string;
 }
 
 // ─── Catálogos ────────────────────────────────────────────────────────────────
@@ -211,6 +254,8 @@ export interface DatosInfoBasica {
   cuerpo:       string;
   formato:      Formato;
   activo:       boolean;
+  /** Fase 10D — solo se muestra/aplica cuando modulo_id="gestion_logistica". */
+  seguimiento_gps: boolean;
 }
 
 export const DATOS_INFO_BASICA_INICIAL: DatosInfoBasica = {
@@ -221,6 +266,7 @@ export const DATOS_INFO_BASICA_INICIAL: DatosInfoBasica = {
   cuerpo:       "",
   formato:      "excel",
   activo:       true,
+  seguimiento_gps: false,
 };
 
 // ─── Etapa 04 · Frecuencia — recurrencia estructurada ────────────────────────
@@ -377,6 +423,7 @@ export function datosConfiguradorDesdeReporte(r: ReporteAutomatico): DatosConfig
       cuerpo:       r.cuerpo ?? "",
       formato:      r.formato,
       activo:       r.activo,
+      seguimiento_gps: r.seguimiento_gps ?? false,
     },
     filtros:       (r.filtros ?? []).map(f => ({ ...f, id: idLocal() })),
     columnas:      r.columnas ?? [],

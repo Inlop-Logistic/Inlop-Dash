@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Mail, Plus, Pencil, Power, Send, Trash2, Settings2 } from "lucide-react";
+import { Mail, Plus, Pencil, Power, Send, Trash2, Settings2, Info } from "lucide-react";
 import {
   PageHeader, FilterBar, DataTable, Button,
   Badge, SidePanel, PanelSection, InfoRow,
 } from "@/components/ui";
 import type { Column } from "@/components/ui";
+import { formatearFecha } from "@/utils/date";
 import { FormReporteAutomatico } from "./components/FormReporteAutomatico";
 import { ModalEnviarReporte } from "./components/ModalEnviarReporte";
 import { ModalEliminarReporte } from "./components/ModalEliminarReporte";
@@ -19,6 +20,13 @@ interface Props {
   onCrear: () => void;
   /** Abre el wizard de 6 etapas precargado — "Editar configuración completa" (Fase 9I). */
   onEditarCompleto: (reporte: ReporteAutomatico) => void;
+  /**
+   * Aviso no bloqueante (Fase 11D.1) traído desde el wizard tras crear/
+   * activar/editar (el wizard se desmonta al navegar de vuelta aquí, así
+   * que no puede mostrarlo por su cuenta — ver ConfiguracionPage.tsx).
+   */
+  avisoInicial?:      string | null;
+  onAvisoConsumido?:  () => void;
 }
 
 // ── Empty state ──────────────────────────────────────────────────────────────
@@ -129,8 +137,12 @@ function buildColumns(
       header: "Próxima ejecución",
       width:  "160px",
       render: (r) => (
+        // Fase 11D.1 — fecha + hora (DD/MM/YYYY HH:mm), nunca solo fecha:
+        // "próxima ejecución" sin hora no le dice al usuario si el slot de
+        // hoy ya pasó. Reutiliza formatearFecha() (@/utils/date, estándar
+        // corporativo) — no se reimplementa formato de fecha aquí.
         <span className="text-[13px]" style={{ color: "var(--gray-400)" }}>
-          {formatFechaCorta(r.proxima_ejecucion)}
+          {formatearFecha(r.proxima_ejecucion, "completo")}
         </span>
       ),
     },
@@ -190,7 +202,7 @@ function buildColumns(
 
 // ── Página principal ──────────────────────────────────────────────────────────
 
-export function ReportesAutomaticosPage({ onBack, onCrear, onEditarCompleto }: Props) {
+export function ReportesAutomaticosPage({ onBack, onCrear, onEditarCompleto, avisoInicial, onAvisoConsumido }: Props) {
   const state = useReportesAutomaticos();
   const {
     filtrados, loading,
@@ -201,10 +213,28 @@ export function ReportesAutomaticosPage({ onBack, onCrear, onEditarCompleto }: P
 
   const [reporteAEnviar,   setReporteAEnviar]   = useState<ReporteAutomatico | null>(null);
   const [reporteAEliminar, setReporteAEliminar] = useState<ReporteAutomatico | null>(null);
+  // Fase 11D.1 — aviso no bloqueante: "la hora de hoy ya pasó, el próximo
+  // envío es [fecha]". Nunca bloquea ni ejecuta nada, solo informa.
+  // Se inicializa con el traído desde el wizard (crear/editar), si hay uno.
+  const [avisoProgramacion, setAvisoProgramacion] = useState<string | null>(avisoInicial ?? null);
+
+  function cerrarAviso() {
+    setAvisoProgramacion(null);
+    onAvisoConsumido?.();
+  }
+
+  async function handleToggle(id: string, activo: boolean) {
+    const resultado = await toggleActivo(id, activo);
+    if (resultado.slotDeHoyVencido && resultado.proxima_ejecucion) {
+      setAvisoProgramacion(
+        `La hora programada de hoy ya pasó. El próximo envío será el ${formatearFecha(resultado.proxima_ejecucion, "fecha")} a las ${formatearFecha(resultado.proxima_ejecucion, "hora")}.`
+      );
+    }
+  }
 
   const columns = buildColumns(
     (r) => setPanelId(r.id),
-    toggleActivo,
+    handleToggle,
     (r) => setReporteAEnviar(r),
     (r) => setReporteAEliminar(r),
   );
@@ -247,6 +277,25 @@ export function ReportesAutomaticosPage({ onBack, onCrear, onEditarCompleto }: P
           Crear reporte
         </Button>
       </div>
+
+      {/* Aviso no bloqueante (Fase 11D.1) — nunca ejecuta nada, solo informa */}
+      {avisoProgramacion && (
+        <div
+          className="flex items-start gap-2.5 text-[12.5px] px-3.5 py-2.5 rounded-xl"
+          style={{ background: "var(--gray-50)", color: "var(--gray-500)", border: "1px solid var(--gray-100)" }}
+        >
+          <Info className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "var(--gray-400)" }} />
+          <span className="flex-1">{avisoProgramacion}</span>
+          <button
+            type="button"
+            onClick={cerrarAviso}
+            className="text-[11.5px] font-medium shrink-0 hover:underline"
+            style={{ color: "var(--gray-500)" }}
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
 
       {/* Barra de búsqueda */}
       <FilterBar
