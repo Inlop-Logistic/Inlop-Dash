@@ -79,13 +79,18 @@ window.KaramViews = window.KaramViews || {};
           const concept = root.querySelector('#wfConcept').value.trim();
           const date = root.querySelector('#wfDate').value;
 
+          // Bloqueo duro: nunca se permite un retiro/sueldo que supere el
+          // dinero disponible (Caja − Capital protegido − Gastos pendientes − Reserva).
           if (type === 'withdrawal' || type === 'salary') {
             const [cashMovements, expenses, settings] = await Promise.all([KaramRepo.cashMovements.all(), KaramRepo.expenses.all(), KaramRepo.getSettings()]);
             const cap = KaramCalc.capitalOverview({ cashMovements, expenses, settings });
+            const errEl = root.querySelector('#wfError');
             if (amount > cap.disponible) {
-              const ok = await KaramUtils.confirmAction(`El retiro (${formatCOP(amount)}) supera el dinero disponible (${formatCOP(cap.disponible)}). ¿Continuar de todos modos?`);
-              if (!ok) return;
+              errEl.textContent = `No permitido: el monto (${formatCOP(amount)}) supera el dinero disponible (${formatCOP(cap.disponible)}). Ajusta el valor o revisa capital/reserva.`;
+              errEl.hidden = false;
+              return;
             }
+            errEl.hidden = true;
           }
 
           await KaramRepo.withdrawals.create({ partnerId, type, amount, date, concept });

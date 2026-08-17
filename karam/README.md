@@ -58,11 +58,17 @@ vistas no deberían cambiar.
 - **inventory** no es un store aparte: el stock vive en `ingredients`
   (`stock`, `minStock`). Los movimientos sí quedan en
   `inventory_movements` para trazabilidad (entrada/consumo/ajuste/merma).
-- **Venta automática desde pedido:** la venta y el movimiento de caja se
-  generan al **crear** el pedido (no al marcarlo "entregado"), porque en
-  una cocina oculta el pago normalmente se confirma antes de preparar.
-  Cancelar un pedido revierte la venta, la caja y el inventario
-  consumido.
+- **Pedido ≠ venta:** crear un pedido NO registra una venta. El flujo de
+  estados es `pendiente → confirmado → preparando → listo → entregado`
+  (o `cancelado` en cualquier punto antes de "entregado"). La venta
+  (costo, consumo de inventario y movimiento de caja) se genera recién
+  cuando el pedido pasa a **confirmado** — la primera acción explícita
+  que compromete producción/cobro — y queda marcada con `order.saleId`
+  como bandera de idempotencia, así que aunque el pedido siga avanzando
+  de estado (preparando → listo → entregado) la venta nunca se duplica.
+  Si se cancela un pedido que aún no tiene `saleId` (sigue "pendiente"),
+  no hay nada que revertir: nunca afectó ventas ni utilidad. Si ya tenía
+  venta registrada, cancelar la anula y revierte caja + inventario.
 - **Hash de contraseña:** SHA-256 + salt aleatorio vía Web Crypto
   (`SubtleCrypto`). No es bcrypt/argon2 (no disponibles nativamente en
   browser sin librerías externas), pero nunca se guarda texto plano.

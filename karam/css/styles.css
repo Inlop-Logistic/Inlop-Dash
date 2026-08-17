@@ -166,6 +166,7 @@ h1,h2,h3,h4{font-family:var(--serif);font-weight:700;letter-spacing:.01em}
 
 .badge{background:var(--surface-2);border-radius:999px;padding:3px 10px;font-size:.7rem;font-weight:700;text-transform:uppercase}
 .badge-pendiente{background:#F1E3C6;color:#8A6A11}
+.badge-confirmado{background:#EAE0F5;color:#5E2E9C}
 .badge-preparando{background:#DDE7F5;color:#26508A}
 .badge-listo{background:#E1EFE4;color:#1D8A55}
 .badge-entregado{background:#E1EFE4;color:#1D8A55}

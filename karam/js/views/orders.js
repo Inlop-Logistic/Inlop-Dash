@@ -1,16 +1,28 @@
 /**
- * KARAM · views/orders.js — Pedidos, generación automática de venta,
- * consumo de inventario y envío por WhatsApp.
+ * KARAM · views/orders.js — Pedidos y transición a venta.
+ * -----------------------------------------------------------------------
+ * PEDIDO ≠ VENTA: crear un pedido NO registra una venta. La venta
+ * (con su costo, movimiento de caja y consumo de inventario) se genera
+ * únicamente cuando el pedido pasa a "confirmado" — la primera acción
+ * explícita que compromete producción/cobro. Se guarda `order.saleId`
+ * como bandera de idempotencia: aunque el pedido cambie de estado varias
+ * veces (preparando → listo → entregado), la venta solo se crea una vez.
+ * Si se cancela un pedido que aún no tiene `saleId` (pendiente), no hay
+ * nada que revertir: nunca afectó ventas ni utilidad. Si ya tenía
+ * `saleId`, cancelar anula la venta y revierte caja + inventario.
+ * -----------------------------------------------------------------------
  */
 window.KaramViews = window.KaramViews || {};
 
 (function () {
-  const { formatCOP, formatDateTime, escapeHtml, waLink, toast, confirmAction, uid, nowISO } = KaramUtils;
+  const { formatCOP, formatDateTime, escapeHtml, waLink, toast, confirmAction, nowISO } = KaramUtils;
   const { activePromotionForProduct, lineTotal, productCost } = KaramCalc;
 
-  const STATUSES = ['pendiente', 'preparando', 'listo', 'entregado', 'cancelado'];
-  const STATUS_LABEL = { pendiente: 'Pendiente', preparando: 'Preparando', listo: 'Listo', entregado: 'Entregado', cancelado: 'Cancelado' };
+  const STATUSES = ['pendiente', 'confirmado', 'preparando', 'listo', 'entregado', 'cancelado'];
+  const STATUS_LABEL = { pendiente: 'Pendiente', confirmado: 'Confirmado', preparando: 'Preparando', listo: 'Listo', entregado: 'Entregado', cancelado: 'Cancelado' };
   const PAY_METHODS = ['efectivo', 'transferencia', 'tarjeta', 'otro'];
+  // Estado en el que un pedido se convierte en venta real (una sola vez).
+  const SALE_TRIGGER_STATUS = 'confirmado';
 
   window.KaramViews.orders = async function (main) {
     const orders = (await KaramRepo.orders.all()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -48,8 +60,8 @@ window.KaramViews = window.KaramViews || {};
       const id = e.target.closest('[data-id]')?.dataset.id;
       if (!id) return;
       if (e.target.closest('.js-wa')) return sendWhatsApp(id);
-      if (e.target.closest('.js-status')) return changeStatus(id, e.target.closest('.js-status').dataset.status, listEl);
-      if (e.target.closest('.js-cancel')) return cancelOrder(id, listEl);
+      if (e.target.closest('.js-status')) return changeStatus(id, e.target.closest('.js-status').dataset.status);
+      if (e.target.closest('.js-cancel')) return cancelOrder(id);
     });
 
     function orderCard(o) {
@@ -64,7 +76,7 @@ window.KaramViews = window.KaramViews || {};
           </div>
           <div class="muted small">${itemsTxt}</div>
           <div class="row-between mt8">
-            <span class="muted small">${formatDateTime(o.createdAt)} · ${o.paymentMethod}</span>
+            <span class="muted small">${formatDateTime(o.createdAt)} · ${o.paymentMethod}${o.saleId ? ' · venta registrada' : ' · aún no es venta'}</span>
             <b>${formatCOP(o.total)}</b>
           </div>
           <div class="card-actions">
@@ -75,14 +87,18 @@ window.KaramViews = window.KaramViews || {};
         </div>`;
     }
 
-    async function changeStatus(id, status, listEl) {
-      await KaramRepo.orders.update(id, { status });
+    async function changeStatus(id, status) {
+      await advanceOrderStatus(id, status);
       toast('Pedido actualizado a ' + STATUS_LABEL[status]);
       window.KaramApp.refresh();
     }
 
-    async function cancelOrder(id, listEl) {
-      const ok = await confirmAction('¿Cancelar este pedido? Se revertirá inventario y caja si ya se había registrado la venta.');
+    async function cancelOrder(id) {
+      const order = await KaramRepo.orders.get(id);
+      const msg = order && order.saleId
+        ? '¿Cancelar este pedido? Ya generó una venta: se anulará y se revertirá inventario y caja.'
+        : '¿Cancelar este pedido? Aún no había generado una venta, así que no afecta ventas ni utilidad.';
+      const ok = await confirmAction(msg);
       if (!ok) return;
       await voidOrder(id);
       toast('Pedido cancelado');
@@ -116,6 +132,7 @@ window.KaramViews = window.KaramViews || {};
             <select id="ofPayment">${PAY_METHODS.map((m) => `<option value="${m}">${m}</option>`).join('')}</select>
           </label>
           <div class="total-line row-between"><span>Total</span><b id="ofTotal">${formatCOP(0)}</b></div>
+          <p class="muted small">El pedido se crea como <b>pendiente</b>. La venta se registra al confirmarlo.</p>
           <div class="form-error" id="ofError" hidden></div>
           <button type="submit" class="btn btn-primary btn-block">Crear pedido</button>
         </form>`;
@@ -191,9 +208,9 @@ window.KaramViews = window.KaramViews || {};
           return;
         }
         try {
-          await createOrderWithSale({ customerName, phone, items, paymentMethod });
+          await createOrder({ customerName, phone, items, paymentMethod });
           KaramModal.close();
-          toast('Pedido creado ✅');
+          toast('Pedido creado ✅ (pendiente — aún no es venta)');
           window.KaramApp.refresh();
         } catch (err) {
           errEl.textContent = 'Error: ' + err.message;
@@ -204,14 +221,24 @@ window.KaramViews = window.KaramViews || {};
   };
 
   // -------------------------------------------------------------- lógica de negocio
-  async function createOrderWithSale({ customerName, phone, items, paymentMethod }) {
+
+  // Crear pedido: NO genera venta, NO toca caja, NO consume inventario.
+  async function createOrder({ customerName, phone, items, paymentMethod }) {
     const total = items.reduce((s, i) => s + i.lineTotal, 0);
-    const order = await KaramRepo.orders.create({ customerName, phone, items, total, paymentMethod, status: 'pendiente' });
+    const order = await KaramRepo.orders.create({ customerName, phone, items, total, paymentMethod, status: 'pendiente', saleId: null });
+    return { order };
+  }
+
+  // Registra la venta real: costo, consumo de inventario y movimiento de
+  // caja. Idempotente vía `order.saleId` — nunca se llama dos veces para
+  // el mismo pedido aunque cambie de estado varias veces.
+  async function registerSale(order) {
+    if (order.saleId) return order; // ya convertido en venta, no duplicar
 
     const [recipes, ingredientsList] = await Promise.all([KaramRepo.recipes.all(), KaramRepo.ingredients.all()]);
     const ingredientsById = new Map(ingredientsList.map((i) => [i.id, i]));
     let cost = 0;
-    for (const item of items) {
+    for (const item of order.items) {
       const recipe = recipes.find((r) => r.productId === item.productId);
       const unitCost = productCost(recipe, ingredientsById);
       cost += unitCost * item.qty;
@@ -219,32 +246,49 @@ window.KaramViews = window.KaramViews || {};
         for (const ri of recipe.items) {
           const consume = ri.qty * item.qty;
           await KaramRepo.adjustIngredientStock(ri.ingredientId, -consume);
-          await KaramRepo.addInventoryMovement({ ingredientId: ri.ingredientId, type: 'consumo', qty: -consume, reference: order.id, note: 'Consumo por pedido' });
+          await KaramRepo.addInventoryMovement({ ingredientId: ri.ingredientId, type: 'consumo', qty: -consume, reference: order.id, note: 'Consumo por confirmación de pedido' });
         }
       }
     }
 
-    const sale = await KaramRepo.sales.create({ orderId: order.id, date: nowISO(), total, cost, paymentMethod, items, voided: false });
-    await KaramRepo.addCashMovement({ type: 'income', amount: total, concept: 'Venta pedido ' + customerName, method: paymentMethod, reference: order.id });
-    return { order, sale };
+    const sale = await KaramRepo.sales.create({ orderId: order.id, date: nowISO(), total: order.total, cost, paymentMethod: order.paymentMethod, items: order.items, voided: false });
+    await KaramRepo.addCashMovement({ type: 'income', amount: order.total, concept: 'Venta pedido ' + order.customerName, method: order.paymentMethod, reference: order.id });
+    return KaramRepo.orders.update(order.id, { saleId: sale.id });
   }
 
+  // Avanza el estado del pedido. Si el nuevo estado es el disparador de
+  // venta (confirmado) y todavía no existe saleId, registra la venta.
+  async function advanceOrderStatus(orderId, status) {
+    const order = await KaramRepo.orders.get(orderId);
+    if (!order) return;
+    let updated = await KaramRepo.orders.update(orderId, { status });
+    if (status === SALE_TRIGGER_STATUS || (!updated.saleId && ['preparando', 'listo', 'entregado'].includes(status))) {
+      updated = await registerSale(updated);
+    }
+    return updated;
+  }
+
+  // Cancelar: si el pedido nunca llegó a generar venta (sin saleId), solo
+  // se marca cancelado — nunca afectó ventas ni utilidad. Si ya tenía
+  // venta, se anula y se revierte caja + inventario.
   async function voidOrder(orderId) {
     const order = await KaramRepo.orders.get(orderId);
     if (!order || order.status === 'cancelado') return;
-    const allSales = await KaramRepo.sales.all();
-    const sale = allSales.find((s) => s.orderId === orderId && !s.voided);
-    if (sale) {
-      await KaramRepo.sales.update(sale.id, { voided: true });
-      await KaramRepo.addCashMovement({ type: 'withdrawal', amount: sale.total, concept: 'Reverso venta cancelada — ' + order.customerName, method: order.paymentMethod, reference: order.id });
-      const recipes = await KaramRepo.recipes.all();
-      for (const item of order.items) {
-        const recipe = recipes.find((r) => r.productId === item.productId);
-        if (recipe) {
-          for (const ri of recipe.items) {
-            const restock = ri.qty * item.qty;
-            await KaramRepo.adjustIngredientStock(ri.ingredientId, restock);
-            await KaramRepo.addInventoryMovement({ ingredientId: ri.ingredientId, type: 'ajuste', qty: restock, reference: order.id, note: 'Reverso por cancelación de pedido' });
+
+    if (order.saleId) {
+      const sale = await KaramRepo.sales.get(order.saleId);
+      if (sale && !sale.voided) {
+        await KaramRepo.sales.update(sale.id, { voided: true });
+        await KaramRepo.addCashMovement({ type: 'withdrawal', amount: sale.total, concept: 'Reverso venta cancelada — ' + order.customerName, method: order.paymentMethod, reference: order.id });
+        const recipes = await KaramRepo.recipes.all();
+        for (const item of order.items) {
+          const recipe = recipes.find((r) => r.productId === item.productId);
+          if (recipe) {
+            for (const ri of recipe.items) {
+              const restock = ri.qty * item.qty;
+              await KaramRepo.adjustIngredientStock(ri.ingredientId, restock);
+              await KaramRepo.addInventoryMovement({ ingredientId: ri.ingredientId, type: 'ajuste', qty: restock, reference: order.id, note: 'Reverso por cancelación de pedido' });
+            }
           }
         }
       }
@@ -252,5 +296,5 @@ window.KaramViews = window.KaramViews || {};
     await KaramRepo.orders.update(orderId, { status: 'cancelado' });
   }
 
-  window.KaramOrders = { createOrderWithSale, voidOrder, STATUSES, STATUS_LABEL, PAY_METHODS };
+  window.KaramOrders = { createOrder, registerSale, advanceOrderStatus, voidOrder, STATUSES, STATUS_LABEL, PAY_METHODS, SALE_TRIGGER_STATUS };
 })();
