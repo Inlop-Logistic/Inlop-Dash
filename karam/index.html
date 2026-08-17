@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KARAM · Panel de control</title>
+<meta name="theme-color" content="#5E1226">
+<meta name="description" content="Panel administrativo KARAM Shawarma &amp; Grill — pedidos, ventas, costos, inventario, caja y capital.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- ============================ LOGIN ============================ -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <div class="brand">
+      <span class="brand-k">K</span>
+      <div class="brand-text">
+        <div class="brand-name">KARAM</div>
+        <div class="brand-sub">SHAWARMA &amp; GRILL</div>
+      </div>
+    </div>
+    <h1>Panel administrativo</h1>
+    <p class="login-hint">Cocina oculta · Acceso local</p>
+    <form id="loginForm" class="login-form">
+      <label>Usuario
+        <input type="text" id="loginUsername" autocomplete="username" required>
+      </label>
+      <label>Contraseña
+        <input type="password" id="loginPassword" autocomplete="current-password" required>
+      </label>
+      <div id="loginError" class="form-error" hidden></div>
+      <button type="submit" class="btn btn-primary btn-block">Ingresar</button>
+    </form>
+    <p class="login-footnote">Usuario inicial: <b>admin</b> · Contraseña inicial: <b>karam2026</b></p>
+  </div>
+</div>
+
+<!-- ============================ APP SHELL ============================ -->
+<div id="appShell" class="app-shell" hidden>
+
+  <header class="app-header">
+    <button id="menuToggle" class="icon-btn only-desktop-hide" aria-label="Menú">☰</button>
+    <div class="brand brand-sm">
+      <span class="brand-k">K</span>
+      <div class="brand-text">
+        <div class="brand-name">KARAM</div>
+      </div>
+    </div>
+    <h2 id="viewTitle" class="view-title">Inicio</h2>
+    <div class="header-actions">
+      <button id="alertsBtn" class="icon-btn" aria-label="Alertas">🔔<span id="alertsDot" class="dot" hidden></span></button>
+      <button id="logoutBtn" class="icon-btn" aria-label="Salir">⎋</button>
+    </div>
+  </header>
+
+  <div class="app-body">
+    <aside id="sidebar" class="sidebar">
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+    </aside>
+
+    <main id="appMain" class="app-main"></main>
+  </div>
+
+  <button id="fabNewOrder" class="fab">+ Nuevo pedido</button>
+
+  <nav class="bottom-nav" id="bottomNav">
+    <a href="#/dashboard" data-route="/dashboard"><span>🏠</span>Inicio</a>
+    <a href="#/pedidos" data-route="/pedidos"><span>🧾</span>Pedidos</a>
+    <a href="#/ventas" data-route="/ventas"><span>💰</span>Ventas</a>
+    <a href="#/caja" data-route="/caja"><span>🏦</span>Caja</a>
+    <a href="#/inventario" data-route="/inventario"><span>📦</span>Inventario</a>
+    <a href="#" id="moreBtn"><span>⋯</span>Más</a>
+  </nav>
+</div>
+
+<!-- ============================ MORE SHEET ============================ -->
+<div id="moreSheet" class="sheet-overlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-grid" id="moreGrid"></div>
+    <button class="btn btn-ghost btn-block" id="moreClose">Cerrar</button>
+  </div>
+</div>
+
+<!-- ============================ MODAL ============================ -->
+<div id="modalRoot" class="modal-overlay">
+  <div class="modal" id="modalBox">
+    <div class="modal-head">
+      <h3 id="modalTitle">Título</h3>
+      <button class="icon-btn" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ============================ CONFIRM ============================ -->
+<div id="confirmModal" class="modal-overlay confirm-overlay">
+  <div class="modal modal-sm">
+    <div class="modal-body">
+      <p id="confirmMessage">¿Confirmar acción?</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="confirmNo">Cancelar</button>
+        <button class="btn btn-danger" id="confirmYes">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toastHost" class="toast-host"></div>
+
+<!-- ============================ SCRIPTS ============================ -->
+<script src="js/db.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/repo.js"></script>
+<script src="js/calc.js"></script>
+<script src="js/modal.js"></script>
+<script src="js/views/dashboard.js"></script>
+<script src="js/views/orders.js"></script>
+<script src="js/views/payments.js"></script>
+<script src="js/views/sales.js"></script>
+<script src="js/views/products.js"></script>
+<script src="js/views/purchases.js"></script>
+<script src="js/views/inventory.js"></script>
+<script src="js/views/expenses.js"></script>
+<script src="js/views/cash.js"></script>
+<script src="js/views/capital.js"></script>
+<script src="js/views/partners.js"></script>
+<script src="js/views/promotions.js"></script>
+<script src="js/views/reports.js"></script>
+<script src="js/views/settings.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
