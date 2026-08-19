@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function loadProfile(authUser: User) {
     const { data } = await supabase
       .from("profiles")
-      .select("id, nombre, cargo, rol, email")
+      .select("id, nombre, rol, email")
       .eq("id", authUser.id)
       .single();
 
@@ -70,7 +70,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile({
       id:     authUser.id,
       nombre: resolveNombre(data?.nombre, metadata, email),
-      cargo:  data?.cargo  ?? (metadata?.cargo  as string | undefined) ?? "",
+      // profiles.cargo no existe en la tabla — se mantiene el campo en el tipo
+      // para compatibilidad con componentes, pero queda vacío. El UI ya usa
+      // profile.rol como fallback (TopbarUserMenu.tsx:135).
+      cargo:  "",
       rol:    data?.rol    ?? (metadata?.rol    as string | undefined) ?? "",
       email,
     });
