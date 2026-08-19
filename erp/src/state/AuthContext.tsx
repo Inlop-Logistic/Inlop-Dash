@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/services/supabase";
-import { setCurrentUserEmail } from "@/services/http";
 import type { Profile } from "@/types/auth";
 
 // Re-export para compatibilidad: los módulos pueden importar Profile
@@ -75,7 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       rol:    data?.rol    ?? (metadata?.rol    as string | undefined) ?? "",
       email,
     });
-    setCurrentUserEmail(email || undefined);
+    // Nota: X-User-Email ya no se envía al backend — la identidad se verifica
+    // desde el JWT de Supabase directamente (Sprint 2A).
   }
 
   useEffect(() => {
@@ -106,7 +106,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    setCurrentUserEmail(undefined);
     setProfile(null);
   };
 

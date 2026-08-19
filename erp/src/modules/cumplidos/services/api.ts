@@ -1,4 +1,4 @@
-import { req } from "@/services/http";
+import { req, getAuthHeaders } from "@/services/http";
 import type { CumplidoRecord, SoporteCumplido } from "../types";
 
 export function listarCumplidos(): Promise<CumplidoRecord[]> {
@@ -30,10 +30,10 @@ function headersSoporte(file: File, descripcion: string, usuario: string): Heade
 
 async function fetchBinario(path: string, method: string, file: File, headers: HeadersInit) {
   const API_URL = import.meta.env.VITE_API_URL as string;
-  const KEY     = import.meta.env.VITE_INTERNAL_API_KEY as string | undefined;
+  const authHeaders = await getAuthHeaders();
   const res = await fetch(`${API_URL}${path}`, {
     method,
-    headers: { ...headers, ...(KEY ? { "X-Internal-Api-Key": KEY } : {}) },
+    headers: { ...headers, ...authHeaders },
     body: file,
   });
   if (!res.ok) {
@@ -78,16 +78,6 @@ export function reemplazarSoporteCumplido(
   );
 }
 
-export function eliminarSoporteCumplido(
-  trip: string,
-  id:   string,
-): Promise<{ ok: boolean }> {
-  return req<{ ok: boolean }>(
-    `/api/cumplidos/${encodeURIComponent(trip)}/documentos/${encodeURIComponent(id)}`,
-    { method: "DELETE" },
-  );
-}
-
 export function urlFirmadaSoporte(
   trip:      string,
   id:        string,
@@ -96,6 +86,16 @@ export function urlFirmadaSoporte(
   return req<{ url: string }>(
     `/api/cumplidos/${encodeURIComponent(trip)}/documentos/${encodeURIComponent(id)}/sign` +
     (descargar ? "?download=1" : ""),
+  );
+}
+
+export function eliminarSoporteCumplido(
+  trip: string,
+  id:   string,
+): Promise<{ ok: boolean }> {
+  return req<{ ok: boolean }>(
+    `/api/cumplidos/${encodeURIComponent(trip)}/documentos/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
   );
 }
 
