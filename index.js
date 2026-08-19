@@ -297,6 +297,120 @@ function requireLegacyOrInternal(req, res, next) {
   return res.status(401).json({ error: "No autorizado" });
 }
 
+// ─── AUTENTICACIÓN ERP — JWT DE SUPABASE (Sprint 2A) ─────────────────────────
+// Middleware que acepta DOS mecanismos de autenticación del ERP:
+//   1. Authorization: Bearer <jwt>  → verificado contra Supabase Auth (identidad confiable)
+//   2. X-Internal-Api-Key           → secreto compartido (backward-compat, SIN identidad)
+//
+// Cuando el JWT es válido, coloca en el request:
+//   req.erpUserId    — UUID del usuario en Supabase Auth
+//   req.erpUserEmail — email verificado del JWT (NO del header X-User-Email)
+//
+// Los endpoints que usaban req.headers["x-user-email"] como "actor" deben
+// preferir req.erpUserEmail — es una identidad verificada, no auto-declarada.
+//
+// IMPORTANTE: Este middleware NO implementa RBAC. Solo resuelve identidad.
+// El RBAC se implementará en un sprint posterior.
+//
+// Backward-compatible: si el ERP aún envía X-Internal-Api-Key (sin JWT),
+// sigue funcionando como antes. La transición es gradual.
+function requireErpAuth(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+
+  // ── Ruta 1: JWT de Supabase ──
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    fetchConTimeout(`${SB_AUTH_URL}/user`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'apikey': SB_ANON_KEY },
+    })
+    .then(async (r) => {
+      if (!r.ok) {
+        return res.status(401).json({ error: 'Token inválido o expirado' });
+      }
+      const sbUser = await r.json();
+      req.erpUserId    = sbUser.id;
+      req.erpUserEmail = sbUser.email || '';
+      next();
+    })
+    .catch((e) => {
+      console.error('❌ requireErpAuth JWT verification:', e.message);
+      res.status(500).json({ error: 'Error de autenticación' });
+    });
+    return;
+  }
+
+  // ── Ruta 2: API Key compartida (backward-compat) ──
+  if (INTERNAL_API_KEY && req.headers["x-internal-api-key"] === INTERNAL_API_KEY) {
+    // Sin JWT no hay identidad verificada — preservar el comportamiento actual:
+    // tomar X-User-Email como actor (no verificado, pero compatible con el flujo existente).
+    req.erpUserId    = null;
+    req.erpUserEmail = req.headers["x-user-email"] || null;
+    return next();
+  }
+
+  // ── Fail-closed ──
+  if (!INTERNAL_API_KEY) {
+    return res.status(503).json({ error: "Servicio no disponible: credenciales no configuradas" });
+  }
+  return res.status(401).json({ error: "No autorizado" });
+}
+
+// Helper: extrae la identidad del actor para auditoría.
+// Prioriza la identidad verificada del JWT sobre el header auto-declarado.
+function getActor(req) {
+  return req.erpUserEmail || req.headers["x-user-email"] || "sistema";
+}
+
+// ─── ACCESO LEGACY+ERP — ENDPOINTS COMPARTIDOS (Sprint 2A) ───────────────────
+// Middleware que acepta TRES mecanismos: JWT (ERP), API Key (ERP fallback),
+// y legacy token (TorreControl.html). Los endpoints compartidos necesitan
+// aceptar los tres durante la transición.
+function requireLegacyOrErpAuth(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+
+  // ── Ruta 1: JWT de Supabase (ERP moderno) ──
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    fetchConTimeout(`${SB_AUTH_URL}/user`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'apikey': SB_ANON_KEY },
+    })
+    .then(async (r) => {
+      if (!r.ok) {
+        return res.status(401).json({ error: 'Token inválido o expirado' });
+      }
+      const sbUser = await r.json();
+      req.erpUserId    = sbUser.id;
+      req.erpUserEmail = sbUser.email || '';
+      next();
+    })
+    .catch((e) => {
+      console.error('❌ requireLegacyOrErpAuth JWT verification:', e.message);
+      res.status(500).json({ error: 'Error de autenticación' });
+    });
+    return;
+  }
+
+  // ── Ruta 2: API Key compartida (ERP backward-compat) ──
+  if (INTERNAL_API_KEY && req.headers["x-internal-api-key"] === INTERNAL_API_KEY) {
+    req.erpUserId    = null;
+    req.erpUserEmail = req.headers["x-user-email"] || null;
+    return next();
+  }
+
+  // ── Ruta 3: Legacy token (TorreControl.html) ──
+  if (LEGACY_TC_TOKEN && req.headers["x-legacy-token"] === LEGACY_TC_TOKEN) {
+    req.erpUserId    = null;
+    req.erpUserEmail = null;
+    return next();
+  }
+
+  // ── Fail-closed ──
+  if (!INTERNAL_API_KEY && !LEGACY_TC_TOKEN) {
+    return res.status(503).json({ error: "Servicio no disponible: credenciales no configuradas" });
+  }
+  return res.status(401).json({ error: "No autorizado" });
+}
+
 // Wrapper de compatibilidad — usa parseFechaTMS('DMY') con offset −05:00. RESUELVE H-04.
 function parseSchedulate(str) {
   return parseFechaTMS(str, 'DMY');
@@ -470,7 +584,7 @@ async function getCtPublicToken() {
 }
 
 // GET /api/ct/travel/:id
-app.get('/api/ct/travel/:id', requireInternalApiKey, async (req, res) => {
+app.get('/api/ct/travel/:id', requireErpAuth, async (req, res) => {
   try {
     const token = await getCtPublicToken();
     const r = await fetchConTimeout(`${CT_PUBLIC_URL}/Travel/${req.params.id}`, {
@@ -490,7 +604,7 @@ app.get('/api/ct/travel/:id', requireInternalApiKey, async (req, res) => {
 });
 
 // GET /api/ct/travel/list — lista viajes activos via Travel API pública
-app.get('/api/ct/travel/list', requireInternalApiKey, async (req, res) => {
+app.get('/api/ct/travel/list', requireErpAuth, async (req, res) => {
   try {
     const token = await getCtPublicToken();
     const r = await fetchConTimeout(`${CT_PUBLIC_URL}/Travel/List`, {
@@ -509,7 +623,7 @@ app.get('/api/ct/travel/list', requireInternalApiKey, async (req, res) => {
 });
 
 // POST /api/ct/binnacle
-app.post('/api/ct/binnacle', requireInternalApiKey, async (req, res) => {
+app.post('/api/ct/binnacle', requireErpAuth, async (req, res) => {
   try {
     const token = await getCtPublicToken();
     const { trip_number, id_monitoring_order, date_start, date_end, take = 100, page = 1 } = req.body;
@@ -1265,15 +1379,15 @@ async function syncAlarmas() {
 
 // ─── ENDPOINTS — responden siempre del caché ────────────
 
-app.get("/api/data", requireLegacyOrInternal, (req, res) => {
+app.get("/api/data", requireLegacyOrErpAuth, (req, res) => {
   res.json(cache.viajes.data);
 });
 
-app.get("/api/alarmas", requireLegacyOrInternal, (req, res) => {
+app.get("/api/alarmas", requireLegacyOrErpAuth, (req, res) => {
   res.json(cache.alarmas.data);
 });
 
-app.get("/api/pendientes", requireLegacyOrInternal, async (req, res) => {
+app.get("/api/pendientes", requireLegacyOrErpAuth, async (req, res) => {
   try {
     if ((Date.now() - cache.pendientes.ts) > 5 * 60 * 1000 || cache.pendientes.data.length === 0) {
       await syncPendientes();
@@ -1312,7 +1426,7 @@ app.get("/api/pendientes", requireLegacyOrInternal, async (req, res) => {
 // y añade campos derivados (lat, lon, pct, cliente, conductor_tel).
 // Transformación en services/reportes/datasetProvider.js (Fase 9B) — la misma
 // función alimenta el generador de reportes automáticos, sin duplicarla.
-app.get('/api/viajes', requireInternalApiKey, (req, res) => {
+app.get('/api/viajes', requireErpAuth, (req, res) => {
   res.json(transformarViajesActivos(cache.viajes.data, {
     tripCustomerCache, extraerTelefono, primerNombreCliente,
   }));
@@ -1338,7 +1452,7 @@ app.get('/api/viajes', requireInternalApiKey, (req, res) => {
 // vehiculo/telefono/ubicacion_actual: mismos campos en tiempo real que ya
 // usa mapSolicitud()/construirControltEnriquecido() vía cache.viajes (Resume
 // API) — no es una fuente nueva, es la misma ya establecida en Fase 5.
-app.get('/api/viajes/:tripNumber', requireInternalApiKey, async (req, res) => {
+app.get('/api/viajes/:tripNumber', requireErpAuth, async (req, res) => {
   const tripNumber = String(req.params.tripNumber || '').trim();
   if (!tripNumber) {
     return res.status(400).json({ error: { code: 'INVALID_TRIP_NUMBER', mensaje: 'Trip Number requerido' } });
@@ -1419,7 +1533,7 @@ app.get('/api/viajes/:tripNumber', requireInternalApiKey, async (req, res) => {
 // GET /api/cumplidos — viajes finalizados desde Supabase (tabla cumplidos).
 // Fuente: Supabase, nunca desde cache en memoria.
 // Paginación interna para soportar crecimiento indefinido de la tabla.
-app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
+app.get('/api/cumplidos', requireErpAuth, async (req, res) => {
   try {
     // ?limit=N — limita resultados (útil para previews en el wizard de reportes).
     // Si no se pasa, el comportamiento es el mismo de siempre (sin límite).
@@ -1501,7 +1615,7 @@ async function refrescarEstadoSoportes(trip) {
 }
 
 // GET /api/cumplidos/:trip/documentos — lista los soportes persistidos para el viaje.
-app.get('/api/cumplidos/:trip/documentos', requireInternalApiKey, async (req, res) => {
+app.get('/api/cumplidos/:trip/documentos', requireErpAuth, async (req, res) => {
   try {
     const { trip } = req.params;
     const rows = await sbFetch(
@@ -1522,7 +1636,7 @@ app.get('/api/cumplidos/:trip/documentos', requireInternalApiKey, async (req, re
 // cuando el usuario selecciona varios en el diálogo de carga.
 app.post(
   '/api/cumplidos/:trip/documentos',
-  requireInternalApiKey,
+  requireErpAuth,
   express.raw({ type: '*/*', limit: '21mb' }),
   async (req, res) => {
     try {
@@ -1597,7 +1711,7 @@ app.post(
 // ni huérfanos: el borrado ocurre antes que la carga.
 app.put(
   '/api/cumplidos/:trip/documentos/:id/reemplazar',
-  requireInternalApiKey,
+  requireErpAuth,
   express.raw({ type: '*/*', limit: '21mb' }),
   async (req, res) => {
     try {
@@ -1678,7 +1792,7 @@ app.put(
 
 // DELETE /api/cumplidos/:trip/documentos/:id — elimina un soporte (Storage + metadata)
 // y actualiza tiene_soporte / estado_documental si el viaje queda sin documentos.
-app.delete('/api/cumplidos/:trip/documentos/:id', requireInternalApiKey, async (req, res) => {
+app.delete('/api/cumplidos/:trip/documentos/:id', requireErpAuth, async (req, res) => {
   try {
     const { trip, id } = req.params;
     const rows = await sbFetch(
@@ -1701,7 +1815,7 @@ app.delete('/api/cumplidos/:trip/documentos/:id', requireInternalApiKey, async (
 // GET /api/cumplidos/:trip/documentos/:id/sign — URL firmada (1h) para ver/descargar.
 // ?download=1 fuerza la descarga con el nombre legible (nombre_generado) en vez
 // del UUID físico del Storage.
-app.get('/api/cumplidos/:trip/documentos/:id/sign', requireInternalApiKey, async (req, res) => {
+app.get('/api/cumplidos/:trip/documentos/:id/sign', requireErpAuth, async (req, res) => {
   try {
     const { trip, id } = req.params;
     const rows = await sbFetch(
@@ -1732,7 +1846,7 @@ app.get('/api/cumplidos/:trip/documentos/:id/sign', requireInternalApiKey, async
 });
 
 // PATCH /api/cumplidos/:trip/estado — actualiza estado_cumplido (y opcionalmente fecha_cumplido).
-app.patch('/api/cumplidos/:trip/estado', requireInternalApiKey, async (req, res) => {
+app.patch('/api/cumplidos/:trip/estado', requireErpAuth, async (req, res) => {
   try {
     const { trip }                    = req.params;
     const { estado_cumplido, fecha_cumplido } = req.body || {};
@@ -1751,13 +1865,13 @@ app.patch('/api/cumplidos/:trip/estado', requireInternalApiKey, async (req, res)
 // Transformación (derivarEstadoGps, parseLatLon, filtrado por
 // ESTADOS_MONITOREABLES) en services/reportes/datasetProvider.js (Fase 9B) —
 // la misma función alimenta el generador de reportes automáticos.
-app.get('/api/gps', requireInternalApiKey, (req, res) => {
+app.get('/api/gps', requireErpAuth, (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json(transformarCentroGps(cache.viajes.data, { tripCustomerCache }));
 });
 
 // ─── SOLICITUDES (Módulo de Demanda) ─────────────────────────────────────────
-app.get('/api/solicitudes', requireLegacyOrInternal, async (req, res) => {
+app.get('/api/solicitudes', requireLegacyOrErpAuth, async (req, res) => {
   try {
     const { desde, hasta, estado } = req.query;
     // Usar fecha local Colombia para el default de "hoy"
@@ -1839,7 +1953,7 @@ app.get('/api/solicitudes', requireLegacyOrInternal, async (req, res) => {
 });
 
 // GET /api/solicitudes/:id — detalle completo para el ERP (interno, sin auth de cliente)
-app.get('/api/solicitudes/:id', requireInternalApiKey, async (req, res) => {
+app.get('/api/solicitudes/:id', requireErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1963,7 +2077,7 @@ app.get('/api/solicitudes/:id', requireInternalApiKey, async (req, res) => {
 });
 
 // PATCH /api/solicitudes/:id/estado — cambia estado manualmente (interno, sin auth)
-app.patch('/api/solicitudes/:id/estado', requireLegacyOrInternal, async (req, res) => {
+app.patch('/api/solicitudes/:id/estado', requireLegacyOrErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { estado, conductor_nombre, placa_asignada, conductor_tel } = req.body;
@@ -3836,7 +3950,7 @@ app.get('/catalogos/vehiculos', (req, res) => {
 });
 
 // Planeados — desde Supabase
-app.get("/api/planeados", requireInternalApiKey, async (req, res) => {
+app.get("/api/planeados", requireErpAuth, async (req, res) => {
   try {
     const hoyStr = fechaHoyColombia();
     const data = await sbFetch(
@@ -3862,7 +3976,7 @@ app.get("/api/planeados", requireInternalApiKey, async (req, res) => {
 // GET /api/programacion — bandeja operativa completa del día
 // Enriquece cada fila con nombre_cliente: razon_social oficial cuando existe,
 // company_customer_name como fallback. El original siempre se conserva.
-app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
+app.get("/api/programacion", requireErpAuth, async (req, res) => {
   const getId  = ++getProgCounter;
   const tGet0  = Date.now();
   try {
@@ -3957,7 +4071,7 @@ app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
 // GET /api/programacion/:id/solicitud — solicitud origen vinculada al viaje
 // Un viaje sin solicitud asociada es un estado de negocio válido → { vinculada: false }.
 // Solo un error de infraestructura devuelve 500.
-app.get("/api/programacion/:id/solicitud", requireInternalApiKey, async (req, res) => {
+app.get("/api/programacion/:id/solicitud", requireErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -4013,7 +4127,7 @@ app.get("/api/programacion/:id/solicitud", requireInternalApiKey, async (req, re
 });
 
 // GET /api/programacion/:id — detalle de un viaje planeado por trip_number
-app.get("/api/programacion/:id", requireInternalApiKey, async (req, res) => {
+app.get("/api/programacion/:id", requireErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const data = await sbFetch(
@@ -4029,7 +4143,7 @@ app.get("/api/programacion/:id", requireInternalApiKey, async (req, res) => {
 
 // PATCH /api/programacion/:id/estado — cambia estado ERP del viaje
 // Solo actualiza estado_programacion. Las observaciones son exclusivas de /observaciones.
-app.patch("/api/programacion/:id/estado", requireInternalApiKey, async (req, res) => {
+app.patch("/api/programacion/:id/estado", requireErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { estado } = req.body || {};
@@ -4052,7 +4166,7 @@ app.patch("/api/programacion/:id/estado", requireInternalApiKey, async (req, res
 
 // PATCH /api/programacion/:id/observaciones — guarda nota del operador
 // Endpoint exclusivo para observaciones; no toca estado_programacion.
-app.patch("/api/programacion/:id/observaciones", requireInternalApiKey, async (req, res) => {
+app.patch("/api/programacion/:id/observaciones", requireErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { observaciones } = req.body || {};
@@ -4072,7 +4186,7 @@ app.patch("/api/programacion/:id/observaciones", requireInternalApiKey, async (r
 });
 
 // POST /api/programacion/:id/sync — reintenta sincronizar un viaje individual con la caché de la plataforma
-app.post("/api/programacion/:id/sync", requireInternalApiKey, async (req, res) => {
+app.post("/api/programacion/:id/sync", requireErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -4217,7 +4331,7 @@ async function enrichClientes(empresas) {
   return empresas.map(e => mapEmpresaToCliente(e, genMap[e.id] ?? null, relMap[e.id] ?? null));
 }
 
-app.get("/api/clientes", async (req, res) => {
+app.get("/api/clientes", requireErpAuth, async (req, res) => {
   try {
     const data = await sbFetch("/empresas_cliente?order=razon_social.asc&limit=1000");
     if (!data) return res.status(502).json({ error: "Error al consultar clientes" });
@@ -4228,7 +4342,7 @@ app.get("/api/clientes", async (req, res) => {
   }
 });
 
-app.get("/api/clientes/:id", async (req, res) => {
+app.get("/api/clientes/:id", requireErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const detalle = await fetchClienteDetalle(id);
@@ -4259,9 +4373,9 @@ async function generarCodigoCliente() {
   return "CLI-000001";
 }
 
-app.post("/api/clientes", async (req, res) => {
+app.post("/api/clientes", requireErpAuth, async (req, res) => {
   try {
-    const actor = req.headers["x-user-email"] ?? "sistema";
+    const actor = getActor(req);
     const {
       razon_social, nit, dv, nombre_comercial, estado = "prospecto",
       sector_economico, ciudad_principal, departamento, pais, direccion,
@@ -4356,10 +4470,10 @@ app.post("/api/clientes", async (req, res) => {
   }
 });
 
-app.patch("/api/clientes/:id", async (req, res) => {
+app.patch("/api/clientes/:id", requireErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const actor = req.headers["x-user-email"] ?? "sistema";
+    const actor = getActor(req);
     const {
       razon_social, nit, dv, nombre_comercial,
       sector_economico, ciudad_principal, departamento, pais, direccion,
@@ -4450,10 +4564,10 @@ app.patch("/api/clientes/:id", async (req, res) => {
   }
 });
 
-app.patch("/api/clientes/:id/estado", async (req, res) => {
+app.patch("/api/clientes/:id/estado", requireErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const actor = req.headers["x-user-email"] ?? "sistema";
+    const actor = getActor(req);
     const { estado, motivo, observacion } = req.body ?? {};
 
     const ESTADOS_VALIDOS = ["activo", "inactivo", "suspendido", "prospecto", "bloqueado"];
@@ -4498,7 +4612,7 @@ app.patch("/api/clientes/:id/estado", async (req, res) => {
 // ─── CUSTOMER MERGE ─────────────────────────────────────────────────────────
 
 // Preview: cuántos registros se reasignarán al fusionar duplicado_id en :id.
-app.get("/api/clientes/:id/merge-preview", async (req, res) => {
+app.get("/api/clientes/:id/merge-preview", requireErpAuth, async (req, res) => {
   try {
     const { id: oficialId } = req.params;
     const { duplicado_id } = req.query;
@@ -4544,10 +4658,10 @@ app.get("/api/clientes/:id/merge-preview", async (req, res) => {
 //   3. Marcar duplicado como fusionado.
 //   4. Registrar historial en ambos clientes.
 //   5. Refrescar lookup in-memory.
-app.post("/api/clientes/:id/merge", async (req, res) => {
+app.post("/api/clientes/:id/merge", requireErpAuth, async (req, res) => {
   try {
     const { id: oficialId } = req.params;
-    const actor = req.headers["x-user-email"] ?? "sistema";
+    const actor = getActor(req);
     const { duplicado_id, motivo = "Fusión de clientes duplicados" } = req.body ?? {};
 
     if (!duplicado_id) return res.status(400).json({ error: "duplicado_id es requerido" });
@@ -4640,7 +4754,7 @@ app.post("/api/clientes/:id/merge", async (req, res) => {
 // ─── ALIAS CRUD ─────────────────────────────────────────────────────────────
 
 // Listar todos los alias de un cliente (activos e inactivos)
-app.get("/api/clientes/:id/alias", requireInternalApiKey, async (req, res) => {
+app.get("/api/clientes/:id/alias", requireErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const rows = await sbFetch(
@@ -4654,10 +4768,10 @@ app.get("/api/clientes/:id/alias", requireInternalApiKey, async (req, res) => {
 });
 
 // Crear un alias manualmente para un cliente
-app.post("/api/clientes/:id/alias", requireInternalApiKey, async (req, res) => {
+app.post("/api/clientes/:id/alias", requireErpAuth, async (req, res) => {
   try {
     const { id: empresa_cliente_id } = req.params;
-    const actor = req.headers["x-user-email"] ?? "sistema";
+    const actor = getActor(req);
     const { nombre_raw, integracion = 'controlt', observacion } = req.body ?? {};
 
     if (!nombre_raw?.trim()) return res.status(400).json({ error: "nombre_raw es requerido" });
@@ -4688,7 +4802,7 @@ app.post("/api/clientes/:id/alias", requireInternalApiKey, async (req, res) => {
 });
 
 // Activar / desactivar un alias (nunca se elimina físicamente)
-app.patch("/api/clientes/:id/alias/:aliasId", requireInternalApiKey, async (req, res) => {
+app.patch("/api/clientes/:id/alias/:aliasId", requireErpAuth, async (req, res) => {
   try {
     const { id: empresa_cliente_id, aliasId } = req.params;
     const { activo, observacion } = req.body ?? {};
@@ -4731,7 +4845,7 @@ app.patch("/api/clientes/:id/alias/:aliasId", requireInternalApiKey, async (req,
 //
 // Usado por Configuración → Reportes Automáticos → Etapa 05 · Destinatarios
 // para poblar la lista de "Personal INLOP" seleccionable — nunca hardcodeada.
-app.get("/api/personal", requireInternalApiKey, async (req, res) => {
+app.get("/api/personal", requireErpAuth, async (req, res) => {
   try {
     const rows = await sbFetch(
       "/personal?select=id,nombre,cargo,correo_compartido&activo=eq.true&order=nombre.asc"
@@ -4781,7 +4895,7 @@ function errorDestinatarios(destinatarios) {
   return null;
 }
 
-app.get("/api/reportes-automaticos", requireInternalApiKey, async (req, res) => {
+app.get("/api/reportes-automaticos", requireErpAuth, async (req, res) => {
   try {
     const rows = await sbFetch("/reportes_automaticos?order=created_at.desc&limit=500");
     res.json(rows ?? []);
@@ -4791,9 +4905,9 @@ app.get("/api/reportes-automaticos", requireInternalApiKey, async (req, res) => 
   }
 });
 
-app.post("/api/reportes-automaticos", requireInternalApiKey, async (req, res) => {
+app.post("/api/reportes-automaticos", requireErpAuth, async (req, res) => {
   try {
-    const actor = req.headers["x-user-email"] ?? "sistema";
+    const actor = getActor(req);
     const {
       nombre,
       modulo_id    = "gestion_logistica",
@@ -4869,10 +4983,10 @@ app.post("/api/reportes-automaticos", requireInternalApiKey, async (req, res) =>
   }
 });
 
-app.patch("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, res) => {
+app.patch("/api/reportes-automaticos/:id", requireErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const actor = req.headers["x-user-email"] ?? "sistema";
+    const actor = getActor(req);
     const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, borrador, frecuencia, filtros, columnas, recurrencia, destinatarios, seguimiento_gps } = req.body ?? {};
 
     const patch = { updated_by: actor };
@@ -4956,10 +5070,10 @@ app.patch("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, re
   }
 });
 
-app.patch("/api/reportes-automaticos/:id/activo", requireInternalApiKey, async (req, res) => {
+app.patch("/api/reportes-automaticos/:id/activo", requireErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const actor = req.headers["x-user-email"] ?? "sistema";
+    const actor = getActor(req);
     const { activo } = req.body ?? {};
 
     if (typeof activo !== "boolean") {
@@ -5011,7 +5125,7 @@ app.patch("/api/reportes-automaticos/:id/activo", requireInternalApiKey, async (
 // sbFetch(..., "DELETE") siempre devuelve null (ver sbFetch arriba), así que
 // primero se verifica existencia — mismo patrón que
 // DELETE /api/cumplidos/:trip/documentos/:id más arriba.
-app.delete("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, res) => {
+app.delete("/api/reportes-automaticos/:id", requireErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const existente = await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}&select=id`);
@@ -5031,7 +5145,7 @@ app.delete("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, r
 // el filtro real en generación (ver services/reportes/datasetProvider.js —
 // listarClientesDataset / cliente_normalizado) — nunca un catálogo aparte
 // que pueda desalinearse de lo que el filtro realmente hace.
-app.get("/api/reportes-automaticos/clientes", requireInternalApiKey, async (req, res) => {
+app.get("/api/reportes-automaticos/clientes", requireErpAuth, async (req, res) => {
   try {
     const tipoReporte = String(req.query.tipo_reporte ?? "").trim();
     if (!tipoReporte) return res.status(400).json({ error: "tipo_reporte es obligatorio" });
@@ -5068,7 +5182,7 @@ const STATUS_POR_CODIGO_ENVIO = {
   error_envio:           502,
 };
 
-app.post("/api/reportes-automaticos/:id/enviar", requireInternalApiKey, async (req, res) => {
+app.post("/api/reportes-automaticos/:id/enviar", requireErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const resultado = await ejecutarReporteManual(id, {
@@ -5159,7 +5273,7 @@ app.delete('/push/suscripcion', requireClienteAuth, async (req, res) => {
 });
 
 // ─── DIAGNÓSTICO CONTROLT SOAP ───────────────────────────────────────────────
-app.use('/api/controlt', requireInternalApiKey, controltDiagRouter);
+app.use('/api/controlt', requireErpAuth, controltDiagRouter);
 
 // ─── SEGUIMIENTO GPS EXTERNO (Fase 10B) ──────────────────────────────────────
 // Rutas PÚBLICAS (sin requireInternalApiKey — decisión cerrada de Fase 10B:
