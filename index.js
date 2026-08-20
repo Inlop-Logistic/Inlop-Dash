@@ -151,8 +151,12 @@ const SB_HEADERS = {
   "Prefer": "resolution=merge-duplicates,return=representation"
 };
 
-async function sbFetch(path, method="GET", body=null) {
-  const opts = { method, headers: SB_HEADERS };
+async function sbFetch(path, method="GET", body=null, extraHeaders=null) {
+  // extraHeaders: override puntual por llamada (ej. Prefer: return=minimal en
+  // un PATCH cuyo caller no usa la fila devuelta) — NUNCA cambia SB_HEADERS
+  // global ni afecta llamadas que no pasen este 4º argumento (Sprint EGRESS-1).
+  const headers = extraHeaders ? { ...SB_HEADERS, ...extraHeaders } : SB_HEADERS;
+  const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetchConTimeout(`${SB_URL}${path}`, opts);
   if (!r.ok) {
@@ -2132,8 +2136,11 @@ async function syncCumplidos() {
     let sbOffset = 0;
     const allExistentes = [];
     while (true) {
+      // estado_controlt/pct/tipo_negocio agregados (Sprint EGRESS-1) — sin estos
+      // valores en memoria no hay forma de comparar contra el PATCH propuesto
+      // antes de enviarlo; el resto de columnas no cambia.
       const page = await sbFetch(
-        `/cumplidos?select=id,estado_cumplido,tiene_soporte,cliente,empresa_cliente_id,fecha_finalizacion&limit=${SB_PAGE}&offset=${sbOffset}`
+        `/cumplidos?select=id,estado_cumplido,tiene_soporte,cliente,empresa_cliente_id,fecha_finalizacion,estado_controlt,pct,tipo_negocio&limit=${SB_PAGE}&offset=${sbOffset}`
       );
       if (!page || page.length === 0) break;
       allExistentes.push(...page);
@@ -2214,7 +2221,28 @@ async function syncCumplidos() {
           }
         }
 
-        await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(v.trip_number)}`, 'PATCH', patch);
+        // Sprint EGRESS-1: no reescribir campos cuyo valor ya es idéntico al
+        // existente — antes se enviaba `patch` completo en cada ciclo (60s)
+        // aunque nada hubiera cambiado (evidencia: 500 PATCH/8min sobre solo
+        // ~30 IDs activos). `patch` (arriba) NO se modifica — sigue siendo la
+        // fuente de verdad para el log de reconciliación de más abajo, que
+        // sigue leyendo `patch.estado_cumplido`/`patch.fecha_finalizacion`
+        // exactamente igual que antes. Solo se filtra lo que se envía por red.
+        const patchReal = {};
+        for (const campo of Object.keys(patch)) {
+          if (existe[campo] !== patch[campo]) patchReal[campo] = patch[campo];
+        }
+        if (Object.keys(patchReal).length > 0) {
+          // return=minimal: este PATCH no usa la fila devuelta (nunca se lee
+          // el resultado) — override puntual, NO toca el header global
+          // (que sigue siendo return=representation para todo lo demás).
+          await sbFetch(
+            `/cumplidos?id=eq.${encodeURIComponent(v.trip_number)}`,
+            'PATCH',
+            patchReal,
+            { "Prefer": "return=minimal" }
+          );
+        }
 
         if (hayFinalizacion) {
           revertidos++;
