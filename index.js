@@ -2131,29 +2131,60 @@ async function syncCumplidos() {
   try {
     if (!cache.viajes.data.length) return;
 
-    // Cargar todas las filas existentes en lotes para evitar el límite de 1.000 registros.
-    const SB_PAGE = 500;
-    let sbOffset = 0;
-    const allExistentes = [];
-    while (true) {
-      // estado_controlt/pct/tipo_negocio agregados (Sprint EGRESS-1) — sin estos
-      // valores en memoria no hay forma de comparar contra el PATCH propuesto
-      // antes de enviarlo; el resto de columnas no cambia.
-      const page = await sbFetch(
-        `/cumplidos?select=id,estado_cumplido,tiene_soporte,cliente,empresa_cliente_id,fecha_finalizacion,estado_controlt,pct,tipo_negocio&limit=${SB_PAGE}&offset=${sbOffset}`
-      );
-      if (!page || page.length === 0) break;
-      allExistentes.push(...page);
-      if (page.length < SB_PAGE) break;
-      sbOffset += SB_PAGE;
-    }
-    const existentes = new Map(allExistentes.map(c => [c.id, c]));
-
     const ESTADOS_ACTIVOS           = new Set(['LIVE', 'SOLICITADO', 'CUMPLIDO RECIBIDO']);
     // Estados escritos exclusivamente por syncCumplidos durante una finalización automática.
     // Usados para distinguir finalizaciones auto-generadas de estados asignados manualmente.
     const ESTADOS_AUTO_FINALIZACION = new Set(['FINALIZADO CONTROLT', 'PENDIENTE LIQUIDACION']);
     const apiSet = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
+
+    // Sprint EGRESS-CUMPLIDOS-1 (diseño aprobado): en vez de escanear TODA la
+    // tabla `cumplidos` (crece indefinidamente con el histórico), se cargan
+    // solo las filas que el resto de esta función puede llegar a necesitar —
+    // la unión de dos conjuntos acotados:
+    //   Query 1 (id in apiSet): filas del feed activo actual — cubre el
+    //     lookup de insert-vs-update más abajo y la reconciliación
+    //     (hayFinalizacion), que necesita encontrar la fila aunque ya esté
+    //     marcada como finalizada en BD.
+    //   Query 2 (estado_cumplido in ESTADOS_ACTIVOS): filas cuyo estado
+    //     sigue activo en BD — cubre la detección de viajes que
+    //     desaparecieron del feed (bucle de finalización, más abajo), que
+    //     necesita encontrarlas aunque ya no estén en apiSet.
+    // Toda fila fuera de ambos conjuntos es, por construcción, irrelevante
+    // para el resto de esta función: si no está en apiSet, el lookup de
+    // arriba no la usa; si además su estado no es activo, `estadoActivo`
+    // (bucle de finalización) sería false de todos modos.
+    // Dos queries separadas, no or=() — mismo motivo ya documentado en
+    // services/customerResolver.js (PGRST100: el parser de or() falla con
+    // valores que contienen comas/paréntesis).
+    const SELECT_CUMPLIDOS = 'id,estado_cumplido,tiene_soporte,cliente,empresa_cliente_id,' +
+      'fecha_finalizacion,estado_controlt,pct,tipo_negocio';
+    const SB_PAGE = 500;
+
+    async function cargarCumplidosPaginado(filtroQs) {
+      let sbOffset = 0;
+      const filas = [];
+      while (true) {
+        const page = await sbFetch(
+          `/cumplidos?select=${SELECT_CUMPLIDOS}&${filtroQs}&limit=${SB_PAGE}&offset=${sbOffset}`
+        );
+        if (!page || page.length === 0) break;
+        filas.push(...page);
+        if (page.length < SB_PAGE) break;
+        sbOffset += SB_PAGE;
+      }
+      return filas;
+    }
+
+    const idsFeedQs = [...apiSet].map(encodeURIComponent).join(',');
+    const filasFeed = idsFeedQs
+      ? await cargarCumplidosPaginado(`id=in.(${idsFeedQs})`)
+      : [];
+    const estadosActivosQs = [...ESTADOS_ACTIVOS].map(encodeURIComponent).join(',');
+    const filasActivasEnBD = await cargarCumplidosPaginado(`estado_cumplido=in.(${estadosActivosQs})`);
+
+    const existentes = new Map(
+      [...filasFeed, ...filasActivasEnBD].map(c => [c.id, c])
+    );
 
     let insertados = 0, actualizados = 0, revertidos = 0, clientesCreados = 0, placeholdersOmitidos = 0;
     for (const v of cache.viajes.data) {
