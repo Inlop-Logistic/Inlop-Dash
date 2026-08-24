@@ -16,6 +16,9 @@ import {
 } from './services/reportes/datasetProvider.js';
 import { ejecutarReporteManual } from './services/reportes/envioManual.js';
 import { ejecutarTickScheduler, calcularProgramacionAlGuardar } from './services/reportes/scheduler.js';
+import { obtenerCatalogo } from './services/rbac/catalogo.js';
+import { calcularPermisosEfectivos } from './services/rbac/resolver.js';
+import { requirePermiso } from './services/rbac/middleware.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -4925,6 +4928,150 @@ app.get("/api/personal", requireErpAuth, async (req, res) => {
     res.json(personal);
   } catch (e) {
     console.error("GET /api/personal error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// ─── RBAC — API de solo lectura (Sprint 3D-3) ──────────────────────────────
+// Módulo: Configuración → Parámetros → Usuarios / Roles / Permisos (UI aún
+// no construida — estos 4 endpoints son la capa de lectura que la
+// alimentará). Ninguno escribe: sin INSERT/UPDATE/DELETE, sin tocar
+// profiles, usuario_roles ni usuario_permisos.
+//
+// Los 3 endpoints administrativos (/api/usuarios, /api/roles, /api/permisos)
+// están protegidos con requirePermiso('rbac:gestionar') — primer uso real de
+// ese middleware (Sprint 3D-2). Como usuario_roles está vacía todavía (la
+// migración de usuarios es un sprint separado, aún no ejecutado), estos 3
+// endpoints son inalcanzables hasta que exista al menos una fila de
+// usuario_roles apuntando al rol master — consecuencia esperada del orden de
+// sprints ya decidido (Sprint 3D-3, diseño aprobado, sección F/R1), no un bug.
+//
+// GET /api/me/permisos es la excepción deliberada: solo requireErpAuth, sin
+// requirePermiso — su propósito es que CUALQUIER usuario autenticado sepa
+// qué puede hacer, nunca condicionado a un permiso administrativo.
+
+// GET /api/usuarios — profiles + sus roles RBAC activos.
+// profiles.rol es el campo legacy (texto libre, aún no migrado) — se expone
+// solo como contexto para la futura migración; NUNCA se usa aquí para
+// derivar permisos. Esa es exclusivamente la función de roles_rbac (vía
+// usuario_roles + roles, ambos con activo=true).
+app.get("/api/usuarios", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const [perfiles, asignaciones, catalogo] = await Promise.all([
+      sbFetch("/profiles?select=id,nombre,email,rol,activo,created_at&order=nombre.asc"),
+      sbFetch("/usuario_roles?activo=eq.true&select=profile_id,rol_id"),
+      obtenerCatalogo({ sbFetch }),
+    ]);
+
+    const rolesPorProfile = new Map(); // profile_id -> [{id, nombre}]
+    for (const a of (asignaciones ?? [])) {
+      const rolInfo = catalogo.rolesPorId.get(a.rol_id);
+      if (!rolInfo || rolInfo.activo !== true) continue; // rol desactivado globalmente — no cuenta
+      if (!rolesPorProfile.has(a.profile_id)) rolesPorProfile.set(a.profile_id, []);
+      rolesPorProfile.get(a.profile_id).push({ id: a.rol_id, nombre: rolInfo.nombre });
+    }
+
+    const usuarios = (perfiles ?? []).map(p => ({
+      id:         p.id,
+      nombre:     p.nombre || "",
+      email:      p.email  || "",
+      rol:        p.rol    || "", // legacy — solo contexto, ver comentario arriba
+      activo:     p.activo === true,
+      created_at: p.created_at,
+      roles_rbac: rolesPorProfile.get(p.id) ?? [],
+    }));
+
+    res.json(usuarios);
+  } catch (e) {
+    console.error("GET /api/usuarios error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// GET /api/roles — catálogo de roles + conteo de usuarios asignados.
+app.get("/api/roles", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const [rolesRaw, asignaciones] = await Promise.all([
+      sbFetch("/roles?select=id,nombre,descripcion,es_sistema,activo&order=nombre.asc"),
+      sbFetch("/usuario_roles?activo=eq.true&select=rol_id"),
+    ]);
+
+    const conteoPorRol = new Map();
+    for (const a of (asignaciones ?? [])) {
+      conteoPorRol.set(a.rol_id, (conteoPorRol.get(a.rol_id) ?? 0) + 1);
+    }
+
+    const roles = (rolesRaw ?? []).map(r => ({
+      id:                 r.id,
+      nombre:             r.nombre,
+      descripcion:        r.descripcion || "",
+      es_sistema:         r.es_sistema === true,
+      activo:             r.activo === true,
+      usuarios_asignados: conteoPorRol.get(r.id) ?? 0,
+    }));
+
+    res.json(roles);
+  } catch (e) {
+    console.error("GET /api/roles error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// GET /api/permisos — catálogo de permisos + roles que los poseen.
+// El reverse-map (permiso → roles) se calcula en memoria contra el catálogo
+// ya cacheado por el motor RBAC (obtenerCatalogo, Sprint 3D-2) — sin
+// duplicar su lógica ni agregar consultas adicionales a Supabase.
+app.get("/api/permisos", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const [permisosRaw, catalogo] = await Promise.all([
+      sbFetch("/permisos?select=id,nombre,modulo,descripcion&order=modulo.asc,nombre.asc"),
+      obtenerCatalogo({ sbFetch }),
+    ]);
+
+    const rolesPorPermiso = new Map(); // permiso_id -> [{id, nombre}]
+    for (const [rolId, permisoIds] of catalogo.permisosPorRol) {
+      const rolInfo = catalogo.rolesPorId.get(rolId);
+      if (!rolInfo) continue;
+      for (const permisoId of permisoIds) {
+        if (!rolesPorPermiso.has(permisoId)) rolesPorPermiso.set(permisoId, []);
+        rolesPorPermiso.get(permisoId).push({ id: rolId, nombre: rolInfo.nombre });
+      }
+    }
+
+    const permisos = (permisosRaw ?? []).map(p => ({
+      id:          p.id,
+      nombre:      p.nombre,
+      modulo:      p.modulo || "",
+      descripcion: p.descripcion || "",
+      roles:       rolesPorPermiso.get(p.id) ?? [],
+    }));
+
+    res.json(permisos);
+  } catch (e) {
+    console.error("GET /api/permisos error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// GET /api/me/permisos — permisos efectivos del usuario autenticado.
+// Usa req.erpUserId directamente (identidad verificada por requireErpAuth
+// vía JWT) — NUNCA acepta un profile_id por parámetro, para que nadie pueda
+// pedir los permisos de otra persona por esta vía (evita IDOR).
+app.get("/api/me/permisos", requireErpAuth, async (req, res) => {
+  try {
+    if (!req.erpUserId) {
+      // Ruta de compatibilidad X-Internal-Api-Key: sin JWT no hay identidad
+      // verificada contra la que resolver RBAC — mismo criterio fail-closed
+      // que requirePermiso() (Sprint 3D-2, decisión G1).
+      return res.status(403).json({ error: "Identidad verificada requerida (JWT)" });
+    }
+    const resultado = await calcularPermisosEfectivos(req.erpUserId, { sbFetch });
+    res.json({
+      esMaster: resultado.esMaster,
+      permisos: Array.from(resultado.permisos),
+    });
+  } catch (e) {
+    console.error("GET /api/me/permisos error:", e.message);
     res.status(500).json({ error: "Error interno" });
   }
 });
