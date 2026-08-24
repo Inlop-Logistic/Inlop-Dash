@@ -456,3 +456,57 @@ export function formatFechaCorta(iso: string | null | undefined): string {
   if (isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }
+
+// ─── Tipos de Configuración → Parámetros → Usuarios / Roles y Permisos ───────
+// Sprint 3D-4 — UI de solo lectura sobre las APIs RBAC de Sprint 3D-3
+// (GET /api/usuarios, /api/roles, /api/permisos, /api/me/permisos).
+// Los campos aquí son un espejo literal de la respuesta de esos endpoints —
+// ver index.js para la fuente de verdad exacta de cada uno.
+
+/** Referencia mínima a un rol, tal como se embebe en usuarios y permisos. */
+export interface RolRbacRef {
+  id:     string;
+  nombre: string;
+}
+
+/**
+ * Fila de GET /api/usuarios. `rol` es el campo legacy de `profiles.rol`
+ * (texto libre, aún no migrado) — se expone solo como contexto para la
+ * futura migración; NUNCA se usa para derivar permisos en la UI. La fuente
+ * de verdad de qué puede hacer un usuario es exclusivamente `roles_rbac`
+ * (y, en el backend, el motor de services/rbac/).
+ */
+export interface UsuarioRbac {
+  id:         string;
+  nombre:     string;
+  email:      string;
+  rol:        string;
+  activo:     boolean;
+  created_at: string;
+  roles_rbac: RolRbacRef[];
+}
+
+/** Fila de GET /api/roles. */
+export interface RolRbac {
+  id:                 string;
+  nombre:             string;
+  descripcion:        string;
+  es_sistema:         boolean;
+  activo:             boolean;
+  usuarios_asignados: number;
+}
+
+/** Fila de GET /api/permisos. */
+export interface PermisoRbac {
+  id:          string;
+  nombre:      string;
+  modulo:      string;
+  descripcion: string;
+  roles:       RolRbacRef[];
+}
+
+/** Respuesta de GET /api/me/permisos. */
+export interface MisPermisos {
+  esMaster: boolean;
+  permisos: string[];
+}

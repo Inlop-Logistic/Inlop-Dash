@@ -7,6 +7,7 @@ import { buscarReporte, type CampoDataset } from "../catalogos/datasetsReportes"
 import type {
   ReporteAutomatico, ReporteBase, PersonalInlop, FiltroItem,
   ResultadoEnvioManual, ClienteFiltroOpcion, AvisoProgramacion,
+  UsuarioRbac, RolRbac, PermisoRbac, MisPermisos,
 } from "../types";
 
 // ─── Preview de datos del reporte ────────────────────────────────────────────
@@ -337,4 +338,33 @@ export function enviarReporteManual(id: string): Promise<ResultadoEnvioManual> {
     `/api/reportes-automaticos/${encodeURIComponent(id)}/enviar`,
     { method: "POST" }
   );
+}
+
+// ─── RBAC — Usuarios / Roles y Permisos (Sprint 3D-4) ────────────────────────
+// Solo lectura: las 4 funciones consumen los endpoints de Sprint 3D-3 tal
+// cual, vía el mismo req<T>() genérico — sin lógica HTTP propia, sin
+// duplicar nada de services/rbac/ (motor que vive exclusivamente en el
+// backend). Los 3 primeros endpoints ya exigen `rbac:gestionar` del lado del
+// servidor; ninguna función de este archivo decide autorización.
+
+export function listarUsuarios(): Promise<UsuarioRbac[]> {
+  return req<UsuarioRbac[]>("/api/usuarios");
+}
+
+export function listarRoles(): Promise<RolRbac[]> {
+  return req<RolRbac[]>("/api/roles");
+}
+
+export function listarPermisos(): Promise<PermisoRbac[]> {
+  return req<PermisoRbac[]>("/api/permisos");
+}
+
+/**
+ * Permisos efectivos del usuario autenticado (self-service, sin
+ * `rbac:gestionar`). Se usa en Parámetros SOLO para progressive disclosure
+ * (mostrar/ocultar las tarjetas de Usuarios y Roles y Permisos) — nunca como
+ * sustituto de la autorización real del backend. Ver ParametrosPage.tsx.
+ */
+export function obtenerMisPermisos(): Promise<MisPermisos> {
+  return req<MisPermisos>("/api/me/permisos");
 }
