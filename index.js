@@ -17,7 +17,7 @@ import {
 import { ejecutarReporteManual } from './services/reportes/envioManual.js';
 import { ejecutarTickScheduler, calcularProgramacionAlGuardar } from './services/reportes/scheduler.js';
 import { obtenerCatalogo } from './services/rbac/catalogo.js';
-import { calcularPermisosEfectivos } from './services/rbac/resolver.js';
+import { calcularPermisosEfectivos, invalidarUsuario } from './services/rbac/resolver.js';
 import { requirePermiso } from './services/rbac/middleware.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
@@ -5072,6 +5072,159 @@ app.get("/api/me/permisos", requireErpAuth, async (req, res) => {
     });
   } catch (e) {
     console.error("GET /api/me/permisos error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+const UUID_REGEX_RBAC = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const NOMBRE_ROL_MASTER_RBAC = 'master';
+
+// PUT /api/usuarios/:id/roles — reemplaza el conjunto COMPLETO de roles RBAC
+// activos de un usuario (Sprint 3D-7.2 — primer endpoint de escritura RBAC).
+//
+// Body: { rol_ids: string[] } — el conjunto deseado. Reconciliación de
+// conjunto sobre usuario_roles: activa (upsert) los rol_id presentes que no
+// estaban activos, desactiva LÓGICAMENTE (activo=false, nunca DELETE físico
+// — usuario_roles no tiene historial propio, ver diseño 3D-7) los que
+// estaban activos y ya no están en la lista. Sin cambios para el resto —
+// idempotente: reenviar el mismo conjunto no escribe nada.
+//
+// Guard reforzado (diseño 3D-7, "poderes reforzados"): si la operación
+// agrega o quita el rol `master` para este usuario, el ACTOR debe ser
+// master real (esMaster===true vía el motor RBAC), no basta con tener
+// `rbac:gestionar` genérico — evita que alguien con rbac:gestionar por otra
+// vía se auto-promueva o promueva a terceros a master.
+//
+// Guard de integridad: nunca se permite dejar el sistema sin al menos un
+// master "funcionando" (usuario_roles.activo=true Y profiles.activo=true) —
+// 409 si la operación dejaría ese conteo en cero.
+app.put("/api/usuarios/:id/roles", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!UUID_REGEX_RBAC.test(id || "")) {
+      return res.status(400).json({ error: "id de usuario inválido" });
+    }
+
+    const { rol_ids } = req.body || {};
+    if (!Array.isArray(rol_ids) || rol_ids.some(r => typeof r !== "string" || !UUID_REGEX_RBAC.test(r))) {
+      return res.status(400).json({ error: "rol_ids debe ser un arreglo de UUID válidos" });
+    }
+    const targetSet = new Set(rol_ids); // dedup — reenviar el mismo id dos veces no es un error
+
+    // Profile debe existir.
+    const perfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}&select=id,activo`);
+    const perfil = perfiles?.[0];
+    if (!perfil) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    // profiles.rol NO participa en autorización ni en esta validación —
+    // solo profiles.activo, que sí es relevante: un usuario inactivo no
+    // puede recibir roles activos nuevos (sí puede recibir un rol_ids=[]
+    // para limpiar sus asignaciones existentes).
+    if (rol_ids.length > 0 && perfil.activo !== true) {
+      return res.status(400).json({ error: "El usuario está inactivo — no puede recibir roles activos" });
+    }
+
+    // Catálogo — valida que cada rol_id exista y esté activo. Reutiliza el
+    // motor RBAC ya cacheado (catalogo.js), sin duplicar su lógica.
+    const catalogo = await obtenerCatalogo({ sbFetch });
+    for (const rolId of targetSet) {
+      const info = catalogo.rolesPorId.get(rolId);
+      if (!info) return res.status(400).json({ error: `rol_id inexistente: ${rolId}` });
+      if (info.activo !== true) return res.status(400).json({ error: `rol inactivo, no asignable: ${info.nombre}` });
+    }
+
+    let rolIdMaster = null;
+    for (const [rolId, info] of catalogo.rolesPorId) {
+      if (info.nombre?.toLowerCase() === NOMBRE_ROL_MASTER_RBAC) { rolIdMaster = rolId; break; }
+    }
+
+    // Estado actual de asignaciones activas de este usuario.
+    const asignacionesActuales = await sbFetch(
+      `/usuario_roles?profile_id=eq.${encodeURIComponent(id)}&activo=eq.true&select=rol_id`
+    ) || [];
+    const activosActuales = new Set(asignacionesActuales.map(a => a.rol_id));
+
+    const toActivate   = [...targetSet].filter(rolId => !activosActuales.has(rolId));
+    const toDeactivate = [...activosActuales].filter(rolId => !targetSet.has(rolId));
+
+    const tocaMaster = rolIdMaster !== null && (toActivate.includes(rolIdMaster) || toDeactivate.includes(rolIdMaster));
+    if (tocaMaster) {
+      const actorResuelto = await calcularPermisosEfectivos(req.erpUserId, { sbFetch });
+      if (!actorResuelto.esMaster) {
+        return res.status(403).json({ error: "Solo un master puede asignar o quitar el rol master" });
+      }
+    }
+
+    // Último master: si esta operación desactiva el rol master de este
+    // usuario, verificar que quede al menos otro master "funcionando"
+    // (asignación activa + profile activo) en el resto del sistema.
+    if (rolIdMaster !== null && toDeactivate.includes(rolIdMaster)) {
+      const filasMaster = await sbFetch(
+        `/usuario_roles?rol_id=eq.${encodeURIComponent(rolIdMaster)}&activo=eq.true&select=profile_id`
+      ) || [];
+      const otrosIds = filasMaster.map(f => f.profile_id).filter(pid => pid !== id);
+      let otrosMasterFuncionando = 0;
+      if (otrosIds.length > 0) {
+        const perfilesOtros = await sbFetch(
+          `/profiles?id=in.(${otrosIds.map(encodeURIComponent).join(',')})&activo=eq.true&select=id`
+        ) || [];
+        otrosMasterFuncionando = perfilesOtros.length;
+      }
+      if (otrosMasterFuncionando === 0) {
+        return res.status(409).json({ error: "No se puede quitar master: quedaría el sistema sin ningún master activo" });
+      }
+    }
+
+    const actor = getActor(req);
+    const nowIso = new Date().toISOString();
+
+    // Reconciliación en dos escrituras atómicas (no granulares) — cada
+    // dirección de cambio (desactivar / activar) se envía como UNA sola
+    // sentencia PostgREST sobre múltiples filas, en vez de un loop de N
+    // llamadas sbFetch. Esto evita el riesgo real (Sprint 3D-7.2, auditoría)
+    // de que una falla a mitad de un loop deje usuario_roles parcialmente
+    // modificada: al ser una sola sentencia por dirección, o se aplica
+    // completa o sbFetch devuelve null y no se aplica nada de esa dirección.
+    // No se usa ninguna transacción ni dependencia nueva — mismo mecanismo
+    // (sbFetch + filtros PostgREST) ya usado en el resto del endpoint.
+    //
+    // Orden fail-closed: primero desactivar, luego activar. Si la activación
+    // falla después de una desactivación ya confirmada, el usuario queda con
+    // MENOS permisos de los deseados (seguro), nunca con roles obsoletos de
+    // más. invalidarUsuario() se llama tras cada escritura confirmada, no
+    // solo al final, para que el cache nunca quede desalineado con una
+    // escritura parcial ya aplicada en la base de datos.
+    if (toDeactivate.length > 0) {
+      const resultado = await sbFetch(
+        `/usuario_roles?profile_id=eq.${encodeURIComponent(id)}&rol_id=in.(${toDeactivate.map(encodeURIComponent).join(',')})`,
+        'PATCH',
+        { activo: false, asignado_por: actor, asignado_en: nowIso }
+      );
+      if (resultado === null) {
+        console.error("PUT /api/usuarios/:id/roles: falló la desactivación en lote, abortando sin activar");
+        return res.status(500).json({ error: "Error interno" });
+      }
+      invalidarUsuario(id);
+    }
+    if (toActivate.length > 0) {
+      const resultado = await sbFetch('/usuario_roles?on_conflict=profile_id,rol_id', 'POST', toActivate.map(rolId => ({
+        profile_id:   id,
+        rol_id:       rolId,
+        asignado_por: actor,
+        asignado_en:  nowIso,
+        activo:       true,
+      })));
+      if (resultado === null) {
+        console.error("PUT /api/usuarios/:id/roles: falló la activación en lote");
+        return res.status(500).json({ error: "Error interno" });
+      }
+      invalidarUsuario(id);
+    }
+
+    const roles_rbac = [...targetSet].map(rolId => ({ id: rolId, nombre: catalogo.rolesPorId.get(rolId).nombre }));
+    res.json({ id, roles_rbac });
+  } catch (e) {
+    console.error("PUT /api/usuarios/:id/roles error:", e.message);
     res.status(500).json({ error: "Error interno" });
   }
 });

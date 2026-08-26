@@ -45,6 +45,45 @@ export function _resetResolverParaTests() {
   cachePorUsuario.clear();
 }
 
+/**
+ * Invalidación explícita de uso en producción (Sprint 3D-7.1) — para que un
+ * futuro endpoint de escritura sobre usuario_roles/usuario_permisos de UN
+ * usuario puntual no tenga que esperar hasta 30s (TTL_USUARIO_MS) a que el
+ * cambio se refleje en tienePermiso()/calcularPermisosEfectivos() para ese
+ * mismo usuario. No afecta la entrada cacheada de ningún otro profileId.
+ *
+ * Distinta de _resetResolverParaTests() a propósito — esa sigue siendo
+ * exclusiva de tests (limpia TODO el cache para aislar casos); esta solo
+ * afecta a un usuario puntual, uso real de producción.
+ *
+ * Segura de llamar si profileId no tiene entrada cacheada (no-op — Map#delete
+ * de una clave ausente no lanza ni hace nada).
+ *
+ * @param {string} profileId
+ */
+export function invalidarUsuario(profileId) {
+  cachePorUsuario.delete(profileId);
+}
+
+/**
+ * Invalidación explícita de uso en producción (Sprint 3D-7.1) — para cuando
+ * un cambio afecta potencialmente a más de un usuario (ej. un futuro
+ * endpoint de escritura sobre rol_permisos, que cambia lo que CUALQUIER
+ * usuario con ese rol resuelve). Limpia todo cachePorUsuario; la próxima
+ * llamada a tienePermiso()/calcularPermisosEfectivos() de cada usuario
+ * recalcula desde cero.
+ *
+ * Distinta de _resetResolverParaTests() solo en su propósito documentado
+ * (uso real de producción vs. aislamiento entre tests) — mismo cuerpo,
+ * mantenidas separadas para no acoplar producción a un helper de test.
+ *
+ * Segura de llamar con el cache ya vacío (Map#clear() sobre un Map vacío
+ * es un no-op).
+ */
+export function invalidarTodosLosUsuarios() {
+  cachePorUsuario.clear();
+}
+
 const VACIO = Object.freeze({ esMaster: false, permisos: new Set() });
 
 async function usuarioActivo(profileId, deps) {

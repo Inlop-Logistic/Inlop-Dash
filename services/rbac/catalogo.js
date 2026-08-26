@@ -68,3 +68,21 @@ export async function obtenerCatalogo(deps) {
   cache = { ts: Date.now(), datos };
   return datos;
 }
+
+/**
+ * Invalidación explícita de uso en producción (Sprint 3D-7.1) — para que un
+ * futuro endpoint de escritura sobre `rol_permisos`/`roles`/`permisos` no
+ * tenga que esperar hasta 5 minutos (TTL_CATALOGO_MS) a que el cambio se
+ * refleje. La próxima llamada a obtenerCatalogo() recarga desde Supabase.
+ *
+ * Distinta de _resetCatalogoParaTests() a propósito — esa sigue siendo
+ * exclusiva de tests (aislamiento entre casos); esta es la que un endpoint
+ * de escritura real invocaría. Misma operación internamente, pero se
+ * mantienen separadas para no acoplar el código de producción a un helper
+ * pensado solo para limpiar estado entre tests.
+ *
+ * Segura de llamar con el cache ya vacío (no-op).
+ */
+export function invalidarCatalogo() {
+  cache = null;
+}

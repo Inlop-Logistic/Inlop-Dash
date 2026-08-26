@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { crearAlmacen } from '../gps/testStore.js';
-import { obtenerCatalogo, _resetCatalogoParaTests } from './catalogo.js';
+import { obtenerCatalogo, invalidarCatalogo, _resetCatalogoParaTests } from './catalogo.js';
 
 function almacenBase() {
   return crearAlmacen({
@@ -65,4 +65,27 @@ test('obtenerCatalogo: rol_permisos vacío o tabla ausente no rompe la carga', a
   const catalogo = await obtenerCatalogo({ sbFetch });
   assert.equal(catalogo.rolesPorId.size, 0);
   assert.equal(catalogo.permisosPorRol.size, 0);
+});
+
+// ── invalidarCatalogo() (Sprint 3D-7.1) ─────────────────────────────────────
+
+test('invalidarCatalogo: provoca una nueva carga en la siguiente llamada, incluso dentro del TTL', async () => {
+  _resetCatalogoParaTests();
+  const sbFetch = almacenBase();
+  await obtenerCatalogo({ sbFetch });
+  const llamadasTrasPrimeraCarga = sbFetch.llamadas.length;
+
+  invalidarCatalogo();
+  await obtenerCatalogo({ sbFetch });
+
+  assert.ok(
+    sbFetch.llamadas.length > llamadasTrasPrimeraCarga,
+    'debe volver a consultar Supabase tras invalidarCatalogo(), sin esperar al TTL'
+  );
+});
+
+test('invalidarCatalogo: es seguro llamarlo con el cache ya vacío (no-op, no lanza)', () => {
+  _resetCatalogoParaTests(); // cache ya en null
+  assert.doesNotThrow(() => invalidarCatalogo());
+  assert.doesNotThrow(() => invalidarCatalogo()); // dos veces seguidas, sigue siendo seguro
 });

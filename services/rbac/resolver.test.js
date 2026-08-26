@@ -6,7 +6,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { crearAlmacen } from '../gps/testStore.js';
 import { _resetCatalogoParaTests } from './catalogo.js';
-import { calcularPermisosEfectivos, tienePermiso, _resetResolverParaTests } from './resolver.js';
+import {
+  calcularPermisosEfectivos, tienePermiso, _resetResolverParaTests,
+  invalidarUsuario, invalidarTodosLosUsuarios,
+} from './resolver.js';
 
 // ── Fixture compartido ────────────────────────────────────────────────────
 // 3 roles: operador (viajes:listar), supervisor (viajes:listar + cumplidos:estado),
@@ -284,4 +287,129 @@ test('calcularPermisosEfectivos: si sbFetch lanza, resuelve VACIO (fail-closed) 
   const sbFetchRoto = async () => { throw new Error('fallo de red simulado'); };
   const resultado = await calcularPermisosEfectivos('user-activo', { sbFetch: sbFetchRoto });
   assert.deepEqual(resultado, { esMaster: false, permisos: new Set() });
+});
+
+// ── invalidarUsuario() / invalidarTodosLosUsuarios() (Sprint 3D-7.1) ────────
+
+test('invalidarUsuario: obliga a recalcular SOLAMENTE ese usuario, sin esperar al TTL de 30s', async () => {
+  reset();
+  const sbFetch = almacenBase({
+    usuario_roles: [
+      { id: 'ur1', profile_id: 'user-activo', rol_id: 'rol-operador', activo: true },
+      { id: 'ur2', profile_id: 'user-master', rol_id: 'rol-master',   activo: true },
+    ],
+  });
+
+  // Cachear ambos usuarios.
+  await tienePermiso('user-activo', 'viajes:listar', { sbFetch });
+  await tienePermiso('user-master', 'rbac:gestionar', { sbFetch });
+  const llamadasTrasCachear = sbFetch.llamadas.length;
+
+  invalidarUsuario('user-activo');
+  await tienePermiso('user-activo', 'viajes:listar', { sbFetch });
+
+  assert.ok(
+    sbFetch.llamadas.length > llamadasTrasCachear,
+    'invalidarUsuario debe forzar una nueva resolución para user-activo, sin esperar los 30s del TTL'
+  );
+});
+
+test('invalidarUsuario: NO elimina la caché de otros usuarios', async () => {
+  reset();
+  const sbFetch = almacenBase({
+    usuario_roles: [
+      { id: 'ur1', profile_id: 'user-activo', rol_id: 'rol-operador', activo: true },
+      { id: 'ur2', profile_id: 'user-master', rol_id: 'rol-master',   activo: true },
+    ],
+  });
+
+  await tienePermiso('user-activo', 'viajes:listar', { sbFetch });
+  await tienePermiso('user-master', 'rbac:gestionar', { sbFetch });
+  const llamadasTrasCachear = sbFetch.llamadas.length;
+
+  invalidarUsuario('user-activo'); // solo invalida user-activo
+  await tienePermiso('user-master', 'rbac:gestionar', { sbFetch }); // consulta user-master de nuevo
+
+  assert.equal(
+    sbFetch.llamadas.length, llamadasTrasCachear,
+    'user-master debe seguir sirviéndose desde caché — invalidarUsuario(user-activo) no debe afectarlo'
+  );
+});
+
+test('invalidarUsuario: es seguro llamarlo para un profileId sin entrada cacheada (no-op, no lanza)', () => {
+  reset();
+  assert.doesNotThrow(() => invalidarUsuario('usuario-que-nunca-se-consultó'));
+});
+
+test('invalidarTodosLosUsuarios: obliga a recalcular a TODOS los usuarios previamente cacheados', async () => {
+  reset();
+  const sbFetch = almacenBase({
+    usuario_roles: [
+      { id: 'ur1', profile_id: 'user-activo', rol_id: 'rol-operador', activo: true },
+      { id: 'ur2', profile_id: 'user-master', rol_id: 'rol-master',   activo: true },
+    ],
+  });
+
+  await tienePermiso('user-activo', 'viajes:listar', { sbFetch });
+  await tienePermiso('user-master', 'rbac:gestionar', { sbFetch });
+  const llamadasTrasCachear = sbFetch.llamadas.length;
+
+  invalidarTodosLosUsuarios();
+  await tienePermiso('user-activo', 'viajes:listar', { sbFetch });
+  await tienePermiso('user-master', 'rbac:gestionar', { sbFetch });
+
+  assert.ok(
+    sbFetch.llamadas.length > llamadasTrasCachear,
+    'ambos usuarios deben recalcularse tras invalidarTodosLosUsuarios()'
+  );
+});
+
+test('invalidarTodosLosUsuarios: es seguro llamarlo con el cache ya vacío (no-op, no lanza)', () => {
+  reset(); // cachePorUsuario ya vacío
+  assert.doesNotThrow(() => invalidarTodosLosUsuarios());
+});
+
+test('la invalidación NO altera las reglas de resolución — mismo resultado antes y después', async () => {
+  reset();
+  const sbFetch = almacenBase({
+    usuario_roles: [
+      { id: 'ur1', profile_id: 'user-activo', rol_id: 'rol-supervisor', activo: true },
+      { id: 'ur2', profile_id: 'user-master', rol_id: 'rol-master',     activo: true },
+    ],
+  });
+
+  const antesOperativo = await calcularPermisosEfectivos('user-activo', { sbFetch });
+  const antesMaster     = await calcularPermisosEfectivos('user-master', { sbFetch });
+
+  invalidarUsuario('user-activo');
+  invalidarTodosLosUsuarios();
+
+  const despuesOperativo = await calcularPermisosEfectivos('user-activo', { sbFetch });
+  const despuesMaster     = await calcularPermisosEfectivos('user-master', { sbFetch });
+
+  assert.deepEqual(despuesOperativo, antesOperativo, 'el conjunto de permisos resuelto no debe cambiar por invalidar el cache');
+  assert.deepEqual(despuesMaster, antesMaster, 'esMaster y su corto-circuito deben seguir intactos tras invalidar');
+  assert.equal(despuesMaster.esMaster, true);
+  assert.ok(despuesOperativo.permisos.has('viajes:listar'));
+  assert.ok(despuesOperativo.permisos.has('cumplidos:estado'));
+});
+
+test('ejecutar invalidación repetidamente no produce errores', async () => {
+  reset();
+  const sbFetch = almacenBase({
+    usuario_roles: [{ id: 'ur1', profile_id: 'user-activo', rol_id: 'rol-operador', activo: true }],
+  });
+  await tienePermiso('user-activo', 'viajes:listar', { sbFetch });
+
+  assert.doesNotThrow(() => {
+    invalidarUsuario('user-activo');
+    invalidarUsuario('user-activo');
+    invalidarTodosLosUsuarios();
+    invalidarTodosLosUsuarios();
+    invalidarUsuario('user-activo');
+  });
+
+  // Y el motor sigue respondiendo con normalidad después de invalidar en bucle.
+  const resultado = await tienePermiso('user-activo', 'viajes:listar', { sbFetch });
+  assert.equal(resultado, true);
 });
