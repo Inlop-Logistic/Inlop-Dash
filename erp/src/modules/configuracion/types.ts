@@ -470,20 +470,33 @@ export interface RolRbacRef {
 }
 
 /**
+ * Una excepción individual activa de `usuario_permisos`, tal como la embebe
+ * GET /api/usuarios (Sprint 3D-7.6) — un grant concede un permiso adicional
+ * al que ya tiene por sus roles; un revoke le niega uno que normalmente
+ * tendría. Nunca reemplaza `roles_rbac`, se superpone.
+ */
+export interface ExcepcionPermisoRef {
+  permiso_id: string;
+  nombre:     string;
+  efecto:     "grant" | "revoke";
+}
+
+/**
  * Fila de GET /api/usuarios. `rol` es el campo legacy de `profiles.rol`
  * (texto libre, aún no migrado) — se expone solo como contexto para la
  * futura migración; NUNCA se usa para derivar permisos en la UI. La fuente
- * de verdad de qué puede hacer un usuario es exclusivamente `roles_rbac`
- * (y, en el backend, el motor de services/rbac/).
+ * de verdad de qué puede hacer un usuario es exclusivamente `roles_rbac` +
+ * `excepciones` (y, en el backend, el motor de services/rbac/).
  */
 export interface UsuarioRbac {
-  id:         string;
-  nombre:     string;
-  email:      string;
-  rol:        string;
-  activo:     boolean;
-  created_at: string;
-  roles_rbac: RolRbacRef[];
+  id:          string;
+  nombre:      string;
+  email:       string;
+  rol:         string;
+  activo:      boolean;
+  created_at:  string;
+  roles_rbac:  RolRbacRef[];
+  excepciones: ExcepcionPermisoRef[];
 }
 
 /** Fila de GET /api/roles. */
@@ -541,4 +554,22 @@ export interface PermisoRolRef {
 export interface ActualizarPermisosRolResponse {
   id:       string;
   permisos: PermisoRolRef[];
+}
+
+// ─── Edición de excepciones individuales de un usuario (Sprint 3D-7.6) ───────
+// PUT /api/usuarios/:id/permisos (backend). `excepciones` es el conjunto
+// COMPLETO de excepciones ACTIVAS deseadas, no un delta — reenviar el mismo
+// conjunto no escribe nada (idempotente, ver index.js). NO modifica roles
+// ni rol_permisos — exclusivamente usuario_permisos.
+
+/** Una excepción tal como se envía en el body de PUT /api/usuarios/:id/permisos. */
+export interface ExcepcionUsuarioBody {
+  permiso_id: string;
+  efecto:     "grant" | "revoke";
+}
+
+/** Respuesta de PUT /api/usuarios/:id/permisos — excepciones ya actualizadas. */
+export interface ActualizarExcepcionesUsuarioResponse {
+  id:          string;
+  excepciones: Array<{ permiso_id: string; nombre: string; efecto: "grant" | "revoke"; activo: boolean }>;
 }

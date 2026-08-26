@@ -1,10 +1,14 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import type { UsuarioRbac, RolRbac } from "../types";
-import { listarUsuarios, listarRoles, actualizarRolesUsuario, obtenerMisPermisos } from "../services/api";
+import type { UsuarioRbac, RolRbac, PermisoRbac } from "../types";
+import {
+  listarUsuarios, listarRoles, listarPermisos, actualizarRolesUsuario,
+  actualizarExcepcionesUsuario, obtenerMisPermisos,
+} from "../services/api";
 
 export type FiltroEstadoUsuario = "" | "activo" | "inactivo";
 
-const NOMBRE_ROL_MASTER = "master";
+const NOMBRE_ROL_MASTER        = "master";
+const NOMBRE_PERMISO_GESTIONAR = "rbac:gestionar";
 
 /**
  * Estado de Configuración → Parámetros → Usuarios (Sprint 3D-4, edición de
@@ -17,6 +21,7 @@ const NOMBRE_ROL_MASTER = "master";
 export function useUsuarios() {
   const [data,     setData]     = useState<UsuarioRbac[]>([]);
   const [roles,    setRoles]    = useState<RolRbac[]>([]);
+  const [permisos, setPermisos] = useState<PermisoRbac[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
@@ -42,13 +47,27 @@ export function useUsuarios() {
   // true mientras se muestra la confirmación reforzada (agregar/quitar master).
   const [confirmarMaster, setConfirmarMaster] = useState(false);
 
+  // ── Edición de excepciones individuales (usuario_permisos) del panel
+  // abierto (Sprint 3D-7.6) — independiente de la edición de roles: ambas
+  // pueden coexistir en el mismo panel, pero cada una tiene su propio modo
+  // de edición/guardado/error, igual que roles y permisos en 3D-7.4/7.5. ──
+  const [editandoExcepciones,       setEditandoExcepciones]       = useState(false);
+  // permiso_id -> efecto deseado. Ausente = sin excepción para ese permiso.
+  const [seleccionExcepciones,      setSeleccionExcepciones]      = useState<Map<string, "grant" | "revoke">>(new Map());
+  const [guardandoExcepciones,      setGuardandoExcepciones]      = useState(false);
+  const [errorGuardadoExcepciones,  setErrorGuardadoExcepciones]  = useState<string | null>(null);
+  const [exitoExcepciones,          setExitoExcepciones]          = useState(false);
+  // true mientras se muestra la confirmación reforzada (agregar/modificar/quitar rbac:gestionar).
+  const [confirmarGestionarExcepcion, setConfirmarGestionarExcepcion] = useState(false);
+
   const cargar = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [usuariosData, rolesData] = await Promise.all([listarUsuarios(), listarRoles()]);
+      const [usuariosData, rolesData, permisosData] = await Promise.all([listarUsuarios(), listarRoles(), listarPermisos()]);
       setData(usuariosData);
       setRoles(rolesData);
+      setPermisos(permisosData);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al cargar usuarios");
     } finally {
@@ -106,22 +125,30 @@ export function useUsuarios() {
     return teniaAntes !== tieneAhora;
   }, [rolIdMaster, panelUsuario, seleccion]);
 
-  function abrirPanel(id: string) {
-    setPanelId(id);
+  /** Resetea el modo edición de roles Y de excepciones — usado al abrir un
+   *  panel distinto o al cerrarlo, para que ninguno arrastre estado del
+   *  usuario anterior. */
+  function resetearEdicionPanel() {
     setEditando(false);
     setSeleccion(new Set());
     setErrorGuardado(null);
     setExito(false);
     setConfirmarMaster(false);
+    setEditandoExcepciones(false);
+    setSeleccionExcepciones(new Map());
+    setErrorGuardadoExcepciones(null);
+    setExitoExcepciones(false);
+    setConfirmarGestionarExcepcion(false);
+  }
+
+  function abrirPanel(id: string) {
+    setPanelId(id);
+    resetearEdicionPanel();
   }
 
   function cerrarPanel() {
     setPanelId(null);
-    setEditando(false);
-    setSeleccion(new Set());
-    setErrorGuardado(null);
-    setExito(false);
-    setConfirmarMaster(false);
+    resetearEdicionPanel();
   }
 
   function iniciarEdicion() {
@@ -182,6 +209,118 @@ export function useUsuarios() {
     void ejecutarGuardado();
   }
 
+  // ── Excepciones individuales de usuario_permisos (Sprint 3D-7.6) ─────────
+  // NO modifica roles ni rol_permisos — solo usuario_permisos, superpuesto a
+  // lo que el usuario ya tiene por sus roles (ver resolver.js: permisos del
+  // rol + grants − revokes).
+
+  const permisoIdGestionar = useMemo(
+    () => permisos.find(p => p.nombre === NOMBRE_PERMISO_GESTIONAR)?.id ?? null,
+    [permisos]
+  );
+
+  /** true si panelUsuario tiene el rol master — sus permisos efectivos se
+   *  resuelven por el corto-circuito especial del motor (resolver.js corta
+   *  ANTES de consultar usuario_permisos), así que ninguna excepción los
+   *  altera. Solo se usa para la advertencia informativa del frontend; el
+   *  backend no bloquea la escritura (una excepción sobre un usuario master
+   *  es válida en la base de datos, solo que inerte). */
+  const panelUsuarioEsMaster = useMemo(
+    () => panelUsuario?.roles_rbac.some(r => r.nombre === NOMBRE_ROL_MASTER) ?? false,
+    [panelUsuario]
+  );
+
+  /** Efecto deseado para rbac:gestionar tras la edición actual, o null si no
+   *  hay excepción configurada — usado para el mensaje del modal reforzado. */
+  const efectoDeseadoGestionar = permisoIdGestionar !== null
+    ? seleccionExcepciones.get(permisoIdGestionar) ?? null
+    : null;
+
+  /** true si la selección actual agrega, modifica o quita una excepción
+   *  sobre rbac:gestionar respecto al estado original — dispara la
+   *  confirmación reforzada (regla 2 del sprint 3D-7.6). */
+  const tocaGestionarExcepcion = useMemo(() => {
+    if (!permisoIdGestionar || !panelUsuario) return false;
+    const actual  = panelUsuario.excepciones.find(e => e.permiso_id === permisoIdGestionar)?.efecto ?? null;
+    const deseado = seleccionExcepciones.get(permisoIdGestionar) ?? null;
+    return actual !== deseado;
+  }, [permisoIdGestionar, panelUsuario, seleccionExcepciones]);
+
+  function iniciarEdicionExcepciones() {
+    if (!panelUsuario) return;
+    const inicial = new Map<string, "grant" | "revoke">();
+    for (const e of panelUsuario.excepciones) inicial.set(e.permiso_id, e.efecto);
+    setSeleccionExcepciones(inicial);
+    setErrorGuardadoExcepciones(null);
+    setExitoExcepciones(false);
+    setEditandoExcepciones(true);
+  }
+
+  /** Cancelación sin guardar — descarta la selección, vuelve a solo lectura. */
+  function cancelarEdicionExcepciones() {
+    setEditandoExcepciones(false);
+    setSeleccionExcepciones(new Map());
+    setErrorGuardadoExcepciones(null);
+    setConfirmarGestionarExcepcion(false);
+  }
+
+  /** Marca `permisoId` con `efecto`; volver a elegir el mismo efecto ya
+   *  seleccionado lo quita (misma excepción vuelve a "sin excepción"). */
+  function setEfectoExcepcion(permisoId: string, efecto: "grant" | "revoke") {
+    setSeleccionExcepciones(prev => {
+      const next = new Map(prev);
+      if (next.get(permisoId) === efecto) next.delete(permisoId);
+      else next.set(permisoId, efecto);
+      return next;
+    });
+  }
+
+  function quitarExcepcion(permisoId: string) {
+    setSeleccionExcepciones(prev => {
+      const next = new Map(prev);
+      next.delete(permisoId);
+      return next;
+    });
+  }
+
+  const ejecutarGuardadoExcepciones = useCallback(async () => {
+    if (!panelUsuario) return;
+    setGuardandoExcepciones(true);
+    setErrorGuardadoExcepciones(null);
+    try {
+      const body = [...seleccionExcepciones.entries()].map(([permiso_id, efecto]) => ({ permiso_id, efecto }));
+      const resultado = await actualizarExcepcionesUsuario(panelUsuario.id, body);
+      // Actualiza el usuario en memoria con la respuesta del backend — sin
+      // refetch de /api/usuarios completo (mismo criterio que roles, 3D-7.4).
+      setData(prev => prev.map(u => u.id === resultado.id
+        ? { ...u, excepciones: resultado.excepciones.map(e => ({ permiso_id: e.permiso_id, nombre: e.nombre, efecto: e.efecto })) }
+        : u
+      ));
+      setEditandoExcepciones(false);
+      setConfirmarGestionarExcepcion(false);
+      setExitoExcepciones(true);
+    } catch (e) {
+      // confirmarGestionarExcepcion NO se limpia aquí a propósito — mismo
+      // criterio que confirmarMaster/confirmarGestionar: si el error viene
+      // del guard esMaster del backend (403), el modal permanece abierto
+      // mostrando el error y ofreciendo "Reintentar".
+      setErrorGuardadoExcepciones(e instanceof Error ? e.message : "Error al guardar las excepciones");
+    } finally {
+      setGuardandoExcepciones(false);
+    }
+  }, [panelUsuario, seleccionExcepciones]);
+
+  /** Punto de entrada de "Guardar" — pide confirmación reforzada primero si
+   *  la operación toca rbac:gestionar; si no, guarda directamente. */
+  function guardarExcepciones() {
+    setExitoExcepciones(false);
+    if (tocaGestionarExcepcion) {
+      setConfirmarGestionarExcepcion(true); // el modal invoca ejecutarGuardadoExcepciones() al confirmar
+      return;
+    }
+    void ejecutarGuardadoExcepciones();
+  }
+
   return {
     filtrados, loading, error, cargar,
     busqueda, setBusqueda,
@@ -193,5 +332,11 @@ export function useUsuarios() {
     guardando, errorGuardado, exito,
     tocaMaster, confirmarMaster, setConfirmarMaster,
     guardarRoles, ejecutarGuardado,
+    permisos, panelUsuarioEsMaster,
+    editandoExcepciones, iniciarEdicionExcepciones, cancelarEdicionExcepciones,
+    setEfectoExcepcion, quitarExcepcion, seleccionExcepciones,
+    guardandoExcepciones, errorGuardadoExcepciones, exitoExcepciones,
+    efectoDeseadoGestionar, confirmarGestionarExcepcion, setConfirmarGestionarExcepcion,
+    guardarExcepciones, ejecutarGuardadoExcepciones,
   };
 }

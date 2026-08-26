@@ -4957,9 +4957,14 @@ app.get("/api/personal", requireErpAuth, async (req, res) => {
 // usuario_roles + roles, ambos con activo=true).
 app.get("/api/usuarios", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
   try {
-    const [perfiles, asignaciones, catalogo] = await Promise.all([
+    const [perfiles, asignaciones, excepcionesRaw, catalogo] = await Promise.all([
       sbFetch("/profiles?select=id,nombre,email,rol,activo,created_at&order=nombre.asc"),
       sbFetch("/usuario_roles?activo=eq.true&select=profile_id,rol_id"),
+      // Excepciones individuales activas de usuario_permisos (Sprint 3D-7.6)
+      // — mismo campo añadido a este endpoint ya existente (3D-3), sin crear
+      // uno nuevo: el frontend necesita el estado actual de grant/revoke por
+      // usuario para precargar la edición en PUT /api/usuarios/:id/permisos.
+      sbFetch("/usuario_permisos?activo=eq.true&select=profile_id,permiso_id,efecto"),
       obtenerCatalogo({ sbFetch }),
     ]);
 
@@ -4971,14 +4976,23 @@ app.get("/api/usuarios", requireErpAuth, requirePermiso('rbac:gestionar', { sbFe
       rolesPorProfile.get(a.profile_id).push({ id: a.rol_id, nombre: rolInfo.nombre });
     }
 
+    const excepcionesPorProfile = new Map(); // profile_id -> [{permiso_id, nombre, efecto}]
+    for (const e of (excepcionesRaw ?? [])) {
+      const nombre = catalogo.permisoNombrePorId.get(e.permiso_id);
+      if (!nombre) continue; // permiso inexistente en catálogo — dato inconsistente, se omite
+      if (!excepcionesPorProfile.has(e.profile_id)) excepcionesPorProfile.set(e.profile_id, []);
+      excepcionesPorProfile.get(e.profile_id).push({ permiso_id: e.permiso_id, nombre, efecto: e.efecto });
+    }
+
     const usuarios = (perfiles ?? []).map(p => ({
-      id:         p.id,
-      nombre:     p.nombre || "",
-      email:      p.email  || "",
-      rol:        p.rol    || "", // legacy — solo contexto, ver comentario arriba
-      activo:     p.activo === true,
-      created_at: p.created_at,
-      roles_rbac: rolesPorProfile.get(p.id) ?? [],
+      id:          p.id,
+      nombre:      p.nombre || "",
+      email:       p.email  || "",
+      rol:         p.rol    || "", // legacy — solo contexto, ver comentario arriba
+      activo:      p.activo === true,
+      created_at:  p.created_at,
+      roles_rbac:  rolesPorProfile.get(p.id) ?? [],
+      excepciones: excepcionesPorProfile.get(p.id) ?? [],
     }));
 
     res.json(usuarios);
@@ -5355,6 +5369,153 @@ app.put("/api/roles/:id/permisos", requireErpAuth, requirePermiso('rbac:gestiona
     res.json({ id, permisos });
   } catch (e) {
     console.error("PUT /api/roles/:id/permisos error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+const EFECTOS_VALIDOS_RBAC = new Set(['grant', 'revoke']);
+
+// PUT /api/usuarios/:id/permisos — reemplaza el conjunto COMPLETO de
+// excepciones individuales activas de un usuario en usuario_permisos
+// (Sprint 3D-7.6). NO toca roles, rol_permisos ni el catálogo RBAC —
+// exclusivamente excepciones puntuales, superpuestas a lo que el usuario ya
+// tiene por sus roles (ver resolver.js: permisos del rol + grants − revokes).
+//
+// master queda fuera del alcance de este guard de negocio: sus permisos
+// efectivos se resuelven por el corto-circuito especial del motor RBAC
+// (resolver.js#calcularPermisosEfectivos corta ANTES de consultar
+// usuario_permisos) — una excepción sobre un usuario master es una
+// operación de base de datos válida, pero inerte; el frontend lo advierte,
+// el backend no la bloquea (a diferencia de PUT /api/roles/:id/permisos,
+// que sí rechaza al rol master porque ahí "editar" no tendría ni siquiera
+// una fila de destino coherente).
+//
+// Guard reforzado (mismo principio "poderes reforzados" de 3D-7): si la
+// operación agrega, MODIFICA (cambia el efecto) o elimina una excepción
+// sobre `rbac:gestionar`, el ACTOR debe ser master real (esMaster===true),
+// no basta con tener `rbac:gestionar` genérico.
+app.put("/api/usuarios/:id/permisos", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!UUID_REGEX_RBAC.test(id || "")) {
+      return res.status(400).json({ error: "id de usuario inválido" });
+    }
+
+    const { excepciones } = req.body || {};
+    if (!Array.isArray(excepciones)) {
+      return res.status(400).json({ error: "excepciones debe ser un arreglo" });
+    }
+    for (const exc of excepciones) {
+      const permisoIdValido = exc && typeof exc.permiso_id === "string" && UUID_REGEX_RBAC.test(exc.permiso_id);
+      const efectoValido    = exc && EFECTOS_VALIDOS_RBAC.has(exc.efecto);
+      if (typeof exc !== "object" || exc === null || !permisoIdValido || !efectoValido) {
+        return res.status(400).json({ error: "cada excepción requiere permiso_id (UUID) y efecto ('grant'|'revoke')" });
+      }
+    }
+    const idsVistos = new Set();
+    for (const exc of excepciones) {
+      if (idsVistos.has(exc.permiso_id)) {
+        return res.status(400).json({ error: `permiso_id duplicado en excepciones: ${exc.permiso_id}` });
+      }
+      idsVistos.add(exc.permiso_id);
+    }
+    const targetMap = new Map(excepciones.map(e => [e.permiso_id, e.efecto])); // permiso_id -> efecto deseado
+
+    // Profile debe existir.
+    const perfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}&select=id,activo`);
+    const perfil = perfiles?.[0];
+    if (!perfil) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    // Catálogo — valida que cada permiso_id exista. La tabla `permisos` no
+    // tiene columna `activo` (sql/20260819_rbac_ddl.sql) — mismo criterio ya
+    // aplicado en PUT /api/roles/:id/permisos (Sprint 3D-7.3): "existir en
+    // el catálogo" es la única verificación aplicable.
+    const catalogo = await obtenerCatalogo({ sbFetch });
+    for (const permisoId of targetMap.keys()) {
+      if (!catalogo.permisoNombrePorId.has(permisoId)) {
+        return res.status(400).json({ error: `permiso_id inexistente: ${permisoId}` });
+      }
+    }
+
+    let permisoIdGestionar = null;
+    for (const [pid, nombre] of catalogo.permisoNombrePorId) {
+      if (nombre === NOMBRE_PERMISO_GESTIONAR_RBAC) { permisoIdGestionar = pid; break; }
+    }
+
+    // Estado actual de excepciones ACTIVAS de este usuario.
+    const actualesRaw = await sbFetch(
+      `/usuario_permisos?profile_id=eq.${encodeURIComponent(id)}&activo=eq.true&select=permiso_id,efecto`
+    ) || [];
+    const actualesMap = new Map(actualesRaw.map(a => [a.permiso_id, a.efecto]));
+
+    // toDeactivate: excepciones activas hoy que ya no están en el conjunto deseado.
+    const toDeactivate = [...actualesMap.keys()].filter(pid => !targetMap.has(pid));
+    // toUpsert: deseadas que no coinciden con una fila ya activa con el MISMO
+    // efecto — cubre altas nuevas, reactivaciones y cambios de efecto
+    // (grant↔revoke) en una sola sentencia de upsert.
+    const toUpsert = [...targetMap.entries()]
+      .filter(([pid, efecto]) => actualesMap.get(pid) !== efecto)
+      .map(([pid, efecto]) => ({ permiso_id: pid, efecto }));
+
+    const tocaGestionar = permisoIdGestionar !== null && (
+      toDeactivate.includes(permisoIdGestionar) ||
+      toUpsert.some(u => u.permiso_id === permisoIdGestionar)
+    );
+    if (tocaGestionar) {
+      const actorResuelto = await calcularPermisosEfectivos(req.erpUserId, { sbFetch });
+      if (!actorResuelto.esMaster) {
+        return res.status(403).json({ error: "Solo un master puede modificar una excepción sobre rbac:gestionar" });
+      }
+    }
+
+    const actor = getActor(req);
+    const nowIso = new Date().toISOString();
+
+    // Reconciliación en dos escrituras atómicas — mismo mecanismo fail-closed
+    // que PUT /api/usuarios/:id/roles (3D-7.2) y PUT /api/roles/:id/permisos
+    // (3D-7.3): cada dirección de cambio es una única sentencia PostgREST
+    // sobre múltiples filas, nunca un loop de N llamadas sbFetch. Desactivar
+    // primero, upsert después: si el upsert falla tras una desactivación ya
+    // confirmada, el usuario queda con MENOS excepciones que las deseadas
+    // (seguro), nunca con excepciones obsoletas de más.
+    if (toDeactivate.length > 0) {
+      const resultado = await sbFetch(
+        `/usuario_permisos?profile_id=eq.${encodeURIComponent(id)}&permiso_id=in.(${toDeactivate.map(encodeURIComponent).join(',')})`,
+        'PATCH',
+        { activo: false, asignado_por: actor, asignado_en: nowIso }
+      );
+      if (resultado === null) {
+        console.error("PUT /api/usuarios/:id/permisos: falló la desactivación en lote, abortando sin upsert");
+        return res.status(500).json({ error: "Error interno" });
+      }
+      invalidarUsuario(id);
+    }
+    if (toUpsert.length > 0) {
+      const resultado = await sbFetch('/usuario_permisos?on_conflict=profile_id,permiso_id', 'POST', toUpsert.map(({ permiso_id, efecto }) => ({
+        profile_id:   id,
+        permiso_id,
+        efecto,
+        asignado_por: actor,
+        asignado_en:  nowIso,
+        activo:       true,
+      })));
+      if (resultado === null) {
+        console.error("PUT /api/usuarios/:id/permisos: falló el upsert en lote");
+        return res.status(500).json({ error: "Error interno" });
+      }
+      invalidarUsuario(id);
+    }
+
+    const excepcionesRespuesta = [...targetMap.entries()].map(([permisoId, efecto]) => ({
+      permiso_id: permisoId,
+      nombre:     catalogo.permisoNombrePorId.get(permisoId),
+      efecto,
+      activo:     true,
+    }));
+
+    res.json({ id, excepciones: excepcionesRespuesta });
+  } catch (e) {
+    console.error("PUT /api/usuarios/:id/permisos error:", e.message);
     res.status(500).json({ error: "Error interno" });
   }
 });

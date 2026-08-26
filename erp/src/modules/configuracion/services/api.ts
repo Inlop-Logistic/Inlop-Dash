@@ -8,7 +8,7 @@ import type {
   ReporteAutomatico, ReporteBase, PersonalInlop, FiltroItem,
   ResultadoEnvioManual, ClienteFiltroOpcion, AvisoProgramacion,
   UsuarioRbac, RolRbac, PermisoRbac, MisPermisos, ActualizarRolesUsuarioResponse,
-  ActualizarPermisosRolResponse,
+  ActualizarPermisosRolResponse, ExcepcionUsuarioBody, ActualizarExcepcionesUsuarioResponse,
 } from "../types";
 
 // ─── Preview de datos del reporte ────────────────────────────────────────────
@@ -405,5 +405,24 @@ export function actualizarPermisosRol(
   return req<ActualizarPermisosRolResponse>(`/api/roles/${encodeURIComponent(id)}/permisos`, {
     method: "PUT",
     body: JSON.stringify({ permiso_ids }),
+  });
+}
+
+/**
+ * Reemplaza el conjunto COMPLETO de excepciones individuales ACTIVAS de un
+ * usuario en usuario_permisos (Sprint 3D-7.6, consumiendo
+ * PUT /api/usuarios/:id/permisos). `excepciones` es el conjunto deseado
+ * completo, no un delta — NO modifica roles ni rol_permisos. El backend
+ * exige esMaster real si la operación agrega, modifica o elimina una
+ * excepción sobre `rbac:gestionar` (403). `req()` convierte cualquier
+ * rechazo en una excepción con el mensaje ya redactado en español.
+ */
+export function actualizarExcepcionesUsuario(
+  id: string,
+  excepciones: ExcepcionUsuarioBody[]
+): Promise<ActualizarExcepcionesUsuarioResponse> {
+  return req<ActualizarExcepcionesUsuarioResponse>(`/api/usuarios/${encodeURIComponent(id)}/permisos`, {
+    method: "PUT",
+    body: JSON.stringify({ excepciones }),
   });
 }

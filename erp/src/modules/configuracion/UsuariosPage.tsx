@@ -1,10 +1,12 @@
-import { Users, AlertCircle, Pencil, Check } from "lucide-react";
+import { useState } from "react";
+import { Users, AlertCircle, Pencil, Check, X as XIcon, Info } from "lucide-react";
 import { PageHeader, FilterBar, DataTable, Badge, Button, SidePanel, PanelSection, InfoRow } from "@/components/ui";
 import type { Column } from "@/components/ui";
 import { formatFechaCorta } from "./types";
-import type { UsuarioRbac, RolRbac } from "./types";
+import type { UsuarioRbac, RolRbac, PermisoRbac } from "./types";
 import { useUsuarios } from "./hooks/useUsuarios";
 import { ModalConfirmarCambioMaster } from "./components/ModalConfirmarCambioMaster";
+import { ModalConfirmarExcepcionGestionar } from "./components/ModalConfirmarExcepcionGestionar";
 
 interface Props {
   onBack: () => void;
@@ -155,6 +157,100 @@ function SelectorRolesRbac({
   );
 }
 
+// ── Editor de excepciones (usuario_permisos) — a diferencia del checklist de
+// roles/permisos, NO duplica el catálogo completo como filas siempre
+// visibles: solo renderiza las excepciones ya elegidas + un selector para
+// agregar una nueva, apoyado en el <select> nativo ya usado en FilterBar.tsx
+// (mismo patrón, sin componente ni librería nueva). ─────────────────────────
+
+const SELECT_STYLE: React.CSSProperties = {
+  border:       "1.5px solid var(--gray-200)",
+  borderRadius: 10,
+  padding:      "6px 10px",
+  color:        "var(--gray-700)",
+  background:   "#fff",
+};
+
+function SelectorExcepciones({
+  catalogo, seleccion, onSetEfecto, onQuitar,
+}: {
+  catalogo: PermisoRbac[];
+  seleccion: Map<string, "grant" | "revoke">;
+  onSetEfecto: (permisoId: string, efecto: "grant" | "revoke") => void;
+  onQuitar: (permisoId: string) => void;
+}) {
+  const [permisoAAgregar, setPermisoAAgregar] = useState("");
+  const permisoPorId = new Map(catalogo.map(p => [p.id, p]));
+  const disponibles = catalogo.filter(p => !seleccion.has(p.id));
+
+  return (
+    <div className="flex flex-col gap-3">
+      {seleccion.size === 0 ? (
+        <p className="text-[13px]" style={{ color: "var(--gray-400)" }}>Sin excepciones.</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {[...seleccion.entries()].map(([permisoId, efecto]) => {
+            const permiso = permisoPorId.get(permisoId);
+            return (
+              <div
+                key={permisoId}
+                className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg"
+                style={{ background: "var(--gray-50)", border: "1px solid var(--gray-200)" }}
+              >
+                <div className="min-w-0 flex-1 flex items-center gap-2">
+                  <Badge variant={efecto === "grant" ? "success" : "danger"}>
+                    {efecto === "grant" ? "Concede" : "Niega"}
+                  </Badge>
+                  <span className="font-mono text-[12px] truncate" style={{ color: "var(--gray-800)" }}>
+                    {permiso?.nombre ?? permisoId}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onQuitar(permisoId)}
+                  className="p-1 rounded hover:bg-gray-100 shrink-0"
+                  aria-label={`Quitar excepción sobre ${permiso?.nombre ?? permisoId}`}
+                >
+                  <XIcon className="w-3.5 h-3.5" style={{ color: "var(--gray-400)" }} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {disponibles.length > 0 && (
+        <div className="flex items-center gap-1.5">
+          <select
+            value={permisoAAgregar}
+            onChange={(e) => setPermisoAAgregar(e.target.value)}
+            aria-label="Elegir permiso para agregar excepción"
+            className="flex-1 min-w-0 text-[12.5px] outline-none"
+            style={SELECT_STYLE}
+          >
+            <option value="">Elegir permiso…</option>
+            {disponibles.map(p => (
+              <option key={p.id} value={p.id}>{p.modulo ? `${p.modulo} · ` : ""}{p.nombre}</option>
+            ))}
+          </select>
+          <Button
+            size="sm" variant="outline" disabled={!permisoAAgregar}
+            onClick={() => { onSetEfecto(permisoAAgregar, "grant"); setPermisoAAgregar(""); }}
+          >
+            Conceder
+          </Button>
+          <Button
+            size="sm" variant="danger" disabled={!permisoAAgregar}
+            onClick={() => { onSetEfecto(permisoAAgregar, "revoke"); setPermisoAAgregar(""); }}
+          >
+            Negar
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export function UsuariosPage({ onBack }: Props) {
@@ -169,6 +265,12 @@ export function UsuariosPage({ onBack }: Props) {
     guardando, errorGuardado, exito,
     tocaMaster, confirmarMaster, setConfirmarMaster,
     guardarRoles, ejecutarGuardado,
+    permisos, panelUsuarioEsMaster,
+    editandoExcepciones, iniciarEdicionExcepciones, cancelarEdicionExcepciones,
+    setEfectoExcepcion, quitarExcepcion, seleccionExcepciones,
+    guardandoExcepciones, errorGuardadoExcepciones, exitoExcepciones,
+    efectoDeseadoGestionar, confirmarGestionarExcepcion, setConfirmarGestionarExcepcion,
+    guardarExcepciones, ejecutarGuardadoExcepciones,
   } = useUsuarios();
 
   const columns = buildColumns();
@@ -262,6 +364,23 @@ export function UsuariosPage({ onBack }: Props) {
               </Button>
             </div>
           </div>
+        ) : editandoExcepciones && panelUsuario ? (
+          <div className="flex items-center justify-between gap-2 px-6 py-4">
+            {errorGuardadoExcepciones ? (
+              <span className="text-[12px] flex items-center gap-1.5" style={{ color: "var(--inlop-red)" }}>
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                {errorGuardadoExcepciones}
+              </span>
+            ) : <span />}
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="ghost" size="sm" onClick={cancelarEdicionExcepciones} disabled={guardandoExcepciones}>
+                Cancelar
+              </Button>
+              <Button size="sm" onClick={guardarExcepciones} loading={guardandoExcepciones} disabled={guardandoExcepciones}>
+                Guardar
+              </Button>
+            </div>
+          </div>
         ) : undefined}
       >
         {panelUsuario && (
@@ -279,7 +398,7 @@ export function UsuariosPage({ onBack }: Props) {
 
             <PanelSection
               title="Roles RBAC"
-              icon={puedeEditarRoles && !editando ? (
+              icon={puedeEditarRoles && !editando && !editandoExcepciones ? (
                 <button
                   type="button"
                   onClick={iniciarEdicion}
@@ -310,6 +429,66 @@ export function UsuariosPage({ onBack }: Props) {
               )}
             </PanelSection>
 
+            {/* Excepciones individuales de usuario_permisos (Sprint 3D-7.6)
+                — grants/revokes puntuales, superpuestos a los roles. NO
+                reemplaza la sección de Roles RBAC de arriba. */}
+            <PanelSection
+              title="Excepciones de permisos"
+              icon={puedeEditarRoles && !editando && !editandoExcepciones ? (
+                <button
+                  type="button"
+                  onClick={iniciarEdicionExcepciones}
+                  className="flex items-center gap-1 hover:underline focus-visible:outline-none"
+                  style={{ color: "var(--navy)" }}
+                  aria-label="Editar excepciones"
+                >
+                  <Pencil className="w-3 h-3" /> Editar
+                </button>
+              ) : undefined}
+            >
+              {panelUsuarioEsMaster && (
+                <div
+                  className="flex items-start gap-2 rounded-xl p-3 mb-3"
+                  style={{ background: "var(--gray-50)", border: "1px solid var(--gray-200)" }}
+                >
+                  <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: "var(--gray-400)" }} />
+                  <p className="text-[12px]" style={{ color: "var(--gray-500)" }}>
+                    Este usuario es <strong>master</strong>: su acceso total se resuelve por la
+                    regla especial del motor RBAC, ANTES de considerar excepciones — estas no
+                    alteran sus permisos efectivos.
+                  </p>
+                </div>
+              )}
+
+              {exitoExcepciones && !editandoExcepciones && (
+                <div className="flex items-center gap-1.5 mb-3 text-[12px]" style={{ color: "#065F46" }}>
+                  <Check className="w-3.5 h-3.5" /> Excepciones actualizadas correctamente.
+                </div>
+              )}
+
+              {editandoExcepciones ? (
+                <SelectorExcepciones
+                  catalogo={permisos}
+                  seleccion={seleccionExcepciones}
+                  onSetEfecto={setEfectoExcepcion}
+                  onQuitar={quitarExcepcion}
+                />
+              ) : panelUsuario.excepciones.length === 0 ? (
+                <p className="text-[13px]" style={{ color: "var(--gray-400)" }}>Sin excepciones.</p>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {panelUsuario.excepciones.map(e => (
+                    <div key={e.permiso_id} className="flex items-center gap-2">
+                      <Badge variant={e.efecto === "grant" ? "success" : "danger"}>
+                        {e.efecto === "grant" ? "Concede" : "Niega"}
+                      </Badge>
+                      <span className="font-mono text-[12px]" style={{ color: "var(--gray-800)" }}>{e.nombre}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </PanelSection>
+
             {/* Rol legacy — solo contexto de migración, NUNCA fuente de
                 permisos (ver types.ts, UsuarioRbac.rol). */}
             <PanelSection title="Rol legacy (pre-migración)">
@@ -330,6 +509,17 @@ export function UsuariosPage({ onBack }: Props) {
           error={errorGuardado}
           onConfirmar={ejecutarGuardado}
           onCancelar={() => setConfirmarMaster(false)}
+        />
+      )}
+
+      {confirmarGestionarExcepcion && panelUsuario && (
+        <ModalConfirmarExcepcionGestionar
+          usuarioNombre={panelUsuario.nombre || panelUsuario.email}
+          efectoDeseado={efectoDeseadoGestionar}
+          guardando={guardandoExcepciones}
+          error={errorGuardadoExcepciones}
+          onConfirmar={ejecutarGuardadoExcepciones}
+          onCancelar={() => setConfirmarGestionarExcepcion(false)}
         />
       )}
     </div>
