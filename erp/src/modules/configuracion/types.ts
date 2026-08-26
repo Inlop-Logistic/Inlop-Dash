@@ -521,3 +521,24 @@ export interface ActualizarRolesUsuarioResponse {
   id:         string;
   roles_rbac: RolRbacRef[];
 }
+
+// ─── Edición de permisos de un rol RBAC (Sprint 3D-7.5) ──────────────────────
+// PUT /api/roles/:id/permisos (backend, Sprint 3D-7.3). `permiso_ids` es el
+// conjunto COMPLETO deseado, no un delta — reenviar el mismo conjunto no
+// escribe nada (idempotente, ver index.js).
+
+/** Un permiso tal como lo embebe la respuesta de PUT /api/roles/:id/permisos
+ *  — mismos 4 campos que PermisoRbac, sin `roles` (ese endpoint responde por
+ *  rol, no por permiso). */
+export interface PermisoRolRef {
+  id:          string;
+  nombre:      string;
+  modulo:      string;
+  descripcion: string;
+}
+
+/** Respuesta de PUT /api/roles/:id/permisos — permisos ya actualizados del rol. */
+export interface ActualizarPermisosRolResponse {
+  id:       string;
+  permisos: PermisoRolRef[];
+}

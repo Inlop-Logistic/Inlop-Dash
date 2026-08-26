@@ -1,10 +1,11 @@
-import { ShieldCheck, KeyRound, AlertCircle } from "lucide-react";
+import { ShieldCheck, KeyRound, AlertCircle, Pencil, Check, Info } from "lucide-react";
 import {
   PageHeader, DataTable, Badge, SidePanel, PanelSection, InfoRow, KpiCard, Button,
 } from "@/components/ui";
 import type { Column } from "@/components/ui";
 import type { RolRbac, PermisoRbac } from "./types";
 import { useRolesPermisos, type PestanaRolesPermisos } from "./hooks/useRolesPermisos";
+import { ModalConfirmarPermisoGestionar } from "./components/ModalConfirmarPermisoGestionar";
 
 interface Props {
   onBack: () => void;
@@ -127,14 +128,82 @@ const COLUMNS_PERMISOS: Column<PermisoRbac>[] = [
   },
 ];
 
+// ── Checklist de permisos editable, agrupado por módulo — mismo patrón
+// visual de checkbox custom que UsuariosPage.tsx#SelectorRolesRbac (label +
+// span estilizado + input sr-only), sin componente ni librería nueva. ──────
+
+function SelectorPermisosPorModulo({
+  permisosPorModulo, seleccion, onToggle,
+}: {
+  permisosPorModulo: Map<string, PermisoRbac[]>;
+  seleccion: Set<string>;
+  onToggle: (permisoId: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      {[...permisosPorModulo.entries()].map(([modulo, lista]) => (
+        <div key={modulo}>
+          <div className="text-[11px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: "var(--gray-400)" }}>
+            {modulo}
+          </div>
+          <div className="flex flex-col gap-1">
+            {lista.map(p => {
+              const activo = seleccion.has(p.id);
+              return (
+                <label
+                  key={p.id}
+                  className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors"
+                  style={{ background: activo ? "var(--gray-50)" : "transparent", border: `1.5px solid ${activo ? "var(--gray-200)" : "transparent"}` }}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="shrink-0 flex items-center justify-center rounded"
+                    style={{
+                      width: "16px", height: "16px",
+                      border: `2px solid ${activo ? "var(--navy)" : "var(--gray-300)"}`,
+                      background: activo ? "var(--navy)" : "transparent",
+                      color: "#fff",
+                    }}
+                  >
+                    {activo && <Check className="w-2.5 h-2.5" strokeWidth={3} />}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={activo}
+                    onChange={() => onToggle(p.id)}
+                    className="sr-only"
+                    aria-label={`Asignar permiso ${p.nombre}`}
+                  />
+                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                    <span className="font-mono text-[12px] font-medium" style={{ color: "var(--gray-800)" }}>{p.nombre}</span>
+                    {p.descripcion && (
+                      <span className="text-[11px] truncate" style={{ color: "var(--gray-400)" }}>{p.descripcion}</span>
+                    )}
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export function RolesPermisosPage({ onBack }: Props) {
   const {
     roles, permisos, loading, error, cargar,
     pestana, setPestana,
-    rolPanelId, setRolPanelId, rolPanel, permisosDelRolPorModulo,
+    rolPanelId, abrirRolPanel, cerrarRolPanel, rolPanel,
+    permisosDelRolPorModulo, todosLosPermisosPorModulo,
     permisoPanelId, setPermisoPanelId, permisoPanel,
+    puedeEditarEsteRol,
+    editandoRol, iniciarEdicionPermisos, cancelarEdicionPermisos, togglePermiso, seleccionPermisos,
+    guardandoPermisos, errorGuardadoPermisos, exitoPermisos,
+    agregandoGestionar, confirmarGestionar, setConfirmarGestionar,
+    guardarPermisos, ejecutarGuardadoPermisos,
   } = useRolesPermisos();
 
   return (
@@ -156,7 +225,7 @@ export function RolesPermisosPage({ onBack }: Props) {
 
       <PageHeader
         title="Roles y Permisos"
-        subtitle="Catálogo RBAC del ERP — solo lectura."
+        subtitle="Catálogo RBAC del ERP y permisos por rol."
         icon={<ShieldCheck className="w-5 h-5" />}
       />
 
@@ -193,7 +262,7 @@ export function RolesPermisosPage({ onBack }: Props) {
               columns={COLUMNS_ROLES}
               rows={roles}
               rowKey={(r) => r.id}
-              onRowClick={(r) => setRolPanelId(r.id)}
+              onRowClick={(r) => abrirRolPanel(r.id)}
               loading={loading}
               emptyMessage="Sin roles"
             />
@@ -210,13 +279,32 @@ export function RolesPermisosPage({ onBack }: Props) {
         </>
       )}
 
-      {/* Panel — detalle de rol: sus permisos agrupados por módulo */}
+      {/* Panel — detalle de rol: sus permisos agrupados por módulo (editable
+          desde Sprint 3D-7.5, salvo master — ver puedeEditarEsteRol) */}
       <SidePanel
         open={rolPanelId !== null}
-        onClose={() => setRolPanelId(null)}
+        onClose={cerrarRolPanel}
         title="Detalle de rol"
         subtitle={rolPanel?.nombre}
         width="440px"
+        footer={editandoRol && rolPanel ? (
+          <div className="flex items-center justify-between gap-2 px-6 py-4">
+            {errorGuardadoPermisos ? (
+              <span className="text-[12px] flex items-center gap-1.5" style={{ color: "var(--inlop-red)" }}>
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                {errorGuardadoPermisos}
+              </span>
+            ) : <span />}
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="ghost" size="sm" onClick={cancelarEdicionPermisos} disabled={guardandoPermisos}>
+                Cancelar
+              </Button>
+              <Button size="sm" onClick={guardarPermisos} loading={guardandoPermisos} disabled={guardandoPermisos}>
+                Guardar
+              </Button>
+            </div>
+          </div>
+        ) : undefined}
       >
         {rolPanel && (
           <div>
@@ -231,11 +319,50 @@ export function RolesPermisosPage({ onBack }: Props) {
               <InfoRow label="Usuarios asignados" value={rolPanel.usuarios_asignados} />
             </PanelSection>
 
-            <PanelSection title={`Permisos (${permisosDelRolPorModulo.size ? [...permisosDelRolPorModulo.values()].reduce((n, arr) => n + arr.length, 0) : 0})`}>
-              {permisosDelRolPorModulo.size === 0 ? (
+            <PanelSection
+              title={`Permisos (${permisosDelRolPorModulo.size ? [...permisosDelRolPorModulo.values()].reduce((n, arr) => n + arr.length, 0) : 0})`}
+              icon={puedeEditarEsteRol && !editandoRol ? (
+                <button
+                  type="button"
+                  onClick={iniciarEdicionPermisos}
+                  className="flex items-center gap-1 hover:underline focus-visible:outline-none"
+                  style={{ color: "var(--navy)" }}
+                  aria-label="Editar permisos"
+                >
+                  <Pencil className="w-3 h-3" /> Editar
+                </button>
+              ) : undefined}
+            >
+              {rolPanel.nombre === "master" && (
+                <div
+                  className="flex items-start gap-2 rounded-xl p-3 mb-3"
+                  style={{ background: "var(--gray-50)", border: "1px solid var(--gray-200)" }}
+                >
+                  <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: "var(--gray-400)" }} />
+                  <p className="text-[12px]" style={{ color: "var(--gray-500)" }}>
+                    <strong>master</strong> obtiene acceso total mediante la regla especial del
+                    motor RBAC, no por filas en <code>rol_permisos</code> — no admite edición
+                    de permisos por esta vía.
+                  </p>
+                </div>
+              )}
+
+              {exitoPermisos && !editandoRol && (
+                <div className="flex items-center gap-1.5 mb-3 text-[12px]" style={{ color: "#065F46" }}>
+                  <Check className="w-3.5 h-3.5" /> Permisos actualizados correctamente.
+                </div>
+              )}
+
+              {editandoRol ? (
+                <SelectorPermisosPorModulo
+                  permisosPorModulo={todosLosPermisosPorModulo}
+                  seleccion={seleccionPermisos}
+                  onToggle={togglePermiso}
+                />
+              ) : permisosDelRolPorModulo.size === 0 ? (
                 <p className="text-[13px]" style={{ color: "var(--gray-400)" }}>
                   Este rol no tiene permisos asignados
-                  {rolPanel.nombre === "master" ? " en rol_permisos — accede por regla especial (master)." : "."}
+                  {rolPanel.nombre === "master" ? "." : " en rol_permisos."}
                 </p>
               ) : (
                 <div className="flex flex-col gap-4">
@@ -257,6 +384,17 @@ export function RolesPermisosPage({ onBack }: Props) {
           </div>
         )}
       </SidePanel>
+
+      {confirmarGestionar && rolPanel && (
+        <ModalConfirmarPermisoGestionar
+          rolNombre={rolPanel.nombre}
+          agregando={agregandoGestionar}
+          guardando={guardandoPermisos}
+          error={errorGuardadoPermisos}
+          onConfirmar={ejecutarGuardadoPermisos}
+          onCancelar={() => setConfirmarGestionar(false)}
+        />
+      )}
 
       {/* Panel — detalle de permiso: roles que lo poseen / no lo poseen */}
       <SidePanel

@@ -8,6 +8,7 @@ import type {
   ReporteAutomatico, ReporteBase, PersonalInlop, FiltroItem,
   ResultadoEnvioManual, ClienteFiltroOpcion, AvisoProgramacion,
   UsuarioRbac, RolRbac, PermisoRbac, MisPermisos, ActualizarRolesUsuarioResponse,
+  ActualizarPermisosRolResponse,
 } from "../types";
 
 // ─── Preview de datos del reporte ────────────────────────────────────────────
@@ -385,5 +386,24 @@ export function actualizarRolesUsuario(
   return req<ActualizarRolesUsuarioResponse>(`/api/usuarios/${encodeURIComponent(id)}/roles`, {
     method: "PUT",
     body: JSON.stringify({ rol_ids }),
+  });
+}
+
+/**
+ * Reemplaza el conjunto COMPLETO de permisos de un rol RBAC (Sprint 3D-7.5,
+ * consumiendo PUT /api/roles/:id/permisos de Sprint 3D-7.3). `permiso_ids`
+ * es el conjunto deseado completo, no un delta. El backend rechaza `master`
+ * (400 — se resuelve por la regla especial del motor, nunca por filas en
+ * rol_permisos) y exige esMaster real si la operación toca `rbac:gestionar`
+ * (403). `req()` convierte cualquier rechazo en una excepción con el mensaje
+ * ya redactado en español (`error.message`).
+ */
+export function actualizarPermisosRol(
+  id: string,
+  permiso_ids: string[]
+): Promise<ActualizarPermisosRolResponse> {
+  return req<ActualizarPermisosRolResponse>(`/api/roles/${encodeURIComponent(id)}/permisos`, {
+    method: "PUT",
+    body: JSON.stringify({ permiso_ids }),
   });
 }
