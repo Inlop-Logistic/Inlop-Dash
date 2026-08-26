@@ -510,3 +510,14 @@ export interface MisPermisos {
   esMaster: boolean;
   permisos: string[];
 }
+
+// ─── Edición de roles RBAC de un usuario (Sprint 3D-7.4) ─────────────────────
+// PUT /api/usuarios/:id/roles (backend, Sprint 3D-7.2). `rol_ids` es el
+// conjunto COMPLETO deseado, no un delta — reenviar el mismo conjunto no
+// escribe nada (idempotente, ver index.js).
+
+/** Respuesta de PUT /api/usuarios/:id/roles — roles_rbac ya actualizado. */
+export interface ActualizarRolesUsuarioResponse {
+  id:         string;
+  roles_rbac: RolRbacRef[];
+}

@@ -1,9 +1,10 @@
-import { Users, AlertCircle } from "lucide-react";
-import { PageHeader, FilterBar, DataTable, Badge, SidePanel, PanelSection, InfoRow } from "@/components/ui";
+import { Users, AlertCircle, Pencil, Check } from "lucide-react";
+import { PageHeader, FilterBar, DataTable, Badge, Button, SidePanel, PanelSection, InfoRow } from "@/components/ui";
 import type { Column } from "@/components/ui";
 import { formatFechaCorta } from "./types";
-import type { UsuarioRbac } from "./types";
+import type { UsuarioRbac, RolRbac } from "./types";
 import { useUsuarios } from "./hooks/useUsuarios";
+import { ModalConfirmarCambioMaster } from "./components/ModalConfirmarCambioMaster";
 
 interface Props {
   onBack: () => void;
@@ -99,6 +100,61 @@ function buildColumns(): Column<UsuarioRbac>[] {
   ];
 }
 
+// ── Checklist de roles editable — mismo patrón visual de checkbox custom que
+// EtapaDestinatarios.tsx (label + span estilizado + input sr-only), sin
+// componente ni librería nueva. ─────────────────────────────────────────────
+
+function SelectorRolesRbac({
+  roles, seleccion, onToggle,
+}: {
+  roles: RolRbac[];
+  seleccion: Set<string>;
+  onToggle: (rolId: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      {roles.map(r => {
+        const activo = seleccion.has(r.id);
+        return (
+          <label
+            key={r.id}
+            className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors"
+            style={{ background: activo ? "var(--gray-50)" : "transparent", border: `1.5px solid ${activo ? "var(--gray-200)" : "transparent"}` }}
+          >
+            <span
+              aria-hidden="true"
+              className="shrink-0 flex items-center justify-center rounded"
+              style={{
+                width: "18px", height: "18px",
+                border: `2px solid ${activo ? "var(--navy)" : "var(--gray-300)"}`,
+                background: activo ? "var(--navy)" : "transparent",
+                color: "#fff",
+              }}
+            >
+              {activo && <Check className="w-3 h-3" strokeWidth={3} />}
+            </span>
+            <input
+              type="checkbox"
+              checked={activo}
+              onChange={() => onToggle(r.id)}
+              className="sr-only"
+              aria-label={`Asignar rol ${r.nombre}`}
+            />
+            <div className="flex-1 min-w-0 flex items-center gap-2">
+              <Badge variant={r.nombre === "master" ? "purple" : "info"}>{r.nombre}</Badge>
+              {r.descripcion && (
+                <span className="text-[11.5px] truncate" style={{ color: "var(--gray-400)" }}>
+                  {r.descripcion}
+                </span>
+              )}
+            </div>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export function UsuariosPage({ onBack }: Props) {
@@ -106,7 +162,13 @@ export function UsuariosPage({ onBack }: Props) {
     filtrados, loading, error, cargar,
     busqueda, setBusqueda,
     filtroEstado, setFiltroEstado,
-    panelId, setPanelId, panelUsuario,
+    panelId, abrirPanel, cerrarPanel, panelUsuario,
+    rolesAsignables,
+    puedeEditarRoles,
+    editando, iniciarEdicion, cancelarEdicion, toggleRol, seleccion,
+    guardando, errorGuardado, exito,
+    tocaMaster, confirmarMaster, setConfirmarMaster,
+    guardarRoles, ejecutarGuardado,
   } = useUsuarios();
 
   const columns = buildColumns();
@@ -171,19 +233,36 @@ export function UsuariosPage({ onBack }: Props) {
           columns={columns}
           rows={filtrados}
           rowKey={(u) => u.id}
-          onRowClick={(u) => setPanelId(u.id)}
+          onRowClick={(u) => abrirPanel(u.id)}
           loading={loading}
           emptyMessage="Sin usuarios"
         />
       )}
 
-      {/* Panel de solo lectura — sin edición en este sprint */}
       <SidePanel
         open={panelId !== null}
-        onClose={() => setPanelId(null)}
+        onClose={cerrarPanel}
         title="Detalle de usuario"
         subtitle={panelUsuario?.nombre}
         width="420px"
+        footer={editando && panelUsuario ? (
+          <div className="flex items-center justify-between gap-2 px-6 py-4">
+            {errorGuardado ? (
+              <span className="text-[12px] flex items-center gap-1.5" style={{ color: "var(--inlop-red)" }}>
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                {errorGuardado}
+              </span>
+            ) : <span />}
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="ghost" size="sm" onClick={cancelarEdicion} disabled={guardando}>
+                Cancelar
+              </Button>
+              <Button size="sm" onClick={guardarRoles} loading={guardando} disabled={guardando}>
+                Guardar
+              </Button>
+            </div>
+          </div>
+        ) : undefined}
       >
         {panelUsuario && (
           <div>
@@ -198,8 +277,29 @@ export function UsuariosPage({ onBack }: Props) {
               <InfoRow label="Creado" value={formatFechaCorta(panelUsuario.created_at)} />
             </PanelSection>
 
-            <PanelSection title="Roles RBAC">
-              {panelUsuario.roles_rbac.length === 0 ? (
+            <PanelSection
+              title="Roles RBAC"
+              icon={puedeEditarRoles && !editando ? (
+                <button
+                  type="button"
+                  onClick={iniciarEdicion}
+                  className="flex items-center gap-1 hover:underline focus-visible:outline-none"
+                  style={{ color: "var(--navy)" }}
+                  aria-label="Editar roles"
+                >
+                  <Pencil className="w-3 h-3" /> Editar
+                </button>
+              ) : undefined}
+            >
+              {exito && !editando && (
+                <div className="flex items-center gap-1.5 mb-3 text-[12px]" style={{ color: "#065F46" }}>
+                  <Check className="w-3.5 h-3.5" /> Roles actualizados correctamente.
+                </div>
+              )}
+
+              {editando ? (
+                <SelectorRolesRbac roles={rolesAsignables} seleccion={seleccion} onToggle={toggleRol} />
+              ) : panelUsuario.roles_rbac.length === 0 ? (
                 <p className="text-[13px]" style={{ color: "var(--gray-400)" }}>Sin roles asignados.</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
@@ -221,6 +321,17 @@ export function UsuariosPage({ onBack }: Props) {
           </div>
         )}
       </SidePanel>
+
+      {confirmarMaster && panelUsuario && (
+        <ModalConfirmarCambioMaster
+          usuarioNombre={panelUsuario.nombre || panelUsuario.email}
+          agregando={tocaMaster && !panelUsuario.roles_rbac.some(r => r.nombre === "master")}
+          guardando={guardando}
+          error={errorGuardado}
+          onConfirmar={ejecutarGuardado}
+          onCancelar={() => setConfirmarMaster(false)}
+        />
+      )}
     </div>
   );
 }

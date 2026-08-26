@@ -7,7 +7,7 @@ import { buscarReporte, type CampoDataset } from "../catalogos/datasetsReportes"
 import type {
   ReporteAutomatico, ReporteBase, PersonalInlop, FiltroItem,
   ResultadoEnvioManual, ClienteFiltroOpcion, AvisoProgramacion,
-  UsuarioRbac, RolRbac, PermisoRbac, MisPermisos,
+  UsuarioRbac, RolRbac, PermisoRbac, MisPermisos, ActualizarRolesUsuarioResponse,
 } from "../types";
 
 // ─── Preview de datos del reporte ────────────────────────────────────────────
@@ -367,4 +367,23 @@ export function listarPermisos(): Promise<PermisoRbac[]> {
  */
 export function obtenerMisPermisos(): Promise<MisPermisos> {
   return req<MisPermisos>("/api/me/permisos");
+}
+
+/**
+ * Reemplaza el conjunto COMPLETO de roles RBAC activos de un usuario
+ * (Sprint 3D-7.4, consumiendo PUT /api/usuarios/:id/roles de Sprint 3D-7.2).
+ * `rol_ids` es el conjunto deseado completo, no un delta. Los casos de
+ * rechazo del backend (403 sin esMaster para tocar el rol master, 409 al
+ * dejar el sistema sin ningún master activo, 400 de validación) llegan como
+ * HTTP no-2xx — `req()` los convierte en una excepción con el mensaje ya
+ * redactado en español (`error.message`), listo para mostrar en la UI.
+ */
+export function actualizarRolesUsuario(
+  id: string,
+  rol_ids: string[]
+): Promise<ActualizarRolesUsuarioResponse> {
+  return req<ActualizarRolesUsuarioResponse>(`/api/usuarios/${encodeURIComponent(id)}/roles`, {
+    method: "PUT",
+    body: JSON.stringify({ rol_ids }),
+  });
 }
