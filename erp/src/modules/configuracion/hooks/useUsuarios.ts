@@ -26,7 +26,15 @@ export function useUsuarios() {
   const [error,    setError]    = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState<FiltroEstadoUsuario>("");
+  // Filtro por rol (rediseño UI) — filtra sobre los mismos datos ya cargados,
+  // por rol_id (valor estable, a diferencia del nombre visible).
+  const [filtroRol, setFiltroRol] = useState("");
   const [panelId,  setPanelId]  = useState<string | null>(null);
+  // Al abrir el panel desde "Editar" (tabla/menú de acciones), qué sección
+  // debe entrar directo en modo edición — null = abrir en solo lectura,
+  // mismo comportamiento que siempre al hacer click en una fila (rediseño
+  // UI; no cambia ninguna regla de permisos ni de guardado ya existente).
+  const [autoEditarAlAbrir, setAutoEditarAlAbrir] = useState<"roles" | "excepciones" | null>(null);
 
   // Progressive disclosure de los controles de edición (Sprint 3D-7.4) —
   // mismo criterio fail-open que ParametrosPage: NUNCA un mecanismo de
@@ -94,13 +102,16 @@ export function useUsuarios() {
     let rows = data;
     if (filtroEstado === "activo")   rows = rows.filter(u => u.activo);
     if (filtroEstado === "inactivo") rows = rows.filter(u => !u.activo);
+    if (filtroRol) rows = rows.filter(u => u.roles_rbac.some(r => r.id === filtroRol));
 
     const term = busqueda.trim().toLowerCase();
     if (!term) return rows;
     return rows.filter(u =>
-      u.nombre.toLowerCase().includes(term) || u.email.toLowerCase().includes(term)
+      u.nombre.toLowerCase().includes(term) ||
+      u.email.toLowerCase().includes(term) ||
+      u.roles_rbac.some(r => r.nombre.toLowerCase().includes(term))
     );
-  }, [data, busqueda, filtroEstado]);
+  }, [data, busqueda, filtroEstado, filtroRol]);
 
   const panelUsuario = useMemo(
     () => (panelId ? data.find(u => u.id === panelId) ?? null : null),
@@ -141,15 +152,47 @@ export function useUsuarios() {
     setConfirmarGestionarExcepcion(false);
   }
 
-  function abrirPanel(id: string) {
+  /**
+   * Abre el panel de un usuario — opcionalmente entrando directo en modo
+   * edición (usado por "Editar" y el menú de acciones de la tabla, rediseño
+   * UI). `editar` solo decide QUÉ sección arranca en edición; no cambia
+   * ninguna regla de permisos/guardado — el efecto de abajo reutiliza
+   * exactamente el mismo estado que iniciarEdicion()/iniciarEdicionExcepciones()
+   * ya usan al hacer click en "Editar" dentro del panel.
+   */
+  function abrirPanel(id: string, editar?: "roles" | "excepciones") {
     setPanelId(id);
     resetearEdicionPanel();
+    setAutoEditarAlAbrir(editar ?? null);
   }
 
   function cerrarPanel() {
     setPanelId(null);
     resetearEdicionPanel();
+    setAutoEditarAlAbrir(null);
   }
+
+  // panelUsuario solo existe a partir del siguiente render tras abrirPanel()
+  // (se deriva de panelId vía useMemo) — este efecto arma el modo edición en
+  // cuanto esa referencia queda disponible, evitando leer un panelUsuario
+  // obsoleto (null) si se intentara hacer en el mismo manejador de click.
+  useEffect(() => {
+    if (!autoEditarAlAbrir || !panelUsuario || !puedeEditarRoles) return;
+    if (autoEditarAlAbrir === "roles") {
+      setSeleccion(new Set(panelUsuario.roles_rbac.map(r => r.id)));
+      setErrorGuardado(null);
+      setExito(false);
+      setEditando(true);
+    } else {
+      const inicial = new Map<string, "grant" | "revoke">();
+      for (const e of panelUsuario.excepciones) inicial.set(e.permiso_id, e.efecto);
+      setSeleccionExcepciones(inicial);
+      setErrorGuardadoExcepciones(null);
+      setExitoExcepciones(false);
+      setEditandoExcepciones(true);
+    }
+    setAutoEditarAlAbrir(null);
+  }, [autoEditarAlAbrir, panelUsuario, puedeEditarRoles]);
 
   function iniciarEdicion() {
     if (!panelUsuario) return;
@@ -322,9 +365,13 @@ export function useUsuarios() {
   }
 
   return {
-    filtrados, loading, error, cargar,
+    // `data` = todos los usuarios cargados, sin filtrar — usado por los KPI
+    // del rediseño UI (totales reales, independientes de la búsqueda/filtro
+    // activos). `filtrados` sigue siendo el listado que ve la tabla.
+    data, filtrados, loading, error, cargar,
     busqueda, setBusqueda,
     filtroEstado, setFiltroEstado,
+    filtroRol, setFiltroRol,
     panelId, abrirPanel, cerrarPanel, panelUsuario,
     rolesAsignables,
     puedeEditarRoles, esMaster,

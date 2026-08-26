@@ -1,10 +1,13 @@
-import { useState } from "react";
-import { Users, AlertCircle, Pencil, Check, X as XIcon, Info } from "lucide-react";
-import { PageHeader, FilterBar, DataTable, Badge, Button, SidePanel, PanelSection, InfoRow } from "@/components/ui";
+import { useState, useEffect, useRef } from "react";
+import {
+  Users, AlertCircle, Pencil, Check, X as XIcon, Info, Plus, Eye,
+  MoreHorizontal, ChevronLeft, ChevronRight, UserCheck, UserX, ShieldCheck,
+} from "lucide-react";
+import { PageHeader, FilterBar, DataTable, Badge, Button, SidePanel, PanelSection, InfoRow, KpiCard } from "@/components/ui";
 import type { Column } from "@/components/ui";
 import { formatFechaCorta } from "./types";
 import type { UsuarioRbac, RolRbac, PermisoRbac } from "./types";
-import { useUsuarios } from "./hooks/useUsuarios";
+import { useUsuarios, type FiltroEstadoUsuario } from "./hooks/useUsuarios";
 import { ModalConfirmarCambioMaster } from "./components/ModalConfirmarCambioMaster";
 import { ModalConfirmarExcepcionGestionar } from "./components/ModalConfirmarExcepcionGestionar";
 
@@ -45,66 +48,293 @@ function EmptyState({ conFiltro }: { conFiltro: boolean }) {
   );
 }
 
+// ── Celda "Usuario" — avatar discreto (iniciales, acento navy) + nombre ─────
+// Mismo algoritmo de iniciales que TopbarUserMenu.tsx (primera + última
+// palabra del nombre real); tono navy/azul claro en vez de --inlop-red para
+// respetar "azul INLOP únicamente como color principal" en esta pantalla.
+
+function inicialesUsuario(nombre: string): string {
+  const words = nombre.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].charAt(0).toUpperCase();
+  return (words[0].charAt(0) + words[words.length - 1].charAt(0)).toUpperCase();
+}
+
+function CeldaUsuario({ u }: { u: UsuarioRbac }) {
+  return (
+    <div className="flex items-center gap-2.5 min-w-0">
+      <span
+        className="shrink-0 h-7 w-7 rounded-full flex items-center justify-center font-semibold text-[11px]"
+        style={{ background: "var(--info-bg)", color: "var(--navy)" }}
+      >
+        {inicialesUsuario(u.nombre || u.email)}
+      </span>
+      <span className="font-medium text-[13px] truncate" style={{ color: "var(--gray-800)" }}>
+        {u.nombre || "—"}
+      </span>
+    </div>
+  );
+}
+
+// ── Celda "Estado" — punto pequeño + texto, sin badge de color (rediseño UI) ─
+
+function EstadoDot({ activo }: { activo: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        className="w-1.5 h-1.5 rounded-full shrink-0"
+        style={{ background: activo ? "var(--success)" : "var(--gray-300)" }}
+      />
+      <span className="text-[13px]" style={{ color: activo ? "var(--gray-700)" : "var(--gray-400)" }}>
+        {activo ? "Activo" : "Inactivo"}
+      </span>
+    </span>
+  );
+}
+
+/** "Rol" como texto limpio (no badge) — varios roles se listan separados por coma. */
+function rolesTexto(u: UsuarioRbac): string {
+  if (u.roles_rbac.length === 0) return "—";
+  return u.roles_rbac.map(r => r.nombre).join(", ");
+}
+
+// ── Menú de acciones "..." — mismo patrón de dropdown (click fuera cierra)
+// que TopbarUserMenu.tsx, simplificado para uso por fila de tabla. Solo
+// expone acciones reales ya existentes (ver/editar roles/editar
+// excepciones) — nada ficticio, sin lógica nueva de backend. ───────────────
+
+function MenuAcciones({
+  usuario, puedeEditarRoles, onVer, onEditarRoles, onEditarExcepciones,
+}: {
+  usuario: UsuarioRbac;
+  puedeEditarRoles: boolean;
+  onVer: () => void;
+  onEditarRoles: () => void;
+  onEditarExcepciones: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const itemClass = "w-full text-left px-3 py-2 text-[12.5px] hover:bg-[var(--gray-50)] disabled:opacity-40 disabled:cursor-not-allowed";
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-label={`Más acciones — ${usuario.nombre}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="p-1.5 rounded-lg hover:bg-[var(--gray-100)]"
+      >
+        <MoreHorizontal className="w-4 h-4" style={{ color: "var(--gray-500)" }} />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 mt-1 min-w-[190px] py-1"
+          style={{
+            background:   "#fff",
+            border:       "1px solid var(--gray-100)",
+            borderRadius: "var(--radius-lg)",
+            boxShadow:    "var(--shadow-dropdown)",
+            zIndex:       30, // var(--z-dropdown), ver tokens.css
+          }}
+        >
+          <button
+            type="button" role="menuitem" className={itemClass} style={{ color: "var(--gray-700)" }}
+            onClick={() => { setOpen(false); onVer(); }}
+          >
+            Ver detalle
+          </button>
+          <button
+            type="button" role="menuitem" className={itemClass} style={{ color: "var(--gray-700)" }}
+            disabled={!puedeEditarRoles}
+            onClick={() => { setOpen(false); onEditarRoles(); }}
+          >
+            Editar roles
+          </button>
+          <button
+            type="button" role="menuitem" className={itemClass} style={{ color: "var(--gray-700)" }}
+            disabled={!puedeEditarRoles}
+            onClick={() => { setOpen(false); onEditarExcepciones(); }}
+          >
+            Editar excepciones
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Columnas de la tabla ──────────────────────────────────────────────────────
 
-function buildColumns(): Column<UsuarioRbac>[] {
+function buildColumns({
+  abrirPanel, puedeEditarRoles,
+}: {
+  abrirPanel: (id: string, editar?: "roles" | "excepciones") => void;
+  puedeEditarRoles: boolean;
+}): Column<UsuarioRbac>[] {
   return [
     {
-      key:    "nombre",
-      header: "Nombre",
+      key:    "usuario",
+      header: "Usuario",
       width:  "220px",
-      render: (u) => (
-        <span className="font-medium text-[13px]" style={{ color: "var(--gray-800)" }}>
-          {u.nombre || "—"}
-        </span>
-      ),
+      render: (u) => <CeldaUsuario u={u} />,
     },
     {
       key:    "email",
       header: "Email",
-      width:  "240px",
+      width:  "220px",
       render: (u) => (
         <span className="text-[13px]" style={{ color: "var(--gray-600)" }}>{u.email || "—"}</span>
       ),
     },
     {
-      key:    "roles_rbac",
-      header: "Rol RBAC",
-      width:  "220px",
+      key:    "rol",
+      header: "Rol",
+      width:  "180px",
       render: (u) => (
-        u.roles_rbac.length === 0 ? (
-          <span className="text-[12px]" style={{ color: "var(--gray-300)" }}>Sin roles asignados</span>
-        ) : (
-          <div className="flex flex-wrap gap-1">
-            {u.roles_rbac.map(r => (
-              <Badge key={r.id} variant={r.nombre === "master" ? "purple" : "info"}>{r.nombre}</Badge>
-            ))}
-          </div>
-        )
+        <span className="text-[13px]" style={{ color: "var(--gray-700)" }}>{rolesTexto(u)}</span>
       ),
     },
     {
-      key:    "activo",
+      key:    "estado",
       header: "Estado",
       width:  "100px",
-      render: (u) => (
-        <Badge variant={u.activo ? "success" : "default"}>{u.activo ? "Activo" : "Inactivo"}</Badge>
+      render: (u) => <EstadoDot activo={u.activo} />,
+    },
+    {
+      key:    "ultimo_acceso",
+      header: "Último acceso",
+      width:  "120px",
+      render: () => (
+        // Auditado (rediseño UI): ningún dato real de último acceso está
+        // disponible hoy — ni `profiles` ni GET /api/usuarios lo exponen, y
+        // este sprint no crea backend nuevo solo para esto. Se muestra "---"
+        // siempre, nunca una fecha inventada.
+        <span className="text-[13px]" style={{ color: "var(--gray-300)" }}>---</span>
       ),
     },
     {
       key:    "created_at",
       header: "Creado",
-      width:  "110px",
+      width:  "100px",
       render: (u) => (
         <span className="text-[13px]" style={{ color: "var(--gray-400)" }}>{formatFechaCorta(u.created_at)}</span>
+      ),
+    },
+    {
+      key:    "acciones",
+      header: "Acciones",
+      width:  "130px",
+      align:  "right",
+      render: (u) => (
+        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => abrirPanel(u.id)}
+            aria-label={`Ver ${u.nombre}`}
+            className="p-1.5 rounded-lg hover:bg-[var(--gray-100)]"
+          >
+            <Eye className="w-4 h-4" style={{ color: "var(--gray-500)" }} />
+          </button>
+          <button
+            type="button"
+            onClick={() => abrirPanel(u.id, "roles")}
+            disabled={!puedeEditarRoles}
+            aria-label={`Editar ${u.nombre}`}
+            className="p-1.5 rounded-lg hover:bg-[var(--gray-100)] disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <Pencil className="w-4 h-4" style={{ color: "var(--gray-500)" }} />
+          </button>
+          <MenuAcciones
+            usuario={u}
+            puedeEditarRoles={puedeEditarRoles}
+            onVer={() => abrirPanel(u.id)}
+            onEditarRoles={() => abrirPanel(u.id, "roles")}
+            onEditarExcepciones={() => abrirPanel(u.id, "excepciones")}
+          />
+        </div>
       ),
     },
   ];
 }
 
+// ── Paginación compacta — todos los datos ya están cargados en memoria
+// (GET /api/usuarios, sin params de paginación en el backend); paginar aquí
+// es solo una vista sobre `filtrados`, sin consultas nuevas. ───────────────
+
+const REGISTROS_POR_PAGINA_OPCIONES = [10, 25, 50];
+
+function Paginacion({
+  pagina, totalPaginas, totalRegistros, porPagina, onCambiarPagina, onCambiarPorPagina,
+}: {
+  pagina: number;
+  totalPaginas: number;
+  totalRegistros: number;
+  porPagina: number;
+  onCambiarPagina: (p: number) => void;
+  onCambiarPorPagina: (n: number) => void;
+}) {
+  const desde = totalRegistros === 0 ? 0 : (pagina - 1) * porPagina + 1;
+  const hasta = Math.min(pagina * porPagina, totalRegistros);
+
+  return (
+    <div className="flex items-center justify-between gap-4 flex-wrap">
+      <div className="flex items-center gap-2 text-[12.5px]" style={{ color: "var(--gray-500)" }}>
+        <span>{desde}–{hasta} de {totalRegistros}</span>
+        <select
+          value={porPagina}
+          onChange={(e) => onCambiarPorPagina(Number(e.target.value))}
+          aria-label="Registros por página"
+          className="text-[12.5px] outline-none"
+          style={{ border: "1.5px solid var(--gray-200)", borderRadius: 8, padding: "4px 8px", color: "var(--gray-600)", background: "#fff" }}
+        >
+          {REGISTROS_POR_PAGINA_OPCIONES.map(n => (
+            <option key={n} value={n}>{n} / página</option>
+          ))}
+        </select>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onCambiarPagina(pagina - 1)}
+          disabled={pagina <= 1}
+          aria-label="Página anterior"
+          className="p-1.5 rounded-lg hover:bg-[var(--gray-100)] disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <ChevronLeft className="w-4 h-4" style={{ color: "var(--gray-600)" }} />
+        </button>
+        <span className="text-[12.5px]" style={{ color: "var(--gray-600)" }}>
+          Página {pagina} de {totalPaginas}
+        </span>
+        <button
+          type="button"
+          onClick={() => onCambiarPagina(pagina + 1)}
+          disabled={pagina >= totalPaginas}
+          aria-label="Página siguiente"
+          className="p-1.5 rounded-lg hover:bg-[var(--gray-100)] disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <ChevronRight className="w-4 h-4" style={{ color: "var(--gray-600)" }} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Checklist de roles editable — mismo patrón visual de checkbox custom que
 // EtapaDestinatarios.tsx (label + span estilizado + input sr-only), sin
-// componente ni librería nueva. ─────────────────────────────────────────────
+// componente ni librería nueva. Sin cambios funcionales en este sprint. ────
 
 function SelectorRolesRbac({
   roles, seleccion, onToggle,
@@ -157,11 +387,8 @@ function SelectorRolesRbac({
   );
 }
 
-// ── Editor de excepciones (usuario_permisos) — a diferencia del checklist de
-// roles/permisos, NO duplica el catálogo completo como filas siempre
-// visibles: solo renderiza las excepciones ya elegidas + un selector para
-// agregar una nueva, apoyado en el <select> nativo ya usado en FilterBar.tsx
-// (mismo patrón, sin componente ni librería nueva). ─────────────────────────
+// ── Editor de excepciones (usuario_permisos) — sin cambios funcionales en
+// este sprint (ver comentario en SelectorRolesRbac de arriba). ─────────────
 
 const SELECT_STYLE: React.CSSProperties = {
   border:       "1.5px solid var(--gray-200)",
@@ -255,9 +482,10 @@ function SelectorExcepciones({
 
 export function UsuariosPage({ onBack }: Props) {
   const {
-    filtrados, loading, error, cargar,
+    data, filtrados, loading, error, cargar,
     busqueda, setBusqueda,
     filtroEstado, setFiltroEstado,
+    filtroRol, setFiltroRol,
     panelId, abrirPanel, cerrarPanel, panelUsuario,
     rolesAsignables,
     puedeEditarRoles,
@@ -273,9 +501,34 @@ export function UsuariosPage({ onBack }: Props) {
     guardarExcepciones, ejecutarGuardadoExcepciones,
   } = useUsuarios();
 
-  const columns = buildColumns();
+  const columns = buildColumns({ abrirPanel, puedeEditarRoles });
   const hayBusqueda = busqueda.trim().length > 0;
-  const hayFiltros  = hayBusqueda || filtroEstado !== "";
+  const hayFiltros  = hayBusqueda || filtroEstado !== "" || filtroRol !== "";
+
+  // ── KPI — calculados sobre `data` (todos los usuarios ya cargados, sin
+  // filtrar), no sobre `filtrados` — totales estables independientes de la
+  // búsqueda activa. Ninguna consulta nueva; "Roles RBAC asignados" es la
+  // suma real de roles_rbac.length por usuario (cuenta relaciones de
+  // asignación, no usuarios — a diferencia del KPI retirado en 3D-4
+  // "usuarios con ≥1 rol", este no tiene ambigüedad de doble conteo). ──────
+  const totalUsuarios      = data.length;
+  const usuariosActivos    = data.filter(u => u.activo).length;
+  const usuariosInactivos  = totalUsuarios - usuariosActivos;
+  const rolesAsignadosTotal = data.reduce((acc, u) => acc + u.roles_rbac.length, 0);
+
+  // ── Paginación — vista sobre `filtrados`, ya en memoria (sin params de
+  // paginación en GET /api/usuarios). Se reinicia a la página 1 si cambia
+  // cualquier filtro, para no quedar "colgado" en una página vacía. ────────
+  const [pagina, setPagina]       = useState(1);
+  const [porPagina, setPorPagina] = useState(10);
+
+  useEffect(() => { setPagina(1); }, [busqueda, filtroEstado, filtroRol]);
+
+  const totalRegistros = filtrados.length;
+  const totalPaginas   = Math.max(1, Math.ceil(totalRegistros / porPagina));
+  const paginaSegura   = Math.min(pagina, totalPaginas);
+  const inicio         = (paginaSegura - 1) * porPagina;
+  const paginaActual   = filtrados.slice(inicio, inicio + porPagina);
 
   return (
     <div className="p-6 flex flex-col gap-6">
@@ -294,20 +547,68 @@ export function UsuariosPage({ onBack }: Props) {
         <span style={{ color: "var(--gray-700)", fontWeight: 600 }}>Usuarios</span>
       </nav>
 
-      <PageHeader
-        title="Usuarios"
-        subtitle="Usuarios del ERP y sus roles RBAC actuales."
-        icon={<Users className="w-5 h-5" />}
-      />
+      {/* Header + acción principal — mismo patrón que ReportesAutomaticosPage */}
+      <div className="flex items-start justify-between gap-4">
+        <PageHeader
+          title="Usuarios"
+          subtitle="Administra los usuarios del ERP y sus roles RBAC actuales."
+          icon={<Users className="w-5 h-5" />}
+        />
+        {/* Sin flujo de creación de usuarios en este sprint (rediseño visual
+            únicamente, sin backend nuevo) — se muestra deshabilitado en vez
+            de simular una acción que no existe. */}
+        <Button icon={<Plus className="w-4 h-4" />} disabled className="shrink-0" title="Próximamente">
+          Nuevo usuario
+        </Button>
+      </div>
+
+      {/* KPI compactos */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <KpiCard
+          label="Total usuarios"
+          value={loading ? "—" : totalUsuarios}
+          icon={<Users className="w-4 h-4" />}
+          color="var(--navy)"
+          bg="var(--gray-100)"
+        />
+        <KpiCard
+          label="Usuarios activos"
+          value={loading ? "—" : usuariosActivos}
+          icon={<UserCheck className="w-4 h-4" />}
+          color="var(--navy)"
+          bg="var(--gray-100)"
+        />
+        <KpiCard
+          label="Usuarios inactivos"
+          value={loading ? "—" : usuariosInactivos}
+          icon={<UserX className="w-4 h-4" />}
+          color="var(--navy)"
+          bg="var(--gray-100)"
+        />
+        <KpiCard
+          label="Roles RBAC asignados"
+          value={loading ? "—" : rolesAsignadosTotal}
+          icon={<ShieldCheck className="w-4 h-4" />}
+          color="var(--navy)"
+          bg="var(--gray-100)"
+        />
+      </div>
 
       <FilterBar
         busqueda={busqueda}
         onBusqueda={setBusqueda}
-        searchPlaceholder="Buscar por nombre o email..."
+        searchPlaceholder="Buscar por nombre, email o rol..."
         selects={[
           {
+            value:       filtroRol,
+            onChange:    setFiltroRol,
+            placeholder: "Todos los roles",
+            options:     rolesAsignables.map(r => ({ value: r.id, label: r.nombre })),
+            ariaLabel:   "Filtrar por rol",
+          },
+          {
             value:       filtroEstado,
-            onChange:    (v) => setFiltroEstado(v as "" | "activo" | "inactivo"),
+            onChange:    (v) => setFiltroEstado(v as FiltroEstadoUsuario),
             placeholder: "Todos los estados",
             options: [
               { value: "activo",   label: "Activo" },
@@ -317,7 +618,7 @@ export function UsuariosPage({ onBack }: Props) {
           },
         ]}
         hayFiltros={hayFiltros}
-        onLimpiar={hayFiltros ? () => { setBusqueda(""); setFiltroEstado(""); } : undefined}
+        onLimpiar={hayFiltros ? () => { setBusqueda(""); setFiltroEstado(""); setFiltroRol(""); } : undefined}
       />
 
       {error ? (
@@ -331,14 +632,26 @@ export function UsuariosPage({ onBack }: Props) {
       ) : !loading && filtrados.length === 0 ? (
         <EmptyState conFiltro={hayFiltros} />
       ) : (
-        <DataTable<UsuarioRbac>
-          columns={columns}
-          rows={filtrados}
-          rowKey={(u) => u.id}
-          onRowClick={(u) => abrirPanel(u.id)}
-          loading={loading}
-          emptyMessage="Sin usuarios"
-        />
+        <>
+          <DataTable<UsuarioRbac>
+            columns={columns}
+            rows={paginaActual}
+            rowKey={(u) => u.id}
+            onRowClick={(u) => abrirPanel(u.id)}
+            loading={loading}
+            emptyMessage="Sin usuarios"
+          />
+          {!loading && totalRegistros > 0 && (
+            <Paginacion
+              pagina={paginaSegura}
+              totalPaginas={totalPaginas}
+              totalRegistros={totalRegistros}
+              porPagina={porPagina}
+              onCambiarPagina={setPagina}
+              onCambiarPorPagina={(n) => { setPorPagina(n); setPagina(1); }}
+            />
+          )}
+        </>
       )}
 
       <SidePanel
