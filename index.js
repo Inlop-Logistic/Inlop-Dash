@@ -16,8 +16,8 @@ import {
 } from './services/reportes/datasetProvider.js';
 import { ejecutarReporteManual } from './services/reportes/envioManual.js';
 import { ejecutarTickScheduler, calcularProgramacionAlGuardar } from './services/reportes/scheduler.js';
-import { obtenerCatalogo } from './services/rbac/catalogo.js';
-import { calcularPermisosEfectivos, invalidarUsuario } from './services/rbac/resolver.js';
+import { obtenerCatalogo, invalidarCatalogo } from './services/rbac/catalogo.js';
+import { calcularPermisosEfectivos, invalidarUsuario, invalidarTodosLosUsuarios } from './services/rbac/resolver.js';
 import { requirePermiso } from './services/rbac/middleware.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
@@ -5225,6 +5225,136 @@ app.put("/api/usuarios/:id/roles", requireErpAuth, requirePermiso('rbac:gestiona
     res.json({ id, roles_rbac });
   } catch (e) {
     console.error("PUT /api/usuarios/:id/roles error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+const NOMBRE_PERMISO_GESTIONAR_RBAC = 'rbac:gestionar';
+
+// PUT /api/roles/:id/permisos — reemplaza el conjunto COMPLETO de permisos
+// asignados a un rol RBAC (Sprint 3D-7.3). Mismo patrón de reconciliación
+// que PUT /api/usuarios/:id/roles (3D-7.2): calcula toAdd/toRemove contra el
+// estado actual de rol_permisos y aplica cada dirección como UNA sola
+// escritura batch (nunca una escritura por fila), comprobando explícitamente
+// que sbFetch no devuelva null antes de continuar con la siguiente.
+//
+// master queda fuera de esta operación (400): su acceso total se resuelve
+// por el corto-circuito especial del motor RBAC (resolver.js) y nunca tiene
+// filas en rol_permisos — permitir "editarlas" aquí no tendría ningún efecto
+// real sobre lo que master puede hacer, y daría al operador la falsa
+// impresión de estar controlando su acceso por esta vía.
+//
+// Guard reforzado (mismo principio "poderes reforzados" de 3D-7): si la
+// operación agrega o quita `rbac:gestionar` de un rol, el ACTOR debe ser
+// master real (esMaster===true vía el motor RBAC), no basta con tener
+// `rbac:gestionar` genérico — evita que admin (u otro rol que ya tenga
+// rbac:gestionar) se autoeleve u otorgue esa exclusividad a otro rol.
+app.put("/api/roles/:id/permisos", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!UUID_REGEX_RBAC.test(id || "")) {
+      return res.status(400).json({ error: "id de rol inválido" });
+    }
+
+    const { permiso_ids } = req.body || {};
+    if (!Array.isArray(permiso_ids) || permiso_ids.some(p => typeof p !== "string" || !UUID_REGEX_RBAC.test(p))) {
+      return res.status(400).json({ error: "permiso_ids debe ser un arreglo de UUID válidos" });
+    }
+    const targetSet = new Set(permiso_ids); // dedup — reenviar el mismo id dos veces no es un error
+
+    const catalogo = await obtenerCatalogo({ sbFetch });
+    const rolInfo = catalogo.rolesPorId.get(id);
+    if (!rolInfo) return res.status(404).json({ error: "Rol no encontrado" });
+    if (rolInfo.activo !== true) return res.status(400).json({ error: "Rol inactivo" });
+    if (rolInfo.nombre?.toLowerCase() === NOMBRE_ROL_MASTER_RBAC) {
+      return res.status(400).json({ error: "master se resuelve por la regla especial del motor RBAC — no admite asignación de permisos" });
+    }
+
+    // Todos los permiso_ids deben existir en el catálogo. La tabla `permisos`
+    // no tiene columna `activo` (sql/20260819_rbac_ddl.sql) — todo permiso
+    // cargado en el catálogo es, por definición del esquema, utilizable;
+    // "existir en el catálogo" es la única verificación aplicable aquí.
+    for (const permisoId of targetSet) {
+      if (!catalogo.permisoNombrePorId.has(permisoId)) {
+        return res.status(400).json({ error: `permiso_id inexistente: ${permisoId}` });
+      }
+    }
+
+    let permisoIdGestionar = null;
+    for (const [pid, nombre] of catalogo.permisoNombrePorId) {
+      if (nombre === NOMBRE_PERMISO_GESTIONAR_RBAC) { permisoIdGestionar = pid; break; }
+    }
+
+    const actualesSet = catalogo.permisosPorRol.get(id) ?? new Set();
+
+    const toAdd    = [...targetSet].filter(pid => !actualesSet.has(pid));
+    const toRemove = [...actualesSet].filter(pid => !targetSet.has(pid));
+
+    const tocaGestionar = permisoIdGestionar !== null && (toAdd.includes(permisoIdGestionar) || toRemove.includes(permisoIdGestionar));
+    if (tocaGestionar) {
+      const actorResuelto = await calcularPermisosEfectivos(req.erpUserId, { sbFetch });
+      if (!actorResuelto.esMaster) {
+        return res.status(403).json({ error: "Solo un master puede asignar o quitar rbac:gestionar de un rol" });
+      }
+    }
+
+    // Reconciliación en dos escrituras atómicas — mismo mecanismo fail-closed
+    // que PUT /api/usuarios/:id/roles (3D-7.2, auditoría): cada dirección de
+    // cambio es una única sentencia PostgREST sobre múltiples filas, nunca
+    // un loop de N llamadas sbFetch. Se elimina antes de agregar: si agregar
+    // falla después de una eliminación ya confirmada, el rol queda con MENOS
+    // permisos de los deseados (seguro), nunca con permisos obsoletos de más.
+    if (toRemove.length > 0) {
+      const resultado = await sbFetch(
+        `/rol_permisos?rol_id=eq.${encodeURIComponent(id)}&permiso_id=in.(${toRemove.map(encodeURIComponent).join(',')})`,
+        'DELETE'
+      );
+      if (resultado === null) {
+        console.error("PUT /api/roles/:id/permisos: falló la eliminación en lote, abortando sin agregar");
+        return res.status(500).json({ error: "Error interno" });
+      }
+    }
+    if (toAdd.length > 0) {
+      const resultado = await sbFetch('/rol_permisos', 'POST', toAdd.map(permisoId => ({
+        rol_id:     id,
+        permiso_id: permisoId,
+      })));
+      if (resultado === null) {
+        console.error("PUT /api/roles/:id/permisos: falló la inserción en lote");
+        return res.status(500).json({ error: "Error interno" });
+      }
+    }
+
+    // Cache — solo se invalida si realmente hubo escritura. invalidarCatalogo()
+    // porque rol_permisos forma parte del catálogo cacheado (catalogo.js);
+    // invalidarTodosLosUsuarios() porque un cambio en rol_permisos puede
+    // afectar la resolución de permisos de CUALQUIER usuario que tenga este
+    // rol asignado, no solo uno puntual (a diferencia de invalidarUsuario()
+    // en 3D-7.2, que solo toca usuario_roles de un usuario específico).
+    if (toAdd.length > 0 || toRemove.length > 0) {
+      invalidarCatalogo();
+      invalidarTodosLosUsuarios();
+    }
+
+    // Estado resultante — se consulta solo lo necesario para el contrato de
+    // respuesta (modulo/descripcion no están en el catálogo en memoria, ver
+    // catalogo.js) en vez de reconsultar todo /api/permisos o todo el
+    // catálogo; sin esta consulta puntual no habría forma de evitar un
+    // refetch más amplio.
+    const permisos = targetSet.size > 0
+      ? ((await sbFetch(
+          `/permisos?id=in.(${[...targetSet].map(encodeURIComponent).join(',')})&select=id,nombre,modulo,descripcion&order=modulo.asc,nombre.asc`
+        )) || []).map(p => ({
+          id:          p.id,
+          nombre:      p.nombre,
+          modulo:      p.modulo || "",
+          descripcion: p.descripcion || "",
+        }))
+      : [];
+
+    res.json({ id, permisos });
+  } catch (e) {
+    console.error("PUT /api/roles/:id/permisos error:", e.message);
     res.status(500).json({ error: "Error interno" });
   }
 });
