@@ -304,6 +304,53 @@ function requireLegacyOrInternal(req, res, next) {
   return res.status(401).json({ error: "No autorizado" });
 }
 
+// ─── VERIFICACIÓN JWT + ESTADO ERP (Sprint 3D-7.7C) ──────────────────────────
+// Lógica común extraída de requireErpAuth y requireLegacyOrErpAuth — antes
+// cada middleware duplicaba la misma verificación de JWT contra GoTrue, sin
+// comprobar en ningún punto profiles.activo (auditorías 3D-7.7A/3D-7.7B: la
+// única comprobación real de "activo" vivía en el motor RBAC, que solo
+// protege los endpoints que usan requirePermiso — el resto del ERP quedaba
+// accesible con un JWT válido aunque el usuario estuviera desactivado).
+//
+// Un JWT solo se considera válido para el ERP si, además de ser aceptado por
+// GoTrue: (1) existe una fila en profiles para ese id, y (2) profiles.activo
+// === true. Sin fila = sin acceso (decisión explícita del sprint: "profiles
+// sin fila se consideran no autorizados para ERP").
+//
+// Consulta de profiles siempre fresca — sin cache (decisión explícita del
+// sprint: "sin cache inicialmente... consulta fresca por request").
+//
+// No distingue en la respuesta entre "sin profile" y "profile inactivo" —
+// mismo status/mensaje genérico para ambos casos, para no revelar cuál de
+// los dos aplica.
+//
+// @param {string} token — JWT crudo (sin el prefijo "Bearer ").
+// @returns {Promise<{id: string, email: string}>}
+// @throws {Error & {status: number}} — listo para responder con
+//   res.status(err.status).json({ error: err.message }).
+async function verificarJwtErpActivo(token) {
+  const r = await fetchConTimeout(`${SB_AUTH_URL}/user`, {
+    headers: { 'Authorization': `Bearer ${token}`, 'apikey': SB_ANON_KEY },
+  });
+  if (!r.ok) {
+    throw Object.assign(new Error('Token inválido o expirado'), { status: 401 });
+  }
+  const sbUser = await r.json();
+  const id    = sbUser.id;
+  const email = sbUser.email || '';
+
+  // sbFetch devuelve null ante un error real de Supabase (no ante "sin
+  // filas", que llega como array vacío) — ambos casos son fail-closed aquí:
+  // sin poder confirmar un profile activo, no hay acceso al ERP.
+  const perfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}&select=activo`);
+  const activo = perfiles?.[0]?.activo === true;
+  if (!activo) {
+    throw Object.assign(new Error('Acceso no autorizado'), { status: 403 });
+  }
+
+  return { id, email };
+}
+
 // ─── AUTENTICACIÓN ERP — JWT DE SUPABASE (Sprint 2A) ─────────────────────────
 // Middleware que acepta DOS mecanismos de autenticación del ERP:
 //   1. Authorization: Bearer <jwt>  → verificado contra Supabase Auth (identidad confiable)
@@ -316,8 +363,10 @@ function requireLegacyOrInternal(req, res, next) {
 // Los endpoints que usaban req.headers["x-user-email"] como "actor" deben
 // preferir req.erpUserEmail — es una identidad verificada, no auto-declarada.
 //
-// IMPORTANTE: Este middleware NO implementa RBAC. Solo resuelve identidad.
-// El RBAC se implementará en un sprint posterior.
+// IMPORTANTE: Este middleware NO implementa RBAC. Solo resuelve identidad
+// (+ desde 3D-7.7C, que el usuario ERP esté activo — ver
+// verificarJwtErpActivo arriba). El RBAC granular por permiso se resuelve
+// aparte, en requirePermiso().
 //
 // Backward-compatible: si el ERP aún envía X-Internal-Api-Key (sin JWT),
 // sigue funcionando como antes. La transición es gradual.
@@ -327,22 +376,19 @@ function requireErpAuth(req, res, next) {
   // ── Ruta 1: JWT de Supabase ──
   if (authHeader.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
-    fetchConTimeout(`${SB_AUTH_URL}/user`, {
-      headers: { 'Authorization': `Bearer ${token}`, 'apikey': SB_ANON_KEY },
-    })
-    .then(async (r) => {
-      if (!r.ok) {
-        return res.status(401).json({ error: 'Token inválido o expirado' });
-      }
-      const sbUser = await r.json();
-      req.erpUserId    = sbUser.id;
-      req.erpUserEmail = sbUser.email || '';
-      next();
-    })
-    .catch((e) => {
-      console.error('❌ requireErpAuth JWT verification:', e.message);
-      res.status(500).json({ error: 'Error de autenticación' });
-    });
+    verificarJwtErpActivo(token)
+      .then(({ id, email }) => {
+        req.erpUserId    = id;
+        req.erpUserEmail = email;
+        next();
+      })
+      .catch((e) => {
+        if (typeof e?.status === 'number') {
+          return res.status(e.status).json({ error: e.message });
+        }
+        console.error('❌ requireErpAuth JWT verification:', e.message);
+        res.status(500).json({ error: 'Error de autenticación' });
+      });
     return;
   }
 
@@ -372,28 +418,31 @@ function getActor(req) {
 // Middleware que acepta TRES mecanismos: JWT (ERP), API Key (ERP fallback),
 // y legacy token (TorreControl.html). Los endpoints compartidos necesitan
 // aceptar los tres durante la transición.
+//
+// Solo la Rama 1 (JWT) pasa por verificarJwtErpActivo() (Sprint 3D-7.7C) —
+// las Ramas 2 (API Key) y 3 (Legacy token) quedan exactamente igual que
+// antes, sin identidad verificada ni chequeo de profiles.activo, por
+// diseño: son los mecanismos que usa TorreControl.html y no tienen (ni
+// deben tener) una fila de profiles asociada.
 function requireLegacyOrErpAuth(req, res, next) {
   const authHeader = req.headers.authorization || '';
 
   // ── Ruta 1: JWT de Supabase (ERP moderno) ──
   if (authHeader.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
-    fetchConTimeout(`${SB_AUTH_URL}/user`, {
-      headers: { 'Authorization': `Bearer ${token}`, 'apikey': SB_ANON_KEY },
-    })
-    .then(async (r) => {
-      if (!r.ok) {
-        return res.status(401).json({ error: 'Token inválido o expirado' });
-      }
-      const sbUser = await r.json();
-      req.erpUserId    = sbUser.id;
-      req.erpUserEmail = sbUser.email || '';
-      next();
-    })
-    .catch((e) => {
-      console.error('❌ requireLegacyOrErpAuth JWT verification:', e.message);
-      res.status(500).json({ error: 'Error de autenticación' });
-    });
+    verificarJwtErpActivo(token)
+      .then(({ id, email }) => {
+        req.erpUserId    = id;
+        req.erpUserEmail = email;
+        next();
+      })
+      .catch((e) => {
+        if (typeof e?.status === 'number') {
+          return res.status(e.status).json({ error: e.message });
+        }
+        console.error('❌ requireLegacyOrErpAuth JWT verification:', e.message);
+        res.status(500).json({ error: 'Error de autenticación' });
+      });
     return;
   }
 
