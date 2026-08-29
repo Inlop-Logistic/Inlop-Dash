@@ -3,7 +3,7 @@ import type { UsuarioRbac, RolRbac, PermisoRbac } from "../types";
 import {
   listarUsuarios, listarRoles, listarPermisos, actualizarRolesUsuario,
   actualizarExcepcionesUsuario, obtenerMisPermisos,
-  crearUsuario, resetPasswordUsuario, actualizarActivoUsuario,
+  crearUsuario, resetPasswordUsuario, actualizarActivoUsuario, actualizarDatosUsuario,
 } from "../services/api";
 
 export type FiltroEstadoUsuario = "" | "activo" | "inactivo";
@@ -35,7 +35,7 @@ export function useUsuarios() {
   // debe entrar directo en modo edición — null = abrir en solo lectura,
   // mismo comportamiento que siempre al hacer click en una fila (rediseño
   // UI; no cambia ninguna regla de permisos ni de guardado ya existente).
-  const [autoEditarAlAbrir, setAutoEditarAlAbrir] = useState<"roles" | "excepciones" | null>(null);
+  const [autoEditarAlAbrir, setAutoEditarAlAbrir] = useState<"roles" | "excepciones" | "datos" | null>(null);
 
   // Progressive disclosure de los controles de edición (Sprint 3D-7.4) —
   // mismo criterio fail-open que ParametrosPage: NUNCA un mecanismo de
@@ -68,6 +68,16 @@ export function useUsuarios() {
   const [exitoExcepciones,          setExitoExcepciones]          = useState(false);
   // true mientras se muestra la confirmación reforzada (agregar/modificar/quitar rbac:gestionar).
   const [confirmarGestionarExcepcion, setConfirmarGestionarExcepcion] = useState(false);
+
+  // ── Edición de datos básicos (nombre/correo) del panel abierto
+  // (Sprint 3D-7.9D) — independiente de roles/excepciones, mismo criterio.
+  // No requiere confirmación reforzada: no toca master ni rbac:gestionar. ──
+  const [editandoDatos,      setEditandoDatos]      = useState(false);
+  const [datosNombre,        setDatosNombre]        = useState("");
+  const [datosEmail,         setDatosEmail]         = useState("");
+  const [guardandoDatos,     setGuardandoDatos]     = useState(false);
+  const [errorGuardadoDatos, setErrorGuardadoDatos] = useState<string | null>(null);
+  const [exitoDatos,         setExitoDatos]         = useState(false);
 
   // ── Crear usuario (Sprint 3D-7.8D) — POST /api/usuarios. El formulario
   // vive en el hook (mismo criterio que el resto del estado de edición). ──
@@ -170,6 +180,11 @@ export function useUsuarios() {
     setErrorGuardadoExcepciones(null);
     setExitoExcepciones(false);
     setConfirmarGestionarExcepcion(false);
+    setEditandoDatos(false);
+    setDatosNombre("");
+    setDatosEmail("");
+    setErrorGuardadoDatos(null);
+    setExitoDatos(false);
   }
 
   /**
@@ -177,10 +192,10 @@ export function useUsuarios() {
    * edición (usado por "Editar" y el menú de acciones de la tabla, rediseño
    * UI). `editar` solo decide QUÉ sección arranca en edición; no cambia
    * ninguna regla de permisos/guardado — el efecto de abajo reutiliza
-   * exactamente el mismo estado que iniciarEdicion()/iniciarEdicionExcepciones()
-   * ya usan al hacer click en "Editar" dentro del panel.
+   * exactamente el mismo estado que iniciarEdicion()/iniciarEdicionExcepciones()/
+   * iniciarEdicionDatos() ya usan al hacer click en "Editar" dentro del panel.
    */
-  function abrirPanel(id: string, editar?: "roles" | "excepciones") {
+  function abrirPanel(id: string, editar?: "roles" | "excepciones" | "datos") {
     setPanelId(id);
     resetearEdicionPanel();
     setAutoEditarAlAbrir(editar ?? null);
@@ -203,13 +218,19 @@ export function useUsuarios() {
       setErrorGuardado(null);
       setExito(false);
       setEditando(true);
-    } else {
+    } else if (autoEditarAlAbrir === "excepciones") {
       const inicial = new Map<string, "grant" | "revoke">();
       for (const e of panelUsuario.excepciones) inicial.set(e.permiso_id, e.efecto);
       setSeleccionExcepciones(inicial);
       setErrorGuardadoExcepciones(null);
       setExitoExcepciones(false);
       setEditandoExcepciones(true);
+    } else {
+      setDatosNombre(panelUsuario.nombre || "");
+      setDatosEmail(panelUsuario.email || "");
+      setErrorGuardadoDatos(null);
+      setExitoDatos(false);
+      setEditandoDatos(true);
     }
     setAutoEditarAlAbrir(null);
   }, [autoEditarAlAbrir, panelUsuario, puedeEditarRoles]);
@@ -384,6 +405,47 @@ export function useUsuarios() {
     void ejecutarGuardadoExcepciones();
   }
 
+  // ── Datos básicos: nombre y correo (Sprint 3D-7.9D) ──────────────────────
+  // PATCH /api/usuarios/:id/datos — separado de roles/permisos/activo. Sin
+  // confirmación reforzada: no toca master ni rbac:gestionar.
+
+  function iniciarEdicionDatos() {
+    if (!panelUsuario) return;
+    setDatosNombre(panelUsuario.nombre || "");
+    setDatosEmail(panelUsuario.email || "");
+    setErrorGuardadoDatos(null);
+    setExitoDatos(false);
+    setEditandoDatos(true);
+  }
+
+  /** Cancelación sin guardar — descarta los cambios, vuelve a solo lectura. */
+  function cancelarEdicionDatos() {
+    setEditandoDatos(false);
+    setDatosNombre("");
+    setDatosEmail("");
+    setErrorGuardadoDatos(null);
+  }
+
+  const guardarDatos = useCallback(async () => {
+    if (!panelUsuario) return;
+    setGuardandoDatos(true);
+    setErrorGuardadoDatos(null);
+    try {
+      const nombreLimpio = datosNombre.trim();
+      const emailLimpio  = datosEmail.trim();
+      const resultado = await actualizarDatosUsuario(panelUsuario.id, { nombre: nombreLimpio, email: emailLimpio });
+      // Actualiza el usuario en memoria con la respuesta del backend — sin
+      // refetch de /api/usuarios completo (mismo criterio que roles/excepciones/activo).
+      setData(prev => prev.map(u => u.id === resultado.id ? { ...u, nombre: resultado.nombre, email: resultado.email } : u));
+      setEditandoDatos(false);
+      setExitoDatos(true);
+    } catch (e) {
+      setErrorGuardadoDatos(e instanceof Error ? e.message : "Error al guardar los datos del usuario");
+    } finally {
+      setGuardandoDatos(false);
+    }
+  }, [panelUsuario, datosNombre, datosEmail]);
+
   // ── Crear usuario (Sprint 3D-7.8D) ────────────────────────────────────────
 
   function abrirCrearUsuario() {
@@ -515,6 +577,9 @@ export function useUsuarios() {
     guardandoExcepciones, errorGuardadoExcepciones, exitoExcepciones,
     efectoDeseadoGestionar, confirmarGestionarExcepcion, setConfirmarGestionarExcepcion,
     guardarExcepciones, ejecutarGuardadoExcepciones,
+    editandoDatos, iniciarEdicionDatos, cancelarEdicionDatos,
+    datosNombre, setDatosNombre, datosEmail, setDatosEmail,
+    guardandoDatos, errorGuardadoDatos, exitoDatos, guardarDatos,
     mostrarCrearUsuario, abrirCrearUsuario, cerrarCrearUsuario,
     nuevoNombre, setNuevoNombre, nuevoEmail, setNuevoEmail,
     creandoUsuario, errorCrearUsuario, confirmarCrearUsuario,

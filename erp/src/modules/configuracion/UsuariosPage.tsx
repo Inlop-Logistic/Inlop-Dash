@@ -18,6 +18,18 @@ interface Props {
   onBack: () => void;
 }
 
+// Edición de Datos básicos (Sprint 3D-7.9D) — mismo patrón visual de input
+// ya usado en ModalCrearUsuario.tsx, para no introducir un estilo nuevo.
+const EMAIL_REGEX_DATOS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const INPUT_STYLE_DATOS: React.CSSProperties = {
+  border:       "1.5px solid var(--gray-200)",
+  borderRadius: 10,
+  padding:      "8px 12px",
+  color:        "var(--gray-700)",
+  background:   "#fff",
+  width:        "100%",
+};
+
 // ── Empty state — mismo patrón visual que ReportesAutomaticosPage ───────────
 
 function EmptyState({ conFiltro }: { conFiltro: boolean }) {
@@ -170,7 +182,7 @@ function MenuAcciones({
 function buildColumns({
   abrirPanel, puedeEditarRoles, onResetPassword, onActivarDesactivar,
 }: {
-  abrirPanel: (id: string, editar?: "roles" | "excepciones") => void;
+  abrirPanel: (id: string, editar?: "roles" | "excepciones" | "datos") => void;
   puedeEditarRoles: boolean;
   onResetPassword: (id: string) => void;
   onActivarDesactivar: (id: string) => void;
@@ -233,7 +245,7 @@ function buildColumns({
         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
-            onClick={() => abrirPanel(u.id, "roles")}
+            onClick={() => abrirPanel(u.id, "datos")}
             disabled={!puedeEditarRoles}
             aria-label={`Editar ${u.nombre}`}
             className="p-1.5 rounded-lg hover:bg-[var(--gray-100)] disabled:opacity-30 disabled:cursor-not-allowed"
@@ -489,6 +501,9 @@ export function UsuariosPage({ onBack }: Props) {
     guardandoExcepciones, errorGuardadoExcepciones, exitoExcepciones,
     efectoDeseadoGestionar, confirmarGestionarExcepcion, setConfirmarGestionarExcepcion,
     guardarExcepciones, ejecutarGuardadoExcepciones,
+    editandoDatos, iniciarEdicionDatos, cancelarEdicionDatos,
+    datosNombre, setDatosNombre, datosEmail, setDatosEmail,
+    guardandoDatos, errorGuardadoDatos, exitoDatos, guardarDatos,
     mostrarCrearUsuario, abrirCrearUsuario, cerrarCrearUsuario,
     nuevoNombre, setNuevoNombre, nuevoEmail, setNuevoEmail,
     creandoUsuario, errorCrearUsuario, confirmarCrearUsuario,
@@ -665,7 +680,29 @@ export function UsuariosPage({ onBack }: Props) {
         title="Detalle de usuario"
         subtitle={panelUsuario?.nombre}
         width="420px"
-        footer={editando && panelUsuario ? (
+        footer={editandoDatos && panelUsuario ? (
+          <div className="flex items-center justify-between gap-2 px-6 py-4">
+            {errorGuardadoDatos ? (
+              <span className="text-[12px] flex items-center gap-1.5" style={{ color: "var(--inlop-red)" }}>
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                {errorGuardadoDatos}
+              </span>
+            ) : <span />}
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="ghost" size="sm" onClick={cancelarEdicionDatos} disabled={guardandoDatos}>
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => void guardarDatos()}
+                loading={guardandoDatos}
+                disabled={guardandoDatos || !datosNombre.trim() || !EMAIL_REGEX_DATOS.test(datosEmail.trim())}
+              >
+                Guardar
+              </Button>
+            </div>
+          </div>
+        ) : editando && panelUsuario ? (
           <div className="flex items-center justify-between gap-2 px-6 py-4">
             {errorGuardado ? (
               <span className="text-[12px] flex items-center gap-1.5" style={{ color: "var(--inlop-red)" }}>
@@ -703,9 +740,66 @@ export function UsuariosPage({ onBack }: Props) {
       >
         {panelUsuario && (
           <div>
-            <PanelSection first>
-              <InfoRow label="Nombre" value={panelUsuario.nombre || "—"} />
-              <InfoRow label="Email" value={panelUsuario.email || "—"} />
+            <PanelSection
+              first
+              title="Datos básicos"
+              icon={puedeEditarRoles && !editandoDatos && !editando && !editandoExcepciones ? (
+                <button
+                  type="button"
+                  onClick={iniciarEdicionDatos}
+                  className="flex items-center gap-1 hover:underline focus-visible:outline-none"
+                  style={{ color: "var(--navy)" }}
+                  aria-label="Editar datos básicos"
+                >
+                  <Pencil className="w-3 h-3" /> Editar
+                </button>
+              ) : undefined}
+            >
+              {exitoDatos && !editandoDatos && (
+                <div className="flex items-center gap-1.5 mb-3 text-[12px]" style={{ color: "#065F46" }}>
+                  <Check className="w-3.5 h-3.5" /> Datos actualizados correctamente.
+                </div>
+              )}
+
+              {editandoDatos ? (
+                <div className="flex flex-col gap-3 mb-2">
+                  <div>
+                    <label htmlFor="editar-datos-nombre" className="block text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--gray-500)" }}>
+                      Nombre
+                    </label>
+                    <input
+                      id="editar-datos-nombre"
+                      type="text"
+                      value={datosNombre}
+                      onChange={(e) => setDatosNombre(e.target.value)}
+                      disabled={guardandoDatos}
+                      className="text-[13px] outline-none"
+                      style={INPUT_STYLE_DATOS}
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="editar-datos-email" className="block text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: "var(--gray-500)" }}>
+                      Email
+                    </label>
+                    <input
+                      id="editar-datos-email"
+                      type="email"
+                      value={datosEmail}
+                      onChange={(e) => setDatosEmail(e.target.value)}
+                      disabled={guardandoDatos}
+                      className="text-[13px] outline-none"
+                      style={INPUT_STYLE_DATOS}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <InfoRow label="Nombre" value={panelUsuario.nombre || "—"} />
+                  <InfoRow label="Email" value={panelUsuario.email || "—"} />
+                </>
+              )}
+
               <InfoRow label="Estado" value={
                 <Badge variant={panelUsuario.activo ? "success" : "default"}>
                   {panelUsuario.activo ? "Activo" : "Inactivo"}
@@ -716,7 +810,7 @@ export function UsuariosPage({ onBack }: Props) {
 
             <PanelSection
               title="Roles RBAC"
-              icon={puedeEditarRoles && !editando && !editandoExcepciones ? (
+              icon={puedeEditarRoles && !editando && !editandoExcepciones && !editandoDatos ? (
                 <button
                   type="button"
                   onClick={iniciarEdicion}
@@ -752,7 +846,7 @@ export function UsuariosPage({ onBack }: Props) {
                 reemplaza la sección de Roles RBAC de arriba. */}
             <PanelSection
               title="Excepciones de permisos"
-              icon={puedeEditarRoles && !editando && !editandoExcepciones ? (
+              icon={puedeEditarRoles && !editando && !editandoExcepciones && !editandoDatos ? (
                 <button
                   type="button"
                   onClick={iniciarEdicionExcepciones}

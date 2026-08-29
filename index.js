@@ -5825,6 +5825,204 @@ app.patch("/api/usuarios/:id/activo", requireErpAuth, requirePermiso('rbac:gesti
   }
 });
 
+// PATCH /api/usuarios/:id/datos — edita nombre y/o correo de un usuario ERP
+// ya existente (Sprint 3D-7.9D — diseño aprobado en las auditorías
+// 3D-7.9A/B/C; corrección de atomicidad en 3D-7.9F tras el hallazgo de
+// 3D-7.9E). Separado de roles/permisos/activo: solo toca profiles.nombre y
+// el par auth.users.email / profiles.email.
+//
+// Correo — flujo aprobado en 3D-7.9C (reemplaza la primera propuesta de
+// 3D-7.9B, que dejaba un "profiles_sincronizado:false" como 200 — aquí
+// NUNCA se responde 200 con un estado parcial):
+//   1. Leer el email ACTUAL directamente desde Supabase Auth — nunca desde
+//      profiles.email, que podría ya estar desincronizado por un fallo
+//      previo no resuelto; leerlo de Auth también confirma que el usuario
+//      existe ahí.
+//   2. Actualizar Auth al nuevo email (email_confirm:true — es una
+//      corrección administrativa, no depende de que el usuario confirme un
+//      enlace que quizás ya no puede recibir).
+//   3. Actualizar profiles.email, con un reintento corto único si falla
+//      (mismo idioma de wait+retry que ya usa POST /api/usuarios) antes de
+//      declarar fallo.
+//   4. Si profiles sigue fallando: revertir Auth al email leído en el paso 1.
+//      - Rollback exitoso → la operación NO se completó: se responde error
+//        (revertido, sin huérfanos ni divergencia).
+//      - Rollback también falla → estado inconsistente real entre Auth y
+//        profiles: se responde error explícito con ambos valores, nunca 200.
+//
+// Nombre + Correo combinados (corrección 3D-7.9F — hallazgo de 3D-7.9E: el
+// nombre se escribía ANTES del correo y quedaba cambiado silenciosamente si
+// el correo fallaba después): el correo se resuelve PRIMERO por completo
+// —exactamente el flujo de arriba, sin modificarlo— y el nombre solo se
+// toca cuando Auth y profiles.email ya quedaron sincronizados. Si el correo
+// falla en cualquier punto, el nombre nunca se toca. Si el correo tuvo
+// éxito pero el nombre falla después, se revierte también el correo (Auth +
+// profiles) al valor leído en el paso 1, con el mismo criterio de
+// "revertido" vs. "estado inconsistente" que ya usa el flujo de solo correo.
+app.patch("/api/usuarios/:id/datos", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!UUID_REGEX_RBAC.test(id || "")) {
+      return res.status(400).json({ error: "id de usuario inválido" });
+    }
+
+    const { nombre, email } = req.body || {};
+    const tocaNombre = typeof nombre === "string";
+    const tocaEmail  = typeof email === "string";
+    if (!tocaNombre && !tocaEmail) {
+      return res.status(400).json({ error: "Debes indicar nombre y/o email" });
+    }
+
+    const nombreLimpio = tocaNombre ? nombre.trim() : null;
+    if (tocaNombre && !nombreLimpio) {
+      return res.status(400).json({ error: "nombre no puede estar vacío" });
+    }
+    const emailNormalizado = tocaEmail ? email.trim().toLowerCase() : null;
+    if (tocaEmail && !EMAIL_REGEX_RBAC.test(emailNormalizado)) {
+      return res.status(400).json({ error: "email inválido" });
+    }
+
+    const perfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}&select=id`);
+    if (!perfiles || !perfiles.length) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    // ── Correo — se resuelve PRIMERO (ver comentario arriba). Nunca toca
+    // nombre; en cualquier fallo responde y sale, exactamente igual que el
+    // flujo aprobado en 3D-7.9C/D, sin modificarlo. ──
+    // `emailAnteriorParaRevertir` queda seteado solo si el correo cambió
+    // realmente de valor — es lo que permite, más abajo, revertirlo si el
+    // nombre falla después.
+    let emailAnteriorParaRevertir = null;
+    if (tocaEmail) {
+      let usuarioAuth;
+      try {
+        usuarioAuth = await sbAuthAdmin(`/admin/users/${encodeURIComponent(id)}`, 'GET');
+      } catch (e) {
+        if (respondSupabaseAuthError(e, res, 'PATCH /api/usuarios/:id/datos (lectura Auth)')) return;
+        throw e;
+      }
+      const emailAnterior = usuarioAuth?.user?.email || usuarioAuth?.email || null;
+      if (!emailAnterior) {
+        return res.status(404).json({ error: "Usuario no encontrado en Auth" });
+      }
+
+      // Solo se toca Auth/profiles si el correo realmente cambia — evita
+      // trabajo y efectos secundarios (reenvío de confirmación) innecesarios
+      // cuando el formulario reenvía el mismo email ya vigente.
+      if (emailAnterior.toLowerCase() !== emailNormalizado) {
+        try {
+          await sbAuthAdmin(`/admin/users/${encodeURIComponent(id)}`, 'PUT', {
+            email: emailNormalizado,
+            email_confirm: true,
+          });
+        } catch (e) {
+          if (respondSupabaseAuthError(e, res, 'PATCH /api/usuarios/:id/datos (Auth)')) return;
+          throw e;
+        }
+
+        let resultadoPerfil = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}`, 'PATCH', { email: emailNormalizado });
+        if (resultadoPerfil === null) {
+          await new Promise(r => setTimeout(r, 300)); // reintento corto único
+          resultadoPerfil = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}`, 'PATCH', { email: emailNormalizado });
+        }
+
+        if (resultadoPerfil === null) {
+          // profiles no se pudo actualizar tras el reintento — revertir Auth
+          // al valor leído en el paso 1 (nunca a profiles.email). El nombre
+          // todavía no se tocó en absoluto en este punto.
+          try {
+            await sbAuthAdmin(`/admin/users/${encodeURIComponent(id)}`, 'PUT', {
+              email: emailAnterior,
+              email_confirm: true,
+            });
+          } catch (rollbackErr) {
+            console.error(
+              `PATCH /api/usuarios/:id/datos: ESTADO INCONSISTENTE para ${id} — Auth quedó en "${emailNormalizado}", profiles sigue en "${emailAnterior}", y el rollback de Auth también falló:`,
+              rollbackErr.message
+            );
+            return res.status(500).json({
+              error: "Estado inconsistente entre autenticación y perfil — requiere verificación manual",
+              estado_inconsistente: true,
+              email_auth_actual: emailNormalizado,
+              email_profiles_actual: emailAnterior,
+            });
+          }
+          console.error(`PATCH /api/usuarios/:id/datos: falló profiles.email para ${id}; Auth revertido a "${emailAnterior}"`);
+          return res.status(500).json({ error: "No se pudo actualizar el correo — la operación fue revertida" });
+        }
+
+        // Correo aplicado y sincronizado — se guarda para poder revertirlo
+        // si el nombre falla a continuación.
+        emailAnteriorParaRevertir = emailAnterior;
+      }
+    }
+
+    // ── Nombre — solo se llega aquí cuando el correo (si se pidió) ya quedó
+    // sincronizado. Si falla y el correo SÍ cambió en esta misma llamada, se
+    // revierte también el correo para no dejar una edición a medias. ──
+    if (tocaNombre) {
+      const resultadoNombre = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}`, 'PATCH', { nombre: nombreLimpio });
+      if (resultadoNombre === null) {
+        console.error(`PATCH /api/usuarios/:id/datos: falló la actualización de profiles.nombre para ${id}`);
+
+        if (emailAnteriorParaRevertir === null) {
+          // Solo nombre (o correo no cambió realmente) — mismo mensaje de
+          // siempre, sin nada que revertir.
+          return res.status(500).json({ error: "Error interno" });
+        }
+
+        // El correo de esta misma llamada ya había quedado aplicado en Auth
+        // y profiles — revertir ambos al valor anterior para no dejar el
+        // correo cambiado sin el nombre.
+        let authRevertido = true;
+        try {
+          await sbAuthAdmin(`/admin/users/${encodeURIComponent(id)}`, 'PUT', {
+            email: emailAnteriorParaRevertir,
+            email_confirm: true,
+          });
+        } catch (revertAuthErr) {
+          authRevertido = false;
+          console.error(
+            `PATCH /api/usuarios/:id/datos: falló revertir Auth a "${emailAnteriorParaRevertir}" tras error de nombre para ${id}:`,
+            revertAuthErr.message
+          );
+        }
+        const resultadoRevertProfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}`, 'PATCH', { email: emailAnteriorParaRevertir });
+        const profilesRevertido = resultadoRevertProfiles !== null;
+
+        if (authRevertido && profilesRevertido) {
+          return res.status(500).json({ error: "No se pudo actualizar el nombre — la operación fue revertida (correo y nombre sin cambios)" });
+        }
+
+        console.error(
+          `PATCH /api/usuarios/:id/datos: ESTADO INCONSISTENTE para ${id} tras fallo de nombre — ` +
+          `Auth ${authRevertido ? "revertido" : "SIGUE en " + emailNormalizado}, ` +
+          `profiles ${profilesRevertido ? "revertido" : "SIGUE en " + emailNormalizado}.`
+        );
+        return res.status(500).json({
+          error: "Estado inconsistente entre autenticación y perfil — requiere verificación manual",
+          estado_inconsistente: true,
+          email_auth_actual: authRevertido ? emailAnteriorParaRevertir : emailNormalizado,
+          email_profiles_actual: profilesRevertido ? emailAnteriorParaRevertir : emailNormalizado,
+        });
+      }
+    }
+
+    const perfilFinal = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}&select=id,nombre,email`);
+    const p = perfilFinal?.[0];
+    if (!p) {
+      console.error(`PATCH /api/usuarios/:id/datos: no se pudo releer el perfil ${id} tras aplicar los cambios`);
+      return res.status(500).json({ error: "Error interno" });
+    }
+
+    res.json({ id: p.id, nombre: p.nombre || "", email: p.email || "" });
+  } catch (e) {
+    console.error("PATCH /api/usuarios/:id/datos error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
 // ─── REPORTES AUTOMÁTICOS ─────────────────────────────────────────────────────
 // Módulo: Configuración → Parámetros → Reportes Automáticos (Fase 2 — CRUD base)
 

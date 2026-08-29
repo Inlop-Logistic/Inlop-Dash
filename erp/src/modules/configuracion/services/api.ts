@@ -10,6 +10,7 @@ import type {
   UsuarioRbac, RolRbac, PermisoRbac, MisPermisos, ActualizarRolesUsuarioResponse,
   ActualizarPermisosRolResponse, ExcepcionUsuarioBody, ActualizarExcepcionesUsuarioResponse,
   CrearUsuarioBody, CrearUsuarioResponse, ResetPasswordResponse, ActualizarActivoUsuarioResponse,
+  ActualizarDatosUsuarioBody, ActualizarDatosUsuarioResponse,
 } from "../types";
 
 // ─── Preview de datos del reporte ────────────────────────────────────────────
@@ -468,5 +469,22 @@ export function actualizarActivoUsuario(
   return req<ActualizarActivoUsuarioResponse>(`/api/usuarios/${encodeURIComponent(id)}/activo`, {
     method: "PATCH",
     body: JSON.stringify({ activo }),
+  });
+}
+
+/**
+ * Edita nombre y/o correo de un usuario ERP existente (Sprint 3D-7.9D,
+ * consumiendo PATCH /api/usuarios/:id/datos). El backend sincroniza el
+ * correo entre Supabase Auth y profiles con compensación — esta llamada
+ * solo resuelve en éxito cuando ambos quedaron consistentes (nunca un 200
+ * con estado parcial, ver auditorías 3D-7.9A/B/C).
+ */
+export function actualizarDatosUsuario(
+  id: string,
+  body: ActualizarDatosUsuarioBody
+): Promise<ActualizarDatosUsuarioResponse> {
+  return req<ActualizarDatosUsuarioResponse>(`/api/usuarios/${encodeURIComponent(id)}/datos`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
   });
 }

@@ -604,3 +604,19 @@ export interface ActualizarActivoUsuarioResponse {
   activo: boolean;
   auth_sincronizado: boolean;
 }
+
+// ─── Editar datos básicos: nombre y correo (Sprint 3D-7.9D) ─────────────────
+// PATCH /api/usuarios/:id/datos. Al menos uno de los dos campos debe
+// enviarse. El correo se sincroniza entre Supabase Auth y profiles con
+// compensación en el backend — ver auditorías 3D-7.9A/B/C: esta respuesta
+// solo llega en caso de éxito total (nunca un 200 con estado parcial).
+export interface ActualizarDatosUsuarioBody {
+  nombre?: string;
+  email?:  string;
+}
+
+export interface ActualizarDatosUsuarioResponse {
+  id:     string;
+  nombre: string;
+  email:  string;
+}
