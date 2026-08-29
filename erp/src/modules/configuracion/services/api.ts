@@ -9,6 +9,7 @@ import type {
   ResultadoEnvioManual, ClienteFiltroOpcion, AvisoProgramacion,
   UsuarioRbac, RolRbac, PermisoRbac, MisPermisos, ActualizarRolesUsuarioResponse,
   ActualizarPermisosRolResponse, ExcepcionUsuarioBody, ActualizarExcepcionesUsuarioResponse,
+  CrearUsuarioBody, CrearUsuarioResponse, ResetPasswordResponse, ActualizarActivoUsuarioResponse,
 } from "../types";
 
 // ─── Preview de datos del reporte ────────────────────────────────────────────
@@ -424,5 +425,48 @@ export function actualizarExcepcionesUsuario(
   return req<ActualizarExcepcionesUsuarioResponse>(`/api/usuarios/${encodeURIComponent(id)}/permisos`, {
     method: "PUT",
     body: JSON.stringify({ excepciones }),
+  });
+}
+
+/**
+ * Crea un usuario ERP (Sprint 3D-7.8D, consumiendo POST /api/usuarios).
+ * El backend invita al usuario por correo (Supabase Auth /invite) — nunca
+ * genera ni transmite una contraseña; el usuario establece la suya propia
+ * desde el enlace de invitación. La respuesta ya tiene el contrato de
+ * UsuarioRbac (sin roles ni excepciones todavía), lista para agregarse a la
+ * lista en memoria sin refetch de /api/usuarios completo.
+ */
+export function crearUsuario(body: CrearUsuarioBody): Promise<CrearUsuarioResponse> {
+  return req<CrearUsuarioResponse>("/api/usuarios", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Dispara el correo oficial de recuperación de contraseña de Supabase Auth
+ * para un usuario puntual (Sprint 3D-7.8D, consumiendo
+ * POST /api/usuarios/:id/reset-password). Nunca genera ni expone una
+ * contraseña — el usuario la establece él mismo desde el correo.
+ */
+export function resetPasswordUsuario(id: string): Promise<ResetPasswordResponse> {
+  return req<ResetPasswordResponse>(`/api/usuarios/${encodeURIComponent(id)}/reset-password`, {
+    method: "POST",
+  });
+}
+
+/**
+ * Activa o desactiva un usuario ERP (Sprint 3D-7.8D, consumiendo
+ * PATCH /api/usuarios/:id/activo). El backend aplica profiles.activo (el
+ * mecanismo principal de bloqueo, 3D-7.7C) y, de forma complementaria,
+ * ban/unban en Supabase Auth Admin.
+ */
+export function actualizarActivoUsuario(
+  id: string,
+  activo: boolean
+): Promise<ActualizarActivoUsuarioResponse> {
+  return req<ActualizarActivoUsuarioResponse>(`/api/usuarios/${encodeURIComponent(id)}/activo`, {
+    method: "PATCH",
+    body: JSON.stringify({ activo }),
   });
 }

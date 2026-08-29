@@ -573,3 +573,34 @@ export interface ActualizarExcepcionesUsuarioResponse {
   id:          string;
   excepciones: Array<{ permiso_id: string; nombre: string; efecto: "grant" | "revoke"; activo: boolean }>;
 }
+
+// ─── Crear usuario, reset password, activar/desactivar (Sprint 3D-7.8D) ─────
+// POST /api/usuarios, POST /api/usuarios/:id/reset-password,
+// PATCH /api/usuarios/:id/activo (backend). Ninguno maneja contraseñas —
+// crear usuario usa /invite de Supabase Auth (el usuario la establece él
+// mismo); reset password reutiliza el flujo oficial de recuperación.
+
+/** Body de POST /api/usuarios. */
+export interface CrearUsuarioBody {
+  nombre: string;
+  email:  string;
+}
+
+/** Respuesta de POST /api/usuarios — mismo contrato que una fila de
+ *  GET /api/usuarios, recién creada (sin roles ni excepciones todavía). */
+export type CrearUsuarioResponse = UsuarioRbac;
+
+/** Respuesta de POST /api/usuarios/:id/reset-password. */
+export interface ResetPasswordResponse {
+  ok: true;
+}
+
+/** Respuesta de PATCH /api/usuarios/:id/activo.
+ *  auth_sincronizado = false (Sprint 3D-7.8F) significa que profiles.activo
+ *  quedó aplicado correctamente (mecanismo principal), pero el ban/unban
+ *  complementario en Supabase Auth falló — ver auditoría 3D-7.8E. */
+export interface ActualizarActivoUsuarioResponse {
+  id:     string;
+  activo: boolean;
+  auth_sincronizado: boolean;
+}

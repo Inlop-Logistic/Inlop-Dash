@@ -3,6 +3,7 @@ import type { UsuarioRbac, RolRbac, PermisoRbac } from "../types";
 import {
   listarUsuarios, listarRoles, listarPermisos, actualizarRolesUsuario,
   actualizarExcepcionesUsuario, obtenerMisPermisos,
+  crearUsuario, resetPasswordUsuario, actualizarActivoUsuario,
 } from "../services/api";
 
 export type FiltroEstadoUsuario = "" | "activo" | "inactivo";
@@ -67,6 +68,25 @@ export function useUsuarios() {
   const [exitoExcepciones,          setExitoExcepciones]          = useState(false);
   // true mientras se muestra la confirmación reforzada (agregar/modificar/quitar rbac:gestionar).
   const [confirmarGestionarExcepcion, setConfirmarGestionarExcepcion] = useState(false);
+
+  // ── Crear usuario (Sprint 3D-7.8D) — POST /api/usuarios. El formulario
+  // vive en el hook (mismo criterio que el resto del estado de edición). ──
+  const [mostrarCrearUsuario, setMostrarCrearUsuario] = useState(false);
+  const [nuevoNombre,         setNuevoNombre]         = useState("");
+  const [nuevoEmail,          setNuevoEmail]          = useState("");
+  const [creandoUsuario,      setCreandoUsuario]      = useState(false);
+  const [errorCrearUsuario,   setErrorCrearUsuario]   = useState<string | null>(null);
+
+  // ── Reset password (Sprint 3D-7.8D) — POST /api/usuarios/:id/reset-password.
+  const [usuarioResetPasswordId, setUsuarioResetPasswordId] = useState<string | null>(null);
+  const [enviandoResetPassword,  setEnviandoResetPassword]  = useState(false);
+  const [errorResetPassword,     setErrorResetPassword]     = useState<string | null>(null);
+  const [exitoResetPassword,     setExitoResetPassword]     = useState(false);
+
+  // ── Activar / desactivar (Sprint 3D-7.8D) — PATCH /api/usuarios/:id/activo.
+  const [usuarioActivarId,   setUsuarioActivarId]   = useState<string | null>(null);
+  const [cambiandoActivo,    setCambiandoActivo]    = useState(false);
+  const [errorCambiarActivo, setErrorCambiarActivo] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -364,6 +384,116 @@ export function useUsuarios() {
     void ejecutarGuardadoExcepciones();
   }
 
+  // ── Crear usuario (Sprint 3D-7.8D) ────────────────────────────────────────
+
+  function abrirCrearUsuario() {
+    setNuevoNombre("");
+    setNuevoEmail("");
+    setErrorCrearUsuario(null);
+    setMostrarCrearUsuario(true);
+  }
+
+  function cerrarCrearUsuario() {
+    if (creandoUsuario) return; // no cerrar a mitad de una escritura en curso
+    setMostrarCrearUsuario(false);
+  }
+
+  const confirmarCrearUsuario = useCallback(async () => {
+    setCreandoUsuario(true);
+    setErrorCrearUsuario(null);
+    try {
+      const resultado = await crearUsuario({ nombre: nuevoNombre.trim(), email: nuevoEmail.trim() });
+      // Agrega el usuario recién creado a la lista en memoria — sin refetch
+      // de /api/usuarios completo (mismo criterio que roles/excepciones).
+      setData(prev => [...prev, resultado]);
+      setMostrarCrearUsuario(false);
+    } catch (e) {
+      setErrorCrearUsuario(e instanceof Error ? e.message : "Error al crear el usuario");
+    } finally {
+      setCreandoUsuario(false);
+    }
+  }, [nuevoNombre, nuevoEmail]);
+
+  // ── Reset password (Sprint 3D-7.8D) ───────────────────────────────────────
+
+  const usuarioResetPassword = useMemo(
+    () => (usuarioResetPasswordId ? data.find(u => u.id === usuarioResetPasswordId) ?? null : null),
+    [usuarioResetPasswordId, data]
+  );
+
+  function pedirResetPassword(id: string) {
+    setUsuarioResetPasswordId(id);
+    setErrorResetPassword(null);
+    setExitoResetPassword(false);
+  }
+
+  function cancelarResetPassword() {
+    if (enviandoResetPassword) return;
+    setUsuarioResetPasswordId(null);
+  }
+
+  const confirmarResetPassword = useCallback(async () => {
+    if (!usuarioResetPasswordId) return;
+    setEnviandoResetPassword(true);
+    setErrorResetPassword(null);
+    try {
+      await resetPasswordUsuario(usuarioResetPasswordId);
+      setExitoResetPassword(true);
+    } catch (e) {
+      setErrorResetPassword(e instanceof Error ? e.message : "Error al enviar el correo de recuperación");
+    } finally {
+      setEnviandoResetPassword(false);
+    }
+  }, [usuarioResetPasswordId]);
+
+  // ── Activar / desactivar (Sprint 3D-7.8D) ─────────────────────────────────
+
+  const usuarioActivar = useMemo(
+    () => (usuarioActivarId ? data.find(u => u.id === usuarioActivarId) ?? null : null),
+    [usuarioActivarId, data]
+  );
+
+  function pedirCambiarActivo(id: string) {
+    setUsuarioActivarId(id);
+    setErrorCambiarActivo(null);
+  }
+
+  function cancelarCambiarActivo() {
+    if (cambiandoActivo) return;
+    setUsuarioActivarId(null);
+  }
+
+  const confirmarCambiarActivo = useCallback(async () => {
+    if (!usuarioActivar) return;
+    setCambiandoActivo(true);
+    setErrorCambiarActivo(null);
+    try {
+      const nuevoActivo = !usuarioActivar.activo;
+      const resultado = await actualizarActivoUsuario(usuarioActivar.id, nuevoActivo);
+      // Actualiza el usuario en memoria con la respuesta del backend — sin
+      // refetch de /api/usuarios completo (mismo criterio que el resto).
+      setData(prev => prev.map(u => u.id === resultado.id ? { ...u, activo: resultado.activo } : u));
+      if (!resultado.auth_sincronizado) {
+        // profiles.activo (mecanismo principal) sí quedó aplicado — pero el
+        // ban/unban complementario en Supabase Auth falló (Sprint 3D-7.8F,
+        // auditoría 3D-7.8E). No se revierte ni se bloquea el cambio ya
+        // confirmado; se deja registrado para diagnóstico. No se reutiliza
+        // el slot de error del modal para esto porque `usuarioActivar` ya
+        // refleja el `activo` actualizado — un "Reintentar" sobre ese slot
+        // invertiría el valor de nuevo en vez de reintentar solo el ban/unban.
+        console.warn(
+          `Usuario ${resultado.id}: profiles.activo=${resultado.activo} aplicado, ` +
+          `pero el ${resultado.activo ? "desbloqueo" : "bloqueo"} complementario en Supabase Auth falló.`
+        );
+      }
+      setUsuarioActivarId(null);
+    } catch (e) {
+      setErrorCambiarActivo(e instanceof Error ? e.message : "Error al cambiar el estado del usuario");
+    } finally {
+      setCambiandoActivo(false);
+    }
+  }, [usuarioActivar]);
+
   return {
     // `data` = todos los usuarios cargados, sin filtrar — usado por los KPI
     // del rediseño UI (totales reales, independientes de la búsqueda/filtro
@@ -385,5 +515,12 @@ export function useUsuarios() {
     guardandoExcepciones, errorGuardadoExcepciones, exitoExcepciones,
     efectoDeseadoGestionar, confirmarGestionarExcepcion, setConfirmarGestionarExcepcion,
     guardarExcepciones, ejecutarGuardadoExcepciones,
+    mostrarCrearUsuario, abrirCrearUsuario, cerrarCrearUsuario,
+    nuevoNombre, setNuevoNombre, nuevoEmail, setNuevoEmail,
+    creandoUsuario, errorCrearUsuario, confirmarCrearUsuario,
+    usuarioResetPassword, pedirResetPassword, cancelarResetPassword,
+    enviandoResetPassword, errorResetPassword, exitoResetPassword, confirmarResetPassword,
+    usuarioActivar, pedirCambiarActivo, cancelarCambiarActivo,
+    cambiandoActivo, errorCambiarActivo, confirmarCambiarActivo,
   };
 }

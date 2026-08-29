@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import {
-  Users, AlertCircle, Pencil, Check, X as XIcon, Info, Plus, Eye,
+  Users, AlertCircle, Pencil, Check, X as XIcon, Info, Plus, KeyRound,
   MoreHorizontal, ChevronLeft, ChevronRight, UserCheck, UserX, ShieldCheck,
 } from "lucide-react";
 import { PageHeader, FilterBar, DataTable, Badge, Button, SidePanel, PanelSection, InfoRow, KpiCard } from "@/components/ui";
@@ -10,6 +10,9 @@ import type { UsuarioRbac, RolRbac, PermisoRbac } from "./types";
 import { useUsuarios, type FiltroEstadoUsuario } from "./hooks/useUsuarios";
 import { ModalConfirmarCambioMaster } from "./components/ModalConfirmarCambioMaster";
 import { ModalConfirmarExcepcionGestionar } from "./components/ModalConfirmarExcepcionGestionar";
+import { ModalCrearUsuario } from "./components/ModalCrearUsuario";
+import { ModalConfirmarResetPassword } from "./components/ModalConfirmarResetPassword";
+import { ModalConfirmarActivarDesactivar } from "./components/ModalConfirmarActivarDesactivar";
 
 interface Props {
   onBack: () => void;
@@ -99,18 +102,16 @@ function rolesTexto(u: UsuarioRbac): string {
 }
 
 // ── Menú de acciones "..." — mismo patrón de dropdown (click fuera cierra)
-// que TopbarUserMenu.tsx, simplificado para uso por fila de tabla. Solo
-// expone acciones reales ya existentes (ver/editar roles/editar
-// excepciones) — nada ficticio, sin lógica nueva de backend. ───────────────
+// que TopbarUserMenu.tsx, simplificado para uso por fila de tabla. Única
+// acción real: activar/desactivar (Sprint 3D-7.8D) — ver/editar roles/
+// excepciones ya se cubren con clic en fila y el lápiz de Editar. ─────────
 
 function MenuAcciones({
-  usuario, puedeEditarRoles, onVer, onEditarRoles, onEditarExcepciones,
+  usuario, puedeEditarRoles, onActivarDesactivar,
 }: {
   usuario: UsuarioRbac;
   puedeEditarRoles: boolean;
-  onVer: () => void;
-  onEditarRoles: () => void;
-  onEditarExcepciones: () => void;
+  onActivarDesactivar: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -151,24 +152,12 @@ function MenuAcciones({
           }}
         >
           <button
-            type="button" role="menuitem" className={itemClass} style={{ color: "var(--gray-700)" }}
-            onClick={() => { setOpen(false); onVer(); }}
-          >
-            Ver detalle
-          </button>
-          <button
-            type="button" role="menuitem" className={itemClass} style={{ color: "var(--gray-700)" }}
+            type="button" role="menuitem" className={itemClass}
+            style={{ color: usuario.activo ? "var(--inlop-red)" : "var(--gray-700)" }}
             disabled={!puedeEditarRoles}
-            onClick={() => { setOpen(false); onEditarRoles(); }}
+            onClick={() => { setOpen(false); onActivarDesactivar(); }}
           >
-            Editar roles
-          </button>
-          <button
-            type="button" role="menuitem" className={itemClass} style={{ color: "var(--gray-700)" }}
-            disabled={!puedeEditarRoles}
-            onClick={() => { setOpen(false); onEditarExcepciones(); }}
-          >
-            Editar excepciones
+            {usuario.activo ? "Desactivar" : "Activar"}
           </button>
         </div>
       )}
@@ -179,10 +168,12 @@ function MenuAcciones({
 // ── Columnas de la tabla ──────────────────────────────────────────────────────
 
 function buildColumns({
-  abrirPanel, puedeEditarRoles,
+  abrirPanel, puedeEditarRoles, onResetPassword, onActivarDesactivar,
 }: {
   abrirPanel: (id: string, editar?: "roles" | "excepciones") => void;
   puedeEditarRoles: boolean;
+  onResetPassword: (id: string) => void;
+  onActivarDesactivar: (id: string) => void;
 }): Column<UsuarioRbac>[] {
   return [
     {
@@ -242,14 +233,6 @@ function buildColumns({
         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
-            onClick={() => abrirPanel(u.id)}
-            aria-label={`Ver ${u.nombre}`}
-            className="p-1.5 rounded-lg hover:bg-[var(--gray-100)]"
-          >
-            <Eye className="w-4 h-4" style={{ color: "var(--gray-500)" }} />
-          </button>
-          <button
-            type="button"
             onClick={() => abrirPanel(u.id, "roles")}
             disabled={!puedeEditarRoles}
             aria-label={`Editar ${u.nombre}`}
@@ -257,12 +240,19 @@ function buildColumns({
           >
             <Pencil className="w-4 h-4" style={{ color: "var(--gray-500)" }} />
           </button>
+          <button
+            type="button"
+            onClick={() => onResetPassword(u.id)}
+            disabled={!puedeEditarRoles}
+            aria-label={`Restablecer contraseña de ${u.nombre}`}
+            className="p-1.5 rounded-lg hover:bg-[var(--gray-100)] disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <KeyRound className="w-4 h-4" style={{ color: "var(--gray-500)" }} />
+          </button>
           <MenuAcciones
             usuario={u}
             puedeEditarRoles={puedeEditarRoles}
-            onVer={() => abrirPanel(u.id)}
-            onEditarRoles={() => abrirPanel(u.id, "roles")}
-            onEditarExcepciones={() => abrirPanel(u.id, "excepciones")}
+            onActivarDesactivar={() => onActivarDesactivar(u.id)}
           />
         </div>
       ),
@@ -499,9 +489,20 @@ export function UsuariosPage({ onBack }: Props) {
     guardandoExcepciones, errorGuardadoExcepciones, exitoExcepciones,
     efectoDeseadoGestionar, confirmarGestionarExcepcion, setConfirmarGestionarExcepcion,
     guardarExcepciones, ejecutarGuardadoExcepciones,
+    mostrarCrearUsuario, abrirCrearUsuario, cerrarCrearUsuario,
+    nuevoNombre, setNuevoNombre, nuevoEmail, setNuevoEmail,
+    creandoUsuario, errorCrearUsuario, confirmarCrearUsuario,
+    usuarioResetPassword, pedirResetPassword, cancelarResetPassword,
+    enviandoResetPassword, errorResetPassword, exitoResetPassword, confirmarResetPassword,
+    usuarioActivar, pedirCambiarActivo, cancelarCambiarActivo,
+    cambiandoActivo, errorCambiarActivo, confirmarCambiarActivo,
   } = useUsuarios();
 
-  const columns = buildColumns({ abrirPanel, puedeEditarRoles });
+  const columns = buildColumns({
+    abrirPanel, puedeEditarRoles,
+    onResetPassword: pedirResetPassword,
+    onActivarDesactivar: pedirCambiarActivo,
+  });
   const hayBusqueda = busqueda.trim().length > 0;
   const hayFiltros  = hayBusqueda || filtroEstado !== "" || filtroRol !== "";
 
@@ -554,10 +555,14 @@ export function UsuariosPage({ onBack }: Props) {
           subtitle="Administra los usuarios del ERP y sus roles RBAC actuales."
           icon={<Users className="w-5 h-5" />}
         />
-        {/* Sin flujo de creación de usuarios en este sprint (rediseño visual
-            únicamente, sin backend nuevo) — se muestra deshabilitado en vez
-            de simular una acción que no existe. */}
-        <Button icon={<Plus className="w-4 h-4" />} disabled className="shrink-0" title="Próximamente">
+        {/* Creación real de usuarios ERP (Sprint 3D-7.8D) — ver
+            ModalCrearUsuario y POST /api/usuarios. */}
+        <Button
+          icon={<Plus className="w-4 h-4" />}
+          onClick={abrirCrearUsuario}
+          disabled={!puedeEditarRoles}
+          className="shrink-0"
+        >
           Nuevo usuario
         </Button>
       </div>
@@ -833,6 +838,42 @@ export function UsuariosPage({ onBack }: Props) {
           error={errorGuardadoExcepciones}
           onConfirmar={ejecutarGuardadoExcepciones}
           onCancelar={() => setConfirmarGestionarExcepcion(false)}
+        />
+      )}
+
+      {mostrarCrearUsuario && (
+        <ModalCrearUsuario
+          nombre={nuevoNombre}
+          email={nuevoEmail}
+          onNombreChange={setNuevoNombre}
+          onEmailChange={setNuevoEmail}
+          creando={creandoUsuario}
+          error={errorCrearUsuario}
+          onCrear={confirmarCrearUsuario}
+          onCancelar={cerrarCrearUsuario}
+        />
+      )}
+
+      {usuarioResetPassword && (
+        <ModalConfirmarResetPassword
+          usuarioNombre={usuarioResetPassword.nombre || usuarioResetPassword.email}
+          guardando={enviandoResetPassword}
+          error={errorResetPassword}
+          exito={exitoResetPassword}
+          onConfirmar={confirmarResetPassword}
+          onCancelar={cancelarResetPassword}
+        />
+      )}
+
+      {usuarioActivar && (
+        <ModalConfirmarActivarDesactivar
+          usuarioNombre={usuarioActivar.nombre || usuarioActivar.email}
+          activando={!usuarioActivar.activo}
+          esMaster={usuarioActivar.roles_rbac.some(r => r.nombre === "master")}
+          guardando={cambiandoActivo}
+          error={errorCambiarActivo}
+          onConfirmar={confirmarCambiarActivo}
+          onCancelar={cancelarCambiarActivo}
         />
       )}
     </div>

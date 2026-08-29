@@ -137,6 +137,21 @@ if (!CLIENT_PORTAL_URL) {
   );
 }
 
+// Mismo patrón que CLIENT_PORTAL_URL arriba (Sprint 3D-7.8D) — cada
+// despliegue de Railway (dev/prod, servicios separados con variables
+// independientes, ver auditoría 3D-7.8B) configura su propio valor. Usado
+// por POST /api/usuarios (invitación) y POST /api/usuarios/:id/reset-password
+// para construir `redirect_to` — NUNCA se acepta un redirect_to del frontend.
+const ERP_RESET_PASSWORD_URL = process.env.ERP_RESET_PASSWORD_URL || "";
+if (!ERP_RESET_PASSWORD_URL) {
+  console.warn(
+    "⚠️  ERP_RESET_PASSWORD_URL no configurada. Los correos de invitación y " +
+    "recuperación de contraseña del ERP usarán el Site URL por defecto del " +
+    "proyecto Supabase (compartido con otros productos INLOP) en vez de la " +
+    "página de establecer contraseña del ERP — configura esta variable en Railway."
+  );
+}
+
 // URL pública base de seguimiento-gps/ (Fase 10C) — usada por
 // services/reportes/enlaceGps.js (Fase 10D) para armar el CTA "Ver
 // seguimiento GPS" del correo de un reporte. Sin esta variable, el CTA
@@ -5565,6 +5580,247 @@ app.put("/api/usuarios/:id/permisos", requireErpAuth, requirePermiso('rbac:gesti
     res.json({ id, excepciones: excepcionesRespuesta });
   } catch (e) {
     console.error("PUT /api/usuarios/:id/permisos error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// POST /api/usuarios — crea un usuario ERP: identidad en Supabase Auth +
+// fila en profiles (Sprint 3D-7.8D). Solo responde éxito (201) cuando AMBOS
+// existen confirmados — a diferencia del precedente de Portal Cliente
+// (POST /usuarios, más arriba), que puede dejar un usuario de Auth huérfano
+// si el fallback de perfil también falla: aquí, si profiles no puede
+// confirmarse tras el mismo fallback, se compensa eliminando el usuario de
+// Auth recién creado antes de responder error (auditoría 3D-7.8C).
+//
+// Usa /invite (no /admin/users con password) — el backend nunca genera ni
+// transmite una contraseña; el usuario establece la suya propia desde el
+// correo de invitación, en la página de "nueva contraseña" del ERP
+// (redirect_to = ERP_RESET_PASSWORD_URL — nunca un valor enviado por el
+// frontend).
+const EMAIL_REGEX_RBAC = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+app.post("/api/usuarios", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const { nombre, email } = req.body || {};
+    if (typeof nombre !== "string" || !nombre.trim()) {
+      return res.status(400).json({ error: "nombre es requerido" });
+    }
+    const emailNormalizado = typeof email === "string" ? email.trim().toLowerCase() : "";
+    if (!EMAIL_REGEX_RBAC.test(emailNormalizado)) {
+      return res.status(400).json({ error: "email inválido" });
+    }
+
+    let authRes;
+    try {
+      const inviteUrl = ERP_RESET_PASSWORD_URL
+        ? `/invite?redirect_to=${encodeURIComponent(`${ERP_RESET_PASSWORD_URL}/set-password`)}`
+        : '/invite';
+      authRes = await sbAuthAdmin(inviteUrl, 'POST', {
+        email: emailNormalizado,
+        data: { nombre: nombre.trim() },
+      });
+    } catch (e) {
+      if (respondSupabaseAuthError(e, res, 'POST /api/usuarios')) return;
+      throw e;
+    }
+    if (!authRes || !authRes.id) {
+      return res.status(500).json({ error: "Error creando usuario en Auth" });
+    }
+
+    // Esperar un posible trigger auth.users → profiles (mismo patrón
+    // defensivo que POST /usuarios de Portal Cliente — no se puede confirmar
+    // desde este repo si ese trigger existe para `profiles`, ver auditoría
+    // 3D-7.8A) y crear la fila manualmente si no llegó.
+    await new Promise(r => setTimeout(r, 300));
+
+    const SELECT_PERFIL_NUEVO = "id,nombre,email,rol,activo,created_at";
+    let perfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(authRes.id)}&select=${SELECT_PERFIL_NUEVO}`);
+
+    if (!perfiles || !perfiles.length) {
+      await sbFetch('/profiles', 'POST', {
+        id: authRes.id, nombre: nombre.trim(), email: emailNormalizado, activo: true,
+      });
+      perfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(authRes.id)}&select=${SELECT_PERFIL_NUEVO}`);
+    }
+
+    if (!perfiles || !perfiles.length) {
+      // Compensación: no dejar una identidad de Auth huérfana sin profile
+      // (mejora explícita sobre el precedente de Portal Cliente — 3D-7.8C).
+      try {
+        await sbAuthAdmin(`/admin/users/${encodeURIComponent(authRes.id)}`, 'DELETE');
+      } catch (compErr) {
+        console.error("POST /api/usuarios: falló la compensación (borrar usuario Auth huérfano)", authRes.id, compErr.message);
+      }
+      return res.status(500).json({ error: "No se pudo crear el perfil del usuario — la operación fue revertida" });
+    }
+
+    const p = perfiles[0];
+    res.status(201).json({
+      id:          p.id,
+      nombre:      p.nombre || "",
+      email:       p.email  || emailNormalizado,
+      rol:         p.rol    || "",
+      activo:      p.activo === true,
+      created_at:  p.created_at,
+      roles_rbac:  [],
+      excepciones: [],
+    });
+  } catch (e) {
+    console.error("POST /api/usuarios error:", e.stack || e.message);
+    res.status(500).json({ error: "Ocurrió un error inesperado al crear el usuario. Intenta de nuevo." });
+  }
+});
+
+// POST /api/usuarios/:id/reset-password — dispara el correo oficial de
+// recuperación de Supabase Auth para el usuario objetivo (Sprint 3D-7.8D).
+// Mismo mecanismo GoTrue que el autoservicio POST /auth/recuperar
+// (/recover, sin service_role — usa el mismo apikey anon), iniciado aquí
+// por un administrador autorizado en vez de por el propio usuario. Nunca
+// genera ni transmite una contraseña.
+app.post("/api/usuarios/:id/reset-password", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!UUID_REGEX_RBAC.test(id || "")) {
+      return res.status(400).json({ error: "id de usuario inválido" });
+    }
+
+    const perfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}&select=id,email`);
+    const perfil = perfiles?.[0];
+    if (!perfil || !perfil.email) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    // redirect_to construido exclusivamente desde la configuración del
+    // backend (ERP_RESET_PASSWORD_URL) — nunca desde el body/query del
+    // frontend (auditoría 3D-7.8B).
+    const recoverUrl = ERP_RESET_PASSWORD_URL
+      ? `${SB_AUTH_URL}/recover?redirect_to=${encodeURIComponent(`${ERP_RESET_PASSWORD_URL}/set-password`)}`
+      : `${SB_AUTH_URL}/recover`;
+    const r = await fetchConTimeout(recoverUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SB_KEY },
+      body: JSON.stringify({ email: perfil.email }),
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '');
+      console.error(`POST /api/usuarios/:id/reset-password: Supabase /recover → ${r.status}: ${txt}`);
+      return res.status(502).json({ error: "No se pudo enviar el correo de recuperación" });
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /api/usuarios/:id/reset-password error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// PATCH /api/usuarios/:id/activo — activa o desactiva un usuario ERP
+// (Sprint 3D-7.8D). El mecanismo PRINCIPAL de bloqueo es profiles.activo +
+// verificarJwtErpActivo() (Sprint 3D-7.7C, decisión ya cerrada) — el
+// ban/unban de Supabase Auth Admin aplicado aquí es únicamente defensa
+// COMPLEMENTARIA (bloquea inicios de sesión/refresh nuevos; no revoca
+// sesiones ya emitidas, ver auditoría 3D-7.7A), nunca el mecanismo del que
+// depende la seguridad real.
+//
+// Reglas (mismo criterio ya usado en PUT /api/usuarios/:id/roles):
+//   - Nadie puede desactivarse a sí mismo.
+//   - Si el usuario objetivo tiene el rol master activo, activar O
+//     desactivar exige esMaster real del actor (poderes reforzados) —
+//     mismo peso que agregar/quitar el rol master, porque profiles.activo
+//     por sí solo ya determina si master tiene o no acceso efectivo
+//     (resolver.js: "profiles.activo = false bloquea TODO, incluido master").
+//   - No se puede desactivar al último master operativo (guard idéntico al
+//     de PUT /api/usuarios/:id/roles, reutilizado tal cual).
+const BAN_DURATION_DESACTIVAR = '87600h'; // ~10 años — GoTrue no admite "permanente" (ver auditoría 3D-7.7A)
+
+app.patch("/api/usuarios/:id/activo", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!UUID_REGEX_RBAC.test(id || "")) {
+      return res.status(400).json({ error: "id de usuario inválido" });
+    }
+    const { activo } = req.body || {};
+    if (typeof activo !== "boolean") {
+      return res.status(400).json({ error: "activo debe ser boolean" });
+    }
+
+    if (!activo && id === req.erpUserId) {
+      return res.status(400).json({ error: "No puedes desactivarte a ti mismo" });
+    }
+
+    const perfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}&select=id,activo`);
+    const perfil = perfiles?.[0];
+    if (!perfil) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    // ¿El objetivo tiene el rol master activo? Mismo criterio RBAC del
+    // resto del motor — nunca profiles.rol (legacy).
+    const catalogo = await obtenerCatalogo({ sbFetch });
+    let rolIdMaster = null;
+    for (const [rolId, info] of catalogo.rolesPorId) {
+      if (info.nombre?.toLowerCase() === NOMBRE_ROL_MASTER_RBAC) { rolIdMaster = rolId; break; }
+    }
+    let objetivoEsMaster = false;
+    if (rolIdMaster !== null) {
+      const asignacionMaster = await sbFetch(
+        `/usuario_roles?profile_id=eq.${encodeURIComponent(id)}&rol_id=eq.${encodeURIComponent(rolIdMaster)}&activo=eq.true&select=profile_id`
+      ) || [];
+      objetivoEsMaster = asignacionMaster.length > 0;
+    }
+
+    if (objetivoEsMaster) {
+      const actorResuelto = await calcularPermisosEfectivos(req.erpUserId, { sbFetch });
+      if (!actorResuelto.esMaster) {
+        return res.status(403).json({ error: "Solo un master puede activar o desactivar a otro master" });
+      }
+    }
+
+    // Último master operativo — mismo guard que PUT /api/usuarios/:id/roles.
+    if (!activo && objetivoEsMaster) {
+      const filasMaster = await sbFetch(
+        `/usuario_roles?rol_id=eq.${encodeURIComponent(rolIdMaster)}&activo=eq.true&select=profile_id`
+      ) || [];
+      const otrosIds = filasMaster.map(f => f.profile_id).filter(pid => pid !== id);
+      let otrosMasterFuncionando = 0;
+      if (otrosIds.length > 0) {
+        const perfilesOtros = await sbFetch(
+          `/profiles?id=in.(${otrosIds.map(encodeURIComponent).join(',')})&activo=eq.true&select=id`
+        ) || [];
+        otrosMasterFuncionando = perfilesOtros.length;
+      }
+      if (otrosMasterFuncionando === 0) {
+        return res.status(409).json({ error: "No se puede desactivar: quedaría el sistema sin ningún master activo" });
+      }
+    }
+
+    const resultado = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}`, 'PATCH', { activo });
+    if (resultado === null) {
+      console.error(`PATCH /api/usuarios/:id/activo: falló la actualización de profiles.activo para ${id}`);
+      return res.status(500).json({ error: "Error interno" });
+    }
+    invalidarUsuario(id);
+
+    // Ban/unban — defensa complementaria (ver comentario arriba). Un fallo
+    // aquí NO revierte el cambio de profiles.activo ya confirmado, porque el
+    // mecanismo principal de bloqueo ya quedó aplicado; se registra para
+    // diagnóstico sin bloquear la respuesta de éxito. Pero la respuesta sí
+    // debe reflejar honestamente que esta parte complementaria no se pudo
+    // sincronizar (auditoría 3D-7.8E: sin esto, un unban fallido en una
+    // reactivación se reporta como éxito total aunque el usuario, con el
+    // ban de ~10 años todavía activo en Supabase Auth, no podrá iniciar
+    // sesión de nuevo una vez su token actual expire).
+    let authSincronizado = true;
+    try {
+      await sbAuthAdmin(`/admin/users/${encodeURIComponent(id)}`, 'PUT', {
+        ban_duration: activo ? 'none' : BAN_DURATION_DESACTIVAR,
+      });
+    } catch (banErr) {
+      authSincronizado = false;
+      console.error(`PATCH /api/usuarios/:id/activo: falló el ${activo ? 'unban' : 'ban'} complementario para ${id}:`, banErr.message);
+    }
+
+    res.json({ id, activo, auth_sincronizado: authSincronizado });
+  } catch (e) {
+    console.error("PATCH /api/usuarios/:id/activo error:", e.message);
     res.status(500).json({ error: "Error interno" });
   }
 });
