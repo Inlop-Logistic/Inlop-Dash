@@ -182,7 +182,7 @@ function MenuAcciones({
 function buildColumns({
   abrirPanel, puedeEditarRoles, onResetPassword, onActivarDesactivar,
 }: {
-  abrirPanel: (id: string, editar?: "roles" | "excepciones" | "datos") => void;
+  abrirPanel: (id: string, modo?: "consulta" | "editar") => void;
   puedeEditarRoles: boolean;
   onResetPassword: (id: string) => void;
   onActivarDesactivar: (id: string) => void;
@@ -245,7 +245,7 @@ function buildColumns({
         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
-            onClick={() => abrirPanel(u.id, "datos")}
+            onClick={() => abrirPanel(u.id, "editar")}
             disabled={!puedeEditarRoles}
             aria-label={`Editar ${u.nombre}`}
             className="p-1.5 rounded-lg hover:bg-[var(--gray-100)] disabled:opacity-30 disabled:cursor-not-allowed"
@@ -488,7 +488,7 @@ export function UsuariosPage({ onBack }: Props) {
     busqueda, setBusqueda,
     filtroEstado, setFiltroEstado,
     filtroRol, setFiltroRol,
-    panelId, abrirPanel, cerrarPanel, panelUsuario,
+    panelId, abrirPanel, cerrarPanel, panelUsuario, panelModo,
     rolesAsignables,
     puedeEditarRoles,
     editando, iniciarEdicion, cancelarEdicion, toggleRol, seleccion,
@@ -743,7 +743,7 @@ export function UsuariosPage({ onBack }: Props) {
             <PanelSection
               first
               title="Datos básicos"
-              icon={puedeEditarRoles && !editandoDatos && !editando && !editandoExcepciones ? (
+              icon={panelModo === "editar" && puedeEditarRoles && !editandoDatos && !editando && !editandoExcepciones ? (
                 <button
                   type="button"
                   onClick={iniciarEdicionDatos}
@@ -810,7 +810,7 @@ export function UsuariosPage({ onBack }: Props) {
 
             <PanelSection
               title="Roles RBAC"
-              icon={puedeEditarRoles && !editando && !editandoExcepciones && !editandoDatos ? (
+              icon={panelModo === "editar" && puedeEditarRoles && !editando && !editandoExcepciones && !editandoDatos ? (
                 <button
                   type="button"
                   onClick={iniciarEdicion}
@@ -846,7 +846,7 @@ export function UsuariosPage({ onBack }: Props) {
                 reemplaza la sección de Roles RBAC de arriba. */}
             <PanelSection
               title="Excepciones de permisos"
-              icon={puedeEditarRoles && !editando && !editandoExcepciones && !editandoDatos ? (
+              icon={panelModo === "editar" && puedeEditarRoles && !editando && !editandoExcepciones && !editandoDatos ? (
                 <button
                   type="button"
                   onClick={iniciarEdicionExcepciones}

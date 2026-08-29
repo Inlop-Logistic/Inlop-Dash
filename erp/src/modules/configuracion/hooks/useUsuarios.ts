@@ -31,11 +31,12 @@ export function useUsuarios() {
   // por rol_id (valor estable, a diferencia del nombre visible).
   const [filtroRol, setFiltroRol] = useState("");
   const [panelId,  setPanelId]  = useState<string | null>(null);
-  // Al abrir el panel desde "Editar" (tabla/menú de acciones), qué sección
-  // debe entrar directo en modo edición — null = abrir en solo lectura,
-  // mismo comportamiento que siempre al hacer click en una fila (rediseño
-  // UI; no cambia ninguna regla de permisos ni de guardado ya existente).
-  const [autoEditarAlAbrir, setAutoEditarAlAbrir] = useState<"roles" | "excepciones" | "datos" | null>(null);
+  // Modo del panel (Sprint 3D-7.10B) — "consulta": clic en la fila, sin
+  // ningún botón "Editar" visible (ni Datos básicos, ni Roles, ni
+  // Excepciones). "editar": clic en el lápiz de la tabla, muestra los tres
+  // botones "Editar" para que el usuario elija cuál sección tocar — nunca
+  // entra automáticamente a editar ninguna de las tres.
+  const [panelModo, setPanelModo] = useState<"consulta" | "editar">("consulta");
 
   // Progressive disclosure de los controles de edición (Sprint 3D-7.4) —
   // mismo criterio fail-open que ParametrosPage: NUNCA un mecanismo de
@@ -188,52 +189,24 @@ export function useUsuarios() {
   }
 
   /**
-   * Abre el panel de un usuario — opcionalmente entrando directo en modo
-   * edición (usado por "Editar" y el menú de acciones de la tabla, rediseño
-   * UI). `editar` solo decide QUÉ sección arranca en edición; no cambia
-   * ninguna regla de permisos/guardado — el efecto de abajo reutiliza
-   * exactamente el mismo estado que iniciarEdicion()/iniciarEdicionExcepciones()/
-   * iniciarEdicionDatos() ya usan al hacer click en "Editar" dentro del panel.
+   * Abre el panel de un usuario (Sprint 3D-7.10B). `modo` distingue clic en
+   * fila ("consulta", default) de clic en el lápiz ("editar") — NUNCA
+   * selecciona ni entra automáticamente a ninguna sección: el usuario elige
+   * cuál de las tres (Datos básicos/Roles/Excepciones) tocar desde sus
+   * propios botones "Editar", visibles solo en modo "editar" (ver
+   * UsuariosPage.tsx).
    */
-  function abrirPanel(id: string, editar?: "roles" | "excepciones" | "datos") {
+  function abrirPanel(id: string, modo: "consulta" | "editar" = "consulta") {
     setPanelId(id);
     resetearEdicionPanel();
-    setAutoEditarAlAbrir(editar ?? null);
+    setPanelModo(modo);
   }
 
   function cerrarPanel() {
     setPanelId(null);
     resetearEdicionPanel();
-    setAutoEditarAlAbrir(null);
+    setPanelModo("consulta");
   }
-
-  // panelUsuario solo existe a partir del siguiente render tras abrirPanel()
-  // (se deriva de panelId vía useMemo) — este efecto arma el modo edición en
-  // cuanto esa referencia queda disponible, evitando leer un panelUsuario
-  // obsoleto (null) si se intentara hacer en el mismo manejador de click.
-  useEffect(() => {
-    if (!autoEditarAlAbrir || !panelUsuario || !puedeEditarRoles) return;
-    if (autoEditarAlAbrir === "roles") {
-      setSeleccion(new Set(panelUsuario.roles_rbac.map(r => r.id)));
-      setErrorGuardado(null);
-      setExito(false);
-      setEditando(true);
-    } else if (autoEditarAlAbrir === "excepciones") {
-      const inicial = new Map<string, "grant" | "revoke">();
-      for (const e of panelUsuario.excepciones) inicial.set(e.permiso_id, e.efecto);
-      setSeleccionExcepciones(inicial);
-      setErrorGuardadoExcepciones(null);
-      setExitoExcepciones(false);
-      setEditandoExcepciones(true);
-    } else {
-      setDatosNombre(panelUsuario.nombre || "");
-      setDatosEmail(panelUsuario.email || "");
-      setErrorGuardadoDatos(null);
-      setExitoDatos(false);
-      setEditandoDatos(true);
-    }
-    setAutoEditarAlAbrir(null);
-  }, [autoEditarAlAbrir, panelUsuario, puedeEditarRoles]);
 
   function iniciarEdicion() {
     if (!panelUsuario) return;
@@ -564,7 +537,7 @@ export function useUsuarios() {
     busqueda, setBusqueda,
     filtroEstado, setFiltroEstado,
     filtroRol, setFiltroRol,
-    panelId, abrirPanel, cerrarPanel, panelUsuario,
+    panelId, abrirPanel, cerrarPanel, panelUsuario, panelModo,
     rolesAsignables,
     puedeEditarRoles, esMaster,
     editando, iniciarEdicion, cancelarEdicion, toggleRol, seleccion,
