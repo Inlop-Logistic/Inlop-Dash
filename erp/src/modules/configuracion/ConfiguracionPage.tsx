@@ -3,13 +3,14 @@ import { ParametrosPage } from "./ParametrosPage";
 import { ReportesAutomaticosPage } from "./ReportesAutomaticosPage";
 import { UsuariosPage } from "./UsuariosPage";
 import { RolesPermisosPage } from "./RolesPermisosPage";
+import { GestionPermisosUsuarioPage } from "./GestionPermisosUsuarioPage";
 import { CrearReportePage } from "./components/CrearReportePage";
 import { EditarReportePage } from "./components/EditarReportePage";
 import type { ReporteAutomatico } from "./types";
 
 type SubVista =
   | "parametros" | "reportes-automaticos" | "crear-reporte" | "editar-reporte"
-  | "usuarios" | "roles-permisos";
+  | "usuarios" | "roles-permisos" | "permisos-usuario";
 
 export function ConfiguracionPage() {
   const [subVista,       setSubVista]       = useState<SubVista>("parametros");
@@ -53,11 +54,20 @@ export function ConfiguracionPage() {
   }
 
   if (subVista === "usuarios") {
-    return <UsuariosPage onBack={() => setSubVista("parametros")} />;
+    return (
+      <UsuariosPage
+        onBack={() => setSubVista("parametros")}
+        onGestionPermisos={() => setSubVista("permisos-usuario")}
+      />
+    );
   }
 
   if (subVista === "roles-permisos") {
     return <RolesPermisosPage onBack={() => setSubVista("parametros")} />;
+  }
+
+  if (subVista === "permisos-usuario") {
+    return <GestionPermisosUsuarioPage onBack={() => setSubVista("usuarios")} />;
   }
 
   // Módulo raíz de esta vista: Parámetros

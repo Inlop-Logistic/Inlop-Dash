@@ -16,6 +16,9 @@ import { ModalConfirmarActivarDesactivar } from "./components/ModalConfirmarActi
 
 interface Props {
   onBack: () => void;
+  /** Navega a la nueva pantalla de Gestión de permisos por usuario
+   *  (Sprint 3D-7.11B) — base UI, sin persistencia todavía. */
+  onGestionPermisos: () => void;
 }
 
 // Edición de Datos básicos (Sprint 3D-7.9D) — mismo patrón visual de input
@@ -338,7 +341,7 @@ function Paginacion({
 // EtapaDestinatarios.tsx (label + span estilizado + input sr-only), sin
 // componente ni librería nueva. Sin cambios funcionales en este sprint. ────
 
-function SelectorRolesRbac({
+export function SelectorRolesRbac({
   roles, seleccion, onToggle,
 }: {
   roles: RolRbac[];
@@ -482,7 +485,7 @@ function SelectorExcepciones({
 
 // ── Página principal ──────────────────────────────────────────────────────────
 
-export function UsuariosPage({ onBack }: Props) {
+export function UsuariosPage({ onBack, onGestionPermisos }: Props) {
   const {
     data, filtrados, loading, error, cargar,
     busqueda, setBusqueda,
@@ -570,16 +573,26 @@ export function UsuariosPage({ onBack }: Props) {
           subtitle="Administra los usuarios del ERP y sus roles RBAC actuales."
           icon={<Users className="w-5 h-5" />}
         />
-        {/* Creación real de usuarios ERP (Sprint 3D-7.8D) — ver
-            ModalCrearUsuario y POST /api/usuarios. */}
-        <Button
-          icon={<Plus className="w-4 h-4" />}
-          onClick={abrirCrearUsuario}
-          disabled={!puedeEditarRoles}
-          className="shrink-0"
-        >
-          Nuevo usuario
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Acceso a la nueva pantalla de Gestión de permisos (Sprint
+              3D-7.11B) — base UI, sin persistencia todavía. */}
+          <Button
+            variant="outline"
+            icon={<ShieldCheck className="w-4 h-4" />}
+            onClick={onGestionPermisos}
+          >
+            Gestión de permisos
+          </Button>
+          {/* Creación real de usuarios ERP (Sprint 3D-7.8D) — ver
+              ModalCrearUsuario y POST /api/usuarios. */}
+          <Button
+            icon={<Plus className="w-4 h-4" />}
+            onClick={abrirCrearUsuario}
+            disabled={!puedeEditarRoles}
+          >
+            Nuevo usuario
+          </Button>
+        </div>
       </div>
 
       {/* KPI compactos */}
