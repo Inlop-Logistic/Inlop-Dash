@@ -1,35 +1,42 @@
 /**
  * GestionPermisosUsuarioPage — "Gestión de permisos por usuario"
- * (Sprint 3D-7.11B, multi-rol + permisos heredados en 3D-7.11C). Página
- * completa nueva (NO SidePanel), reutilizando datos y componentes ya
- * existentes (GET /api/usuarios, /api/roles, /api/permisos;
- * SelectorRolesRbac de UsuariosPage.tsx).
+ * (Sprint 3D-7.11B, multi-rol + permisos heredados en 3D-7.11C, excepciones
+ * individuales locales en 3D-7.11D). Página completa nueva (NO SidePanel),
+ * reutilizando datos y componentes ya existentes (GET /api/usuarios,
+ * /api/roles, /api/permisos; SelectorRolesRbac de UsuariosPage.tsx).
  *
  * Decisión de producto ya cerrada (3D-7.11B.1): un usuario puede tener
  * múltiples roles simultáneos — el checklist de la izquierda es
  * deliberadamente multi-selección (checkbox), no un radio de rol único.
  *
- * Desde 3D-7.11C, el panel derecho muestra en tiempo real la UNIÓN de los
- * permisos de los roles marcados (permisosHeredados, calculado en el hook)
- * — se actualiza solo, como cualquier estado de React, cada vez que
- * rolesSeleccionados cambia. Marcados como activos por defecto (son
- * heredados, no excepciones). El buscador filtra únicamente dentro de esos
- * permisos heredados, nunca sobre el catálogo completo.
+ * Fórmula de permisos efectivos (3D-7.11D, replicada del motor RBAC real
+ * — services/rbac/resolver.js — puramente para previsualización local):
  *
- * SIGUE SIN PERSISTIR (alcance de 3D-7.11C, ver también 3D-7.11D):
- *   - Nada de esto se guarda todavía — no hay botón Guardar ni llamada de
- *     escritura. Cambiar roles aquí no afecta la base de datos.
- *   - El interruptor "Excepciones de permisos" sigue siendo únicamente
- *     estado local (Sprint 3D-7.11B) — activarlo no altera el panel de
- *     permisos ni habilita grants/revokes; esa lógica es 3D-7.11D.
- *   - Usuario inactivo: toda la columna izquierda (roles + excepciones)
- *     queda deshabilitada — solo permite consulta (ver edicionBloqueada).
+ *   permisos_efectivos = permisos_heredados (unión de roles) + grants − revokes
+ *
+ * Con "Excepciones de permisos" DESACTIVADAS: el panel derecho se comporta
+ * exactamente como en 3D-7.11C — solo heredados, todos activos, sin ON/OFF
+ * individual, buscador acotado a los heredados.
+ *
+ * Con "Excepciones de permisos" ACTIVADAS: el panel derecho muestra el
+ * catálogo COMPLETO; cada permiso es clickeable — heredados alternan un
+ * revoke local, no-heredados alternan un grant local (toggleExcepcionPermiso,
+ * en el hook). Volver a coincidir con el estado base elimina la excepción.
+ *
+ * SIGUE SIN PERSISTIR: no hay botón Guardar ni llamada de escritura — nada
+ * de esto llama a PUT /api/usuarios/:id/roles ni a
+ * PUT /api/usuarios/:id/permisos (ya existentes, pendientes de conectar en
+ * un sprint de guardado posterior).
+ *
+ * Usuario inactivo: toda la columna izquierda y el panel de permisos quedan
+ * deshabilitados — solo permite consulta (ver edicionBloqueada).
  */
 import { useState } from "react";
 import { ShieldCheck, Search, AlertCircle, Check } from "lucide-react";
 import { PageHeader, Badge } from "@/components/ui";
 import { useGestionPermisosUsuario } from "./hooks/useGestionPermisosUsuario";
 import { SelectorRolesRbac } from "./UsuariosPage";
+import type { PermisoRbac } from "./types";
 
 interface Props {
   onBack: () => void;
@@ -44,18 +51,81 @@ const SELECT_STYLE: React.CSSProperties = {
   width:        "100%",
 };
 
+/** Estado visual de un permiso en modo "Excepciones activadas" — deriva
+ *  puramente de si es heredado y de si tiene una excepción local sobre él;
+ *  no es un estado propio, se recalcula en cada render (ver TarjetaPermiso). */
+type EstadoPermiso = "heredado" | "revocado" | "otorgado" | "base";
+
+function TarjetaPermiso({
+  permiso, estado, interactivo, onClick,
+}: {
+  permiso: PermisoRbac;
+  estado: EstadoPermiso;
+  /** false en modo "Excepciones desactivadas" — solo lectura. */
+  interactivo: boolean;
+  onClick: () => void;
+}) {
+  const activo = estado === "heredado" || estado === "otorgado";
+  const cajaBg = estado === "otorgado" ? "#6D28D9" : activo ? "var(--navy)" : "#fff";
+  const cajaBorde = estado === "revocado" ? "var(--inlop-red)" : activo ? cajaBg : "var(--gray-300)";
+
+  const Contenedor = interactivo ? "button" : "div";
+
+  return (
+    <Contenedor
+      type={interactivo ? "button" : undefined}
+      onClick={interactivo ? onClick : undefined}
+      className="rounded-lg px-3 py-2.5 flex items-start gap-2 text-left w-full transition-colors"
+      style={{
+        background: "var(--gray-50)",
+        border: "1px solid var(--gray-200)",
+        cursor: interactivo ? "pointer" : "default",
+      }}
+    >
+      <span
+        aria-hidden="true"
+        className="shrink-0 flex items-center justify-center rounded mt-0.5"
+        style={{ width: "16px", height: "16px", border: `2px solid ${cajaBorde}`, background: cajaBg }}
+      >
+        {activo && <Check className="w-2.5 h-2.5" style={{ color: "#fff" }} strokeWidth={3} />}
+      </span>
+      <span className="flex-1 min-w-0 flex flex-col gap-1">
+        <span className="text-[12.5px] font-medium leading-snug" style={{ color: "var(--gray-800)" }}>
+          {permiso.descripcion || "—"}
+        </span>
+        {/* Distinción visual explícita — solo para los dos estados que son
+            una excepción local respecto al rol (requisito 4 del ticket).
+            "Heredado" y "sin asignar" ya se comunican con el color de la
+            casilla, sin necesidad de una insignia en cada tarjeta. */}
+        {estado === "revocado" && <Badge variant="danger">Revocado</Badge>}
+        {estado === "otorgado" && <Badge variant="purple">Otorgado</Badge>}
+      </span>
+    </Contenedor>
+  );
+}
+
 export function GestionPermisosUsuarioPage({ onBack }: Props) {
   const {
-    usuarios, roles, loading, error, cargar,
+    usuarios, roles, permisos, loading, error, cargar,
     usuarioSeleccionadoId, usuarioSeleccionado, seleccionarUsuario,
     rolesSeleccionados, toggleRol,
     excepcionesActivadas, toggleExcepcionesActivadas,
-    busquedaPermiso, setBusquedaPermiso, permisosHeredados, permisosPorModulo,
+    grantsLocales, revokesLocales, toggleExcepcionPermiso,
+    busquedaPermiso, setBusquedaPermiso,
+    permisosHeredadosIds, permisosHeredados, permisosEfectivosIds, permisosPorModulo,
     edicionBloqueada,
   } = useGestionPermisosUsuario();
 
   // Solo estado local de foco del buscador — sin lógica adicional.
   const [busquedaFoco, setBusquedaFoco] = useState(false);
+
+  const cambiosPendientes = grantsLocales.size + revokesLocales.size;
+
+  function estadoDe(permisoId: string): EstadoPermiso {
+    const heredado = permisosHeredadosIds.has(permisoId);
+    if (heredado) return revokesLocales.has(permisoId) ? "revocado" : "heredado";
+    return grantsLocales.has(permisoId) ? "otorgado" : "base";
+  }
 
   return (
     <div className="p-6 flex flex-col gap-6">
@@ -226,8 +296,11 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                       </span>
                     </label>
                     <p className="text-[11.5px] mt-2" style={{ color: "var(--gray-400)" }}>
-                      Permitirá otorgar o revocar permisos puntuales para este usuario — disponible en un
-                      próximo sprint.
+                      {excepcionesActivadas
+                        ? cambiosPendientes === 0
+                          ? "Sin cambios locales todavía — toca un permiso a la derecha para otorgarlo o revocarlo."
+                          : `${cambiosPendientes} cambio${cambiosPendientes === 1 ? "" : "s"} local${cambiosPendientes === 1 ? "" : "es"} pendiente${cambiosPendientes === 1 ? "" : "s"} (sin guardar).`
+                        : "Actívalo para otorgar o revocar permisos puntuales para este usuario."}
                     </p>
                   </div>
                 </div>
@@ -239,7 +312,9 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--gray-400)" }}>
-                      Permisos heredados {rolesSeleccionados.size > 0 && `(${permisosHeredados.length})`}
+                      {excepcionesActivadas
+                        ? `Todos los permisos (${permisosEfectivosIds.size} activos de ${permisos.length})`
+                        : `Permisos heredados ${rolesSeleccionados.size > 0 ? `(${permisosHeredados.length})` : ""}`}
                     </div>
                     <div className="relative w-full max-w-xs">
                       <Search
@@ -264,45 +339,59 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                     </div>
                   </div>
 
-                  {rolesSeleccionados.size === 0 ? (
+                  {!excepcionesActivadas && rolesSeleccionados.size === 0 ? (
                     <p className="text-[13px] py-8 text-center" style={{ color: "var(--gray-400)" }}>
                       Selecciona al menos un rol para ver sus permisos heredados.
                     </p>
                   ) : permisosPorModulo.size === 0 ? (
                     <p className="text-[13px] py-8 text-center" style={{ color: "var(--gray-400)" }}>
-                      Ningún permiso heredado coincide con la búsqueda.
+                      Ningún permiso{excepcionesActivadas ? "" : " heredado"} coincide con la búsqueda.
                     </p>
                   ) : (
-                    <div className="flex flex-col gap-5">
-                      {[...permisosPorModulo.entries()].map(([modulo, lista]) => (
-                        <div key={modulo}>
-                          <div className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--gray-400)" }}>
-                            {modulo}
+                    <fieldset
+                      disabled={edicionBloqueada}
+                      style={{ opacity: edicionBloqueada ? 0.5 : 1, pointerEvents: edicionBloqueada ? "none" : "auto" }}
+                    >
+                      <div className="flex flex-col gap-5">
+                        {[...permisosPorModulo.entries()].map(([modulo, lista]) => (
+                          <div key={modulo}>
+                            <div className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--gray-400)" }}>
+                              {modulo}
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                              {lista.map(p => (
+                                excepcionesActivadas ? (
+                                  <TarjetaPermiso
+                                    key={p.id}
+                                    permiso={p}
+                                    estado={estadoDe(p.id)}
+                                    interactivo
+                                    onClick={() => toggleExcepcionPermiso(p.id)}
+                                  />
+                                ) : (
+                                  // Modo normal (excepciones desactivadas) — mismo
+                                  // render de solo lectura de 3D-7.11C, sin cambios.
+                                  <div
+                                    key={p.id}
+                                    className="rounded-lg px-3 py-2.5 flex items-start gap-2"
+                                    style={{ background: "var(--gray-50)", border: "1px solid var(--gray-200)" }}
+                                  >
+                                    <Check
+                                      className="w-3.5 h-3.5 shrink-0 mt-0.5"
+                                      style={{ color: "#065F46" }}
+                                      aria-label="Activo (heredado del rol)"
+                                    />
+                                    <span className="text-[12.5px] font-medium leading-snug" style={{ color: "var(--gray-800)" }}>
+                                      {p.descripcion || "—"}
+                                    </span>
+                                  </div>
+                                )
+                              ))}
+                            </div>
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
-                            {lista.map(p => (
-                              <div
-                                key={p.id}
-                                className="rounded-lg px-3 py-2.5 flex items-start gap-2"
-                                style={{ background: "var(--gray-50)", border: "1px solid var(--gray-200)" }}
-                              >
-                                {/* Heredado de un rol seleccionado → activo por
-                                    defecto (Sprint 3D-7.11C). Sin toggle todavía
-                                    — las excepciones individuales son 3D-7.11D. */}
-                                <Check
-                                  className="w-3.5 h-3.5 shrink-0 mt-0.5"
-                                  style={{ color: "#065F46" }}
-                                  aria-label="Activo (heredado del rol)"
-                                />
-                                <span className="text-[12.5px] font-medium leading-snug" style={{ color: "var(--gray-800)" }}>
-                                  {p.descripcion || "—"}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    </fieldset>
                   )}
                 </div>
               </div>
