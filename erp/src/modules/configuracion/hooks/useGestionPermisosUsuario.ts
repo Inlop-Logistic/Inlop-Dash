@@ -9,14 +9,15 @@ import { listarUsuarios, listarRoles, listarPermisos } from "../services/api";
  * Carga los mismos 3 catálogos que ya usan UsuariosPage/RolesPermisosPage
  * (GET /api/usuarios, /api/roles, /api/permisos) — sin endpoints nuevos.
  *
- * IMPORTANTE (alcance de este sprint, ver ticket 3D-7.11B/3D-7.11B.1):
+ * IMPORTANTE (alcance, ver tickets 3D-7.11B/3D-7.11B.1/3D-7.11C):
  * decisión de producto ya cerrada — un usuario puede tener múltiples roles
  * simultáneos, y la UI de la izquierda mantiene selección múltiple
- * (checkbox) por eso. Lo que SÍ queda deliberadamente para 3D-7.11C es el
- * cálculo: la selección de roles y el modo "Excepciones de permisos" son
- * ÚNICAMENTE estado local de preparación visual en este sprint — todavía NO
- * se calcula la unión de permisos de los roles seleccionados, NO se deriva
- * qué permisos "heredaría" el usuario, y NO hay guardado real.
+ * (checkbox) por eso. Desde 3D-7.11C, el panel derecho SÍ calcula en tiempo
+ * real la UNIÓN de los permisos de los roles marcados (permisosHeredados
+ * abajo) — pero sigue sin haber guardado real, ni grants/revokes de
+ * excepciones individuales (eso es 3D-7.11D): todo lo de esta pantalla
+ * sigue siendo estado local hasta que exista un endpoint de guardado
+ * conectado aquí.
  */
 export function useGestionPermisosUsuario() {
   const [usuarios, setUsuarios] = useState<UsuarioRbac[]>([]);
@@ -95,19 +96,41 @@ export function useGestionPermisosUsuario() {
     setExcepcionesActivadas(v => !v);
   }
 
+  // Permisos heredados = UNIÓN de los permisos de todos los roles marcados
+  // en rolesSeleccionados (Sprint 3D-7.11C). Cada PermisoRbac ya trae su
+  // propio reverse-map `roles: RolRbacRef[]` (GET /api/permisos) — el mismo
+  // dato que useRolesPermisos.ts ya usa para "permisos de este rol"
+  // (permisos.filter(p => p.roles.some(...))). Aquí se generaliza a "algún
+  // rol seleccionado", sin tocar el catálogo ni pedir nada nuevo al backend.
+  //
+  // Deduplicación: se filtra sobre `permisos` (la lista única del catálogo,
+  // un elemento por permiso real), nunca se concatenan los permisos de cada
+  // rol por separado — así que un permiso presente en 2+ roles seleccionados
+  // aparece una sola vez de forma natural, sin necesitar un Set/Map
+  // adicional para deduplicar.
+  //
+  // Con 0 roles seleccionados, la unión es vacía por definición (no hay
+  // nada que heredar) — el panel lo comunica explícitamente en vez de
+  // mostrar el catálogo completo o quedar en blanco sin explicación.
+  const permisosHeredados = useMemo(
+    () => permisos.filter(p => p.roles.some(r => rolesSeleccionados.has(r.id))),
+    [permisos, rolesSeleccionados]
+  );
+
   // Agrupado por módulo para el panel derecho — mismo cálculo ya usado en
-  // useRolesPermisos.ts (permisosPorModulo/todosLosPermisosPorModulo), sobre
-  // el catálogo completo ya cargado, filtrado por el buscador. No depende de
-  // rolesSeleccionados ni de excepcionesActivadas en este sprint (ver
-  // comentario del módulo) — es deliberado, no un olvido.
+  // useRolesPermisos.ts (permisosPorModulo/todosLosPermisosPorModulo), pero
+  // aplicado sobre permisosHeredados (no el catálogo completo) y filtrado
+  // por el buscador. El buscador, por diseño, solo puede acotar lo ya
+  // heredado — nunca saca a relucir un permiso fuera de los roles marcados,
+  // porque filtra sobre `permisosHeredados`, no sobre `permisos`.
   const permisosPorModulo = useMemo(() => {
     const termino = busquedaPermiso.trim().toLowerCase();
     const filtrados = termino
-      ? permisos.filter(p =>
+      ? permisosHeredados.filter(p =>
           p.descripcion.toLowerCase().includes(termino) ||
           p.modulo.toLowerCase().includes(termino)
         )
-      : permisos;
+      : permisosHeredados;
 
     const grupos = new Map<string, PermisoRbac[]>();
     for (const p of filtrados) {
@@ -116,14 +139,14 @@ export function useGestionPermisosUsuario() {
       grupos.get(key)!.push(p);
     }
     return grupos;
-  }, [permisos, busquedaPermiso]);
+  }, [permisosHeredados, busquedaPermiso]);
 
   return {
     usuarios, roles, permisos, loading, error, cargar,
     usuarioSeleccionadoId, usuarioSeleccionado, seleccionarUsuario,
     rolesSeleccionados, toggleRol,
     excepcionesActivadas, toggleExcepcionesActivadas,
-    busquedaPermiso, setBusquedaPermiso, permisosPorModulo,
+    busquedaPermiso, setBusquedaPermiso, permisosHeredados, permisosPorModulo,
     edicionBloqueada,
   };
 }

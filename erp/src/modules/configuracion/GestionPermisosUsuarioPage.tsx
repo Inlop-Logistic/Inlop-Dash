@@ -1,27 +1,32 @@
 /**
- * GestionPermisosUsuarioPage — base UI de "Gestión de permisos por usuario"
- * (Sprint 3D-7.11B). Página completa nueva (NO SidePanel), reutilizando
- * datos y componentes ya existentes (GET /api/usuarios, /api/roles,
- * /api/permisos; SelectorRolesRbac de UsuariosPage.tsx).
+ * GestionPermisosUsuarioPage — "Gestión de permisos por usuario"
+ * (Sprint 3D-7.11B, multi-rol + permisos heredados en 3D-7.11C). Página
+ * completa nueva (NO SidePanel), reutilizando datos y componentes ya
+ * existentes (GET /api/usuarios, /api/roles, /api/permisos;
+ * SelectorRolesRbac de UsuariosPage.tsx).
  *
  * Decisión de producto ya cerrada (3D-7.11B.1): un usuario puede tener
  * múltiples roles simultáneos — el checklist de la izquierda es
  * deliberadamente multi-selección (checkbox), no un radio de rol único.
  *
- * ALCANCE DE ESTE SPRINT — SOLO estado local / preparación visual:
- *   - Selección de roles (checkbox múltiple) y el interruptor "Excepciones
- *     de permisos" no persisten todavía, ni calculan la unión de permisos
- *     de los roles seleccionados, ni derivan qué permisos "heredaría" el
- *     usuario — ese cálculo es exactamente el trabajo de 3D-7.11C. El panel
- *     derecho, mientras tanto, muestra el catálogo completo de permisos,
- *     agrupado por módulo y filtrable por texto, sin conexión todavía a la
- *     selección de roles ni al modo de excepciones.
+ * Desde 3D-7.11C, el panel derecho muestra en tiempo real la UNIÓN de los
+ * permisos de los roles marcados (permisosHeredados, calculado en el hook)
+ * — se actualiza solo, como cualquier estado de React, cada vez que
+ * rolesSeleccionados cambia. Marcados como activos por defecto (son
+ * heredados, no excepciones). El buscador filtra únicamente dentro de esos
+ * permisos heredados, nunca sobre el catálogo completo.
+ *
+ * SIGUE SIN PERSISTIR (alcance de 3D-7.11C, ver también 3D-7.11D):
+ *   - Nada de esto se guarda todavía — no hay botón Guardar ni llamada de
+ *     escritura. Cambiar roles aquí no afecta la base de datos.
+ *   - El interruptor "Excepciones de permisos" sigue siendo únicamente
+ *     estado local (Sprint 3D-7.11B) — activarlo no altera el panel de
+ *     permisos ni habilita grants/revokes; esa lógica es 3D-7.11D.
  *   - Usuario inactivo: toda la columna izquierda (roles + excepciones)
  *     queda deshabilitada — solo permite consulta (ver edicionBloqueada).
- *   - Sin botón Guardar: nada de esto se persiste todavía.
  */
 import { useState } from "react";
-import { ShieldCheck, Search, AlertCircle, KeyRound } from "lucide-react";
+import { ShieldCheck, Search, AlertCircle, Check } from "lucide-react";
 import { PageHeader, Badge } from "@/components/ui";
 import { useGestionPermisosUsuario } from "./hooks/useGestionPermisosUsuario";
 import { SelectorRolesRbac } from "./UsuariosPage";
@@ -45,7 +50,7 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
     usuarioSeleccionadoId, usuarioSeleccionado, seleccionarUsuario,
     rolesSeleccionados, toggleRol,
     excepcionesActivadas, toggleExcepcionesActivadas,
-    busquedaPermiso, setBusquedaPermiso, permisosPorModulo,
+    busquedaPermiso, setBusquedaPermiso, permisosHeredados, permisosPorModulo,
     edicionBloqueada,
   } = useGestionPermisosUsuario();
 
@@ -170,6 +175,14 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                     >
                       <SelectorRolesRbac roles={roles} seleccion={rolesSeleccionados} onToggle={toggleRol} />
                     </fieldset>
+                    {/* Feedback visual local en tiempo real (3D-7.11C) — se
+                        actualiza solo con cada marca/desmarca, sin mensaje
+                        de guardado (nada de esto persiste todavía). */}
+                    <p className="text-[11.5px] mt-2.5" style={{ color: "var(--gray-400)" }}>
+                      {rolesSeleccionados.size === 0
+                        ? "Ningún rol seleccionado."
+                        : `${rolesSeleccionados.size} rol${rolesSeleccionados.size === 1 ? "" : "es"} seleccionado${rolesSeleccionados.size === 1 ? "" : "s"} · ${permisosHeredados.length} permiso${permisosHeredados.length === 1 ? "" : "s"} heredado${permisosHeredados.length === 1 ? "" : "s"}.`}
+                    </p>
                   </div>
 
                   <div
@@ -226,7 +239,7 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--gray-400)" }}>
-                      Permisos
+                      Permisos heredados {rolesSeleccionados.size > 0 && `(${permisosHeredados.length})`}
                     </div>
                     <div className="relative w-full max-w-xs">
                       <Search
@@ -251,9 +264,13 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                     </div>
                   </div>
 
-                  {permisosPorModulo.size === 0 ? (
+                  {rolesSeleccionados.size === 0 ? (
                     <p className="text-[13px] py-8 text-center" style={{ color: "var(--gray-400)" }}>
-                      Ningún permiso coincide con la búsqueda.
+                      Selecciona al menos un rol para ver sus permisos heredados.
+                    </p>
+                  ) : permisosPorModulo.size === 0 ? (
+                    <p className="text-[13px] py-8 text-center" style={{ color: "var(--gray-400)" }}>
+                      Ningún permiso heredado coincide con la búsqueda.
                     </p>
                   ) : (
                     <div className="flex flex-col gap-5">
@@ -269,7 +286,14 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                                 className="rounded-lg px-3 py-2.5 flex items-start gap-2"
                                 style={{ background: "var(--gray-50)", border: "1px solid var(--gray-200)" }}
                               >
-                                <KeyRound className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: "var(--gray-400)" }} />
+                                {/* Heredado de un rol seleccionado → activo por
+                                    defecto (Sprint 3D-7.11C). Sin toggle todavía
+                                    — las excepciones individuales son 3D-7.11D. */}
+                                <Check
+                                  className="w-3.5 h-3.5 shrink-0 mt-0.5"
+                                  style={{ color: "#065F46" }}
+                                  aria-label="Activo (heredado del rol)"
+                                />
                                 <span className="text-[12.5px] font-medium leading-snug" style={{ color: "var(--gray-800)" }}>
                                   {p.descripcion || "—"}
                                 </span>
