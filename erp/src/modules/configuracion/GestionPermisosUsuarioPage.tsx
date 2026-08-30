@@ -1,9 +1,10 @@
 /**
  * GestionPermisosUsuarioPage — "Gestión de permisos por usuario"
  * (Sprint 3D-7.11B, multi-rol + permisos heredados en 3D-7.11C, excepciones
- * individuales locales en 3D-7.11D). Página completa nueva (NO SidePanel),
- * reutilizando datos y componentes ya existentes (GET /api/usuarios,
- * /api/roles, /api/permisos; SelectorRolesRbac de UsuariosPage.tsx).
+ * individuales locales en 3D-7.11D, layout aprobado en 3D-7.11E.1). Página
+ * completa nueva (NO SidePanel), reutilizando datos y componentes ya
+ * existentes (GET /api/usuarios, /api/roles, /api/permisos;
+ * SelectorRolesRbac de UsuariosPage.tsx).
  *
  * Decisión de producto ya cerrada (3D-7.11B.1): un usuario puede tener
  * múltiples roles simultáneos — el checklist de la izquierda es
@@ -23,17 +24,20 @@
  * revoke local, no-heredados alternan un grant local (toggleExcepcionPermiso,
  * en el hook). Volver a coincidir con el estado base elimina la excepción.
  *
- * SIGUE SIN PERSISTIR: no hay botón Guardar ni llamada de escritura — nada
- * de esto llama a PUT /api/usuarios/:id/roles ni a
- * PUT /api/usuarios/:id/permisos (ya existentes, pendientes de conectar en
- * un sprint de guardado posterior).
+ * SIGUE SIN PERSISTIR: "Restablecer cambios"/"Guardar cambios" en el header
+ * (Sprint 3D-7.11E.1) son ubicación/estructura visual únicamente — quedan
+ * deshabilitados a propósito, mismo patrón ya usado en este proyecto para
+ * una acción de UI todavía no conectada a backend (ver "Nuevo usuario" en
+ * UsuariosPage antes de 3D-7.8D). Nada de esto llama a
+ * PUT /api/usuarios/:id/roles ni a PUT /api/usuarios/:id/permisos (ya
+ * existentes, pendientes de conectar en un sprint de guardado posterior).
  *
  * Usuario inactivo: toda la columna izquierda y el panel de permisos quedan
  * deshabilitados — solo permite consulta (ver edicionBloqueada).
  */
 import { useState } from "react";
-import { ShieldCheck, Search, AlertCircle, Check } from "lucide-react";
-import { PageHeader, Badge } from "@/components/ui";
+import { ShieldCheck, Search, AlertCircle, Check, RotateCcw, Save } from "lucide-react";
+import { PageHeader, Badge, Button } from "@/components/ui";
 import { useGestionPermisosUsuario } from "./hooks/useGestionPermisosUsuario";
 import { SelectorRolesRbac } from "./UsuariosPage";
 import type { PermisoRbac } from "./types";
@@ -104,9 +108,31 @@ function TarjetaPermiso({
   );
 }
 
+/** Iniciales para el avatar del usuario seleccionado — puramente
+ *  presentacional, derivado del nombre/correo ya cargados (sin campo de
+ *  foto en UsuarioRbac; no se inventa uno). */
+function iniciales(nombre: string, email: string): string {
+  const base = nombre.trim() || email.trim();
+  if (!base) return "?";
+  const partes = base.split(/\s+/).filter(Boolean);
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return (partes[0][0] + partes[1][0]).toUpperCase();
+}
+
+/** Card de estadística simple para "Resumen actual" — solo redistribuye
+ *  valores ya calculados en el hook, sin ningún cómputo nuevo. */
+function EstadisticaResumen({ valor, etiqueta }: { valor: number; etiqueta: string }) {
+  return (
+    <div className="flex-1 text-center">
+      <div className="font-bold text-[24px] leading-none" style={{ color: "var(--navy)" }}>{valor}</div>
+      <div className="text-[11px] mt-1" style={{ color: "var(--gray-500)" }}>{etiqueta}</div>
+    </div>
+  );
+}
+
 export function GestionPermisosUsuarioPage({ onBack }: Props) {
   const {
-    usuarios, roles, permisos, loading, error, cargar,
+    usuarios, roles, loading, error, cargar,
     usuarioSeleccionadoId, usuarioSeleccionado, seleccionarUsuario,
     rolesSeleccionados, toggleRol,
     excepcionesActivadas, toggleExcepcionesActivadas,
@@ -145,8 +171,36 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
 
       <PageHeader
         title="Gestión de permisos"
-        subtitle="Roles y excepciones individuales de un usuario del ERP."
+        subtitle="Administra los roles y excepciones de permisos para cada usuario del ERP."
         icon={<ShieldCheck className="w-5 h-5" />}
+        actions={usuarioSeleccionado ? (
+          <div className="flex items-center gap-3">
+            <div className="text-right leading-tight">
+              <div
+                className="text-[12.5px] font-semibold flex items-center gap-1.5 justify-end"
+                style={{ color: cambiosPendientes > 0 ? "var(--warning)" : "var(--gray-400)" }}
+              >
+                {cambiosPendientes > 0 && (
+                  <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--warning)" }} />
+                )}
+                {cambiosPendientes} cambio{cambiosPendientes === 1 ? "" : "s"} pendiente{cambiosPendientes === 1 ? "" : "s"}
+              </div>
+              <div className="text-[11px]" style={{ color: "var(--gray-400)" }}>
+                {cambiosPendientes > 0 ? "Sin guardar" : "Todo al día"}
+              </div>
+            </div>
+            {/* Guardado real pendiente de un sprint posterior (ver comentario
+                del módulo) — estructura/posición ya aprobadas por el mockup,
+                deshabilitados a propósito para no simular una acción que
+                todavía no existe. */}
+            <Button variant="outline" size="sm" icon={<RotateCcw className="w-3.5 h-3.5" />} disabled title="Disponible en un sprint posterior">
+              Restablecer cambios
+            </Button>
+            <Button size="sm" icon={<Save className="w-3.5 h-3.5" />} disabled title="Disponible en un sprint posterior">
+              Guardar cambios
+            </Button>
+          </div>
+        ) : undefined}
       />
 
       {error ? (
@@ -159,7 +213,9 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
         </div>
       ) : (
         <>
-          {/* Selector superior de usuario */}
+          {/* Selector superior de usuario — mecanismo de elección, sin cambios
+              de comportamiento; el mockup lo asume ya resuelto y muestra el
+              resultado en la tarjeta "Usuario seleccionado" de la izquierda. */}
           <div className="max-w-md">
             <label
               htmlFor="gestion-permisos-usuario"
@@ -185,27 +241,6 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
 
           {usuarioSeleccionado && (
             <>
-              {/* Cabecera del usuario — Nombre/Correo/Estado, solo lectura */}
-              <div
-                className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 rounded-xl"
-                style={{ background: "var(--gray-50)", border: "1px solid var(--gray-200)" }}
-              >
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>Nombre</div>
-                  <div className="text-[14px] font-semibold" style={{ color: "var(--gray-800)" }}>{usuarioSeleccionado.nombre || "—"}</div>
-                </div>
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>Correo</div>
-                  <div className="text-[13px]" style={{ color: "var(--gray-600)" }}>{usuarioSeleccionado.email || "—"}</div>
-                </div>
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>Estado</div>
-                  <Badge variant={usuarioSeleccionado.activo ? "success" : "default"}>
-                    {usuarioSeleccionado.activo ? "Activo" : "Inactivo"}
-                  </Badge>
-                </div>
-              </div>
-
               {edicionBloqueada && (
                 <div
                   className="flex items-start gap-2.5 px-4 py-3 rounded-xl"
@@ -219,17 +254,50 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                 </div>
               )}
 
-              {/* Layout de 2 columnas */}
-              <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
+              {/* Layout de 2 columnas (proporciones ajustadas al mockup 3D-7.11E.1) */}
+              <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-6 items-start">
 
-                {/* IZQUIERDA — Roles + Excepciones */}
-                <div className="flex flex-col gap-6">
+                {/* IZQUIERDA — Usuario + Roles + Excepciones + Resumen */}
+                <div className="flex flex-col gap-4">
+                  {/* Usuario seleccionado */}
                   <div
                     className="rounded-xl p-4"
                     style={{ background: "#fff", border: "1px solid var(--gray-200)" }}
                   >
                     <div className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--gray-400)" }}>
-                      Roles
+                      Usuario seleccionado
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div
+                        aria-hidden="true"
+                        className="shrink-0 rounded-full flex items-center justify-center font-bold text-[13px]"
+                        style={{ width: "40px", height: "40px", background: "var(--gray-100)", color: "var(--navy)" }}
+                      >
+                        {iniciales(usuarioSeleccionado.nombre, usuarioSeleccionado.email)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[14px] font-semibold truncate" style={{ color: "var(--gray-800)" }}>
+                            {usuarioSeleccionado.nombre || "—"}
+                          </span>
+                          <Badge variant={usuarioSeleccionado.activo ? "success" : "default"}>
+                            {usuarioSeleccionado.activo ? "Activo" : "Inactivo"}
+                          </Badge>
+                        </div>
+                        <div className="text-[12.5px] truncate" style={{ color: "var(--gray-500)" }}>
+                          {usuarioSeleccionado.email || "—"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Roles asignados */}
+                  <div
+                    className="rounded-xl p-4"
+                    style={{ background: "#fff", border: "1px solid var(--gray-200)" }}
+                  >
+                    <div className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--gray-400)" }}>
+                      Roles asignados ({rolesSeleccionados.size})
                     </div>
                     {/* Usuario inactivo (3D-7.11B.1): además del atributo
                         `disabled` (que ya impide interactuar con los
@@ -249,12 +317,11 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                         actualiza solo con cada marca/desmarca, sin mensaje
                         de guardado (nada de esto persiste todavía). */}
                     <p className="text-[11.5px] mt-2.5" style={{ color: "var(--gray-400)" }}>
-                      {rolesSeleccionados.size === 0
-                        ? "Ningún rol seleccionado."
-                        : `${rolesSeleccionados.size} rol${rolesSeleccionados.size === 1 ? "" : "es"} seleccionado${rolesSeleccionados.size === 1 ? "" : "s"} · ${permisosHeredados.length} permiso${permisosHeredados.length === 1 ? "" : "s"} heredado${permisosHeredados.length === 1 ? "" : "s"}.`}
+                      Los permisos heredados son la unión de los roles seleccionados.
                     </p>
                   </div>
 
+                  {/* Excepciones de permisos */}
                   <div
                     className="rounded-xl p-4"
                     style={{ background: "#fff", border: "1px solid var(--gray-200)" }}
@@ -294,14 +361,29 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                       <span className="text-[12.5px] font-medium" style={{ color: "var(--gray-700)" }}>
                         {excepcionesActivadas ? "Activadas" : "Desactivadas"}
                       </span>
+                      {excepcionesActivadas && cambiosPendientes > 0 && (
+                        <Badge variant="warning">{cambiosPendientes} cambios</Badge>
+                      )}
                     </label>
                     <p className="text-[11.5px] mt-2" style={{ color: "var(--gray-400)" }}>
                       {excepcionesActivadas
-                        ? cambiosPendientes === 0
-                          ? "Sin cambios locales todavía — toca un permiso a la derecha para otorgarlo o revocarlo."
-                          : `${cambiosPendientes} cambio${cambiosPendientes === 1 ? "" : "s"} local${cambiosPendientes === 1 ? "" : "es"} pendiente${cambiosPendientes === 1 ? "" : "s"} (sin guardar).`
+                        ? "Toca un permiso a la derecha para otorgarlo o revocarlo."
                         : "Actívalo para otorgar o revocar permisos puntuales para este usuario."}
                     </p>
+                  </div>
+
+                  {/* Resumen actual — redistribuye valores ya calculados
+                      (rolesSeleccionados/permisosEfectivosIds/cambiosPendientes),
+                      sin ningún cómputo nuevo. */}
+                  <div
+                    className="rounded-xl p-4 flex items-center"
+                    style={{ background: "#fff", border: "1px solid var(--gray-200)" }}
+                  >
+                    <EstadisticaResumen valor={rolesSeleccionados.size} etiqueta="Roles seleccionados" />
+                    <div className="w-px self-stretch" style={{ background: "var(--gray-100)" }} />
+                    <EstadisticaResumen valor={permisosEfectivosIds.size} etiqueta="Permisos activos" />
+                    <div className="w-px self-stretch" style={{ background: "var(--gray-100)" }} />
+                    <EstadisticaResumen valor={cambiosPendientes} etiqueta="Cambios pendientes" />
                   </div>
                 </div>
 
@@ -310,11 +392,26 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                   className="rounded-xl p-4 flex flex-col gap-4"
                   style={{ background: "#fff", border: "1px solid var(--gray-200)" }}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--gray-400)" }}>
-                      {excepcionesActivadas
-                        ? `Todos los permisos (${permisosEfectivosIds.size} activos de ${permisos.length})`
-                        : `Permisos heredados ${rolesSeleccionados.size > 0 ? `(${permisosHeredados.length})` : ""}`}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--gray-400)" }}>
+                          {excepcionesActivadas ? "Permisos efectivos" : "Permisos heredados"}
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-bold text-[24px] leading-none" style={{ color: "var(--navy)" }}>
+                            {excepcionesActivadas ? permisosEfectivosIds.size : permisosHeredados.length}
+                          </span>
+                          <span className="text-[12px]" style={{ color: "var(--gray-500)" }}>
+                            {excepcionesActivadas ? "permisos activos" : "heredados del rol"}
+                          </span>
+                        </div>
+                        {excepcionesActivadas && (
+                          <div className="text-[11px]" style={{ color: "var(--gray-400)" }}>
+                            Heredados + excepciones locales
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="relative w-full max-w-xs">
                       <Search
@@ -356,7 +453,7 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                         {[...permisosPorModulo.entries()].map(([modulo, lista]) => (
                           <div key={modulo}>
                             <div className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--gray-400)" }}>
-                              {modulo}
+                              {modulo} <span style={{ color: "var(--gray-300)" }}>· {lista.length}</span>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
                               {lista.map(p => (
