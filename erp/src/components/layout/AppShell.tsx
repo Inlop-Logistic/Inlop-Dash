@@ -105,7 +105,13 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
   };
 
   return (
-    <div className="flex h-svh w-full overflow-hidden">
+    // `height: 100vh` explícito (Sprint 3D-7.11E.3.1) además de `h-svh` —
+    // refuerzo defensivo: la altura del shell no debe depender únicamente
+    // de que el navegador soporte `svh` y de que el build genere esa
+    // utilidad; `100vh` es el valor de máxima compatibilidad para un shell
+    // de escritorio como este. Con ambos presentes el estilo en línea
+    // decide (mismo valor de facto en desktop), sin cambiar nada visible.
+    <div className="flex h-svh w-full overflow-hidden" style={{ height: "100vh" }}>
 
       {/* ── Sidebar ──────────────────────────────────────────────────────── */}
       {/*
@@ -302,7 +308,15 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
       </aside>
 
       {/* ── Main ─────────────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      {/* `min-h-0` (Sprint 3D-7.11E.3.1) — un hijo flex tiene por defecto un
+          tamaño mínimo automático (`min-height: auto`) que, en algunos
+          navegadores/condiciones de contenido, puede impedir que se encoja
+          por debajo del tamaño de su propio contenido dentro de un
+          contenedor de altura fija. Este wrapper y <main> (abajo) son la
+          cadena completa que debe poder encogerse para que <main> sea el
+          único que scrollea internamente — nunca el documento. Sin efecto
+          visual en ninguna pantalla existente. */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
 
         {/* Topbar */}
         <header
@@ -356,8 +370,9 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto" style={{ background: "var(--gray-50)" }}>
+        {/* Page content — único contenedor con scroll vertical de todo el
+            shell (ver comentario de min-h-0 arriba). */}
+        <main className="flex-1 min-h-0 overflow-y-auto" style={{ background: "var(--gray-50)" }}>
           {children}
         </main>
       </div>

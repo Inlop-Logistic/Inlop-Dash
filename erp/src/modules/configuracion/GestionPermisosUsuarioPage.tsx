@@ -431,11 +431,17 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                   contenido. `min-w-0` permite que cada columna se ajuste al
                   ancho real de su pista y delega el corte de texto largo al
                   `min-w-0`/`break-words` ya puesto en los elementos internos
-                  (ver TarjetaPermiso y la tarjeta de solo lectura, abajo). */}
+                  (ver TarjetaPermiso y la tarjeta de solo lectura, abajo).
+                  `min-h-0` en ambas columnas (Sprint 3D-7.11E.3.1) — mismo
+                  refuerzo defensivo que en AppShell.tsx, por si algún
+                  ancestro llegara a acotar la altura de este grid; con el
+                  <main> actual (altura automática, sin acotar) no tiene
+                  efecto visible, pero mantiene la misma regla aplicada de
+                  forma consistente en toda la cadena. */}
               <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-6 items-start">
 
                 {/* IZQUIERDA — Usuario + Roles + Excepciones + Resumen */}
-                <div className="flex flex-col gap-4 min-w-0">
+                <div className="flex flex-col gap-4 min-w-0 min-h-0">
                   {/* Usuario seleccionado */}
                   <div
                     className="rounded-xl p-4"
@@ -566,7 +572,7 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
 
                 {/* DERECHA — Catálogo de permisos */}
                 <div
-                  className="rounded-xl p-4 flex flex-col gap-4 min-w-0"
+                  className="rounded-xl p-4 flex flex-col gap-4 min-w-0 min-h-0"
                   style={{ background: "#fff", border: "1px solid var(--gray-200)" }}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
