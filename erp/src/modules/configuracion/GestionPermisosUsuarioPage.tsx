@@ -94,7 +94,7 @@ function TarjetaPermiso({
         {activo && <Check className="w-2.5 h-2.5" style={{ color: "#fff" }} strokeWidth={3} />}
       </span>
       <span className="flex-1 min-w-0 flex flex-col gap-1">
-        <span className="text-[12.5px] font-medium leading-snug" style={{ color: "var(--gray-800)" }}>
+        <span className="text-[12.5px] font-medium leading-snug break-words" style={{ color: "var(--gray-800)" }}>
           {permiso.descripcion || "—"}
         </span>
         {/* Distinción visual explícita — solo para los dos estados que son
@@ -358,11 +358,23 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                 </div>
               )}
 
-              {/* Layout de 2 columnas (proporciones ajustadas al mockup 3D-7.11E.1) */}
+              {/* Layout de 2 columnas (proporciones ajustadas al mockup 3D-7.11E.1).
+                  `min-w-0` en ambas columnas (Sprint 3D-7.11E.3): un grid item
+                  tiene por defecto `min-width: auto`, es decir NO se encoge
+                  por debajo del ancho mínimo de su contenido — con la pista
+                  `1fr` de la derecha, un texto largo sin espacios podía forzar
+                  el ancho real del grid más allá del disponible, produciendo
+                  overflow horizontal dentro de <main> (el único contenedor con
+                  scroll del shell, ver AppShell.tsx) y por tanto una segunda
+                  barra de scroll compitiendo con la vertical natural del
+                  contenido. `min-w-0` permite que cada columna se ajuste al
+                  ancho real de su pista y delega el corte de texto largo al
+                  `min-w-0`/`break-words` ya puesto en los elementos internos
+                  (ver TarjetaPermiso y la tarjeta de solo lectura, abajo). */}
               <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-6 items-start">
 
                 {/* IZQUIERDA — Usuario + Roles + Excepciones + Resumen */}
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-4 min-w-0">
                   {/* Usuario seleccionado */}
                   <div
                     className="rounded-xl p-4"
@@ -493,7 +505,7 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
 
                 {/* DERECHA — Catálogo de permisos */}
                 <div
-                  className="rounded-xl p-4 flex flex-col gap-4"
+                  className="rounded-xl p-4 flex flex-col gap-4 min-w-0"
                   style={{ background: "#fff", border: "1px solid var(--gray-200)" }}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -618,7 +630,7 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                                       style={{ color: "#065F46" }}
                                       aria-label="Activo (heredado del rol)"
                                     />
-                                    <span className="text-[12.5px] font-medium leading-snug" style={{ color: "var(--gray-800)" }}>
+                                    <span className="flex-1 min-w-0 text-[12.5px] font-medium leading-snug break-words" style={{ color: "var(--gray-800)" }}>
                                       {p.descripcion || "—"}
                                     </span>
                                   </div>
