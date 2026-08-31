@@ -35,7 +35,7 @@
  * Usuario inactivo: toda la columna izquierda y el panel de permisos quedan
  * deshabilitados — solo permite consulta (ver edicionBloqueada).
  */
-import { useState } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { ShieldCheck, Search, AlertCircle, Check, RotateCcw, Save } from "lucide-react";
 import { PageHeader, Badge, Button } from "@/components/ui";
 import { useGestionPermisosUsuario } from "./hooks/useGestionPermisosUsuario";
@@ -130,9 +130,43 @@ function EstadisticaResumen({ valor, etiqueta }: { valor: number; etiqueta: stri
   );
 }
 
+/** Filtro rápido por estado (Sprint 3D-7.11E.2) — solo aplica en modo
+ *  "Excepciones activadas", donde tiene sentido distinguir estos 4 casos
+ *  (en modo normal todo lo visible es "heredado" por definición). */
+type FiltroEstado = "todos" | EstadoPermiso;
+
+/** Chip de filtro compacto — reutilizado para módulo y para estado, sin
+ *  introducir un componente de UI nuevo (mismo estilo de pill que Badge). */
+function Chip({
+  activo, onClick, children, punto,
+}: {
+  activo: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  /** Color del punto indicador, para los chips de estado. */
+  punto?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-semibold transition-colors shrink-0"
+      style={{
+        background: activo ? "var(--navy)" : "var(--gray-100)",
+        color:      activo ? "#fff" : "var(--gray-600)",
+      }}
+    >
+      {punto && (
+        <span aria-hidden="true" className="rounded-full shrink-0" style={{ width: "7px", height: "7px", background: activo ? "#fff" : punto }} />
+      )}
+      {children}
+    </button>
+  );
+}
+
 export function GestionPermisosUsuarioPage({ onBack }: Props) {
   const {
-    usuarios, roles, loading, error, cargar,
+    usuarios, roles, permisos, loading, error, cargar,
     usuarioSeleccionadoId, usuarioSeleccionado, seleccionarUsuario,
     rolesSeleccionados, toggleRol,
     excepcionesActivadas, toggleExcepcionesActivadas,
@@ -145,13 +179,83 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
   // Solo estado local de foco del buscador — sin lógica adicional.
   const [busquedaFoco, setBusquedaFoco] = useState(false);
 
+  // Filtros rápidos del catálogo (Sprint 3D-7.11E.2) — puramente de
+  // presentación: solo deciden QUÉ se muestra, nunca tocan
+  // permisosHeredadosIds/grantsLocales/revokesLocales/permisosEfectivosIds
+  // (esos siguen viviendo exclusivamente en el hook, sin duplicar lógica RBAC).
+  const [filtroModulo, setFiltroModulo] = useState<string>("todos");
+  const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>("todos");
+
+  // Al cambiar de usuario, los filtros vuelven a su estado neutro — mismo
+  // criterio que el resto del estado local de esta pantalla (useGestionPermisosUsuario
+  // ya resetea roles/excepciones/búsqueda al cambiar de usuarioSeleccionado).
+  useEffect(() => {
+    setFiltroModulo("todos");
+    setFiltroEstado("todos");
+  }, [usuarioSeleccionadoId]);
+
   const cambiosPendientes = grantsLocales.size + revokesLocales.size;
 
-  function estadoDe(permisoId: string): EstadoPermiso {
+  const estadoDe = useCallback((permisoId: string): EstadoPermiso => {
     const heredado = permisosHeredadosIds.has(permisoId);
     if (heredado) return revokesLocales.has(permisoId) ? "revocado" : "heredado";
     return grantsLocales.has(permisoId) ? "otorgado" : "base";
-  }
+  }, [permisosHeredadosIds, grantsLocales, revokesLocales]);
+
+  // Catálogo base según el modo actual — mismo criterio ya usado dentro del
+  // hook para permisosPorModulo (heredados en modo normal, catálogo
+  // completo con Excepciones activadas). Se recalcula aquí solo para los
+  // contadores de los chips, sin duplicar la agrupación por módulo del hook.
+  const catalogoBase = excepcionesActivadas ? permisos : permisosHeredados;
+
+  // Chips de módulo — cuenta real de permisos por módulo dentro del
+  // catálogo base actual (no del catálogo completo si estamos en modo
+  // normal, para que "Todos" siempre coincida con lo que hay para ver).
+  const moduloChips = useMemo(() => {
+    const conteo = new Map<string, number>();
+    for (const p of catalogoBase) {
+      const key = p.modulo || "otros";
+      conteo.set(key, (conteo.get(key) ?? 0) + 1);
+    }
+    return [...conteo.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [catalogoBase]);
+
+  // Chips de estado — solo tienen sentido con Excepciones activadas (en
+  // modo normal todo lo visible es "heredado" por definición). Cuenta real
+  // sobre el catálogo completo, usando exactamente estadoDe() (misma lógica
+  // que ya pinta cada tarjeta) — no se inventa un cálculo paralelo.
+  const estadoChips = useMemo(() => {
+    if (!excepcionesActivadas) return null;
+    const conteo: Record<EstadoPermiso, number> = { heredado: 0, otorgado: 0, revocado: 0, base: 0 };
+    for (const p of permisos) conteo[estadoDe(p.id)]++;
+    return conteo;
+  }, [excepcionesActivadas, permisos, estadoDe]);
+
+  // Aplica los filtros de módulo y estado sobre el agrupado que ya arma el
+  // hook (permisosPorModulo, que ya viene filtrado por el buscador y por el
+  // modo actual) — combinación búsqueda + módulo + estado en un solo lugar.
+  const permisosPorModuloFiltrados = useMemo(() => {
+    let entradas = [...permisosPorModulo.entries()];
+    if (filtroModulo !== "todos") {
+      entradas = entradas.filter(([modulo]) => modulo === filtroModulo);
+    }
+    if (excepcionesActivadas && filtroEstado !== "todos") {
+      entradas = entradas
+        .map(([modulo, lista]) => [modulo, lista.filter(p => estadoDe(p.id) === filtroEstado)] as [string, PermisoRbac[]])
+        .filter(([, lista]) => lista.length > 0);
+    }
+    return new Map(entradas);
+  }, [permisosPorModulo, filtroModulo, filtroEstado, excepcionesActivadas, estadoDe]);
+
+  // Mensaje de estado vacío (requisito 6) — nunca dice "heredado" cuando el
+  // vacío viene de un filtro de módulo/estado/búsqueda distinto, para no
+  // confundir a alguien mirando, por ejemplo, "Revocados".
+  const hayFiltrosActivos = busquedaPermiso.trim() !== "" || filtroModulo !== "todos" || (excepcionesActivadas && filtroEstado !== "todos");
+  const mensajeSinResultados = hayFiltrosActivos
+    ? "Ningún permiso coincide con los filtros actuales."
+    : excepcionesActivadas
+      ? "Ningún permiso coincide con la búsqueda."
+      : "Ningún permiso heredado coincide con la búsqueda.";
 
   return (
     <div className="p-6 flex flex-col gap-6">
@@ -436,13 +540,49 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                     </div>
                   </div>
 
+                  {/* Filtros rápidos (Sprint 3D-7.11E.2) — solo deciden qué se
+                      muestra; no tocan roles, excepciones ni el cálculo RBAC. */}
+                  {(!excepcionesActivadas ? permisosHeredados.length > 0 : permisos.length > 0) && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex flex-wrap gap-1.5">
+                        <Chip activo={filtroModulo === "todos"} onClick={() => setFiltroModulo("todos")}>
+                          Todos ({catalogoBase.length})
+                        </Chip>
+                        {moduloChips.map(([modulo, n]) => (
+                          <Chip key={modulo} activo={filtroModulo === modulo} onClick={() => setFiltroModulo(modulo)}>
+                            {modulo} ({n})
+                          </Chip>
+                        ))}
+                      </div>
+                      {estadoChips && (
+                        <div className="flex flex-wrap gap-1.5">
+                          <Chip activo={filtroEstado === "todos"} onClick={() => setFiltroEstado("todos")}>
+                            Todos ({permisos.length})
+                          </Chip>
+                          <Chip activo={filtroEstado === "heredado"} onClick={() => setFiltroEstado("heredado")} punto="var(--navy)">
+                            Heredados ({estadoChips.heredado})
+                          </Chip>
+                          <Chip activo={filtroEstado === "otorgado"} onClick={() => setFiltroEstado("otorgado")} punto="#6D28D9">
+                            Otorgados ({estadoChips.otorgado})
+                          </Chip>
+                          <Chip activo={filtroEstado === "revocado"} onClick={() => setFiltroEstado("revocado")} punto="var(--inlop-red)">
+                            Revocados ({estadoChips.revocado})
+                          </Chip>
+                          <Chip activo={filtroEstado === "base"} onClick={() => setFiltroEstado("base")} punto="var(--gray-300)">
+                            No heredados ({estadoChips.base})
+                          </Chip>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {!excepcionesActivadas && rolesSeleccionados.size === 0 ? (
                     <p className="text-[13px] py-8 text-center" style={{ color: "var(--gray-400)" }}>
                       Selecciona al menos un rol para ver sus permisos heredados.
                     </p>
-                  ) : permisosPorModulo.size === 0 ? (
+                  ) : permisosPorModuloFiltrados.size === 0 ? (
                     <p className="text-[13px] py-8 text-center" style={{ color: "var(--gray-400)" }}>
-                      Ningún permiso{excepcionesActivadas ? "" : " heredado"} coincide con la búsqueda.
+                      {mensajeSinResultados}
                     </p>
                   ) : (
                     <fieldset
@@ -450,7 +590,7 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                       style={{ opacity: edicionBloqueada ? 0.5 : 1, pointerEvents: edicionBloqueada ? "none" : "auto" }}
                     >
                       <div className="flex flex-col gap-5">
-                        {[...permisosPorModulo.entries()].map(([modulo, lista]) => (
+                        {[...permisosPorModuloFiltrados.entries()].map(([modulo, lista]) => (
                           <div key={modulo}>
                             <div className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--gray-400)" }}>
                               {modulo} <span style={{ color: "var(--gray-300)" }}>· {lista.length}</span>
