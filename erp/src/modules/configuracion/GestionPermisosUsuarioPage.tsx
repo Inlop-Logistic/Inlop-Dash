@@ -36,7 +36,7 @@
  * deshabilitados — solo permite consulta (ver edicionBloqueada).
  */
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { ShieldCheck, Search, AlertCircle, Check, RotateCcw, Save } from "lucide-react";
+import { ShieldCheck, Search, AlertCircle, Check, RotateCcw, Save, ChevronDown } from "lucide-react";
 import { PageHeader, Badge, Button } from "@/components/ui";
 import { useGestionPermisosUsuario } from "./hooks/useGestionPermisosUsuario";
 import { SelectorRolesRbac } from "./UsuariosPage";
@@ -164,6 +164,43 @@ function Chip({
   );
 }
 
+/** Ítem del navegador vertical de módulos (Sprint 3D-7.11E.4) — inspirado en
+ *  el selector "Ver: Módulos" del mockup aprobado. Reemplaza la fila
+ *  horizontal de chips de módulo de 3D-7.11E.2 por una lista vertical
+ *  compacta: mismo estado (`filtroModulo`), misma fuente de conteos
+ *  (`moduloChips`/`catalogoBase`), solo cambia la presentación. */
+function ModuloNavItem({
+  activo, onClick, children, contador,
+}: {
+  activo: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  contador: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-left transition-colors w-full"
+      style={{
+        background: activo ? "var(--navy)" : "transparent",
+        color:      activo ? "#fff" : "var(--gray-600)",
+      }}
+    >
+      <span className="truncate">{children}</span>
+      <span
+        className="text-[10.5px] font-semibold rounded-full shrink-0 px-1.5 py-0.5"
+        style={{
+          background: activo ? "rgba(255,255,255,0.18)" : "var(--gray-100)",
+          color:      activo ? "#fff" : "var(--gray-500)",
+        }}
+      >
+        {contador}
+      </span>
+    </button>
+  );
+}
+
 export function GestionPermisosUsuarioPage({ onBack }: Props) {
   const {
     usuarios, roles, permisos, loading, error, cargar,
@@ -186,13 +223,29 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
   const [filtroModulo, setFiltroModulo] = useState<string>("todos");
   const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>("todos");
 
+  // Acordeón por módulo (Sprint 3D-7.11E.4) — puramente de presentación:
+  // qué grupos de módulo están desplegados en la vista "Todos". No decide
+  // qué permisos existen ni altera permisosPorModuloFiltrados; solo evita
+  // que la pantalla se convierta en un listado vertical interminable
+  // cuando hay muchos módulos con muchos permisos cada uno.
+  const [modulosExpandidos, setModulosExpandidos] = useState<Set<string>>(new Set());
+
   // Al cambiar de usuario, los filtros vuelven a su estado neutro — mismo
   // criterio que el resto del estado local de esta pantalla (useGestionPermisosUsuario
   // ya resetea roles/excepciones/búsqueda al cambiar de usuarioSeleccionado).
   useEffect(() => {
     setFiltroModulo("todos");
     setFiltroEstado("todos");
+    setModulosExpandidos(new Set());
   }, [usuarioSeleccionadoId]);
+
+  function toggleModuloExpandido(modulo: string) {
+    setModulosExpandidos(prev => {
+      const next = new Set(prev);
+      if (next.has(modulo)) next.delete(modulo); else next.add(modulo);
+      return next;
+    });
+  }
 
   const cambiosPendientes = grantsLocales.size + revokesLocales.size;
 
@@ -256,6 +309,14 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
     : excepcionesActivadas
       ? "Ningún permiso coincide con la búsqueda."
       : "Ningún permiso heredado coincide con la búsqueda.";
+
+  // Un módulo se ve desplegado si el usuario lo abrió a mano, o si ya hay un
+  // filtro activo que reduce por sí solo lo que hay que mostrar (un módulo
+  // puntual seleccionado en el navegador de módulos, una búsqueda o un
+  // filtro de estado) — en esos casos no tiene sentido pedir un clic extra
+  // para ver un resultado que el propio usuario ya acotó.
+  const expandirTodo = filtroModulo !== "todos" || hayFiltrosActivos;
+  const moduloEstaExpandido = (modulo: string) => expandirTodo || modulosExpandidos.has(modulo);
 
   return (
     <div className="p-6 flex flex-col gap-6">
@@ -552,39 +613,27 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                     </div>
                   </div>
 
-                  {/* Filtros rápidos (Sprint 3D-7.11E.2) — solo deciden qué se
-                      muestra; no tocan roles, excepciones ni el cálculo RBAC. */}
-                  {(!excepcionesActivadas ? permisosHeredados.length > 0 : permisos.length > 0) && (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex flex-wrap gap-1.5">
-                        <Chip activo={filtroModulo === "todos"} onClick={() => setFiltroModulo("todos")}>
-                          Todos ({catalogoBase.length})
-                        </Chip>
-                        {moduloChips.map(([modulo, n]) => (
-                          <Chip key={modulo} activo={filtroModulo === modulo} onClick={() => setFiltroModulo(modulo)}>
-                            {modulo} ({n})
-                          </Chip>
-                        ))}
-                      </div>
-                      {estadoChips && (
-                        <div className="flex flex-wrap gap-1.5">
-                          <Chip activo={filtroEstado === "todos"} onClick={() => setFiltroEstado("todos")}>
-                            Todos ({permisos.length})
-                          </Chip>
-                          <Chip activo={filtroEstado === "heredado"} onClick={() => setFiltroEstado("heredado")} punto="var(--navy)">
-                            Heredados ({estadoChips.heredado})
-                          </Chip>
-                          <Chip activo={filtroEstado === "otorgado"} onClick={() => setFiltroEstado("otorgado")} punto="#6D28D9">
-                            Otorgados ({estadoChips.otorgado})
-                          </Chip>
-                          <Chip activo={filtroEstado === "revocado"} onClick={() => setFiltroEstado("revocado")} punto="var(--inlop-red)">
-                            Revocados ({estadoChips.revocado})
-                          </Chip>
-                          <Chip activo={filtroEstado === "base"} onClick={() => setFiltroEstado("base")} punto="var(--gray-300)">
-                            No heredados ({estadoChips.base})
-                          </Chip>
-                        </div>
-                      )}
+                  {/* Filtros rápidos de estado (Sprint 3D-7.11E.2) — solo
+                      deciden qué se muestra; no tocan roles, excepciones ni
+                      el cálculo RBAC. La navegación por módulo (abajo) pasó a
+                      ser el navegador vertical "Ver: módulos" de 3D-7.11E.4. */}
+                  {estadoChips && (
+                    <div className="flex flex-wrap gap-1.5">
+                      <Chip activo={filtroEstado === "todos"} onClick={() => setFiltroEstado("todos")}>
+                        Todos ({permisos.length})
+                      </Chip>
+                      <Chip activo={filtroEstado === "heredado"} onClick={() => setFiltroEstado("heredado")} punto="var(--navy)">
+                        Heredados ({estadoChips.heredado})
+                      </Chip>
+                      <Chip activo={filtroEstado === "otorgado"} onClick={() => setFiltroEstado("otorgado")} punto="#6D28D9">
+                        Otorgados ({estadoChips.otorgado})
+                      </Chip>
+                      <Chip activo={filtroEstado === "revocado"} onClick={() => setFiltroEstado("revocado")} punto="var(--inlop-red)">
+                        Revocados ({estadoChips.revocado})
+                      </Chip>
+                      <Chip activo={filtroEstado === "base"} onClick={() => setFiltroEstado("base")} punto="var(--gray-300)">
+                        No heredados ({estadoChips.base})
+                      </Chip>
                     </div>
                   )}
 
@@ -592,55 +641,126 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                     <p className="text-[13px] py-8 text-center" style={{ color: "var(--gray-400)" }}>
                       Selecciona al menos un rol para ver sus permisos heredados.
                     </p>
-                  ) : permisosPorModuloFiltrados.size === 0 ? (
+                  ) : catalogoBase.length === 0 ? (
                     <p className="text-[13px] py-8 text-center" style={{ color: "var(--gray-400)" }}>
                       {mensajeSinResultados}
                     </p>
                   ) : (
-                    <fieldset
-                      disabled={edicionBloqueada}
-                      style={{ opacity: edicionBloqueada ? 0.5 : 1, pointerEvents: edicionBloqueada ? "none" : "auto" }}
-                    >
-                      <div className="flex flex-col gap-5">
-                        {[...permisosPorModuloFiltrados.entries()].map(([modulo, lista]) => (
-                          <div key={modulo}>
-                            <div className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "var(--gray-400)" }}>
-                              {modulo} <span style={{ color: "var(--gray-300)" }}>· {lista.length}</span>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
-                              {lista.map(p => (
-                                excepcionesActivadas ? (
-                                  <TarjetaPermiso
-                                    key={p.id}
-                                    permiso={p}
-                                    estado={estadoDe(p.id)}
-                                    interactivo
-                                    onClick={() => toggleExcepcionPermiso(p.id)}
-                                  />
-                                ) : (
-                                  // Modo normal (excepciones desactivadas) — mismo
-                                  // render de solo lectura de 3D-7.11C, sin cambios.
-                                  <div
-                                    key={p.id}
-                                    className="rounded-lg px-3 py-2.5 flex items-start gap-2"
-                                    style={{ background: "var(--gray-50)", border: "1px solid var(--gray-200)" }}
-                                  >
-                                    <Check
-                                      className="w-3.5 h-3.5 shrink-0 mt-0.5"
-                                      style={{ color: "#065F46" }}
-                                      aria-label="Activo (heredado del rol)"
-                                    />
-                                    <span className="flex-1 min-w-0 text-[12.5px] font-medium leading-snug break-words" style={{ color: "var(--gray-800)" }}>
-                                      {p.descripcion || "—"}
-                                    </span>
-                                  </div>
-                                )
-                              ))}
-                            </div>
-                          </div>
+                    /* Navegador de módulos + catálogo (Sprint 3D-7.11E.4) —
+                       "Ver: Módulos" del mockup: una lista vertical compacta a
+                       la izquierda para saltar directo a un módulo (en vez de
+                       obligar a bajar por un listado plano interminable),
+                       manteniendo el mismo `filtroModulo`/`permisosPorModuloFiltrados`
+                       ya calculados arriba — ninguna lógica RBAC nueva. */
+                    <div className="flex gap-4 items-start min-w-0">
+                      <nav
+                        aria-label="Ver por módulo"
+                        className="hidden sm:flex flex-col gap-0.5 shrink-0 w-[168px]"
+                      >
+                        <div className="text-[10.5px] font-semibold uppercase tracking-widest px-2.5 mb-1" style={{ color: "var(--gray-400)" }}>
+                          Ver: Módulos
+                        </div>
+                        <ModuloNavItem activo={filtroModulo === "todos"} onClick={() => setFiltroModulo("todos")} contador={catalogoBase.length}>
+                          Todos
+                        </ModuloNavItem>
+                        {moduloChips.map(([modulo, n]) => (
+                          <ModuloNavItem key={modulo} activo={filtroModulo === modulo} onClick={() => setFiltroModulo(modulo)} contador={n}>
+                            {modulo}
+                          </ModuloNavItem>
                         ))}
+                      </nav>
+
+                      <div className="flex-1 min-w-0">
+                        {/* En pantallas angostas (nav de módulos oculto) se ofrece el
+                            mismo salto de módulo como chips horizontales — ningún
+                            estado ni cómputo nuevo, solo un segundo control para el
+                            mismo `filtroModulo`. */}
+                        <div className="sm:hidden flex flex-wrap gap-1.5 mb-3">
+                          <Chip activo={filtroModulo === "todos"} onClick={() => setFiltroModulo("todos")}>
+                            Todos ({catalogoBase.length})
+                          </Chip>
+                          {moduloChips.map(([modulo, n]) => (
+                            <Chip key={modulo} activo={filtroModulo === modulo} onClick={() => setFiltroModulo(modulo)}>
+                              {modulo} ({n})
+                            </Chip>
+                          ))}
+                        </div>
+
+                        {permisosPorModuloFiltrados.size === 0 ? (
+                          <p className="text-[13px] py-8 text-center" style={{ color: "var(--gray-400)" }}>
+                            {mensajeSinResultados}
+                          </p>
+                        ) : (
+                          <fieldset
+                            disabled={edicionBloqueada}
+                            style={{ opacity: edicionBloqueada ? 0.5 : 1, pointerEvents: edicionBloqueada ? "none" : "auto" }}
+                          >
+                            <div className="flex flex-col gap-2">
+                              {[...permisosPorModuloFiltrados.entries()].map(([modulo, lista]) => {
+                                const expandido = moduloEstaExpandido(modulo);
+                                return (
+                                  <div key={modulo} className="rounded-lg" style={{ border: "1px solid var(--gray-100)" }}>
+                                    {/* Encabezado de acordeón — solo clicable cuando hay
+                                        más de un módulo visible (vista "Todos" sin otros
+                                        filtros); con un único módulo ya no aporta nada
+                                        ocultar su propio contenido. */}
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleModuloExpandido(modulo)}
+                                      disabled={expandirTodo}
+                                      className="w-full flex items-center justify-between gap-2 px-2.5 py-2 text-left"
+                                      style={{ cursor: expandirTodo ? "default" : "pointer" }}
+                                    >
+                                      <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--gray-400)" }}>
+                                        {modulo} <span style={{ color: "var(--gray-300)" }}>· {lista.length}</span>
+                                      </span>
+                                      {!expandirTodo && (
+                                        <ChevronDown
+                                          className="w-3.5 h-3.5 shrink-0 transition-transform"
+                                          style={{ color: "var(--gray-400)", transform: expandido ? "rotate(180deg)" : "rotate(0deg)" }}
+                                        />
+                                      )}
+                                    </button>
+                                    {expandido && (
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2 px-2.5 pb-2.5">
+                                        {lista.map(p => (
+                                          excepcionesActivadas ? (
+                                            <TarjetaPermiso
+                                              key={p.id}
+                                              permiso={p}
+                                              estado={estadoDe(p.id)}
+                                              interactivo
+                                              onClick={() => toggleExcepcionPermiso(p.id)}
+                                            />
+                                          ) : (
+                                            // Modo normal (excepciones desactivadas) — mismo
+                                            // render de solo lectura de 3D-7.11C, sin cambios.
+                                            <div
+                                              key={p.id}
+                                              className="rounded-lg px-3 py-2.5 flex items-start gap-2"
+                                              style={{ background: "var(--gray-50)", border: "1px solid var(--gray-200)" }}
+                                            >
+                                              <Check
+                                                className="w-3.5 h-3.5 shrink-0 mt-0.5"
+                                                style={{ color: "#065F46" }}
+                                                aria-label="Activo (heredado del rol)"
+                                              />
+                                              <span className="flex-1 min-w-0 text-[12.5px] font-medium leading-snug break-words" style={{ color: "var(--gray-800)" }}>
+                                                {p.descripcion || "—"}
+                                              </span>
+                                            </div>
+                                          )
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </fieldset>
+                        )}
                       </div>
-                    </fieldset>
+                    </div>
                   )}
                 </div>
               </div>
