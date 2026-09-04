@@ -440,8 +440,22 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                   forma consistente en toda la cadena. */}
               <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-6 items-start">
 
-                {/* IZQUIERDA — Usuario + Roles + Excepciones + Resumen */}
-                <div className="flex flex-col gap-4 min-w-0 min-h-0">
+                {/* IZQUIERDA — Usuario + Roles + Excepciones + Resumen.
+                    `sticky top-6` (Sprint 3D-7.11E.3.2) — con el catálogo de
+                    permisos a menudo más alto que esta columna (una vez hay
+                    roles/excepciones con varios módulos), bajo `items-start`
+                    la fila del grid ya mide lo que mida la columna derecha
+                    (la más alta); sin sticky, esta columna simplemente
+                    termina a media altura y el resto del scroll transcurre
+                    únicamente sobre el catálogo — se percibe como una zona
+                    de scroll aparte. Con sticky, esta columna viaja fijada
+                    mientras se scrollea el catálogo, dentro del único
+                    contenedor de scroll real (<main>, ver AppShell.tsx): no
+                    crea un contexto de scroll nuevo, no oculta ni recorta
+                    nada, solo reposiciona. `top-6` iguala el padding
+                    superior de la página (p-6) para que no quede pegada al
+                    borde de <main>. */}
+                <div className="flex flex-col gap-4 min-w-0 min-h-0 lg:sticky lg:top-6 lg:self-start">
                   {/* Usuario seleccionado */}
                   <div
                     className="rounded-xl p-4"
