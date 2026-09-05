@@ -41,3 +41,11 @@ export interface NavigationDestination {
   payload?:      NavPayload;
   originModule?: ModuloId;
 }
+
+/** Un tramo del breadcrumb superior de AppShell (Sprint 3D-7.11F). Sin
+ *  `onClick` = ubicación actual (no navegable), como el último tramo de
+ *  cualquier breadcrumb. */
+export interface BreadcrumbItem {
+  label:    string;
+  onClick?: () => void;
+}

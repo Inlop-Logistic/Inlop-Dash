@@ -1,10 +1,10 @@
 /**
  * GestionPermisosUsuarioPage — "Gestión de permisos por usuario"
  * (Sprint 3D-7.11B, multi-rol + permisos heredados en 3D-7.11C, excepciones
- * individuales locales en 3D-7.11D, layout aprobado en 3D-7.11E.1). Página
- * completa nueva (NO SidePanel), reutilizando datos y componentes ya
- * existentes (GET /api/usuarios, /api/roles, /api/permisos;
- * SelectorRolesRbac de UsuariosPage.tsx).
+ * individuales locales en 3D-7.11D, layout aprobado en 3D-7.11E.1,
+ * refinamiento UX/UI final en 3D-7.11F). Página completa nueva (NO
+ * SidePanel), reutilizando datos ya existentes (GET /api/usuarios, /api/roles,
+ * /api/permisos) — sin endpoints nuevos.
  *
  * Decisión de producto ya cerrada (3D-7.11B.1): un usuario puede tener
  * múltiples roles simultáneos — el checklist de la izquierda es
@@ -24,6 +24,18 @@
  * revoke local, no-heredados alternan un grant local (toggleExcepcionPermiso,
  * en el hook). Volver a coincidir con el estado base elimina la excepción.
  *
+ * Navegación (Sprint 3D-7.11F): esta página ya no dibuja su propia miga de
+ * pan interna — el breadcrumb superior de AppShell ("Configuración ›
+ * Usuarios › Gestión de permisos", navegable) lo declara ConfiguracionPage
+ * vía NavigationContext#setBreadcrumbTrail. Por eso esta página ya no recibe
+ * `onBack`: toda la navegación hacia atrás vive en ese breadcrumb.
+ *
+ * Catálogo de permisos (Sprint 3D-7.11F): se retiró el navegador vertical
+ * "Ver: módulos" y los chips de filtro por estado de 3D-7.11E.2/E.4 — la
+ * única forma de acotar el catálogo es el buscador; los grupos por módulo
+ * (todos desplegados por defecto, con expandir/contraer manual) son ahora la
+ * navegación principal del panel derecho.
+ *
  * SIGUE SIN PERSISTIR: "Restablecer cambios"/"Guardar cambios" en el header
  * (Sprint 3D-7.11E.1) son ubicación/estructura visual únicamente — quedan
  * deshabilitados a propósito, mismo patrón ya usado en este proyecto para
@@ -35,16 +47,11 @@
  * Usuario inactivo: toda la columna izquierda y el panel de permisos quedan
  * deshabilitados — solo permite consulta (ver edicionBloqueada).
  */
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { ShieldCheck, Search, AlertCircle, Check, RotateCcw, Save, ChevronDown } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { ShieldCheck, Search, AlertCircle, Check, RotateCcw, Save, ChevronDown, Layers } from "lucide-react";
 import { PageHeader, Badge, Button } from "@/components/ui";
 import { useGestionPermisosUsuario } from "./hooks/useGestionPermisosUsuario";
-import { SelectorRolesRbac } from "./UsuariosPage";
-import type { PermisoRbac } from "./types";
-
-interface Props {
-  onBack: () => void;
-}
+import type { PermisoRbac, RolRbac } from "./types";
 
 const SELECT_STYLE: React.CSSProperties = {
   border:       "1.5px solid var(--gray-200)",
@@ -54,6 +61,15 @@ const SELECT_STYLE: React.CSSProperties = {
   background:   "#fff",
   width:        "100%",
 };
+
+const TARJETA_STYLE: React.CSSProperties = { background: "#fff", border: "1px solid var(--gray-200)" };
+
+/** Primera letra en mayúscula — los nombres de rol vienen en minúscula desde
+ *  la base de datos (p.ej. "operador"); puramente presentacional, no toca
+ *  `r.nombre` (el valor real usado en checkbox/onToggle). */
+function capitalizar(texto: string): string {
+  return texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : texto;
+}
 
 /** Estado visual de un permiso en modo "Excepciones activadas" — deriva
  *  puramente de si es heredado y de si tiene una excepción local sobre él;
@@ -130,80 +146,61 @@ function EstadisticaResumen({ valor, etiqueta }: { valor: number; etiqueta: stri
   );
 }
 
-/** Filtro rápido por estado (Sprint 3D-7.11E.2) — solo aplica en modo
- *  "Excepciones activadas", donde tiene sentido distinguir estos 4 casos
- *  (en modo normal todo lo visible es "heredado" por definición). */
-type FiltroEstado = "todos" | EstadoPermiso;
-
-/** Chip de filtro compacto — reutilizado para módulo y para estado, sin
- *  introducir un componente de UI nuevo (mismo estilo de pill que Badge). */
-function Chip({
-  activo, onClick, children, punto,
+/** Checklist de roles compacto (Sprint 3D-7.11F) — variante propia de esta
+ *  pantalla, sin descripciones ni badges (a diferencia de SelectorRolesRbac
+ *  en UsuariosPage.tsx, que sí las necesita ahí): solo checkbox + nombre del
+ *  rol capitalizado. No se modifica SelectorRolesRbac ni su uso en
+ *  UsuariosPage — se define una variante local para no alterar el diseño ya
+ *  existente de esa pantalla. */
+function SelectorRolesCompacto({
+  roles, seleccion, onToggle,
 }: {
-  activo: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-  /** Color del punto indicador, para los chips de estado. */
-  punto?: string;
+  roles: RolRbac[];
+  seleccion: Set<string>;
+  onToggle: (rolId: string) => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-semibold transition-colors shrink-0"
-      style={{
-        background: activo ? "var(--navy)" : "var(--gray-100)",
-        color:      activo ? "#fff" : "var(--gray-600)",
-      }}
-    >
-      {punto && (
-        <span aria-hidden="true" className="rounded-full shrink-0" style={{ width: "7px", height: "7px", background: activo ? "#fff" : punto }} />
-      )}
-      {children}
-    </button>
+    <div className="flex flex-col gap-0.5">
+      {roles.map(r => {
+        const activo = seleccion.has(r.id);
+        return (
+          <label
+            key={r.id}
+            className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors"
+            style={{ background: activo ? "var(--gray-50)" : "transparent" }}
+          >
+            <span
+              aria-hidden="true"
+              className="shrink-0 flex items-center justify-center rounded"
+              style={{
+                width: "16px", height: "16px",
+                border: `2px solid ${activo ? "var(--navy)" : "var(--gray-300)"}`,
+                background: activo ? "var(--navy)" : "transparent",
+                color: "#fff",
+              }}
+            >
+              {activo && <Check className="w-2.5 h-2.5" strokeWidth={3} />}
+            </span>
+            <input
+              type="checkbox"
+              checked={activo}
+              onChange={() => onToggle(r.id)}
+              className="sr-only"
+              aria-label={`Asignar rol ${r.nombre}`}
+            />
+            <span className="text-[12.5px] font-medium" style={{ color: "var(--gray-700)" }}>
+              {capitalizar(r.nombre)}
+            </span>
+          </label>
+        );
+      })}
+    </div>
   );
 }
 
-/** Ítem del navegador vertical de módulos (Sprint 3D-7.11E.4) — inspirado en
- *  el selector "Ver: Módulos" del mockup aprobado. Reemplaza la fila
- *  horizontal de chips de módulo de 3D-7.11E.2 por una lista vertical
- *  compacta: mismo estado (`filtroModulo`), misma fuente de conteos
- *  (`moduloChips`/`catalogoBase`), solo cambia la presentación. */
-function ModuloNavItem({
-  activo, onClick, children, contador,
-}: {
-  activo: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-  contador: number;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-left transition-colors w-full"
-      style={{
-        background: activo ? "var(--navy)" : "transparent",
-        color:      activo ? "#fff" : "var(--gray-600)",
-      }}
-    >
-      <span className="truncate">{children}</span>
-      <span
-        className="text-[10.5px] font-semibold rounded-full shrink-0 px-1.5 py-0.5"
-        style={{
-          background: activo ? "rgba(255,255,255,0.18)" : "var(--gray-100)",
-          color:      activo ? "#fff" : "var(--gray-500)",
-        }}
-      >
-        {contador}
-      </span>
-    </button>
-  );
-}
-
-export function GestionPermisosUsuarioPage({ onBack }: Props) {
+export function GestionPermisosUsuarioPage() {
   const {
-    usuarios, roles, permisos, loading, error, cargar,
+    usuarios, roles, loading, error, cargar,
     usuarioSeleccionadoId, usuarioSeleccionado, seleccionarUsuario,
     rolesSeleccionados, toggleRol,
     excepcionesActivadas, toggleExcepcionesActivadas,
@@ -216,31 +213,23 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
   // Solo estado local de foco del buscador — sin lógica adicional.
   const [busquedaFoco, setBusquedaFoco] = useState(false);
 
-  // Filtros rápidos del catálogo (Sprint 3D-7.11E.2) — puramente de
-  // presentación: solo deciden QUÉ se muestra, nunca tocan
-  // permisosHeredadosIds/grantsLocales/revokesLocales/permisosEfectivosIds
-  // (esos siguen viviendo exclusivamente en el hook, sin duplicar lógica RBAC).
-  const [filtroModulo, setFiltroModulo] = useState<string>("todos");
-  const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>("todos");
+  // Acordeón por módulo (Sprint 3D-7.11E.4, todos abiertos por defecto desde
+  // 3D-7.11F) — puramente de presentación: qué grupos están COLAPSADOS a
+  // mano. Por defecto (Set vacío) todos los módulos aparecen desplegados;
+  // el usuario puede contraer/expandir cada uno individualmente. No decide
+  // qué permisos existen ni altera permisosPorModulo.
+  const [modulosColapsados, setModulosColapsados] = useState<Set<string>>(new Set());
 
-  // Acordeón por módulo (Sprint 3D-7.11E.4) — puramente de presentación:
-  // qué grupos de módulo están desplegados en la vista "Todos". No decide
-  // qué permisos existen ni altera permisosPorModuloFiltrados; solo evita
-  // que la pantalla se convierta en un listado vertical interminable
-  // cuando hay muchos módulos con muchos permisos cada uno.
-  const [modulosExpandidos, setModulosExpandidos] = useState<Set<string>>(new Set());
-
-  // Al cambiar de usuario, los filtros vuelven a su estado neutro — mismo
-  // criterio que el resto del estado local de esta pantalla (useGestionPermisosUsuario
-  // ya resetea roles/excepciones/búsqueda al cambiar de usuarioSeleccionado).
+  // Al cambiar de usuario, el acordeón vuelve a su estado neutro (todo
+  // desplegado) — mismo criterio que el resto del estado local de esta
+  // pantalla (useGestionPermisosUsuario ya resetea roles/excepciones/
+  // búsqueda al cambiar de usuarioSeleccionado).
   useEffect(() => {
-    setFiltroModulo("todos");
-    setFiltroEstado("todos");
-    setModulosExpandidos(new Set());
+    setModulosColapsados(new Set());
   }, [usuarioSeleccionadoId]);
 
-  function toggleModuloExpandido(modulo: string) {
-    setModulosExpandidos(prev => {
+  function toggleModuloColapsado(modulo: string) {
+    setModulosColapsados(prev => {
       const next = new Set(prev);
       if (next.has(modulo)) next.delete(modulo); else next.add(modulo);
       return next;
@@ -255,85 +244,14 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
     return grantsLocales.has(permisoId) ? "otorgado" : "base";
   }, [permisosHeredadosIds, grantsLocales, revokesLocales]);
 
-  // Catálogo base según el modo actual — mismo criterio ya usado dentro del
-  // hook para permisosPorModulo (heredados en modo normal, catálogo
-  // completo con Excepciones activadas). Se recalcula aquí solo para los
-  // contadores de los chips, sin duplicar la agrupación por módulo del hook.
-  const catalogoBase = excepcionesActivadas ? permisos : permisosHeredados;
-
-  // Chips de módulo — cuenta real de permisos por módulo dentro del
-  // catálogo base actual (no del catálogo completo si estamos en modo
-  // normal, para que "Todos" siempre coincida con lo que hay para ver).
-  const moduloChips = useMemo(() => {
-    const conteo = new Map<string, number>();
-    for (const p of catalogoBase) {
-      const key = p.modulo || "otros";
-      conteo.set(key, (conteo.get(key) ?? 0) + 1);
-    }
-    return [...conteo.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [catalogoBase]);
-
-  // Chips de estado — solo tienen sentido con Excepciones activadas (en
-  // modo normal todo lo visible es "heredado" por definición). Cuenta real
-  // sobre el catálogo completo, usando exactamente estadoDe() (misma lógica
-  // que ya pinta cada tarjeta) — no se inventa un cálculo paralelo.
-  const estadoChips = useMemo(() => {
-    if (!excepcionesActivadas) return null;
-    const conteo: Record<EstadoPermiso, number> = { heredado: 0, otorgado: 0, revocado: 0, base: 0 };
-    for (const p of permisos) conteo[estadoDe(p.id)]++;
-    return conteo;
-  }, [excepcionesActivadas, permisos, estadoDe]);
-
-  // Aplica los filtros de módulo y estado sobre el agrupado que ya arma el
-  // hook (permisosPorModulo, que ya viene filtrado por el buscador y por el
-  // modo actual) — combinación búsqueda + módulo + estado en un solo lugar.
-  const permisosPorModuloFiltrados = useMemo(() => {
-    let entradas = [...permisosPorModulo.entries()];
-    if (filtroModulo !== "todos") {
-      entradas = entradas.filter(([modulo]) => modulo === filtroModulo);
-    }
-    if (excepcionesActivadas && filtroEstado !== "todos") {
-      entradas = entradas
-        .map(([modulo, lista]) => [modulo, lista.filter(p => estadoDe(p.id) === filtroEstado)] as [string, PermisoRbac[]])
-        .filter(([, lista]) => lista.length > 0);
-    }
-    return new Map(entradas);
-  }, [permisosPorModulo, filtroModulo, filtroEstado, excepcionesActivadas, estadoDe]);
-
-  // Mensaje de estado vacío (requisito 6) — nunca dice "heredado" cuando el
-  // vacío viene de un filtro de módulo/estado/búsqueda distinto, para no
-  // confundir a alguien mirando, por ejemplo, "Revocados".
-  const hayFiltrosActivos = busquedaPermiso.trim() !== "" || filtroModulo !== "todos" || (excepcionesActivadas && filtroEstado !== "todos");
-  const mensajeSinResultados = hayFiltrosActivos
-    ? "Ningún permiso coincide con los filtros actuales."
-    : excepcionesActivadas
-      ? "Ningún permiso coincide con la búsqueda."
-      : "Ningún permiso heredado coincide con la búsqueda.";
-
-  // Un módulo se ve desplegado si el usuario lo abrió a mano, o si ya hay un
-  // filtro activo que reduce por sí solo lo que hay que mostrar (un módulo
-  // puntual seleccionado en el navegador de módulos, una búsqueda o un
-  // filtro de estado) — en esos casos no tiene sentido pedir un clic extra
-  // para ver un resultado que el propio usuario ya acotó.
-  const expandirTodo = filtroModulo !== "todos" || hayFiltrosActivos;
-  const moduloEstaExpandido = (modulo: string) => expandirTodo || modulosExpandidos.has(modulo);
+  // Mensaje de estado vacío del catálogo — nunca dice "heredado" cuando el
+  // catálogo mostrado es el completo (modo Excepciones activas).
+  const mensajeSinResultados = busquedaPermiso.trim() !== ""
+    ? (excepcionesActivadas ? "Ningún permiso coincide con la búsqueda." : "Ningún permiso heredado coincide con la búsqueda.")
+    : "No hay permisos para mostrar.";
 
   return (
     <div className="p-6 flex flex-col gap-6">
-      {/* Migas de pan interna — mismo patrón que UsuariosPage/RolesPermisosPage */}
-      <nav aria-label="Ruta interna" className="flex items-center gap-1.5 text-[13px]" style={{ color: "var(--gray-400)" }}>
-        <button
-          type="button"
-          onClick={onBack}
-          className="hover:underline focus-visible:outline-none"
-          style={{ color: "var(--gray-500)" }}
-        >
-          Usuarios
-        </button>
-        <span aria-hidden="true">›</span>
-        <span style={{ color: "var(--gray-700)", fontWeight: 600 }}>Gestión de permisos</span>
-      </nav>
-
       <PageHeader
         title="Gestión de permisos"
         subtitle="Administra los roles y excepciones de permisos para cada usuario del ERP."
@@ -378,13 +296,16 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
         </div>
       ) : (
         <>
-          {/* Selector superior de usuario — mecanismo de elección, sin cambios
-              de comportamiento; el mockup lo asume ya resuelto y muestra el
-              resultado en la tarjeta "Usuario seleccionado" de la izquierda. */}
-          <div className="max-w-md">
+          {/* Selector de usuario + información del usuario seleccionado,
+              integrados en una sola tarjeta (Sprint 3D-7.11F) — antes eran
+              dos bloques separados (selector suelto arriba + tarjeta "Usuario
+              seleccionado" dentro de la columna izquierda). Ancho igualado al
+              de la columna izquierda del grid de abajo para leerse como su
+              continuación natural. */}
+          <div className="w-full lg:w-[360px] rounded-xl p-5" style={TARJETA_STYLE}>
             <label
               htmlFor="gestion-permisos-usuario"
-              className="block text-[11px] font-semibold uppercase tracking-wide mb-1"
+              className="block text-[11px] font-semibold uppercase tracking-wide mb-1.5"
               style={{ color: "var(--gray-500)" }}
             >
               Usuario
@@ -402,6 +323,37 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                 <option key={u.id} value={u.id}>{u.nombre || u.email} — {u.email}</option>
               ))}
             </select>
+
+            {usuarioSeleccionado && (
+              <>
+                <div style={{ height: 1, background: "var(--gray-100)", margin: "16px 0" }} />
+                <div className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--gray-400)" }}>
+                  Información del usuario
+                </div>
+                <div className="flex items-center gap-3">
+                  <div
+                    aria-hidden="true"
+                    className="shrink-0 rounded-full flex items-center justify-center font-bold text-[13px]"
+                    style={{ width: "40px", height: "40px", background: "var(--gray-100)", color: "var(--navy)" }}
+                  >
+                    {iniciales(usuarioSeleccionado.nombre, usuarioSeleccionado.email)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[14px] font-semibold truncate" style={{ color: "var(--gray-800)" }}>
+                        {usuarioSeleccionado.nombre || "—"}
+                      </span>
+                      <Badge variant={usuarioSeleccionado.activo ? "success" : "default"}>
+                        {usuarioSeleccionado.activo ? "Activo" : "Inactivo"}
+                      </Badge>
+                    </div>
+                    <div className="text-[12.5px] truncate" style={{ color: "var(--gray-500)" }}>
+                      {usuarioSeleccionado.email || "—"}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {usuarioSeleccionado && (
@@ -440,7 +392,9 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                   forma consistente en toda la cadena. */}
               <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-6 items-start">
 
-                {/* IZQUIERDA — Usuario + Roles + Excepciones + Resumen.
+                {/* IZQUIERDA — Roles + Excepciones + Resumen ("Usuario
+                    seleccionado" ahora vive en la tarjeta integrada de
+                    arriba, ver 3D-7.11F).
                     `sticky top-6` (Sprint 3D-7.11E.3.2) — con el catálogo de
                     permisos a menudo más alto que esta columna (una vez hay
                     roles/excepciones con varios módulos), bajo `items-start`
@@ -455,44 +409,10 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                     nada, solo reposiciona. `top-6` iguala el padding
                     superior de la página (p-6) para que no quede pegada al
                     borde de <main>. */}
-                <div className="flex flex-col gap-4 min-w-0 min-h-0 lg:sticky lg:top-6 lg:self-start">
-                  {/* Usuario seleccionado */}
-                  <div
-                    className="rounded-xl p-4"
-                    style={{ background: "#fff", border: "1px solid var(--gray-200)" }}
-                  >
-                    <div className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--gray-400)" }}>
-                      Usuario seleccionado
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div
-                        aria-hidden="true"
-                        className="shrink-0 rounded-full flex items-center justify-center font-bold text-[13px]"
-                        style={{ width: "40px", height: "40px", background: "var(--gray-100)", color: "var(--navy)" }}
-                      >
-                        {iniciales(usuarioSeleccionado.nombre, usuarioSeleccionado.email)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[14px] font-semibold truncate" style={{ color: "var(--gray-800)" }}>
-                            {usuarioSeleccionado.nombre || "—"}
-                          </span>
-                          <Badge variant={usuarioSeleccionado.activo ? "success" : "default"}>
-                            {usuarioSeleccionado.activo ? "Activo" : "Inactivo"}
-                          </Badge>
-                        </div>
-                        <div className="text-[12.5px] truncate" style={{ color: "var(--gray-500)" }}>
-                          {usuarioSeleccionado.email || "—"}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Roles asignados */}
-                  <div
-                    className="rounded-xl p-4"
-                    style={{ background: "#fff", border: "1px solid var(--gray-200)" }}
-                  >
+                <div className="flex flex-col gap-5 min-w-0 min-h-0 lg:sticky lg:top-6 lg:self-start">
+                  {/* Roles asignados — checklist compacto sin descripciones
+                      ni badges (Sprint 3D-7.11F, ver SelectorRolesCompacto). */}
+                  <div className="rounded-xl p-5" style={TARJETA_STYLE}>
                     <div className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--gray-400)" }}>
                       Roles asignados ({rolesSeleccionados.size})
                     </div>
@@ -508,7 +428,7 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                         pointerEvents: edicionBloqueada ? "none" : "auto",
                       }}
                     >
-                      <SelectorRolesRbac roles={roles} seleccion={rolesSeleccionados} onToggle={toggleRol} />
+                      <SelectorRolesCompacto roles={roles} seleccion={rolesSeleccionados} onToggle={toggleRol} />
                     </fieldset>
                     {/* Feedback visual local en tiempo real (3D-7.11C) — se
                         actualiza solo con cada marca/desmarca, sin mensaje
@@ -519,10 +439,7 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                   </div>
 
                   {/* Excepciones de permisos */}
-                  <div
-                    className="rounded-xl p-4"
-                    style={{ background: "#fff", border: "1px solid var(--gray-200)" }}
-                  >
+                  <div className="rounded-xl p-5" style={TARJETA_STYLE}>
                     <div className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--gray-400)" }}>
                       Excepciones de permisos
                     </div>
@@ -572,10 +489,7 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                   {/* Resumen actual — redistribuye valores ya calculados
                       (rolesSeleccionados/permisosEfectivosIds/cambiosPendientes),
                       sin ningún cómputo nuevo. */}
-                  <div
-                    className="rounded-xl p-4 flex items-center"
-                    style={{ background: "#fff", border: "1px solid var(--gray-200)" }}
-                  >
+                  <div className="rounded-xl p-5 flex items-center" style={TARJETA_STYLE}>
                     <EstadisticaResumen valor={rolesSeleccionados.size} etiqueta="Roles seleccionados" />
                     <div className="w-px self-stretch" style={{ background: "var(--gray-100)" }} />
                     <EstadisticaResumen valor={permisosEfectivosIds.size} etiqueta="Permisos activos" />
@@ -584,30 +498,40 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                   </div>
                 </div>
 
-                {/* DERECHA — Catálogo de permisos */}
+                {/* DERECHA — Catálogo de permisos. Sprint 3D-7.11F: se retiró
+                    el navegador "Ver: módulos" y los chips de filtro por
+                    estado — el buscador es ahora el único filtro, y los
+                    grupos por módulo (todos desplegados por defecto) son la
+                    navegación principal. */}
                 <div
-                  className="rounded-xl p-4 flex flex-col gap-4 min-w-0 min-h-0"
-                  style={{ background: "#fff", border: "1px solid var(--gray-200)" }}
+                  className="rounded-xl p-5 flex flex-col gap-4 min-w-0 min-h-0"
+                  style={TARJETA_STYLE}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
+                    {/* Cantidad + concepto (Sprint 3D-7.11F): el número y su
+                        etiqueta ("permisos heredados"/"permisos efectivos")
+                        se leen como una sola unidad, con un ícono de apoyo —
+                        mismos valores ya calculados en el hook. */}
                     <div className="flex items-center gap-3">
+                      <div
+                        aria-hidden="true"
+                        className="shrink-0 rounded-lg flex items-center justify-center"
+                        style={{ width: "40px", height: "40px", background: "var(--gray-50)", color: "var(--navy)" }}
+                      >
+                        <Layers className="w-5 h-5" />
+                      </div>
                       <div>
-                        <div className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--gray-400)" }}>
-                          {excepcionesActivadas ? "Permisos efectivos" : "Permisos heredados"}
-                        </div>
                         <div className="flex items-baseline gap-2">
-                          <span className="font-bold text-[24px] leading-none" style={{ color: "var(--navy)" }}>
+                          <span className="font-bold text-[26px] leading-none" style={{ color: "var(--navy)" }}>
                             {excepcionesActivadas ? permisosEfectivosIds.size : permisosHeredados.length}
                           </span>
-                          <span className="text-[12px]" style={{ color: "var(--gray-500)" }}>
-                            {excepcionesActivadas ? "permisos activos" : "heredados del rol"}
+                          <span className="text-[13px] font-semibold" style={{ color: "var(--gray-700)" }}>
+                            {excepcionesActivadas ? "permisos efectivos" : "permisos heredados"}
                           </span>
                         </div>
-                        {excepcionesActivadas && (
-                          <div className="text-[11px]" style={{ color: "var(--gray-400)" }}>
-                            Heredados + excepciones locales
-                          </div>
-                        )}
+                        <div className="text-[11.5px] mt-0.5" style={{ color: "var(--gray-400)" }}>
+                          {excepcionesActivadas ? "Heredados + excepciones locales" : "Por los roles asignados"}
+                        </div>
                       </div>
                     </div>
                     <div className="relative w-full max-w-xs">
@@ -633,154 +557,80 @@ export function GestionPermisosUsuarioPage({ onBack }: Props) {
                     </div>
                   </div>
 
-                  {/* Filtros rápidos de estado (Sprint 3D-7.11E.2) — solo
-                      deciden qué se muestra; no tocan roles, excepciones ni
-                      el cálculo RBAC. La navegación por módulo (abajo) pasó a
-                      ser el navegador vertical "Ver: módulos" de 3D-7.11E.4. */}
-                  {estadoChips && (
-                    <div className="flex flex-wrap gap-1.5">
-                      <Chip activo={filtroEstado === "todos"} onClick={() => setFiltroEstado("todos")}>
-                        Todos ({permisos.length})
-                      </Chip>
-                      <Chip activo={filtroEstado === "heredado"} onClick={() => setFiltroEstado("heredado")} punto="var(--navy)">
-                        Heredados ({estadoChips.heredado})
-                      </Chip>
-                      <Chip activo={filtroEstado === "otorgado"} onClick={() => setFiltroEstado("otorgado")} punto="#6D28D9">
-                        Otorgados ({estadoChips.otorgado})
-                      </Chip>
-                      <Chip activo={filtroEstado === "revocado"} onClick={() => setFiltroEstado("revocado")} punto="var(--inlop-red)">
-                        Revocados ({estadoChips.revocado})
-                      </Chip>
-                      <Chip activo={filtroEstado === "base"} onClick={() => setFiltroEstado("base")} punto="var(--gray-300)">
-                        No heredados ({estadoChips.base})
-                      </Chip>
-                    </div>
-                  )}
-
                   {!excepcionesActivadas && rolesSeleccionados.size === 0 ? (
                     <p className="text-[13px] py-8 text-center" style={{ color: "var(--gray-400)" }}>
                       Selecciona al menos un rol para ver sus permisos heredados.
                     </p>
-                  ) : catalogoBase.length === 0 ? (
+                  ) : permisosPorModulo.size === 0 ? (
                     <p className="text-[13px] py-8 text-center" style={{ color: "var(--gray-400)" }}>
                       {mensajeSinResultados}
                     </p>
                   ) : (
-                    /* Navegador de módulos + catálogo (Sprint 3D-7.11E.4) —
-                       "Ver: Módulos" del mockup: una lista vertical compacta a
-                       la izquierda para saltar directo a un módulo (en vez de
-                       obligar a bajar por un listado plano interminable),
-                       manteniendo el mismo `filtroModulo`/`permisosPorModuloFiltrados`
-                       ya calculados arriba — ninguna lógica RBAC nueva. */
-                    <div className="flex gap-4 items-start min-w-0">
-                      <nav
-                        aria-label="Ver por módulo"
-                        className="hidden sm:flex flex-col gap-0.5 shrink-0 w-[168px]"
-                      >
-                        <div className="text-[10.5px] font-semibold uppercase tracking-widest px-2.5 mb-1" style={{ color: "var(--gray-400)" }}>
-                          Ver: Módulos
-                        </div>
-                        <ModuloNavItem activo={filtroModulo === "todos"} onClick={() => setFiltroModulo("todos")} contador={catalogoBase.length}>
-                          Todos
-                        </ModuloNavItem>
-                        {moduloChips.map(([modulo, n]) => (
-                          <ModuloNavItem key={modulo} activo={filtroModulo === modulo} onClick={() => setFiltroModulo(modulo)} contador={n}>
-                            {modulo}
-                          </ModuloNavItem>
-                        ))}
-                      </nav>
-
-                      <div className="flex-1 min-w-0">
-                        {/* En pantallas angostas (nav de módulos oculto) se ofrece el
-                            mismo salto de módulo como chips horizontales — ningún
-                            estado ni cómputo nuevo, solo un segundo control para el
-                            mismo `filtroModulo`. */}
-                        <div className="sm:hidden flex flex-wrap gap-1.5 mb-3">
-                          <Chip activo={filtroModulo === "todos"} onClick={() => setFiltroModulo("todos")}>
-                            Todos ({catalogoBase.length})
-                          </Chip>
-                          {moduloChips.map(([modulo, n]) => (
-                            <Chip key={modulo} activo={filtroModulo === modulo} onClick={() => setFiltroModulo(modulo)}>
-                              {modulo} ({n})
-                            </Chip>
-                          ))}
-                        </div>
-
-                        {permisosPorModuloFiltrados.size === 0 ? (
-                          <p className="text-[13px] py-8 text-center" style={{ color: "var(--gray-400)" }}>
-                            {mensajeSinResultados}
-                          </p>
-                        ) : (
-                          <fieldset
-                            disabled={edicionBloqueada}
-                            style={{ opacity: edicionBloqueada ? 0.5 : 1, pointerEvents: edicionBloqueada ? "none" : "auto" }}
-                          >
-                            <div className="flex flex-col gap-2">
-                              {[...permisosPorModuloFiltrados.entries()].map(([modulo, lista]) => {
-                                const expandido = moduloEstaExpandido(modulo);
-                                return (
-                                  <div key={modulo} className="rounded-lg" style={{ border: "1px solid var(--gray-100)" }}>
-                                    {/* Encabezado de acordeón — solo clicable cuando hay
-                                        más de un módulo visible (vista "Todos" sin otros
-                                        filtros); con un único módulo ya no aporta nada
-                                        ocultar su propio contenido. */}
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleModuloExpandido(modulo)}
-                                      disabled={expandirTodo}
-                                      className="w-full flex items-center justify-between gap-2 px-2.5 py-2 text-left"
-                                      style={{ cursor: expandirTodo ? "default" : "pointer" }}
-                                    >
-                                      <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--gray-400)" }}>
-                                        {modulo} <span style={{ color: "var(--gray-300)" }}>· {lista.length}</span>
-                                      </span>
-                                      {!expandirTodo && (
-                                        <ChevronDown
-                                          className="w-3.5 h-3.5 shrink-0 transition-transform"
-                                          style={{ color: "var(--gray-400)", transform: expandido ? "rotate(180deg)" : "rotate(0deg)" }}
+                    <fieldset
+                      disabled={edicionBloqueada}
+                      style={{ opacity: edicionBloqueada ? 0.5 : 1, pointerEvents: edicionBloqueada ? "none" : "auto" }}
+                    >
+                      {/* Grupos por módulo, todos abiertos por defecto
+                          (Sprint 3D-7.11F) — la navegación/contenido
+                          principal del panel. Alturas y espaciados
+                          compactados un poco respecto a 3D-7.11E.4
+                          (gap-2 → gap-1.5, px-2.5 py-2 → px-2 py-1.5). */}
+                      <div className="flex flex-col gap-1.5">
+                        {[...permisosPorModulo.entries()].map(([modulo, lista]) => {
+                          const expandido = !modulosColapsados.has(modulo);
+                          return (
+                            <div key={modulo} className="rounded-lg" style={{ border: "1px solid var(--gray-100)" }}>
+                              <button
+                                type="button"
+                                onClick={() => toggleModuloColapsado(modulo)}
+                                className="w-full flex items-center justify-between gap-2 px-2 py-1.5 text-left"
+                                style={{ cursor: "pointer" }}
+                              >
+                                <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--gray-400)" }}>
+                                  {modulo} <span style={{ color: "var(--gray-300)" }}>· {lista.length}</span>
+                                </span>
+                                <ChevronDown
+                                  className="w-3.5 h-3.5 shrink-0 transition-transform"
+                                  style={{ color: "var(--gray-400)", transform: expandido ? "rotate(180deg)" : "rotate(0deg)" }}
+                                />
+                              </button>
+                              {expandido && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2 px-2 pb-2">
+                                  {lista.map(p => (
+                                    excepcionesActivadas ? (
+                                      <TarjetaPermiso
+                                        key={p.id}
+                                        permiso={p}
+                                        estado={estadoDe(p.id)}
+                                        interactivo
+                                        onClick={() => toggleExcepcionPermiso(p.id)}
+                                      />
+                                    ) : (
+                                      // Modo normal (excepciones desactivadas) — mismo
+                                      // render de solo lectura de 3D-7.11C, sin cambios.
+                                      <div
+                                        key={p.id}
+                                        className="rounded-lg px-3 py-2.5 flex items-start gap-2"
+                                        style={{ background: "var(--gray-50)", border: "1px solid var(--gray-200)" }}
+                                      >
+                                        <Check
+                                          className="w-3.5 h-3.5 shrink-0 mt-0.5"
+                                          style={{ color: "#065F46" }}
+                                          aria-label="Activo (heredado del rol)"
                                         />
-                                      )}
-                                    </button>
-                                    {expandido && (
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2 px-2.5 pb-2.5">
-                                        {lista.map(p => (
-                                          excepcionesActivadas ? (
-                                            <TarjetaPermiso
-                                              key={p.id}
-                                              permiso={p}
-                                              estado={estadoDe(p.id)}
-                                              interactivo
-                                              onClick={() => toggleExcepcionPermiso(p.id)}
-                                            />
-                                          ) : (
-                                            // Modo normal (excepciones desactivadas) — mismo
-                                            // render de solo lectura de 3D-7.11C, sin cambios.
-                                            <div
-                                              key={p.id}
-                                              className="rounded-lg px-3 py-2.5 flex items-start gap-2"
-                                              style={{ background: "var(--gray-50)", border: "1px solid var(--gray-200)" }}
-                                            >
-                                              <Check
-                                                className="w-3.5 h-3.5 shrink-0 mt-0.5"
-                                                style={{ color: "#065F46" }}
-                                                aria-label="Activo (heredado del rol)"
-                                              />
-                                              <span className="flex-1 min-w-0 text-[12.5px] font-medium leading-snug break-words" style={{ color: "var(--gray-800)" }}>
-                                                {p.descripcion || "—"}
-                                              </span>
-                                            </div>
-                                          )
-                                        ))}
+                                        <span className="flex-1 min-w-0 text-[12.5px] font-medium leading-snug break-words" style={{ color: "var(--gray-800)" }}>
+                                          {p.descripcion || "—"}
+                                        </span>
                                       </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
+                                    )
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                          </fieldset>
-                        )}
+                          );
+                        })}
                       </div>
-                    </div>
+                    </fieldset>
                   )}
                 </div>
               </div>

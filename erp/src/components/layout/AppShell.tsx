@@ -9,6 +9,7 @@ import { TopbarSearch } from "@/components/layout/TopbarSearch";
 import { TopbarNotifications } from "@/components/layout/TopbarNotifications";
 import { TopbarUserMenu } from "@/components/layout/TopbarUserMenu";
 import type { Vista, NavSection } from "@/types/navigation";
+import type { BreadcrumbItem } from "@/core/navigation";
 
 // Re-export para compatibilidad con importadores existentes (ej. App.tsx).
 export type { Vista } from "@/types/navigation";
@@ -59,9 +60,13 @@ interface Props {
   setVista: (v: Vista) => void;
   children: ReactNode;
   badges?: Partial<Record<Vista, number>>;
+  /** Tramo de breadcrumb adicional declarado por el módulo actual (Sprint
+   *  3D-7.11F) — ver NavigationContext. `null`/`undefined` = breadcrumb por
+   *  defecto (INLOP › [sección] › [ítem de nav actual]). */
+  breadcrumbTrail?: BreadcrumbItem[] | null;
 }
 
-export function AppShell({ vista, setVista, children, badges = {} }: Props) {
+export function AppShell({ vista, setVista, children, badges = {}, breadcrumbTrail }: Props) {
   const { profile, signOut } = useAuth();
 
   const [collapsed, setCollapsed] = useState(
@@ -328,14 +333,52 @@ export function AppShell({ vista, setVista, children, badges = {} }: Props) {
             borderBottom: "1px solid var(--gray-100)",
           }}
         >
-          {/* Breadcrumb semántico — WAI-ARIA breadcrumb pattern */}
+          {/* Breadcrumb semántico — WAI-ARIA breadcrumb pattern. "INLOP" es
+              siempre navegable a Inicio; si el módulo actual declaró un
+              `breadcrumbTrail` propio (Sprint 3D-7.11F, ej. Configuración →
+              Usuarios → Gestión de permisos) se usa ese en vez del breadcrumb
+              genérico de sección/ítem de nav. */}
           <nav aria-label="Ruta de navegación">
             {(() => {
+              const crumbBtnCls = "hover:underline focus-visible:outline-none";
+              const crumbBtnStyle: CSSProperties = { color: "inherit" };
+
+              if (breadcrumbTrail && breadcrumbTrail.length > 0) {
+                return (
+                  <ol className="flex items-center gap-1.5 list-none m-0 p-0 text-[var(--text-md)]" style={{ color: "var(--gray-400)" }}>
+                    <li>
+                      <button type="button" className={crumbBtnCls} style={crumbBtnStyle} onClick={() => setVista("dashboard")}>INLOP</button>
+                    </li>
+                    <li aria-hidden="true"><ChevronRight className="w-3.5 h-3.5" /></li>
+                    {breadcrumbTrail.map((crumb, i) => {
+                      const esUltimo = i === breadcrumbTrail.length - 1;
+                      return (
+                        <li key={i} className="flex items-center gap-1.5">
+                          {esUltimo || !crumb.onClick ? (
+                            <span
+                              aria-current={esUltimo ? "page" : undefined}
+                              style={esUltimo ? { color: "var(--gray-700)", fontWeight: "var(--weight-semibold)" } : undefined}
+                            >
+                              {crumb.label}
+                            </span>
+                          ) : (
+                            <button type="button" className={crumbBtnCls} style={crumbBtnStyle} onClick={crumb.onClick}>{crumb.label}</button>
+                          )}
+                          {!esUltimo && <ChevronRight aria-hidden="true" className="w-3.5 h-3.5" />}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                );
+              }
+
               const activeSec  = NAV_SECTIONS.find(s => s.items.some(i => i.id === vista));
               const activeItem = NAV_ALL.find(n => n.id === vista);
               return (
                 <ol className="flex items-center gap-1.5 list-none m-0 p-0 text-[var(--text-md)]" style={{ color: "var(--gray-400)" }}>
-                  <li><span>INLOP</span></li>
+                  <li>
+                    <button type="button" className={crumbBtnCls} style={crumbBtnStyle} onClick={() => setVista("dashboard")}>INLOP</button>
+                  </li>
                   <li aria-hidden="true"><ChevronRight className="w-3.5 h-3.5" /></li>
                   {activeSec?.breadcrumbLabel && (
                     <>

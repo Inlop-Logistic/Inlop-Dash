@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigationContext } from "@/core/navigation";
 import { ParametrosPage } from "./ParametrosPage";
 import { ReportesAutomaticosPage } from "./ReportesAutomaticosPage";
 import { UsuariosPage } from "./UsuariosPage";
@@ -21,6 +22,26 @@ export function ConfiguracionPage() {
   // wizard se desmonta al navegar de vuelta al listado, así que el mensaje
   // viaja por acá para que el listado lo muestre tras la navegación.
   const [avisoProgramacion, setAvisoProgramacion] = useState<string | null>(null);
+
+  // Breadcrumb superior de AppShell (Sprint 3D-7.11F) — Gestión de permisos
+  // ya no dibuja su propia miga de pan interna; en su lugar declara un tramo
+  // dinámico "Configuración › Usuarios › Gestión de permisos" en el
+  // breadcrumb del shell, navegable en sus dos primeros niveles. El resto de
+  // sub-pantallas de Configuración no declara nada (null) y AppShell usa su
+  // breadcrumb genérico de siempre.
+  const { setBreadcrumbTrail } = useNavigationContext();
+  useEffect(() => {
+    setBreadcrumbTrail(
+      subVista === "permisos-usuario"
+        ? [
+            { label: "Configuración", onClick: () => setSubVista("parametros") },
+            { label: "Usuarios",      onClick: () => setSubVista("usuarios") },
+            { label: "Gestión de permisos" },
+          ]
+        : null
+    );
+    return () => setBreadcrumbTrail(null);
+  }, [subVista, setBreadcrumbTrail]);
 
   if (subVista === "crear-reporte") {
     return (
@@ -67,7 +88,7 @@ export function ConfiguracionPage() {
   }
 
   if (subVista === "permisos-usuario") {
-    return <GestionPermisosUsuarioPage onBack={() => setSubVista("usuarios")} />;
+    return <GestionPermisosUsuarioPage />;
   }
 
   // Módulo raíz de esta vista: Parámetros
