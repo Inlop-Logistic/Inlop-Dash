@@ -37,9 +37,13 @@
  * navegación principal del panel derecho.
  *
  * SIGUE SIN PERSISTIR: "Restablecer cambios"/"Guardar cambios" en el header
- * (Sprint 3D-7.11E.1) son ubicación/estructura visual únicamente — quedan
- * deshabilitados a propósito, mismo patrón ya usado en este proyecto para
- * una acción de UI todavía no conectada a backend (ver "Nuevo usuario" en
+ * (posición/estructura de 3D-7.11E.1) habilitan/deshabilitan su estado según
+ * `hayCambiosPendientes` desde 3D-7.11G. "Restablecer" ya es funcional —
+ * descarta roles/excepciones/grants/revokes locales y vuelve al estado con
+ * el que se entró a la pantalla (ver restablecerCambios en el hook).
+ * "Guardar cambios" solo refleja si hay algo pendiente: la persistencia real
+ * sigue sin implementarse (mismo patrón ya usado en este proyecto para una
+ * acción de UI todavía no conectada a backend, ver "Nuevo usuario" en
  * UsuariosPage antes de 3D-7.8D). Nada de esto llama a
  * PUT /api/usuarios/:id/roles ni a PUT /api/usuarios/:id/permisos (ya
  * existentes, pendientes de conectar en un sprint de guardado posterior).
@@ -207,7 +211,7 @@ export function GestionPermisosUsuarioPage() {
     grantsLocales, revokesLocales, toggleExcepcionPermiso,
     busquedaPermiso, setBusquedaPermiso,
     permisosHeredadosIds, permisosHeredados, permisosEfectivosIds, permisosPorModulo,
-    edicionBloqueada,
+    edicionBloqueada, hayCambiosPendientes, restablecerCambios,
   } = useGestionPermisosUsuario();
 
   // Solo estado local de foco del buscador — sin lógica adicional.
@@ -272,14 +276,29 @@ export function GestionPermisosUsuarioPage() {
                 {cambiosPendientes > 0 ? "Sin guardar" : "Todo al día"}
               </div>
             </div>
-            {/* Guardado real pendiente de un sprint posterior (ver comentario
-                del módulo) — estructura/posición ya aprobadas por el mockup,
-                deshabilitados a propósito para no simular una acción que
-                todavía no existe. */}
-            <Button variant="outline" size="sm" icon={<RotateCcw className="w-3.5 h-3.5" />} disabled title="Disponible en un sprint posterior">
+            {/* Restablecer (Sprint 3D-7.11G): habilitado solo con cambios
+                locales pendientes (roles/excepciones/grants/revokes, ver
+                hayCambiosPendientes en el hook); descarta todo y vuelve
+                exactamente al estado con el que se entró a la pantalla.
+                Guardar cambios: la persistencia real sigue pendiente de un
+                sprint posterior (ver comentario del módulo) — por ahora solo
+                refleja si hay algo que guardar, sin llamar a ningún
+                endpoint ni mostrar un mensaje de éxito. */}
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<RotateCcw className="w-3.5 h-3.5" />}
+              disabled={!hayCambiosPendientes || edicionBloqueada}
+              onClick={restablecerCambios}
+            >
               Restablecer cambios
             </Button>
-            <Button size="sm" icon={<Save className="w-3.5 h-3.5" />} disabled title="Disponible en un sprint posterior">
+            <Button
+              size="sm"
+              icon={<Save className="w-3.5 h-3.5" />}
+              disabled={!hayCambiosPendientes || edicionBloqueada}
+              title="Disponible en un sprint posterior"
+            >
               Guardar cambios
             </Button>
           </div>

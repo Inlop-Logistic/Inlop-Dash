@@ -98,6 +98,55 @@ export function useGestionPermisosUsuario() {
    *  no persistir todavía (este sprint), quedaría inerte igualmente. */
   const edicionBloqueada = !usuarioSeleccionado || usuarioSeleccionado.activo !== true;
 
+  // Roles con los que el usuario llegó a la pantalla (Sprint 3D-7.11G) —
+  // derivado directamente de usuario.roles_rbac (el dato tal cual lo cargó
+  // el backend), no un snapshot manual: se recalcula solo si cambia el
+  // usuario seleccionado, exactamente el mismo momento en que el efecto de
+  // arriba reinicializa rolesSeleccionados. Sirve como base de comparación
+  // para "hay cambios pendientes" y como valor al que vuelve "Restablecer".
+  const rolesOriginalIds = useMemo(
+    () => new Set(usuarioSeleccionado?.roles_rbac.map(r => r.id) ?? []),
+    [usuarioSeleccionado]
+  );
+
+  function mismoConjunto(a: Set<string>, b: Set<string>): boolean {
+    if (a.size !== b.size) return false;
+    for (const id of a) if (!b.has(id)) return false;
+    return true;
+  }
+
+  /**
+   * Hay cambios pendientes (Sprint 3D-7.11G) — comparación directa contra el
+   * estado con el que se entró a la pantalla, no un flag acumulado que haya
+   * que ir marcando en cada toggle: roles distintos a rolesOriginalIds,
+   * "Excepciones" activado (el valor de entrada siempre es false), o
+   * cualquier grant/revoke local. Activar y luego desactivar Excepciones sin
+   * tocar nada más vuelve a coincidir con el estado de entrada — igual que
+   * marcar y desmarcar el mismo rol — por lo que correctamente deja de
+   * contar como cambio pendiente, sin necesidad de un caso especial.
+   */
+  const hayCambiosPendientes = useMemo(
+    () =>
+      !mismoConjunto(rolesSeleccionados, rolesOriginalIds) ||
+      excepcionesActivadas ||
+      grantsLocales.size > 0 ||
+      revokesLocales.size > 0,
+    [rolesSeleccionados, rolesOriginalIds, excepcionesActivadas, grantsLocales, revokesLocales]
+  );
+
+  /** Descarta roles/excepciones/grants/revokes locales y vuelve exactamente
+   *  al estado con el que se entró a la pantalla (mismo valor que ya aplica
+   *  el efecto de reinicio al cambiar de usuario, pero invocable a mano sin
+   *  cambiar de usuario). No toca busquedaPermiso — el buscador no es un
+   *  "cambio pendiente" sobre el usuario, es solo un filtro de vista. */
+  function restablecerCambios() {
+    if (edicionBloqueada) return;
+    setRolesSeleccionados(new Set(rolesOriginalIds));
+    setExcepcionesActivadas(false);
+    setGrantsLocales(new Set());
+    setRevokesLocales(new Set());
+  }
+
   /** IDs de los permisos heredados por el conjunto de roles dado — misma
    *  regla de unión que permisosHeredados (abajo), extraída para poder
    *  recalcularla también dentro de toggleRol (antes de que el nuevo
@@ -239,5 +288,6 @@ export function useGestionPermisosUsuario() {
     busquedaPermiso, setBusquedaPermiso,
     permisosHeredadosIds, permisosHeredados, permisosEfectivosIds, permisosPorModulo,
     edicionBloqueada,
+    hayCambiosPendientes, restablecerCambios,
   };
 }
