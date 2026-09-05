@@ -36,25 +36,29 @@
  * (todos desplegados por defecto, con expandir/contraer manual) son ahora la
  * navegación principal del panel derecho.
  *
- * SIGUE SIN PERSISTIR: "Restablecer cambios"/"Guardar cambios" en el header
- * (posición/estructura de 3D-7.11E.1) habilitan/deshabilitan su estado según
- * `hayCambiosPendientes` desde 3D-7.11G. "Restablecer" ya es funcional —
- * descarta roles/excepciones/grants/revokes locales y vuelve al estado con
- * el que se entró a la pantalla (ver restablecerCambios en el hook).
- * "Guardar cambios" solo refleja si hay algo pendiente: la persistencia real
- * sigue sin implementarse (mismo patrón ya usado en este proyecto para una
- * acción de UI todavía no conectada a backend, ver "Nuevo usuario" en
- * UsuariosPage antes de 3D-7.8D). Nada de esto llama a
- * PUT /api/usuarios/:id/roles ni a PUT /api/usuarios/:id/permisos (ya
- * existentes, pendientes de conectar en un sprint de guardado posterior).
+ * Persistencia real (Sprint 3D-7.11I) — "Restablecer cambios"/"Guardar
+ * cambios" en el header habilitan/deshabilitan su estado según
+ * `hayCambiosPendientes` (3D-7.11G). Ambos son ya funcionales:
+ * "Restablecer" descarta roles/excepciones/grants/revokes locales y vuelve
+ * al estado con el que se entró a la pantalla; "Guardar cambios" llama a
+ * `guardarCambios()` del hook, que reutiliza EXACTAMENTE la infraestructura
+ * RBAC ya existente y auditada (3D-7.11H) — actualizarRolesUsuario()/
+ * actualizarExcepcionesUsuario() (PUT /api/usuarios/:id/roles y
+ * PUT /api/usuarios/:id/permisos), sin ningún endpoint nuevo. Si la
+ * operación toca el rol `master` o una excepción sobre `rbac:gestionar`,
+ * se reutilizan sin cambios los mismos modales de confirmación reforzada
+ * de UsuariosPage.tsx (ModalConfirmarCambioMaster/
+ * ModalConfirmarExcepcionGestionar) — ninguna regla de seguridad nueva.
  *
  * Usuario inactivo: toda la columna izquierda y el panel de permisos quedan
  * deshabilitados — solo permite consulta (ver edicionBloqueada).
  */
 import { useState, useEffect, useCallback } from "react";
-import { ShieldCheck, Search, AlertCircle, Check, RotateCcw, Save, ChevronDown, Layers } from "lucide-react";
+import { ShieldCheck, Search, AlertCircle, Check, RotateCcw, Save, ChevronDown, Layers, Loader2 } from "lucide-react";
 import { PageHeader, Badge, Button } from "@/components/ui";
 import { useGestionPermisosUsuario } from "./hooks/useGestionPermisosUsuario";
+import { ModalConfirmarCambioMaster } from "./components/ModalConfirmarCambioMaster";
+import { ModalConfirmarExcepcionGestionar } from "./components/ModalConfirmarExcepcionGestionar";
 import type { PermisoRbac, RolRbac } from "./types";
 
 const SELECT_STYLE: React.CSSProperties = {
@@ -212,6 +216,9 @@ export function GestionPermisosUsuarioPage() {
     busquedaPermiso, setBusquedaPermiso,
     permisosHeredadosIds, permisosHeredados, permisosEfectivosIds, permisosPorModulo,
     edicionBloqueada, hayCambiosPendientes, restablecerCambios,
+    guardando, errorGuardado, guardarCambios,
+    agregandoMaster, confirmarMaster, confirmarCambioMaster, cancelarConfirmacionGuardado,
+    efectoDeseadoGestionar, confirmarGestionarExcepcion, confirmarExcepcionGestionar,
   } = useGestionPermisosUsuario();
 
   // Solo estado local de foco del buscador — sin lógica adicional.
@@ -280,30 +287,51 @@ export function GestionPermisosUsuarioPage() {
                 locales pendientes (roles/excepciones/grants/revokes, ver
                 hayCambiosPendientes en el hook); descarta todo y vuelve
                 exactamente al estado con el que se entró a la pantalla.
-                Guardar cambios: la persistencia real sigue pendiente de un
-                sprint posterior (ver comentario del módulo) — por ahora solo
-                refleja si hay algo que guardar, sin llamar a ningún
-                endpoint ni mostrar un mensaje de éxito. */}
+                Deshabilitado también mientras se está guardando (evita
+                restablecer a mitad de un guardado en curso). */}
             <Button
               variant="outline"
               size="sm"
               icon={<RotateCcw className="w-3.5 h-3.5" />}
-              disabled={!hayCambiosPendientes || edicionBloqueada}
+              disabled={!hayCambiosPendientes || edicionBloqueada || guardando}
               onClick={restablecerCambios}
             >
               Restablecer cambios
             </Button>
+            {/* Guardar cambios (Sprint 3D-7.11I): guardarCambios() reutiliza
+                actualizarRolesUsuario()/actualizarExcepcionesUsuario() ya
+                existentes (roles primero, excepciones después) — pide
+                confirmación reforzada antes si toca master/rbac:gestionar
+                (ver modales abajo). `disabled` también mientras `guardando`
+                evita doble envío. */}
             <Button
               size="sm"
-              icon={<Save className="w-3.5 h-3.5" />}
-              disabled={!hayCambiosPendientes || edicionBloqueada}
-              title="Disponible en un sprint posterior"
+              icon={guardando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              disabled={!hayCambiosPendientes || edicionBloqueada || guardando}
+              onClick={guardarCambios}
             >
-              Guardar cambios
+              {guardando ? "Guardando…" : "Guardar cambios"}
             </Button>
           </div>
         ) : undefined}
       />
+
+      {/* Error de guardado (Sprint 3D-7.11I) — mismo patrón visual que el
+          aviso de usuario inactivo de abajo: banner rojo con AlertCircle.
+          Nunca reemplaza al banner de error de carga (`error`, más abajo),
+          que es un problema distinto (no se pudo cargar usuarios/roles/
+          permisos). Si falló solo una parte (p.ej. roles se guardaron pero
+          excepciones no), el mensaje ya lo deja explícito — ver
+          ejecutarGuardado en el hook. */}
+      {errorGuardado && !error && (
+        <div
+          className="flex items-start gap-2.5 px-4 py-3 rounded-xl"
+          style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-light)" }}
+        >
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "var(--inlop-red)" }} />
+          <p className="text-[12.5px]" style={{ color: "var(--inlop-red)" }}>{errorGuardado}</p>
+        </div>
+      )}
 
       {error ? (
         <div className="py-16 text-center">
@@ -671,6 +699,31 @@ export function GestionPermisosUsuarioPage() {
                 </div>
               </div>
         </>
+      )}
+
+      {/* Confirmación reforzada al guardar (Sprint 3D-7.11I) — mismos
+          componentes que ya usa UsuariosPage.tsx, sin modificarlos: el
+          request real lo dispara guardarCambios()/ejecutarGuardado() en el
+          hook, estos modales solo confirman y reflejan guardando/error. */}
+      {confirmarMaster && usuarioSeleccionado && (
+        <ModalConfirmarCambioMaster
+          usuarioNombre={usuarioSeleccionado.nombre || usuarioSeleccionado.email}
+          agregando={agregandoMaster}
+          guardando={guardando}
+          error={errorGuardado}
+          onConfirmar={confirmarCambioMaster}
+          onCancelar={cancelarConfirmacionGuardado}
+        />
+      )}
+      {confirmarGestionarExcepcion && usuarioSeleccionado && (
+        <ModalConfirmarExcepcionGestionar
+          usuarioNombre={usuarioSeleccionado.nombre || usuarioSeleccionado.email}
+          efectoDeseado={efectoDeseadoGestionar}
+          guardando={guardando}
+          error={errorGuardado}
+          onConfirmar={confirmarExcepcionGestionar}
+          onCancelar={cancelarConfirmacionGuardado}
+        />
       )}
     </div>
   );
