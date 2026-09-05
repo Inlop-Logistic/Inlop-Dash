@@ -16,7 +16,6 @@ import {
 } from "./types";
 
 interface Props {
-  onBack:  () => void;
   onCrear: () => void;
   /** Abre el wizard de 6 etapas precargado — "Editar configuración completa" (Fase 9I). */
   onEditarCompleto: (reporte: ReporteAutomatico) => void;
@@ -202,7 +201,7 @@ function buildColumns(
 
 // ── Página principal ──────────────────────────────────────────────────────────
 
-export function ReportesAutomaticosPage({ onBack, onCrear, onEditarCompleto, avisoInicial, onAvisoConsumido }: Props) {
+export function ReportesAutomaticosPage({ onCrear, onEditarCompleto, avisoInicial, onAvisoConsumido }: Props) {
   const state = useReportesAutomaticos();
   const {
     filtrados, loading,
@@ -243,24 +242,6 @@ export function ReportesAutomaticosPage({ onBack, onCrear, onEditarCompleto, avi
 
   return (
     <div className="p-6 flex flex-col gap-6">
-
-      {/* Migas de pan interna */}
-      <nav
-        aria-label="Ruta interna"
-        className="flex items-center gap-1.5 text-[13px]"
-        style={{ color: "var(--gray-400)" }}
-      >
-        <button
-          type="button"
-          onClick={onBack}
-          className="hover:underline focus-visible:outline-none"
-          style={{ color: "var(--gray-500)" }}
-        >
-          Parámetros
-        </button>
-        <span aria-hidden="true">›</span>
-        <span style={{ color: "var(--gray-700)", fontWeight: 600 }}>Reportes Automáticos</span>
-      </nav>
 
       {/* Header + acción principal */}
       <div className="flex items-start justify-between gap-4">

@@ -9,7 +9,7 @@ import { TopbarSearch } from "@/components/layout/TopbarSearch";
 import { TopbarNotifications } from "@/components/layout/TopbarNotifications";
 import { TopbarUserMenu } from "@/components/layout/TopbarUserMenu";
 import type { Vista, NavSection } from "@/types/navigation";
-import type { BreadcrumbItem } from "@/core/navigation";
+import type { BreadcrumbItem, SidebarGroup } from "@/core/navigation";
 
 // Re-export para compatibilidad con importadores existentes (ej. App.tsx).
 export type { Vista } from "@/types/navigation";
@@ -64,9 +64,14 @@ interface Props {
    *  3D-7.11F) — ver NavigationContext. `null`/`undefined` = breadcrumb por
    *  defecto (INLOP › [sección] › [ítem de nav actual]). */
   breadcrumbTrail?: BreadcrumbItem[] | null;
+  /** Subgrupos que reemplazan los ítems planos de la sección "CONFIGURACIÓN"
+   *  del sidebar (Sprint 3D-7.11J) — ver NavigationContext. `null`/`undefined`
+   *  = esa sección muestra su lista de ítems por defecto (sin cambios en el
+   *  resto de secciones, que nunca usan este mecanismo). */
+  sidebarGroups?: SidebarGroup[] | null;
 }
 
-export function AppShell({ vista, setVista, children, badges = {}, breadcrumbTrail }: Props) {
+export function AppShell({ vista, setVista, children, badges = {}, breadcrumbTrail, sidebarGroups }: Props) {
   const { profile, signOut } = useAuth();
 
   const [collapsed, setCollapsed] = useState(
@@ -108,6 +113,68 @@ export function AppShell({ vista, setVista, children, badges = {}, breadcrumbTra
     background: "var(--navy)", borderRadius: "var(--radius-md)",
     boxShadow: "var(--shadow-card)", zIndex: 50,
   };
+
+  /** Botón de navegación del sidebar — extraído (Sprint 3D-7.11J) para
+   *  reutilizarlo tal cual tanto en los ítems planos de cada NavSection como
+   *  en los subgrupos dinámicos de "CONFIGURACIÓN" (sidebarGroups): mismo
+   *  markup, mismas clases/estilos, mismo tooltip en modo colapsado — cero
+   *  estilo nuevo, solo se parametrizan id/label/icon/active/onClick/badge
+   *  en vez de derivarlos de `vista === item.id`. */
+  function renderNavButton({
+    id, label, icon, active, badge, onClick,
+  }: { id: string; label: string; icon: ReactNode; active: boolean; badge?: number; onClick: () => void }) {
+    return (
+      <div key={id} className="relative group/nav">
+        <button
+          onClick={onClick}
+          aria-current={active ? "page" : undefined}
+          className={[
+            "w-full flex items-center py-2.5 text-left text-[var(--text-md)] font-medium",
+            "rounded-[var(--radius-xl)]",
+            "transition-colors duration-150",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--navy-dark)]",
+            collapsed ? "justify-center gap-0" : "gap-3 px-3",
+            active
+              ? "bg-[var(--navy-mid)] text-white"
+              : "text-[rgba(255,255,255,0.55)] hover:bg-[rgba(255,255,255,0.07)] hover:text-[rgba(255,255,255,0.85)]",
+          ].join(" ")}
+          style={{ borderLeft: active ? "2px solid var(--inlop-red)" : "2px solid transparent" }}
+        >
+          <span className="shrink-0">{icon}</span>
+          <span style={textStyle}>{label}</span>
+          {badge !== undefined && badge > 0 && (
+            <span
+              aria-label={`${badge} notificaciones`}
+              className="text-[var(--text-xs)] font-bold px-1.5 py-0.5 rounded-[var(--radius-full)] min-w-[18px] text-center shrink-0"
+              style={{
+                background: "var(--inlop-red)", color: "#fff",
+                ...(collapsed
+                  ? { opacity: 0, maxWidth: 0, overflow: "hidden", transition: `opacity 80ms ease, max-width 200ms ${EASE}` }
+                  : { opacity: 1, maxWidth: "40px", transition: `opacity 150ms ease 180ms, max-width 250ms ${EASE}` }
+                ),
+              }}
+            >
+              {badge}
+            </span>
+          )}
+        </button>
+
+        {collapsed && (
+          <div role="tooltip" className={`${tooltipCls} group-hover/nav:opacity-100`} style={tooltipStyle}>
+            {label}
+            {badge !== undefined && badge > 0 && (
+              <span
+                className="text-[var(--text-xs)] font-bold px-1.5 py-0.5 rounded-[var(--radius-full)] min-w-[18px] text-center"
+                style={{ background: "var(--inlop-red)", color: "#fff" }}
+              >
+                {badge}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     // `height: 100vh` explícito (Sprint 3D-7.11E.3.1) además de `h-svh` —
@@ -174,71 +241,40 @@ export function AppShell({ vista, setVista, children, badges = {}, breadcrumbTra
                 {section.label}
               </div>
 
-              {/* Ítems */}
-              <div className="flex flex-col gap-0.5">
-                {section.items.map((item) => {
-                  const active = vista === item.id;
-                  const badge  = badges[item.id];
-                  return (
-                    <div key={item.id} className="relative group/nav">
-                      <button
-                        onClick={() => setVista(item.id)}
-                        aria-current={active ? "page" : undefined}
-                        className={[
-                          "w-full flex items-center py-2.5 text-left text-[var(--text-md)] font-medium",
-                          "rounded-[var(--radius-xl)]",
-                          "transition-colors duration-150",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--navy-dark)]",
-                          // gap y padding condicionales: gap-0 evita descentrado del ícono en modo colapsado
-                          collapsed ? "justify-center gap-0" : "gap-3 px-3",
-                          active
-                            ? "bg-[var(--navy-mid)] text-white"
-                            : "text-[rgba(255,255,255,0.55)] hover:bg-[rgba(255,255,255,0.07)] hover:text-[rgba(255,255,255,0.85)]",
-                        ].join(" ")}
-                        style={{ borderLeft: active ? "2px solid var(--inlop-red)" : "2px solid transparent" }}
+              {/* Ítems — la sección "CONFIGURACIÓN" (única con sidebarGroups
+                  declarado, Sprint 3D-7.11J) reemplaza su lista plana por
+                  subgrupos ("Seguridad y acceso"/"Parámetros"), cada uno con
+                  su propia etiqueta y sus propios ítems; el resto de
+                  secciones nunca usa este mecanismo y sigue exactamente igual. */}
+              {section.id === "sistema" && sidebarGroups ? (
+                <div className="flex flex-col gap-3">
+                  {sidebarGroups.map((grupo) => (
+                    <div key={grupo.label}>
+                      <div
+                        aria-hidden="true"
+                        className="px-3 pb-1 text-[var(--text-xs)] font-semibold select-none"
+                        style={{ color: "rgba(255,255,255,0.22)", letterSpacing: "0.06em", ...sectionLabelStyle }}
                       >
-                        <span className="shrink-0">{item.icon}</span>
-                        <span style={textStyle}>{item.label}</span>
-                        {badge !== undefined && badge > 0 && (
-                          <span
-                            aria-label={`${badge} notificaciones`}
-                            className="text-[var(--text-xs)] font-bold px-1.5 py-0.5 rounded-[var(--radius-full)] min-w-[18px] text-center shrink-0"
-                            style={{
-                              background: "var(--inlop-red)", color: "#fff",
-                              // Badge se desvanece con el texto en modo colapsado
-                              ...(collapsed
-                                ? { opacity: 0, maxWidth: 0, overflow: "hidden", transition: `opacity 80ms ease, max-width 200ms ${EASE}` }
-                                : { opacity: 1, maxWidth: "40px", transition: `opacity 150ms ease 180ms, max-width 250ms ${EASE}` }
-                              ),
-                            }}
-                          >
-                            {badge}
-                          </span>
-                        )}
-                      </button>
-
-                      {/* Tooltip — solo en modo colapsado */}
-                      {collapsed && (
-                        <div
-                          role="tooltip"
-                          className={`${tooltipCls} group-hover/nav:opacity-100`}
-                          style={tooltipStyle}
-                        >
-                          {item.label}
-                          {badge !== undefined && badge > 0 && (
-                            <span
-                              className="text-[var(--text-xs)] font-bold px-1.5 py-0.5 rounded-[var(--radius-full)] min-w-[18px] text-center"
-                              style={{ background: "var(--inlop-red)", color: "#fff" }}
-                            >
-                              {badge}
-                            </span>
-                          )}
-                        </div>
-                      )}
+                        {grupo.label}
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        {grupo.items.map((item) => renderNavButton({
+                          id: item.id, label: item.label, icon: item.icon,
+                          active: item.active, onClick: item.onClick,
+                        }))}
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-0.5">
+                  {section.items.map((item) => renderNavButton({
+                    id: item.id, label: item.label, icon: item.icon,
+                    active: vista === item.id, badge: badges[item.id],
+                    onClick: () => setVista(item.id),
+                  }))}
+                </div>
+              )}
             </div>
           ))}
 

@@ -7,10 +7,6 @@ import type { RolRbac, PermisoRbac } from "./types";
 import { useRolesPermisos, type PestanaRolesPermisos } from "./hooks/useRolesPermisos";
 import { ModalConfirmarPermisoGestionar } from "./components/ModalConfirmarPermisoGestionar";
 
-interface Props {
-  onBack: () => void;
-}
-
 // ── Bloque de error — mismo patrón real que CumplidosPage ────────────────────
 
 function BloqueError({ mensaje, onReintentar }: { mensaje: string; onReintentar: () => void }) {
@@ -192,7 +188,7 @@ function SelectorPermisosPorModulo({
 
 // ── Página principal ──────────────────────────────────────────────────────────
 
-export function RolesPermisosPage({ onBack }: Props) {
+export function RolesPermisosPage() {
   const {
     roles, permisos, loading, error, cargar,
     pestana, setPestana,
@@ -208,20 +204,6 @@ export function RolesPermisosPage({ onBack }: Props) {
 
   return (
     <div className="p-6 flex flex-col gap-6">
-
-      {/* Migas de pan interna */}
-      <nav aria-label="Ruta interna" className="flex items-center gap-1.5 text-[13px]" style={{ color: "var(--gray-400)" }}>
-        <button
-          type="button"
-          onClick={onBack}
-          className="hover:underline focus-visible:outline-none"
-          style={{ color: "var(--gray-500)" }}
-        >
-          Parámetros
-        </button>
-        <span aria-hidden="true">›</span>
-        <span style={{ color: "var(--gray-700)", fontWeight: 600 }}>Roles y Permisos</span>
-      </nav>
 
       <PageHeader
         title="Roles y Permisos"

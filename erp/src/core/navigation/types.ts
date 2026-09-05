@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Vista } from "@/types/navigation";
 
 /**
@@ -48,4 +49,24 @@ export interface NavigationDestination {
 export interface BreadcrumbItem {
   label:    string;
   onClick?: () => void;
+}
+
+/** Un ítem de navegación dentro de un subgrupo del sidebar (Sprint 3D-7.11J)
+ *  — mismo shape/estilo que NavItem, pero `active`/`onClick` los calcula el
+ *  módulo dueño del subgrupo (ConfiguracionPage), no `vista === item.id`
+ *  (estos ítems no son Vista de nivel superior, son subVistas internas). */
+export interface SidebarSubItem {
+  id:      string;
+  label:   string;
+  icon:    ReactNode;
+  active:  boolean;
+  onClick: () => void;
+}
+
+/** Subgrupo visual dentro de una sección del sidebar (Sprint 3D-7.11J) — ej.
+ *  "Seguridad y acceso"/"Parámetros" dentro de la sección "CONFIGURACIÓN".
+ *  Puramente de presentación: no crea rutas ni Vista nuevas. */
+export interface SidebarGroup {
+  label: string;
+  items: SidebarSubItem[];
 }

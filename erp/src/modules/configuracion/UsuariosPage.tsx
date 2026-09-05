@@ -15,7 +15,6 @@ import { ModalConfirmarResetPassword } from "./components/ModalConfirmarResetPas
 import { ModalConfirmarActivarDesactivar } from "./components/ModalConfirmarActivarDesactivar";
 
 interface Props {
-  onBack: () => void;
   /** Navega a la nueva pantalla de Gestión de permisos por usuario
    *  (Sprint 3D-7.11B) — base UI, sin persistencia todavía. */
   onGestionPermisos: () => void;
@@ -485,7 +484,7 @@ function SelectorExcepciones({
 
 // ── Página principal ──────────────────────────────────────────────────────────
 
-export function UsuariosPage({ onBack, onGestionPermisos }: Props) {
+export function UsuariosPage({ onGestionPermisos }: Props) {
   const {
     data, filtrados, loading, error, cargar,
     busqueda, setBusqueda,
@@ -551,20 +550,6 @@ export function UsuariosPage({ onBack, onGestionPermisos }: Props) {
 
   return (
     <div className="p-6 flex flex-col gap-6">
-
-      {/* Migas de pan interna */}
-      <nav aria-label="Ruta interna" className="flex items-center gap-1.5 text-[13px]" style={{ color: "var(--gray-400)" }}>
-        <button
-          type="button"
-          onClick={onBack}
-          className="hover:underline focus-visible:outline-none"
-          style={{ color: "var(--gray-500)" }}
-        >
-          Parámetros
-        </button>
-        <span aria-hidden="true">›</span>
-        <span style={{ color: "var(--gray-700)", fontWeight: 600 }}>Usuarios</span>
-      </nav>
 
       {/* Header + acción principal — mismo patrón que ReportesAutomaticosPage */}
       <div className="flex items-start justify-between gap-4">
