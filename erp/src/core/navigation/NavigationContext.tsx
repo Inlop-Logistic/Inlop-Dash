@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import type { Vista } from "@/types/navigation";
-import type { BreadcrumbItem, ModuloId, NavPayload, NavigationDestination, SidebarGroup } from "./types";
+import type { BreadcrumbItem, ModuloId, NavPayload, NavigationDestination } from "./types";
 import { MODULOS_IMPLEMENTADOS } from "./types";
 
 interface NavigationCtxValue {
@@ -20,14 +20,16 @@ interface NavigationCtxValue {
    */
   breadcrumbTrail: BreadcrumbItem[] | null;
   /**
-   * Subgrupos del sidebar que reemplazan los ítems planos de la sección
-   * "CONFIGURACIÓN" (Sprint 3D-7.11J) — ej. "Seguridad y acceso"/"Parámetros"
-   * con sus propios ítems (Usuarios/Roles/Parámetros). `null` = AppShell usa
-   * la lista plana de ítems por defecto de esa sección. Mismo ciclo de vida
-   * que `breadcrumbTrail`: el módulo dueño lo declara mientras esté montado y
-   * lo limpia (null) al desmontarse.
+   * Ítem del sidebar de Configuración actualmente activo (Sprint 3D-7.11J.2)
+   * — "usuarios" | "roles-permisos" | "parametros", o `null` si Configuración
+   * no está montada. Los 3 ítems del sidebar ("Usuarios", "Roles",
+   * "Parámetros") son fijos y siempre visibles (declarados en AppShell, no
+   * dependen de este valor para *aparecer*); esto solo decide cuál se ve
+   * resaltado como activo. Mismo ciclo de vida que `breadcrumbTrail`:
+   * ConfiguracionPage lo declara mientras esté montada y lo limpia (null) al
+   * desmontarse.
    */
-  sidebarGroups: SidebarGroup[] | null;
+  configActiveItem: "usuarios" | "roles-permisos" | "parametros" | null;
   /**
    * Navega a otro módulo preservando el contexto operativo.
    * Si el módulo destino no está en MODULOS_IMPLEMENTADOS, es un no-op.
@@ -38,7 +40,7 @@ interface NavigationCtxValue {
    */
   setVista:      (v: Vista) => void;
   setBreadcrumbTrail: (trail: BreadcrumbItem[] | null) => void;
-  setSidebarGroups:   (groups: SidebarGroup[] | null) => void;
+  setConfigActiveItem: (item: "usuarios" | "roles-permisos" | "parametros" | null) => void;
 }
 
 const NavigationCtx = createContext<NavigationCtxValue | null>(null);
@@ -48,14 +50,14 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
   const [navPayload,      setNavPayload]        = useState<NavPayload | null>(null);
   const [originModule,    setOriginModule]      = useState<ModuloId | null>(null);
   const [breadcrumbTrail, setBreadcrumbTrail]   = useState<BreadcrumbItem[] | null>(null);
-  const [sidebarGroups,   setSidebarGroups]     = useState<SidebarGroup[] | null>(null);
+  const [configActiveItem, setConfigActiveItem] = useState<"usuarios" | "roles-permisos" | "parametros" | null>(null);
 
   const navigateTo = useCallback((dest: NavigationDestination) => {
     if (!MODULOS_IMPLEMENTADOS.has(dest.modulo)) return;
     setNavPayload(dest.payload ?? null);
     setOriginModule(dest.originModule ?? null);
     setBreadcrumbTrail(null);
-    setSidebarGroups(null);
+    if (dest.modulo !== "configuracion") setConfigActiveItem(null);
     setVistaState(dest.modulo as Vista);
   }, []);
 
@@ -63,14 +65,14 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
     setNavPayload(null);
     setOriginModule(null);
     setBreadcrumbTrail(null);
-    setSidebarGroups(null);
+    setConfigActiveItem(null);
     setVistaState(v);
   }, []);
 
   return (
     <NavigationCtx.Provider value={{
-      vista, navPayload, originModule, breadcrumbTrail, sidebarGroups,
-      navigateTo, setVista, setBreadcrumbTrail, setSidebarGroups,
+      vista, navPayload, originModule, breadcrumbTrail, configActiveItem,
+      navigateTo, setVista, setBreadcrumbTrail, setConfigActiveItem,
     }}>
       {children}
     </NavigationCtx.Provider>

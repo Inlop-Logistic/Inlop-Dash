@@ -22,7 +22,7 @@ function ComingSoon({ titulo }: { titulo: string }) {
 
 function AppInner() {
   const { user, loading, recoveryMode } = useAuth();
-  const { vista, setVista, breadcrumbTrail, sidebarGroups } = useNavigationContext();
+  const { vista, setVista, navigateTo, breadcrumbTrail, configActiveItem } = useNavigationContext();
 
   if (loading) {
     return (
@@ -52,7 +52,7 @@ function AppInner() {
   };
 
   return (
-    <AppShell vista={vista} setVista={setVista} breadcrumbTrail={breadcrumbTrail} sidebarGroups={sidebarGroups}>
+    <AppShell vista={vista} setVista={setVista} navigateTo={navigateTo} breadcrumbTrail={breadcrumbTrail} configActiveItem={configActiveItem}>
       {renderPage()}
     </AppShell>
   );

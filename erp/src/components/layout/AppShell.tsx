@@ -2,14 +2,14 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import { useAuth } from "@/state/AuthContext";
 import {
   LayoutDashboard, ClipboardList, Truck, Map,
-  CalendarClock, CheckSquare, Settings,
+  CalendarClock, CheckSquare, Settings, Users, ShieldCheck,
   LogOut, ChevronRight, ChevronLeft, Building2,
 } from "lucide-react";
 import { TopbarSearch } from "@/components/layout/TopbarSearch";
 import { TopbarNotifications } from "@/components/layout/TopbarNotifications";
 import { TopbarUserMenu } from "@/components/layout/TopbarUserMenu";
 import type { Vista, NavSection } from "@/types/navigation";
-import type { BreadcrumbItem, SidebarGroup } from "@/core/navigation";
+import type { BreadcrumbItem, NavigationDestination } from "@/core/navigation";
 
 // Re-export para compatibilidad con importadores existentes (ej. App.tsx).
 export type { Vista } from "@/types/navigation";
@@ -50,6 +50,28 @@ const NAV_SECTIONS: NavSection[] = [
 
 const NAV_ALL = NAV_SECTIONS.flatMap((s) => s.items);
 
+/**
+ * Ítems fijos del sidebar de la sección "CONFIGURACIÓN" (Sprint 3D-7.11J.2).
+ * A diferencia del resto de secciones, estos 3 ítems no corresponden 1:1 a
+ * una `Vista` (los tres navegan a la misma vista "configuracion" con una
+ * sub-pantalla distinta vía `NavPayload.configSubVista`) — por eso viven
+ * en un arreglo aparte en vez del `items: NavItem[]` tipado de NavSection,
+ * y por qué la sección "sistema" tiene su propia rama de render más abajo.
+ * Son estáticos: SIEMPRE visibles, sin depender de que ConfiguracionPage
+ * esté montada (antes de esta corrección, los ítems los declaraba
+ * ConfiguracionPage vía contexto al montarse, por lo que solo aparecían
+ * después de haber entrado a Configuración — ese era el bug).
+ */
+const CONFIG_SIDEBAR_ITEMS: {
+  key:   "usuarios" | "roles-permisos" | "parametros";
+  label: string;
+  icon:  ReactNode;
+}[] = [
+  { key: "usuarios",       label: "Usuarios",   icon: <Users className="w-4 h-4" /> },
+  { key: "roles-permisos", label: "Roles",      icon: <ShieldCheck className="w-4 h-4" /> },
+  { key: "parametros",     label: "Parámetros", icon: <Settings className="w-4 h-4" /> },
+];
+
 const STORAGE_KEY = "inlop-erp-sidebar-collapsed";
 
 // Easing compartido — Material Design standard easing
@@ -58,20 +80,25 @@ const EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
 interface Props {
   vista: Vista;
   setVista: (v: Vista) => void;
+  /** Navega preservando `NavPayload` (Sprint 3D-7.11J.2) — lo usan los 3
+   *  ítems fijos de "CONFIGURACIÓN" para indicar qué sub-pantalla abrir
+   *  (`configSubVista`) sin depender de que ConfiguracionPage ya esté
+   *  montada. Ver NavigationContext. */
+  navigateTo: (dest: NavigationDestination) => void;
   children: ReactNode;
   badges?: Partial<Record<Vista, number>>;
   /** Tramo de breadcrumb adicional declarado por el módulo actual (Sprint
    *  3D-7.11F) — ver NavigationContext. `null`/`undefined` = breadcrumb por
    *  defecto (INLOP › [sección] › [ítem de nav actual]). */
   breadcrumbTrail?: BreadcrumbItem[] | null;
-  /** Subgrupos que reemplazan los ítems planos de la sección "CONFIGURACIÓN"
-   *  del sidebar (Sprint 3D-7.11J) — ver NavigationContext. `null`/`undefined`
-   *  = esa sección muestra su lista de ítems por defecto (sin cambios en el
-   *  resto de secciones, que nunca usan este mecanismo). */
-  sidebarGroups?: SidebarGroup[] | null;
+  /** Cuál de los 3 ítems fijos de "CONFIGURACIÓN" está activo (Sprint
+   *  3D-7.11J.2) — ver NavigationContext. Los ítems mismos son estáticos y
+   *  siempre se renderizan; esto solo decide el resaltado. `null`/`undefined`
+   *  (Configuración no montada) o vista !== "configuracion" → ninguno activo. */
+  configActiveItem?: "usuarios" | "roles-permisos" | "parametros" | null;
 }
 
-export function AppShell({ vista, setVista, children, badges = {}, breadcrumbTrail, sidebarGroups }: Props) {
+export function AppShell({ vista, setVista, navigateTo, children, badges = {}, breadcrumbTrail, configActiveItem }: Props) {
   const { profile, signOut } = useAuth();
 
   const [collapsed, setCollapsed] = useState(
@@ -241,30 +268,18 @@ export function AppShell({ vista, setVista, children, badges = {}, breadcrumbTra
                 {section.label}
               </div>
 
-              {/* Ítems — la sección "CONFIGURACIÓN" (única con sidebarGroups
-                  declarado, Sprint 3D-7.11J) reemplaza su lista plana por
-                  subgrupos ("Seguridad y acceso"/"Parámetros"), cada uno con
-                  su propia etiqueta y sus propios ítems; el resto de
-                  secciones nunca usa este mecanismo y sigue exactamente igual. */}
-              {section.id === "sistema" && sidebarGroups ? (
-                <div className="flex flex-col gap-3">
-                  {sidebarGroups.map((grupo) => (
-                    <div key={grupo.label}>
-                      <div
-                        aria-hidden="true"
-                        className="px-3 pb-1 text-[var(--text-xs)] font-semibold select-none"
-                        style={{ color: "rgba(255,255,255,0.22)", letterSpacing: "0.06em", ...sectionLabelStyle }}
-                      >
-                        {grupo.label}
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        {grupo.items.map((item) => renderNavButton({
-                          id: item.id, label: item.label, icon: item.icon,
-                          active: item.active, onClick: item.onClick,
-                        }))}
-                      </div>
-                    </div>
-                  ))}
+              {/* Ítems — la sección "CONFIGURACIÓN" tiene sus propios 3 ítems
+                  fijos (Usuarios/Roles/Parámetros, Sprint 3D-7.11J.2):
+                  siempre visibles, sin agrupadores ni acordeones, sin
+                  depender de que ConfiguracionPage esté montada. El resto de
+                  secciones sigue exactamente igual (ítem plano por Vista). */}
+              {section.id === "sistema" ? (
+                <div className="flex flex-col gap-0.5">
+                  {CONFIG_SIDEBAR_ITEMS.map((item) => renderNavButton({
+                    id: item.key, label: item.label, icon: item.icon,
+                    active: vista === "configuracion" && (configActiveItem ?? "parametros") === item.key,
+                    onClick: () => navigateTo({ modulo: "configuracion", payload: { configSubVista: item.key } }),
+                  }))}
                 </div>
               ) : (
                 <div className="flex flex-col gap-0.5">

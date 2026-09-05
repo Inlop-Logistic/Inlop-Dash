@@ -50,12 +50,11 @@ interface Props {
  * Pantalla raíz de Configuración → Parámetros (subVista "parametros").
  *
  * Sprint 3D-7.11J: "Usuarios" y "Roles" dejaron de listarse aquí como
- * tarjetas — ahora se navegan directamente desde los subgrupos del sidebar
- * ("Seguridad y acceso", ver ConfiguracionPage.tsx#sidebarGroups), evitando
- * navegación duplicada hacia el mismo destino. Esta pantalla solo lista lo
- * que cuelga de "Parámetros" en la jerarquía aprobada: Reportes automáticos.
- * El progressive disclosure de Usuarios/Roles (antes aquí) se movió junto
- * con esas tarjetas a ConfiguracionPage.tsx.
+ * tarjetas — ahora se navegan directamente desde los ítems fijos del
+ * sidebar de "CONFIGURACIÓN" (ver AppShell.tsx#CONFIG_SIDEBAR_ITEMS),
+ * evitando navegación duplicada hacia el mismo destino. Esta pantalla solo
+ * lista lo que cuelga de "Parámetros" en la jerarquía aprobada: Reportes
+ * automáticos.
  */
 export function ParametrosPage({ onReportesAutomaticos }: Props) {
   return (
