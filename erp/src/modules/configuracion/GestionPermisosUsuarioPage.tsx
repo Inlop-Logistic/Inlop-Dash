@@ -296,82 +296,24 @@ export function GestionPermisosUsuarioPage() {
         </div>
       ) : (
         <>
-          {/* Selector de usuario + información del usuario seleccionado,
-              integrados en una sola tarjeta (Sprint 3D-7.11F) — antes eran
-              dos bloques separados (selector suelto arriba + tarjeta "Usuario
-              seleccionado" dentro de la columna izquierda). Ancho igualado al
-              de la columna izquierda del grid de abajo para leerse como su
-              continuación natural. */}
-          <div className="w-full lg:w-[360px] rounded-xl p-5" style={TARJETA_STYLE}>
-            <label
-              htmlFor="gestion-permisos-usuario"
-              className="block text-[11px] font-semibold uppercase tracking-wide mb-1.5"
-              style={{ color: "var(--gray-500)" }}
+          {/* Sprint 3D-7.11F.1: el aviso de usuario inactivo ya no separa la
+              tarjeta "Usuario" del grid — vive arriba del grid (no dentro de
+              ninguna columna), así ambas columnas siguen arrancando en la
+              misma fila sin importar si el aviso se muestra o no. */}
+          {usuarioSeleccionado && edicionBloqueada && (
+            <div
+              className="flex items-start gap-2.5 px-4 py-3 rounded-xl"
+              style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-light)" }}
             >
-              Usuario
-            </label>
-            <select
-              id="gestion-permisos-usuario"
-              value={usuarioSeleccionadoId ?? ""}
-              onChange={(e) => seleccionarUsuario(e.target.value)}
-              disabled={loading}
-              className="text-[13.5px] outline-none"
-              style={SELECT_STYLE}
-            >
-              <option value="">{loading ? "Cargando…" : "Selecciona un usuario…"}</option>
-              {usuarios.map(u => (
-                <option key={u.id} value={u.id}>{u.nombre || u.email} — {u.email}</option>
-              ))}
-            </select>
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "var(--inlop-red)" }} />
+              <p className="text-[12.5px]" style={{ color: "var(--inlop-red)" }}>
+                Este usuario está inactivo — no se pueden editar sus roles ni excepciones de permisos.
+                Actívalo primero desde <strong>Configuración → Usuarios</strong>.
+              </p>
+            </div>
+          )}
 
-            {usuarioSeleccionado && (
-              <>
-                <div style={{ height: 1, background: "var(--gray-100)", margin: "16px 0" }} />
-                <div className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--gray-400)" }}>
-                  Información del usuario
-                </div>
-                <div className="flex items-center gap-3">
-                  <div
-                    aria-hidden="true"
-                    className="shrink-0 rounded-full flex items-center justify-center font-bold text-[13px]"
-                    style={{ width: "40px", height: "40px", background: "var(--gray-100)", color: "var(--navy)" }}
-                  >
-                    {iniciales(usuarioSeleccionado.nombre, usuarioSeleccionado.email)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[14px] font-semibold truncate" style={{ color: "var(--gray-800)" }}>
-                        {usuarioSeleccionado.nombre || "—"}
-                      </span>
-                      <Badge variant={usuarioSeleccionado.activo ? "success" : "default"}>
-                        {usuarioSeleccionado.activo ? "Activo" : "Inactivo"}
-                      </Badge>
-                    </div>
-                    <div className="text-[12.5px] truncate" style={{ color: "var(--gray-500)" }}>
-                      {usuarioSeleccionado.email || "—"}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {usuarioSeleccionado && (
-            <>
-              {edicionBloqueada && (
-                <div
-                  className="flex items-start gap-2.5 px-4 py-3 rounded-xl"
-                  style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-light)" }}
-                >
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "var(--inlop-red)" }} />
-                  <p className="text-[12.5px]" style={{ color: "var(--inlop-red)" }}>
-                    Este usuario está inactivo — no se pueden editar sus roles ni excepciones de permisos.
-                    Actívalo primero desde <strong>Configuración → Usuarios</strong>.
-                  </p>
-                </div>
-              )}
-
-              {/* Layout de 2 columnas (proporciones ajustadas al mockup 3D-7.11E.1).
+          {/* Layout de 2 columnas (proporciones ajustadas al mockup 3D-7.11E.1).
                   `min-w-0` en ambas columnas (Sprint 3D-7.11E.3): un grid item
                   tiene por defecto `min-width: auto`, es decir NO se encoge
                   por debajo del ancho mínimo de su contenido — con la pista
@@ -392,9 +334,16 @@ export function GestionPermisosUsuarioPage() {
                   forma consistente en toda la cadena. */}
               <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-6 items-start">
 
-                {/* IZQUIERDA — Roles + Excepciones + Resumen ("Usuario
-                    seleccionado" ahora vive en la tarjeta integrada de
-                    arriba, ver 3D-7.11F).
+                {/* IZQUIERDA — Usuario + Roles + Excepciones + Resumen.
+                    Sprint 3D-7.11F.1: "Usuario" vuelve a ser el primer
+                    elemento DENTRO de esta columna (en vez de una tarjeta
+                    suelta encima del grid, como en 3D-7.11F) para que
+                    arranque en la misma fila que el panel "Permisos
+                    heredados" de la derecha — ambos son ahora el primer hijo
+                    de su respectiva columna del mismo grid. Se muestra
+                    siempre (incluso sin usuario elegido, para poder elegir
+                    uno); Roles/Excepciones/Resumen siguen apareciendo solo
+                    una vez hay un usuario seleccionado.
                     `sticky top-6` (Sprint 3D-7.11E.3.2) — con el catálogo de
                     permisos a menudo más alto que esta columna (una vez hay
                     roles/excepciones con varios módulos), bajo `items-start`
@@ -410,6 +359,64 @@ export function GestionPermisosUsuarioPage() {
                     superior de la página (p-6) para que no quede pegada al
                     borde de <main>. */}
                 <div className="flex flex-col gap-5 min-w-0 min-h-0 lg:sticky lg:top-6 lg:self-start">
+                  {/* Usuario + información del usuario seleccionado,
+                      integrados en una sola tarjeta (Sprint 3D-7.11F). */}
+                  <div className="rounded-xl p-5" style={TARJETA_STYLE}>
+                    <label
+                      htmlFor="gestion-permisos-usuario"
+                      className="block text-[11px] font-semibold uppercase tracking-wide mb-1.5"
+                      style={{ color: "var(--gray-500)" }}
+                    >
+                      Usuario
+                    </label>
+                    <select
+                      id="gestion-permisos-usuario"
+                      value={usuarioSeleccionadoId ?? ""}
+                      onChange={(e) => seleccionarUsuario(e.target.value)}
+                      disabled={loading}
+                      className="text-[13.5px] outline-none"
+                      style={SELECT_STYLE}
+                    >
+                      <option value="">{loading ? "Cargando…" : "Selecciona un usuario…"}</option>
+                      {usuarios.map(u => (
+                        <option key={u.id} value={u.id}>{u.nombre || u.email} — {u.email}</option>
+                      ))}
+                    </select>
+
+                    {usuarioSeleccionado && (
+                      <>
+                        <div style={{ height: 1, background: "var(--gray-100)", margin: "16px 0" }} />
+                        <div className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--gray-400)" }}>
+                          Información del usuario
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div
+                            aria-hidden="true"
+                            className="shrink-0 rounded-full flex items-center justify-center font-bold text-[13px]"
+                            style={{ width: "40px", height: "40px", background: "var(--gray-100)", color: "var(--navy)" }}
+                          >
+                            {iniciales(usuarioSeleccionado.nombre, usuarioSeleccionado.email)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[14px] font-semibold truncate" style={{ color: "var(--gray-800)" }}>
+                                {usuarioSeleccionado.nombre || "—"}
+                              </span>
+                              <Badge variant={usuarioSeleccionado.activo ? "success" : "default"}>
+                                {usuarioSeleccionado.activo ? "Activo" : "Inactivo"}
+                              </Badge>
+                            </div>
+                            <div className="text-[12.5px] truncate" style={{ color: "var(--gray-500)" }}>
+                              {usuarioSeleccionado.email || "—"}
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {usuarioSeleccionado && (
+                  <>
                   {/* Roles asignados — checklist compacto sin descripciones
                       ni badges (Sprint 3D-7.11F, ver SelectorRolesCompacto). */}
                   <div className="rounded-xl p-5" style={TARJETA_STYLE}>
@@ -496,6 +503,8 @@ export function GestionPermisosUsuarioPage() {
                     <div className="w-px self-stretch" style={{ background: "var(--gray-100)" }} />
                     <EstadisticaResumen valor={cambiosPendientes} etiqueta="Cambios pendientes" />
                   </div>
+                  </>
+                  )}
                 </div>
 
                 {/* DERECHA — Catálogo de permisos. Sprint 3D-7.11F: se retiró
@@ -507,6 +516,8 @@ export function GestionPermisosUsuarioPage() {
                   className="rounded-xl p-5 flex flex-col gap-4 min-w-0 min-h-0"
                   style={TARJETA_STYLE}
                 >
+                {usuarioSeleccionado ? (
+                <>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     {/* Cantidad + concepto (Sprint 3D-7.11F): el número y su
                         etiqueta ("permisos heredados"/"permisos efectivos")
@@ -632,10 +643,14 @@ export function GestionPermisosUsuarioPage() {
                       </div>
                     </fieldset>
                   )}
+                </>
+                ) : (
+                  <p className="text-[13px] py-8 text-center" style={{ color: "var(--gray-400)" }}>
+                    Selecciona un usuario para ver sus permisos.
+                  </p>
+                )}
                 </div>
               </div>
-            </>
-          )}
         </>
       )}
     </div>
