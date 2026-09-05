@@ -23,23 +23,51 @@ export function ConfiguracionPage() {
   // viaja por acá para que el listado lo muestre tras la navegación.
   const [avisoProgramacion, setAvisoProgramacion] = useState<string | null>(null);
 
-  // Breadcrumb superior de AppShell (Sprint 3D-7.11F) — Gestión de permisos
-  // ya no dibuja su propia miga de pan interna; en su lugar declara un tramo
-  // dinámico "Configuración › Usuarios › Gestión de permisos" en el
-  // breadcrumb del shell, navegable en sus dos primeros niveles. El resto de
-  // sub-pantallas de Configuración no declara nada (null) y AppShell usa su
-  // breadcrumb genérico de siempre.
+  // Breadcrumb superior de AppShell (Sprint 3D-7.11F, reorganizado en
+  // 3D-7.11J para reflejar la separación "Seguridad y acceso" / "Parámetros"
+  // — ver ParametrosPage.tsx). Ambos son solo etiquetas visuales de sección
+  // en esa pantalla, NO subVistas ni rutas propias: por eso su onClick en el
+  // breadcrumb navega de vuelta a "parametros" (la única pantalla donde
+  // viven), igual que "Configuración". "Roles" (nivel intermedio de "Roles y
+  // permisos") tampoco es una pantalla propia — incluirlo como intermedio
+  // navegable respeta la jerarquía aprobada sin inventar una página nueva.
+  // La pantalla raíz "parametros" no declara nada (null) y usa el breadcrumb
+  // genérico de AppShell, que ya produce exactamente "INLOP › Configuración
+  // › Parámetros" sin necesidad de un tramo custom.
   const { setBreadcrumbTrail } = useNavigationContext();
   useEffect(() => {
-    setBreadcrumbTrail(
-      subVista === "permisos-usuario"
-        ? [
-            { label: "Configuración", onClick: () => setSubVista("parametros") },
-            { label: "Usuarios",      onClick: () => setSubVista("usuarios") },
-            { label: "Gestión de permisos" },
-          ]
-        : null
-    );
+    const irAParametros = () => setSubVista("parametros");
+    let trail: { label: string; onClick?: () => void }[] | null = null;
+
+    if (subVista === "usuarios") {
+      trail = [
+        { label: "Configuración",      onClick: irAParametros },
+        { label: "Seguridad y acceso", onClick: irAParametros },
+        { label: "Usuarios" },
+      ];
+    } else if (subVista === "permisos-usuario") {
+      trail = [
+        { label: "Configuración",      onClick: irAParametros },
+        { label: "Seguridad y acceso", onClick: irAParametros },
+        { label: "Usuarios",           onClick: () => setSubVista("usuarios") },
+        { label: "Gestión de permisos" },
+      ];
+    } else if (subVista === "roles-permisos") {
+      trail = [
+        { label: "Configuración",      onClick: irAParametros },
+        { label: "Seguridad y acceso", onClick: irAParametros },
+        { label: "Roles",              onClick: irAParametros },
+        { label: "Roles y permisos" },
+      ];
+    } else if (subVista === "reportes-automaticos") {
+      trail = [
+        { label: "Configuración", onClick: irAParametros },
+        { label: "Parámetros",    onClick: irAParametros },
+        { label: "Reportes automáticos" },
+      ];
+    }
+
+    setBreadcrumbTrail(trail);
     return () => setBreadcrumbTrail(null);
   }, [subVista, setBreadcrumbTrail]);
 

@@ -24,10 +24,11 @@
  * revoke local, no-heredados alternan un grant local (toggleExcepcionPermiso,
  * en el hook). Volver a coincidir con el estado base elimina la excepción.
  *
- * Navegación (Sprint 3D-7.11F): esta página ya no dibuja su propia miga de
- * pan interna — el breadcrumb superior de AppShell ("Configuración ›
- * Usuarios › Gestión de permisos", navegable) lo declara ConfiguracionPage
- * vía NavigationContext#setBreadcrumbTrail. Por eso esta página ya no recibe
+ * Navegación (Sprint 3D-7.11F, tramo actualizado en 3D-7.11J): esta página
+ * ya no dibuja su propia miga de pan interna — el breadcrumb superior de
+ * AppShell ("Configuración › Seguridad y acceso › Usuarios › Gestión de
+ * permisos", navegable) lo declara ConfiguracionPage vía
+ * NavigationContext#setBreadcrumbTrail. Por eso esta página ya no recibe
  * `onBack`: toda la navegación hacia atrás vive en ese breadcrumb.
  *
  * Catálogo de permisos (Sprint 3D-7.11F): se retiró el navegador vertical

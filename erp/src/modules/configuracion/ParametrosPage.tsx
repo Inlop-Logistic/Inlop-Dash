@@ -81,16 +81,17 @@ export function ParametrosPage({ onReportesAutomaticos, onUsuarios, onRolesPermi
         icon={<SlidersHorizontal className="w-5 h-5" />}
       />
 
-      <div className="flex flex-col gap-3 max-w-xl">
-        <OpcionCard
-          icon={<Mail className="w-5 h-5" />}
-          titulo="Reportes Automáticos"
-          descripcion="Configura reportes que el ERP genera y envía automáticamente."
-          onClick={onReportesAutomaticos}
-        />
-
+      {/* Sprint 3D-7.11J: las tarjetas se agrupan visualmente en "Seguridad y
+          acceso" y "Parámetros" — son solo etiquetas de sección, no páginas
+          ni rutas nuevas; ambos grupos siguen viviendo en esta misma pantalla
+          (subVista "parametros" de ConfiguracionPage), sin cambios en las
+          páginas de destino de cada tarjeta. */}
+      <div className="flex flex-col gap-6 max-w-xl">
         {puedeGestionarRbac && (
-          <>
+          <div className="flex flex-col gap-3">
+            <div className="text-[11px] font-semibold uppercase tracking-widest px-1" style={{ color: "var(--gray-400)" }}>
+              Seguridad y acceso
+            </div>
             <OpcionCard
               icon={<Users className="w-5 h-5" />}
               titulo="Usuarios"
@@ -103,8 +104,20 @@ export function ParametrosPage({ onReportesAutomaticos, onUsuarios, onRolesPermi
               descripcion="Catálogo de roles, permisos y su relación."
               onClick={onRolesPermisos}
             />
-          </>
+          </div>
         )}
+
+        <div className="flex flex-col gap-3">
+          <div className="text-[11px] font-semibold uppercase tracking-widest px-1" style={{ color: "var(--gray-400)" }}>
+            Parámetros
+          </div>
+          <OpcionCard
+            icon={<Mail className="w-5 h-5" />}
+            titulo="Reportes Automáticos"
+            descripcion="Configura reportes que el ERP genera y envía automáticamente."
+            onClick={onReportesAutomaticos}
+          />
+        </div>
       </div>
     </div>
   );
