@@ -1497,7 +1497,7 @@ app.get("/api/pendientes", requireLegacyOrErpAuth, async (req, res) => {
 // y añade campos derivados (lat, lon, pct, cliente, conductor_tel).
 // Transformación en services/reportes/datasetProvider.js (Fase 9B) — la misma
 // función alimenta el generador de reportes automáticos, sin duplicarla.
-app.get('/api/viajes', requireErpAuth, (req, res) => {
+app.get('/api/viajes', requireErpAuth, requirePermiso('viajes:listar', { sbFetch }), (req, res) => {
   res.json(transformarViajesActivos(cache.viajes.data, {
     tripCustomerCache, extraerTelefono, primerNombreCliente,
   }));
@@ -1604,7 +1604,7 @@ app.get('/api/viajes/:tripNumber', requireErpAuth, async (req, res) => {
 // GET /api/cumplidos — viajes finalizados desde Supabase (tabla cumplidos).
 // Fuente: Supabase, nunca desde cache en memoria.
 // Paginación interna para soportar crecimiento indefinido de la tabla.
-app.get('/api/cumplidos', requireErpAuth, async (req, res) => {
+app.get('/api/cumplidos', requireErpAuth, requirePermiso('cumplidos:listar', { sbFetch }), async (req, res) => {
   try {
     // ?limit=N — limita resultados (útil para previews en el wizard de reportes).
     // Si no se pasa, el comportamiento es el mismo de siempre (sin límite).
@@ -1936,7 +1936,7 @@ app.patch('/api/cumplidos/:trip/estado', requireErpAuth, async (req, res) => {
 // Transformación (derivarEstadoGps, parseLatLon, filtrado por
 // ESTADOS_MONITOREABLES) en services/reportes/datasetProvider.js (Fase 9B) —
 // la misma función alimenta el generador de reportes automáticos.
-app.get('/api/gps', requireErpAuth, (req, res) => {
+app.get('/api/gps', requireErpAuth, requirePermiso('gps:listar', { sbFetch }), (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json(transformarCentroGps(cache.viajes.data, { tripCustomerCache }));
 });
@@ -4102,7 +4102,7 @@ app.get("/api/planeados", requireErpAuth, async (req, res) => {
 // GET /api/programacion — bandeja operativa completa del día
 // Enriquece cada fila con nombre_cliente: razon_social oficial cuando existe,
 // company_customer_name como fallback. El original siempre se conserva.
-app.get("/api/programacion", requireErpAuth, async (req, res) => {
+app.get("/api/programacion", requireErpAuth, requirePermiso('programacion:listar', { sbFetch }), async (req, res) => {
   const getId  = ++getProgCounter;
   const tGet0  = Date.now();
   try {
@@ -4457,7 +4457,7 @@ async function enrichClientes(empresas) {
   return empresas.map(e => mapEmpresaToCliente(e, genMap[e.id] ?? null, relMap[e.id] ?? null));
 }
 
-app.get("/api/clientes", requireErpAuth, async (req, res) => {
+app.get("/api/clientes", requireErpAuth, requirePermiso('clientes:listar', { sbFetch }), async (req, res) => {
   try {
     const data = await sbFetch("/empresas_cliente?order=razon_social.asc&limit=1000");
     if (!data) return res.status(502).json({ error: "Error al consultar clientes" });
