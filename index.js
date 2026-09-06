@@ -2024,7 +2024,7 @@ app.get('/api/solicitudes', requireLegacyOrErpAuth, async (req, res) => {
 });
 
 // GET /api/solicitudes/:id — detalle completo para el ERP (interno, sin auth de cliente)
-app.get('/api/solicitudes/:id', requireErpAuth, async (req, res) => {
+app.get('/api/solicitudes/:id', requireErpAuth, requirePermiso('solicitudes:listar', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -4971,7 +4971,7 @@ app.patch("/api/clientes/:id/alias/:aliasId", requireErpAuth, async (req, res) =
 //
 // Usado por Configuración → Reportes Automáticos → Etapa 05 · Destinatarios
 // para poblar la lista de "Personal INLOP" seleccionable — nunca hardcodeada.
-app.get("/api/personal", requireErpAuth, async (req, res) => {
+app.get("/api/personal", requireErpAuth, requirePermiso('configuracion:acceso', { sbFetch }), async (req, res) => {
   try {
     const rows = await sbFetch(
       "/personal?select=id,nombre,cargo,correo_compartido&activo=eq.true&order=nombre.asc"
@@ -6048,7 +6048,7 @@ function errorDestinatarios(destinatarios) {
   return null;
 }
 
-app.get("/api/reportes-automaticos", requireErpAuth, async (req, res) => {
+app.get("/api/reportes-automaticos", requireErpAuth, requirePermiso('configuracion:acceso', { sbFetch }), async (req, res) => {
   try {
     const rows = await sbFetch("/reportes_automaticos?order=created_at.desc&limit=500");
     res.json(rows ?? []);
@@ -6058,7 +6058,7 @@ app.get("/api/reportes-automaticos", requireErpAuth, async (req, res) => {
   }
 });
 
-app.post("/api/reportes-automaticos", requireErpAuth, async (req, res) => {
+app.post("/api/reportes-automaticos", requireErpAuth, requirePermiso('configuracion:acceso', { sbFetch }), async (req, res) => {
   try {
     const actor = getActor(req);
     const {
@@ -6136,7 +6136,7 @@ app.post("/api/reportes-automaticos", requireErpAuth, async (req, res) => {
   }
 });
 
-app.patch("/api/reportes-automaticos/:id", requireErpAuth, async (req, res) => {
+app.patch("/api/reportes-automaticos/:id", requireErpAuth, requirePermiso('configuracion:acceso', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
     const actor = getActor(req);
@@ -6223,7 +6223,7 @@ app.patch("/api/reportes-automaticos/:id", requireErpAuth, async (req, res) => {
   }
 });
 
-app.patch("/api/reportes-automaticos/:id/activo", requireErpAuth, async (req, res) => {
+app.patch("/api/reportes-automaticos/:id/activo", requireErpAuth, requirePermiso('configuracion:acceso', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
     const actor = getActor(req);
@@ -6278,7 +6278,7 @@ app.patch("/api/reportes-automaticos/:id/activo", requireErpAuth, async (req, re
 // sbFetch(..., "DELETE") siempre devuelve null (ver sbFetch arriba), así que
 // primero se verifica existencia — mismo patrón que
 // DELETE /api/cumplidos/:trip/documentos/:id más arriba.
-app.delete("/api/reportes-automaticos/:id", requireErpAuth, async (req, res) => {
+app.delete("/api/reportes-automaticos/:id", requireErpAuth, requirePermiso('configuracion:acceso', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
     const existente = await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}&select=id`);
@@ -6298,7 +6298,7 @@ app.delete("/api/reportes-automaticos/:id", requireErpAuth, async (req, res) => 
 // el filtro real en generación (ver services/reportes/datasetProvider.js —
 // listarClientesDataset / cliente_normalizado) — nunca un catálogo aparte
 // que pueda desalinearse de lo que el filtro realmente hace.
-app.get("/api/reportes-automaticos/clientes", requireErpAuth, async (req, res) => {
+app.get("/api/reportes-automaticos/clientes", requireErpAuth, requirePermiso('configuracion:acceso', { sbFetch }), async (req, res) => {
   try {
     const tipoReporte = String(req.query.tipo_reporte ?? "").trim();
     if (!tipoReporte) return res.status(400).json({ error: "tipo_reporte es obligatorio" });
@@ -6335,7 +6335,7 @@ const STATUS_POR_CODIGO_ENVIO = {
   error_envio:           502,
 };
 
-app.post("/api/reportes-automaticos/:id/enviar", requireErpAuth, async (req, res) => {
+app.post("/api/reportes-automaticos/:id/enviar", requireErpAuth, requirePermiso('configuracion:acceso', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
     const resultado = await ejecutarReporteManual(id, {
