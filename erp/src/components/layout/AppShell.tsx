@@ -1,5 +1,6 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useState, useMemo, type CSSProperties, type ReactNode } from "react";
 import { useAuth } from "@/state/AuthContext";
+import { usePermisos } from "@/hooks/usePermisos";
 import {
   LayoutDashboard, ClipboardList, Truck, Map,
   CalendarClock, CheckSquare, Settings, Users, ShieldCheck,
@@ -72,6 +73,28 @@ const CONFIG_SIDEBAR_ITEMS: {
   { key: "parametros",     label: "Parámetros", icon: <Settings className="w-4 h-4" /> },
 ];
 
+/**
+ * Mapa de permisos por ítem de navegación (Sprint 3D-7.11K.1).
+ * Los ítems sin entrada son siempre visibles (ej. "dashboard").
+ * El filtrado es fail-open: si los permisos aún están cargando o la llamada
+ * falló, se muestran todos los ítems (ver usePermisos()).
+ */
+const PERMISO_POR_ITEM: Readonly<Partial<Record<string, string>>> = {
+  clientes:     "clientes:listar",
+  solicitudes:  "solicitudes:listar",
+  programacion: "programacion:listar",
+  viajes:       "viajes:listar",
+  mapa:         "gps:listar",
+  cumplidos:    "cumplidos:listar",
+  // "dashboard": siempre visible — sin entrada
+};
+
+const PERMISO_POR_CONFIG: Readonly<Partial<Record<string, string>>> = {
+  usuarios:         "rbac:gestionar",
+  "roles-permisos": "rbac:gestionar",
+  parametros:       "configuracion:acceso",
+};
+
 const STORAGE_KEY = "inlop-erp-sidebar-collapsed";
 
 // Easing compartido — Material Design standard easing
@@ -100,6 +123,42 @@ interface Props {
 
 export function AppShell({ vista, setVista, navigateTo, children, badges = {}, breadcrumbTrail, configActiveItem }: Props) {
   const { profile, signOut } = useAuth();
+
+  // ── Permisos (Sprint 3D-7.11K.1) ──────────────────────────────────────────
+  // Una única llamada a GET /api/me/permisos para toda la shell.
+  // Fail-open: mientras cargando===true (o si falló), se muestran todos los ítems.
+  const { esMaster, permisos: listaPermisos, cargando: cargandoPermisos } = usePermisos();
+
+  /** Devuelve true si el ítem con ese permiso requerido debe mostrarse. */
+  const puedeVer = useMemo(() => {
+    return (permiso: string | undefined): boolean => {
+      if (cargandoPermisos) return true;          // fail-open (cargando o error)
+      if (esMaster) return true;                  // master ve todo
+      if (!permiso) return true;                  // sin permiso requerido → siempre visible
+      return listaPermisos.includes(permiso);
+    };
+  }, [cargandoPermisos, esMaster, listaPermisos]);
+
+  /** Secciones de nav con sus ítems filtrados por permiso. */
+  const navSeccionesVisibles = useMemo(
+    () =>
+      NAV_SECTIONS.map((section) => ({
+        ...section,
+        items:
+          section.id === "sistema"
+            ? section.items // la sección "sistema" se renderiza aparte (CONFIG_SIDEBAR_ITEMS)
+            : section.items.filter((item) => puedeVer(PERMISO_POR_ITEM[item.id])),
+      })).filter((section) => section.id === "sistema" || section.items.length > 0),
+    [puedeVer]
+  );
+
+  /** Ítems del bloque Configuración filtrados por permiso. */
+  const configItemsVisibles = useMemo(
+    () => CONFIG_SIDEBAR_ITEMS.filter((item) => puedeVer(PERMISO_POR_CONFIG[item.key])),
+    [puedeVer]
+  );
+
+  // ──────────────────────────────────────────────────────────────────────────
 
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(STORAGE_KEY) === "true"
@@ -256,7 +315,7 @@ export function AppShell({ vista, setVista, navigateTo, children, badges = {}, b
         {/* Nav ── flex col, sin overflow para que los tooltips no sean recortados */}
         <nav aria-label="Navegación principal" className="flex-1 px-3 py-3 flex flex-col">
 
-          {NAV_SECTIONS.filter((s) => s.items.length > 0).map((section, idx) => (
+          {navSeccionesVisibles.filter((s) => s.items.length > 0).map((section, idx) => (
             <div key={section.id} className={idx > 0 ? "mt-4" : ""}>
 
               {/* Etiqueta de sección */}
@@ -275,7 +334,7 @@ export function AppShell({ vista, setVista, navigateTo, children, badges = {}, b
                   secciones sigue exactamente igual (ítem plano por Vista). */}
               {section.id === "sistema" ? (
                 <div className="flex flex-col gap-0.5">
-                  {CONFIG_SIDEBAR_ITEMS.map((item) => renderNavButton({
+                  {configItemsVisibles.map((item) => renderNavButton({
                     id: item.key, label: item.label, icon: item.icon,
                     active: vista === "configuracion" && (configActiveItem ?? "parametros") === item.key,
                     onClick: () => navigateTo({ modulo: "configuracion", payload: { configSubVista: item.key } }),
