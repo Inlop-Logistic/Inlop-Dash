@@ -4282,7 +4282,7 @@ app.get("/api/programacion/:id", requireErpAuth, requirePermiso('programacion:li
 
 // PATCH /api/programacion/:id/estado — cambia estado ERP del viaje
 // Solo actualiza estado_programacion. Las observaciones son exclusivas de /observaciones.
-app.patch("/api/programacion/:id/estado", requireErpAuth, async (req, res) => {
+app.patch("/api/programacion/:id/estado", requireErpAuth, requirePermiso('programacion:gestionar', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
     const { estado } = req.body || {};
@@ -4305,7 +4305,7 @@ app.patch("/api/programacion/:id/estado", requireErpAuth, async (req, res) => {
 
 // PATCH /api/programacion/:id/observaciones — guarda nota del operador
 // Endpoint exclusivo para observaciones; no toca estado_programacion.
-app.patch("/api/programacion/:id/observaciones", requireErpAuth, async (req, res) => {
+app.patch("/api/programacion/:id/observaciones", requireErpAuth, requirePermiso('programacion:gestionar', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
     const { observaciones } = req.body || {};
@@ -4325,7 +4325,7 @@ app.patch("/api/programacion/:id/observaciones", requireErpAuth, async (req, res
 });
 
 // POST /api/programacion/:id/sync — reintenta sincronizar un viaje individual con la caché de la plataforma
-app.post("/api/programacion/:id/sync", requireErpAuth, async (req, res) => {
+app.post("/api/programacion/:id/sync", requireErpAuth, requirePermiso('programacion:gestionar', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
 
