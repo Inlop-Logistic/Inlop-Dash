@@ -1523,7 +1523,7 @@ app.get('/api/viajes', requireErpAuth, requirePermiso('viajes:listar', { sbFetch
 // vehiculo/telefono/ubicacion_actual: mismos campos en tiempo real que ya
 // usa mapSolicitud()/construirControltEnriquecido() vía cache.viajes (Resume
 // API) — no es una fuente nueva, es la misma ya establecida en Fase 5.
-app.get('/api/viajes/:tripNumber', requireErpAuth, async (req, res) => {
+app.get('/api/viajes/:tripNumber', requireErpAuth, requirePermiso('viajes:listar', { sbFetch }), async (req, res) => {
   const tripNumber = String(req.params.tripNumber || '').trim();
   if (!tripNumber) {
     return res.status(400).json({ error: { code: 'INVALID_TRIP_NUMBER', mensaje: 'Trip Number requerido' } });
@@ -1686,7 +1686,7 @@ async function refrescarEstadoSoportes(trip) {
 }
 
 // GET /api/cumplidos/:trip/documentos — lista los soportes persistidos para el viaje.
-app.get('/api/cumplidos/:trip/documentos', requireErpAuth, async (req, res) => {
+app.get('/api/cumplidos/:trip/documentos', requireErpAuth, requirePermiso('cumplidos:listar', { sbFetch }), async (req, res) => {
   try {
     const { trip } = req.params;
     const rows = await sbFetch(
@@ -1886,7 +1886,7 @@ app.delete('/api/cumplidos/:trip/documentos/:id', requireErpAuth, async (req, re
 // GET /api/cumplidos/:trip/documentos/:id/sign — URL firmada (1h) para ver/descargar.
 // ?download=1 fuerza la descarga con el nombre legible (nombre_generado) en vez
 // del UUID físico del Storage.
-app.get('/api/cumplidos/:trip/documentos/:id/sign', requireErpAuth, async (req, res) => {
+app.get('/api/cumplidos/:trip/documentos/:id/sign', requireErpAuth, requirePermiso('cumplidos:listar', { sbFetch }), async (req, res) => {
   try {
     const { trip, id } = req.params;
     const rows = await sbFetch(
@@ -4197,7 +4197,7 @@ app.get("/api/programacion", requireErpAuth, requirePermiso('programacion:listar
 // GET /api/programacion/:id/solicitud — solicitud origen vinculada al viaje
 // Un viaje sin solicitud asociada es un estado de negocio válido → { vinculada: false }.
 // Solo un error de infraestructura devuelve 500.
-app.get("/api/programacion/:id/solicitud", requireErpAuth, async (req, res) => {
+app.get("/api/programacion/:id/solicitud", requireErpAuth, requirePermiso('programacion:listar', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -4253,7 +4253,7 @@ app.get("/api/programacion/:id/solicitud", requireErpAuth, async (req, res) => {
 });
 
 // GET /api/programacion/:id — detalle de un viaje planeado por trip_number
-app.get("/api/programacion/:id", requireErpAuth, async (req, res) => {
+app.get("/api/programacion/:id", requireErpAuth, requirePermiso('programacion:listar', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
     const data = await sbFetch(
@@ -4468,7 +4468,7 @@ app.get("/api/clientes", requireErpAuth, requirePermiso('clientes:listar', { sbF
   }
 });
 
-app.get("/api/clientes/:id", requireErpAuth, async (req, res) => {
+app.get("/api/clientes/:id", requireErpAuth, requirePermiso('clientes:listar', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
     const detalle = await fetchClienteDetalle(id);
@@ -4738,7 +4738,7 @@ app.patch("/api/clientes/:id/estado", requireErpAuth, async (req, res) => {
 // ─── CUSTOMER MERGE ─────────────────────────────────────────────────────────
 
 // Preview: cuántos registros se reasignarán al fusionar duplicado_id en :id.
-app.get("/api/clientes/:id/merge-preview", requireErpAuth, async (req, res) => {
+app.get("/api/clientes/:id/merge-preview", requireErpAuth, requirePermiso('clientes:listar', { sbFetch }), async (req, res) => {
   try {
     const { id: oficialId } = req.params;
     const { duplicado_id } = req.query;
@@ -4880,7 +4880,7 @@ app.post("/api/clientes/:id/merge", requireErpAuth, async (req, res) => {
 // ─── ALIAS CRUD ─────────────────────────────────────────────────────────────
 
 // Listar todos los alias de un cliente (activos e inactivos)
-app.get("/api/clientes/:id/alias", requireErpAuth, async (req, res) => {
+app.get("/api/clientes/:id/alias", requireErpAuth, requirePermiso('clientes:listar', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
     const rows = await sbFetch(
