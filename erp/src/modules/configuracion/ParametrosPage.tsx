@@ -46,6 +46,16 @@ interface Props {
   onReportesAutomaticos: () => void;
 }
 
+/**
+ * Pantalla raíz de Configuración → Parámetros (subVista "parametros").
+ *
+ * Sprint 3D-7.11J: "Usuarios" y "Roles" dejaron de listarse aquí como
+ * tarjetas — ahora se navegan directamente desde los ítems fijos del
+ * sidebar de "CONFIGURACIÓN" (ver AppShell.tsx#CONFIG_SIDEBAR_ITEMS),
+ * evitando navegación duplicada hacia el mismo destino. Esta pantalla solo
+ * lista lo que cuelga de "Parámetros" en la jerarquía aprobada: Reportes
+ * automáticos.
+ */
 export function ParametrosPage({ onReportesAutomaticos }: Props) {
   return (
     <div className="p-6 flex flex-col gap-6">

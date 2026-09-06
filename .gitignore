@@ -1,5 +1,16 @@
 node_modules/
 erp/node_modules/
 *.local
+
+# ─── Secretos y configuración local ─────────────────────
+# Archivos .env pueden contener API keys, service keys, y tokens.
+# Solo los .env.example se commitean (con valores placeholder).
 .env
 .env.*
+!.env.example
+
+# Nota: erp/.env fue commiteado antes de esta regla y contiene solo
+# valores públicos (anon key, URLs), pero permanece tracked hasta
+# ejecutar manualmente: git rm --cached erp/.env
+# Ver: https://git-scm.com/docs/gitignore — gitignore no afecta
+# archivos ya tracked.

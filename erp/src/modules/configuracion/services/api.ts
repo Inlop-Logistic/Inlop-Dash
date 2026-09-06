@@ -7,6 +7,10 @@ import { buscarReporte, type CampoDataset } from "../catalogos/datasetsReportes"
 import type {
   ReporteAutomatico, ReporteBase, PersonalInlop, FiltroItem,
   ResultadoEnvioManual, ClienteFiltroOpcion, AvisoProgramacion,
+  UsuarioRbac, RolRbac, PermisoRbac, MisPermisos, ActualizarRolesUsuarioResponse,
+  ActualizarPermisosRolResponse, ExcepcionUsuarioBody, ActualizarExcepcionesUsuarioResponse,
+  CrearUsuarioBody, CrearUsuarioResponse, ResetPasswordResponse, ActualizarActivoUsuarioResponse,
+  ActualizarDatosUsuarioBody, ActualizarDatosUsuarioResponse,
 } from "../types";
 
 // ─── Preview de datos del reporte ────────────────────────────────────────────
@@ -337,4 +341,150 @@ export function enviarReporteManual(id: string): Promise<ResultadoEnvioManual> {
     `/api/reportes-automaticos/${encodeURIComponent(id)}/enviar`,
     { method: "POST" }
   );
+}
+
+// ─── RBAC — Usuarios / Roles y Permisos (Sprint 3D-4) ────────────────────────
+// Solo lectura: las 4 funciones consumen los endpoints de Sprint 3D-3 tal
+// cual, vía el mismo req<T>() genérico — sin lógica HTTP propia, sin
+// duplicar nada de services/rbac/ (motor que vive exclusivamente en el
+// backend). Los 3 primeros endpoints ya exigen `rbac:gestionar` del lado del
+// servidor; ninguna función de este archivo decide autorización.
+
+export function listarUsuarios(): Promise<UsuarioRbac[]> {
+  return req<UsuarioRbac[]>("/api/usuarios");
+}
+
+export function listarRoles(): Promise<RolRbac[]> {
+  return req<RolRbac[]>("/api/roles");
+}
+
+export function listarPermisos(): Promise<PermisoRbac[]> {
+  return req<PermisoRbac[]>("/api/permisos");
+}
+
+/**
+ * Permisos efectivos del usuario autenticado (self-service, sin
+ * `rbac:gestionar`). Se usa en Parámetros SOLO para progressive disclosure
+ * (mostrar/ocultar las tarjetas de Usuarios y Roles y Permisos) — nunca como
+ * sustituto de la autorización real del backend. Ver ParametrosPage.tsx.
+ */
+export function obtenerMisPermisos(): Promise<MisPermisos> {
+  return req<MisPermisos>("/api/me/permisos");
+}
+
+/**
+ * Reemplaza el conjunto COMPLETO de roles RBAC activos de un usuario
+ * (Sprint 3D-7.4, consumiendo PUT /api/usuarios/:id/roles de Sprint 3D-7.2).
+ * `rol_ids` es el conjunto deseado completo, no un delta. Los casos de
+ * rechazo del backend (403 sin esMaster para tocar el rol master, 409 al
+ * dejar el sistema sin ningún master activo, 400 de validación) llegan como
+ * HTTP no-2xx — `req()` los convierte en una excepción con el mensaje ya
+ * redactado en español (`error.message`), listo para mostrar en la UI.
+ */
+export function actualizarRolesUsuario(
+  id: string,
+  rol_ids: string[]
+): Promise<ActualizarRolesUsuarioResponse> {
+  return req<ActualizarRolesUsuarioResponse>(`/api/usuarios/${encodeURIComponent(id)}/roles`, {
+    method: "PUT",
+    body: JSON.stringify({ rol_ids }),
+  });
+}
+
+/**
+ * Reemplaza el conjunto COMPLETO de permisos de un rol RBAC (Sprint 3D-7.5,
+ * consumiendo PUT /api/roles/:id/permisos de Sprint 3D-7.3). `permiso_ids`
+ * es el conjunto deseado completo, no un delta. El backend rechaza `master`
+ * (400 — se resuelve por la regla especial del motor, nunca por filas en
+ * rol_permisos) y exige esMaster real si la operación toca `rbac:gestionar`
+ * (403). `req()` convierte cualquier rechazo en una excepción con el mensaje
+ * ya redactado en español (`error.message`).
+ */
+export function actualizarPermisosRol(
+  id: string,
+  permiso_ids: string[]
+): Promise<ActualizarPermisosRolResponse> {
+  return req<ActualizarPermisosRolResponse>(`/api/roles/${encodeURIComponent(id)}/permisos`, {
+    method: "PUT",
+    body: JSON.stringify({ permiso_ids }),
+  });
+}
+
+/**
+ * Reemplaza el conjunto COMPLETO de excepciones individuales ACTIVAS de un
+ * usuario en usuario_permisos (Sprint 3D-7.6, consumiendo
+ * PUT /api/usuarios/:id/permisos). `excepciones` es el conjunto deseado
+ * completo, no un delta — NO modifica roles ni rol_permisos. El backend
+ * exige esMaster real si la operación agrega, modifica o elimina una
+ * excepción sobre `rbac:gestionar` (403). `req()` convierte cualquier
+ * rechazo en una excepción con el mensaje ya redactado en español.
+ */
+export function actualizarExcepcionesUsuario(
+  id: string,
+  excepciones: ExcepcionUsuarioBody[]
+): Promise<ActualizarExcepcionesUsuarioResponse> {
+  return req<ActualizarExcepcionesUsuarioResponse>(`/api/usuarios/${encodeURIComponent(id)}/permisos`, {
+    method: "PUT",
+    body: JSON.stringify({ excepciones }),
+  });
+}
+
+/**
+ * Crea un usuario ERP (Sprint 3D-7.8D, consumiendo POST /api/usuarios).
+ * El backend invita al usuario por correo (Supabase Auth /invite) — nunca
+ * genera ni transmite una contraseña; el usuario establece la suya propia
+ * desde el enlace de invitación. La respuesta ya tiene el contrato de
+ * UsuarioRbac (sin roles ni excepciones todavía), lista para agregarse a la
+ * lista en memoria sin refetch de /api/usuarios completo.
+ */
+export function crearUsuario(body: CrearUsuarioBody): Promise<CrearUsuarioResponse> {
+  return req<CrearUsuarioResponse>("/api/usuarios", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Dispara el correo oficial de recuperación de contraseña de Supabase Auth
+ * para un usuario puntual (Sprint 3D-7.8D, consumiendo
+ * POST /api/usuarios/:id/reset-password). Nunca genera ni expone una
+ * contraseña — el usuario la establece él mismo desde el correo.
+ */
+export function resetPasswordUsuario(id: string): Promise<ResetPasswordResponse> {
+  return req<ResetPasswordResponse>(`/api/usuarios/${encodeURIComponent(id)}/reset-password`, {
+    method: "POST",
+  });
+}
+
+/**
+ * Activa o desactiva un usuario ERP (Sprint 3D-7.8D, consumiendo
+ * PATCH /api/usuarios/:id/activo). El backend aplica profiles.activo (el
+ * mecanismo principal de bloqueo, 3D-7.7C) y, de forma complementaria,
+ * ban/unban en Supabase Auth Admin.
+ */
+export function actualizarActivoUsuario(
+  id: string,
+  activo: boolean
+): Promise<ActualizarActivoUsuarioResponse> {
+  return req<ActualizarActivoUsuarioResponse>(`/api/usuarios/${encodeURIComponent(id)}/activo`, {
+    method: "PATCH",
+    body: JSON.stringify({ activo }),
+  });
+}
+
+/**
+ * Edita nombre y/o correo de un usuario ERP existente (Sprint 3D-7.9D,
+ * consumiendo PATCH /api/usuarios/:id/datos). El backend sincroniza el
+ * correo entre Supabase Auth y profiles con compensación — esta llamada
+ * solo resuelve en éxito cuando ambos quedaron consistentes (nunca un 200
+ * con estado parcial, ver auditorías 3D-7.9A/B/C).
+ */
+export function actualizarDatosUsuario(
+  id: string,
+  body: ActualizarDatosUsuarioBody
+): Promise<ActualizarDatosUsuarioResponse> {
+  return req<ActualizarDatosUsuarioResponse>(`/api/usuarios/${encodeURIComponent(id)}/datos`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
 }

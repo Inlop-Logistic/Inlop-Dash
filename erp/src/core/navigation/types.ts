@@ -33,6 +33,13 @@ export interface NavPayload {
   driverId?:        string;
   clienteId?:       string;
   remision?:        string;
+  /**
+   * Sub-pantalla inicial a abrir dentro de Configuración (Sprint 3D-7.11J.2)
+   * — permite que los ítems fijos del sidebar (Usuarios/Roles/Parámetros)
+   * naveguen directamente a la sub-pantalla correcta sin depender de que
+   * ConfiguracionPage ya esté montada (ver ConfiguracionPage.tsx).
+   */
+  configSubVista?:  "usuarios" | "roles-permisos" | "parametros";
 }
 
 /** Destino de navegación contextual. */
@@ -40,4 +47,12 @@ export interface NavigationDestination {
   modulo:        ModuloId;
   payload?:      NavPayload;
   originModule?: ModuloId;
+}
+
+/** Un tramo del breadcrumb superior de AppShell (Sprint 3D-7.11F). Sin
+ *  `onClick` = ubicación actual (no navegable), como el último tramo de
+ *  cualquier breadcrumb. */
+export interface BreadcrumbItem {
+  label:    string;
+  onClick?: () => void;
 }

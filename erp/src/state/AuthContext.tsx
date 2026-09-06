@@ -1,8 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
-import { supabase } from "@/services/supabase";
-import { setCurrentUserEmail } from "@/services/http";
+import { supabase, onRecoveryDetectada, resetRecoveryDetectada } from "@/services/supabase";
 import type { Profile } from "@/types/auth";
 
 // Re-export para compatibilidad: los módulos pueden importar Profile
@@ -13,8 +12,17 @@ interface AuthState {
   user:    User | null;
   profile: Profile | null;
   loading: boolean;
+  // true mientras la sesión activa es de recuperación de contraseña
+  // (Supabase emite PASSWORD_RECOVERY al detectar el enlace de /invite o
+  // /recover en la URL — Sprint 3D-7.8D). Un usuario en este estado NUNCA
+  // debe entrar al dashboard normal: App.tsx debe mostrar el formulario de
+  // nueva contraseña mientras esto sea true, con prioridad sobre `user`.
+  recoveryMode: boolean;
   signIn:  (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Llamar tras `supabase.auth.updateUser({ password })` exitoso — cierra
+   *  la sesión temporal de recuperación y vuelve al login normal. */
+  completarRecovery: () => Promise<void>;
 }
 
 // ── Jerarquía de resolución de identidad ─────────────────────────────────────
@@ -57,11 +65,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user,    setUser]    = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recoveryMode, setRecoveryMode] = useState(false);
 
   async function loadProfile(authUser: User) {
     const { data } = await supabase
       .from("profiles")
-      .select("id, nombre, cargo, rol, email")
+      .select("id, nombre, rol, email")
       .eq("id", authUser.id)
       .single();
 
@@ -71,27 +80,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile({
       id:     authUser.id,
       nombre: resolveNombre(data?.nombre, metadata, email),
-      cargo:  data?.cargo  ?? (metadata?.cargo  as string | undefined) ?? "",
+      // profiles.cargo no existe en la tabla — se mantiene el campo en el tipo
+      // para compatibilidad con componentes, pero queda vacío. El UI ya usa
+      // profile.rol como fallback (TopbarUserMenu.tsx:135).
+      cargo:  "",
       rol:    data?.rol    ?? (metadata?.rol    as string | undefined) ?? "",
       email,
     });
-    setCurrentUserEmail(email || undefined);
+    // Nota: X-User-Email ya no se envía al backend — la identidad se verifica
+    // desde el JWT de Supabase directamente (Sprint 2A).
   }
 
   useEffect(() => {
+    // PASSWORD_RECOVERY (Sprint 3D-7.8D, corregido en 3D-7.8F) — Supabase la
+    // emite al detectar en la URL el enlace de /invite (usuario nuevo) o
+    // /recover (reset password administrado) de GoTrue. Puede dispararse
+    // muy pronto, durante la inicialización interna del cliente (creación
+    // en services/supabase.ts) — antes de que este efecto llegue a
+    // registrar un listener propio (auditoría 3D-7.8E: el evento se perdía
+    // por esa carrera y el usuario entraba directo al dashboard). Por eso
+    // se consulta onRecoveryDetectada(), que ya viene observando el evento
+    // desde el mismo tick en que se creó el cliente y avisa de inmediato si
+    // ya ocurrió, sin importar cuándo se suscriba este efecto.
+    const unsubRecovery = onRecoveryDetectada(() => {
+      setRecoveryMode(true);
+      setLoading(false);
+    });
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user) loadProfile(session.user);
       else setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) loadProfile(session.user);
       else { setProfile(null); setLoading(false); }
     });
 
-    return () => subscription.unsubscribe();
+    return () => { subscription.unsubscribe(); unsubRecovery(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // setLoading(false) debe ocurrir después de que loadProfile resuelva
@@ -106,12 +134,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    setCurrentUserEmail(undefined);
+    setProfile(null);
+  };
+
+  // Cierra la sesión temporal de recuperación tras establecer la nueva
+  // contraseña exitosamente (Sprint 3D-7.8D) — vuelve al login normal, para
+  // que el usuario entre con su contraseña recién creada, no arrastrando la
+  // sesión de recovery.
+  const completarRecovery = async () => {
+    await supabase.auth.signOut();
+    resetRecoveryDetectada(); // Sprint 3D-7.8F — permite detectar una futura recuperación en la misma pestaña.
+    setRecoveryMode(false);
+    setUser(null);
     setProfile(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, recoveryMode, signIn, signOut, completarRecovery }}>
       {children}
     </AuthContext.Provider>
   );

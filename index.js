@@ -16,6 +16,10 @@ import {
 } from './services/reportes/datasetProvider.js';
 import { ejecutarReporteManual } from './services/reportes/envioManual.js';
 import { ejecutarTickScheduler, calcularProgramacionAlGuardar } from './services/reportes/scheduler.js';
+import { obtenerCatalogo, invalidarCatalogo } from './services/rbac/catalogo.js';
+import { calcularPermisosEfectivos, invalidarUsuario, invalidarTodosLosUsuarios } from './services/rbac/resolver.js';
+import { requirePermiso } from './services/rbac/middleware.js';
+import { validarEstadoHumano } from './services/cumplidos/dominioEstados.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -134,6 +138,21 @@ if (!CLIENT_PORTAL_URL) {
   );
 }
 
+// Mismo patrón que CLIENT_PORTAL_URL arriba (Sprint 3D-7.8D) — cada
+// despliegue de Railway (dev/prod, servicios separados con variables
+// independientes, ver auditoría 3D-7.8B) configura su propio valor. Usado
+// por POST /api/usuarios (invitación) y POST /api/usuarios/:id/reset-password
+// para construir `redirect_to` — NUNCA se acepta un redirect_to del frontend.
+const ERP_RESET_PASSWORD_URL = process.env.ERP_RESET_PASSWORD_URL || "";
+if (!ERP_RESET_PASSWORD_URL) {
+  console.warn(
+    "⚠️  ERP_RESET_PASSWORD_URL no configurada. Los correos de invitación y " +
+    "recuperación de contraseña del ERP usarán el Site URL por defecto del " +
+    "proyecto Supabase (compartido con otros productos INLOP) en vez de la " +
+    "página de establecer contraseña del ERP — configura esta variable en Railway."
+  );
+}
+
 // URL pública base de seguimiento-gps/ (Fase 10C) — usada por
 // services/reportes/enlaceGps.js (Fase 10D) para armar el CTA "Ver
 // seguimiento GPS" del correo de un reporte. Sin esta variable, el CTA
@@ -151,8 +170,12 @@ const SB_HEADERS = {
   "Prefer": "resolution=merge-duplicates,return=representation"
 };
 
-async function sbFetch(path, method="GET", body=null) {
-  const opts = { method, headers: SB_HEADERS };
+async function sbFetch(path, method="GET", body=null, extraHeaders=null) {
+  // extraHeaders: override puntual por llamada (ej. Prefer: return=minimal en
+  // un PATCH cuyo caller no usa la fila devuelta) — NUNCA cambia SB_HEADERS
+  // global ni afecta llamadas que no pasen este 4º argumento (Sprint EGRESS-1).
+  const headers = extraHeaders ? { ...SB_HEADERS, ...extraHeaders } : SB_HEADERS;
+  const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetchConTimeout(`${SB_URL}${path}`, opts);
   if (!r.ok) {
@@ -291,6 +314,169 @@ function requireLegacyOrInternal(req, res, next) {
     return next();
   }
   // Fail-closed: si ninguna key está configurada, responder 503
+  if (!INTERNAL_API_KEY && !LEGACY_TC_TOKEN) {
+    return res.status(503).json({ error: "Servicio no disponible: credenciales no configuradas" });
+  }
+  return res.status(401).json({ error: "No autorizado" });
+}
+
+// ─── VERIFICACIÓN JWT + ESTADO ERP (Sprint 3D-7.7C) ──────────────────────────
+// Lógica común extraída de requireErpAuth y requireLegacyOrErpAuth — antes
+// cada middleware duplicaba la misma verificación de JWT contra GoTrue, sin
+// comprobar en ningún punto profiles.activo (auditorías 3D-7.7A/3D-7.7B: la
+// única comprobación real de "activo" vivía en el motor RBAC, que solo
+// protege los endpoints que usan requirePermiso — el resto del ERP quedaba
+// accesible con un JWT válido aunque el usuario estuviera desactivado).
+//
+// Un JWT solo se considera válido para el ERP si, además de ser aceptado por
+// GoTrue: (1) existe una fila en profiles para ese id, y (2) profiles.activo
+// === true. Sin fila = sin acceso (decisión explícita del sprint: "profiles
+// sin fila se consideran no autorizados para ERP").
+//
+// Consulta de profiles siempre fresca — sin cache (decisión explícita del
+// sprint: "sin cache inicialmente... consulta fresca por request").
+//
+// No distingue en la respuesta entre "sin profile" y "profile inactivo" —
+// mismo status/mensaje genérico para ambos casos, para no revelar cuál de
+// los dos aplica.
+//
+// @param {string} token — JWT crudo (sin el prefijo "Bearer ").
+// @returns {Promise<{id: string, email: string}>}
+// @throws {Error & {status: number}} — listo para responder con
+//   res.status(err.status).json({ error: err.message }).
+async function verificarJwtErpActivo(token) {
+  const r = await fetchConTimeout(`${SB_AUTH_URL}/user`, {
+    headers: { 'Authorization': `Bearer ${token}`, 'apikey': SB_ANON_KEY },
+  });
+  if (!r.ok) {
+    throw Object.assign(new Error('Token inválido o expirado'), { status: 401 });
+  }
+  const sbUser = await r.json();
+  const id    = sbUser.id;
+  const email = sbUser.email || '';
+
+  // sbFetch devuelve null ante un error real de Supabase (no ante "sin
+  // filas", que llega como array vacío) — ambos casos son fail-closed aquí:
+  // sin poder confirmar un profile activo, no hay acceso al ERP.
+  const perfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}&select=activo`);
+  const activo = perfiles?.[0]?.activo === true;
+  if (!activo) {
+    throw Object.assign(new Error('Acceso no autorizado'), { status: 403 });
+  }
+
+  return { id, email };
+}
+
+// ─── AUTENTICACIÓN ERP — JWT DE SUPABASE (Sprint 2A) ─────────────────────────
+// Middleware que acepta DOS mecanismos de autenticación del ERP:
+//   1. Authorization: Bearer <jwt>  → verificado contra Supabase Auth (identidad confiable)
+//   2. X-Internal-Api-Key           → secreto compartido (backward-compat, SIN identidad)
+//
+// Cuando el JWT es válido, coloca en el request:
+//   req.erpUserId    — UUID del usuario en Supabase Auth
+//   req.erpUserEmail — email verificado del JWT (NO del header X-User-Email)
+//
+// Los endpoints que usaban req.headers["x-user-email"] como "actor" deben
+// preferir req.erpUserEmail — es una identidad verificada, no auto-declarada.
+//
+// IMPORTANTE: Este middleware NO implementa RBAC. Solo resuelve identidad
+// (+ desde 3D-7.7C, que el usuario ERP esté activo — ver
+// verificarJwtErpActivo arriba). El RBAC granular por permiso se resuelve
+// aparte, en requirePermiso().
+//
+// Backward-compatible: si el ERP aún envía X-Internal-Api-Key (sin JWT),
+// sigue funcionando como antes. La transición es gradual.
+function requireErpAuth(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+
+  // ── Ruta 1: JWT de Supabase ──
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    verificarJwtErpActivo(token)
+      .then(({ id, email }) => {
+        req.erpUserId    = id;
+        req.erpUserEmail = email;
+        next();
+      })
+      .catch((e) => {
+        if (typeof e?.status === 'number') {
+          return res.status(e.status).json({ error: e.message });
+        }
+        console.error('❌ requireErpAuth JWT verification:', e.message);
+        res.status(500).json({ error: 'Error de autenticación' });
+      });
+    return;
+  }
+
+  // ── Ruta 2: API Key compartida (backward-compat) ──
+  if (INTERNAL_API_KEY && req.headers["x-internal-api-key"] === INTERNAL_API_KEY) {
+    // Sin JWT no hay identidad verificada — preservar el comportamiento actual:
+    // tomar X-User-Email como actor (no verificado, pero compatible con el flujo existente).
+    req.erpUserId    = null;
+    req.erpUserEmail = req.headers["x-user-email"] || null;
+    return next();
+  }
+
+  // ── Fail-closed ──
+  if (!INTERNAL_API_KEY) {
+    return res.status(503).json({ error: "Servicio no disponible: credenciales no configuradas" });
+  }
+  return res.status(401).json({ error: "No autorizado" });
+}
+
+// Helper: extrae la identidad del actor para auditoría.
+// Prioriza la identidad verificada del JWT sobre el header auto-declarado.
+function getActor(req) {
+  return req.erpUserEmail || req.headers["x-user-email"] || "sistema";
+}
+
+// ─── ACCESO LEGACY+ERP — ENDPOINTS COMPARTIDOS (Sprint 2A) ───────────────────
+// Middleware que acepta TRES mecanismos: JWT (ERP), API Key (ERP fallback),
+// y legacy token (TorreControl.html). Los endpoints compartidos necesitan
+// aceptar los tres durante la transición.
+//
+// Solo la Rama 1 (JWT) pasa por verificarJwtErpActivo() (Sprint 3D-7.7C) —
+// las Ramas 2 (API Key) y 3 (Legacy token) quedan exactamente igual que
+// antes, sin identidad verificada ni chequeo de profiles.activo, por
+// diseño: son los mecanismos que usa TorreControl.html y no tienen (ni
+// deben tener) una fila de profiles asociada.
+function requireLegacyOrErpAuth(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+
+  // ── Ruta 1: JWT de Supabase (ERP moderno) ──
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    verificarJwtErpActivo(token)
+      .then(({ id, email }) => {
+        req.erpUserId    = id;
+        req.erpUserEmail = email;
+        next();
+      })
+      .catch((e) => {
+        if (typeof e?.status === 'number') {
+          return res.status(e.status).json({ error: e.message });
+        }
+        console.error('❌ requireLegacyOrErpAuth JWT verification:', e.message);
+        res.status(500).json({ error: 'Error de autenticación' });
+      });
+    return;
+  }
+
+  // ── Ruta 2: API Key compartida (ERP backward-compat) ──
+  if (INTERNAL_API_KEY && req.headers["x-internal-api-key"] === INTERNAL_API_KEY) {
+    req.erpUserId    = null;
+    req.erpUserEmail = req.headers["x-user-email"] || null;
+    return next();
+  }
+
+  // ── Ruta 3: Legacy token (TorreControl.html) ──
+  if (LEGACY_TC_TOKEN && req.headers["x-legacy-token"] === LEGACY_TC_TOKEN) {
+    req.erpUserId    = null;
+    req.erpUserEmail = null;
+    return next();
+  }
+
+  // ── Fail-closed ──
   if (!INTERNAL_API_KEY && !LEGACY_TC_TOKEN) {
     return res.status(503).json({ error: "Servicio no disponible: credenciales no configuradas" });
   }
@@ -470,7 +656,7 @@ async function getCtPublicToken() {
 }
 
 // GET /api/ct/travel/:id
-app.get('/api/ct/travel/:id', requireInternalApiKey, async (req, res) => {
+app.get('/api/ct/travel/:id', requireErpAuth, async (req, res) => {
   try {
     const token = await getCtPublicToken();
     const r = await fetchConTimeout(`${CT_PUBLIC_URL}/Travel/${req.params.id}`, {
@@ -490,7 +676,7 @@ app.get('/api/ct/travel/:id', requireInternalApiKey, async (req, res) => {
 });
 
 // GET /api/ct/travel/list — lista viajes activos via Travel API pública
-app.get('/api/ct/travel/list', requireInternalApiKey, async (req, res) => {
+app.get('/api/ct/travel/list', requireErpAuth, async (req, res) => {
   try {
     const token = await getCtPublicToken();
     const r = await fetchConTimeout(`${CT_PUBLIC_URL}/Travel/List`, {
@@ -509,7 +695,7 @@ app.get('/api/ct/travel/list', requireInternalApiKey, async (req, res) => {
 });
 
 // POST /api/ct/binnacle
-app.post('/api/ct/binnacle', requireInternalApiKey, async (req, res) => {
+app.post('/api/ct/binnacle', requireErpAuth, async (req, res) => {
   try {
     const token = await getCtPublicToken();
     const { trip_number, id_monitoring_order, date_start, date_end, take = 100, page = 1 } = req.body;
@@ -1265,15 +1451,15 @@ async function syncAlarmas() {
 
 // ─── ENDPOINTS — responden siempre del caché ────────────
 
-app.get("/api/data", requireLegacyOrInternal, (req, res) => {
+app.get("/api/data", requireLegacyOrErpAuth, (req, res) => {
   res.json(cache.viajes.data);
 });
 
-app.get("/api/alarmas", requireLegacyOrInternal, (req, res) => {
+app.get("/api/alarmas", requireLegacyOrErpAuth, (req, res) => {
   res.json(cache.alarmas.data);
 });
 
-app.get("/api/pendientes", requireLegacyOrInternal, async (req, res) => {
+app.get("/api/pendientes", requireLegacyOrErpAuth, async (req, res) => {
   try {
     if ((Date.now() - cache.pendientes.ts) > 5 * 60 * 1000 || cache.pendientes.data.length === 0) {
       await syncPendientes();
@@ -1312,7 +1498,7 @@ app.get("/api/pendientes", requireLegacyOrInternal, async (req, res) => {
 // y añade campos derivados (lat, lon, pct, cliente, conductor_tel).
 // Transformación en services/reportes/datasetProvider.js (Fase 9B) — la misma
 // función alimenta el generador de reportes automáticos, sin duplicarla.
-app.get('/api/viajes', requireInternalApiKey, (req, res) => {
+app.get('/api/viajes', requireErpAuth, requirePermiso('viajes:listar', { sbFetch }), (req, res) => {
   res.json(transformarViajesActivos(cache.viajes.data, {
     tripCustomerCache, extraerTelefono, primerNombreCliente,
   }));
@@ -1338,7 +1524,7 @@ app.get('/api/viajes', requireInternalApiKey, (req, res) => {
 // vehiculo/telefono/ubicacion_actual: mismos campos en tiempo real que ya
 // usa mapSolicitud()/construirControltEnriquecido() vía cache.viajes (Resume
 // API) — no es una fuente nueva, es la misma ya establecida en Fase 5.
-app.get('/api/viajes/:tripNumber', requireInternalApiKey, async (req, res) => {
+app.get('/api/viajes/:tripNumber', requireErpAuth, requirePermiso('viajes:listar', { sbFetch }), async (req, res) => {
   const tripNumber = String(req.params.tripNumber || '').trim();
   if (!tripNumber) {
     return res.status(400).json({ error: { code: 'INVALID_TRIP_NUMBER', mensaje: 'Trip Number requerido' } });
@@ -1419,7 +1605,7 @@ app.get('/api/viajes/:tripNumber', requireInternalApiKey, async (req, res) => {
 // GET /api/cumplidos — viajes finalizados desde Supabase (tabla cumplidos).
 // Fuente: Supabase, nunca desde cache en memoria.
 // Paginación interna para soportar crecimiento indefinido de la tabla.
-app.get('/api/cumplidos', requireInternalApiKey, async (req, res) => {
+app.get('/api/cumplidos', requireErpAuth, requirePermiso('cumplidos:listar', { sbFetch }), async (req, res) => {
   try {
     // ?limit=N — limita resultados (útil para previews en el wizard de reportes).
     // Si no se pasa, el comportamiento es el mismo de siempre (sin límite).
@@ -1501,7 +1687,7 @@ async function refrescarEstadoSoportes(trip) {
 }
 
 // GET /api/cumplidos/:trip/documentos — lista los soportes persistidos para el viaje.
-app.get('/api/cumplidos/:trip/documentos', requireInternalApiKey, async (req, res) => {
+app.get('/api/cumplidos/:trip/documentos', requireErpAuth, requirePermiso('cumplidos:listar', { sbFetch }), async (req, res) => {
   try {
     const { trip } = req.params;
     const rows = await sbFetch(
@@ -1522,7 +1708,8 @@ app.get('/api/cumplidos/:trip/documentos', requireInternalApiKey, async (req, re
 // cuando el usuario selecciona varios en el diálogo de carga.
 app.post(
   '/api/cumplidos/:trip/documentos',
-  requireInternalApiKey,
+  requireErpAuth,
+  requirePermiso('cumplidos:gestionar-docs', { sbFetch }),
   express.raw({ type: '*/*', limit: '21mb' }),
   async (req, res) => {
     try {
@@ -1597,7 +1784,8 @@ app.post(
 // ni huérfanos: el borrado ocurre antes que la carga.
 app.put(
   '/api/cumplidos/:trip/documentos/:id/reemplazar',
-  requireInternalApiKey,
+  requireErpAuth,
+  requirePermiso('cumplidos:gestionar-docs', { sbFetch }),
   express.raw({ type: '*/*', limit: '21mb' }),
   async (req, res) => {
     try {
@@ -1678,7 +1866,7 @@ app.put(
 
 // DELETE /api/cumplidos/:trip/documentos/:id — elimina un soporte (Storage + metadata)
 // y actualiza tiene_soporte / estado_documental si el viaje queda sin documentos.
-app.delete('/api/cumplidos/:trip/documentos/:id', requireInternalApiKey, async (req, res) => {
+app.delete('/api/cumplidos/:trip/documentos/:id', requireErpAuth, requirePermiso('cumplidos:gestionar-docs', { sbFetch }), async (req, res) => {
   try {
     const { trip, id } = req.params;
     const rows = await sbFetch(
@@ -1701,7 +1889,7 @@ app.delete('/api/cumplidos/:trip/documentos/:id', requireInternalApiKey, async (
 // GET /api/cumplidos/:trip/documentos/:id/sign — URL firmada (1h) para ver/descargar.
 // ?download=1 fuerza la descarga con el nombre legible (nombre_generado) en vez
 // del UUID físico del Storage.
-app.get('/api/cumplidos/:trip/documentos/:id/sign', requireInternalApiKey, async (req, res) => {
+app.get('/api/cumplidos/:trip/documentos/:id/sign', requireErpAuth, requirePermiso('cumplidos:listar', { sbFetch }), async (req, res) => {
   try {
     const { trip, id } = req.params;
     const rows = await sbFetch(
@@ -1732,11 +1920,21 @@ app.get('/api/cumplidos/:trip/documentos/:id/sign', requireInternalApiKey, async
 });
 
 // PATCH /api/cumplidos/:trip/estado — actualiza estado_cumplido (y opcionalmente fecha_cumplido).
-app.patch('/api/cumplidos/:trip/estado', requireInternalApiKey, async (req, res) => {
+// Protegido por:
+//   - requirePermiso('cumplidos:cambiar-estado'): solo usuarios autorizados.
+//   - validarEstadoHumano(): rechaza estados exclusivos del sistema
+//     (LIVE, FINALIZADO CONTROLT, PENDIENTE LIQUIDACION) — escritos únicamente
+//     por syncCumplidos. Ver services/cumplidos/dominioEstados.js.
+app.patch('/api/cumplidos/:trip/estado', requireErpAuth, requirePermiso('cumplidos:cambiar-estado', { sbFetch }), async (req, res) => {
   try {
     const { trip }                    = req.params;
     const { estado_cumplido, fecha_cumplido } = req.body || {};
     if (!estado_cumplido) return res.status(400).json({ error: 'estado_cumplido requerido' });
+
+    // Integridad de dominio: rechazar estados exclusivos del sistema (syncCumplidos).
+    const errorDominio = validarEstadoHumano(estado_cumplido);
+    if (errorDominio) return res.status(422).json({ error: errorDominio, codigo: 'estado_exclusivo_sistema' });
+
     const patch = { estado_cumplido };
     if (fecha_cumplido) patch.fecha_cumplido = fecha_cumplido;
     await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(trip)}`, 'PATCH', patch);
@@ -1751,13 +1949,13 @@ app.patch('/api/cumplidos/:trip/estado', requireInternalApiKey, async (req, res)
 // Transformación (derivarEstadoGps, parseLatLon, filtrado por
 // ESTADOS_MONITOREABLES) en services/reportes/datasetProvider.js (Fase 9B) —
 // la misma función alimenta el generador de reportes automáticos.
-app.get('/api/gps', requireInternalApiKey, (req, res) => {
+app.get('/api/gps', requireErpAuth, requirePermiso('gps:listar', { sbFetch }), (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json(transformarCentroGps(cache.viajes.data, { tripCustomerCache }));
 });
 
 // ─── SOLICITUDES (Módulo de Demanda) ─────────────────────────────────────────
-app.get('/api/solicitudes', requireLegacyOrInternal, async (req, res) => {
+app.get('/api/solicitudes', requireLegacyOrErpAuth, async (req, res) => {
   try {
     const { desde, hasta, estado } = req.query;
     // Usar fecha local Colombia para el default de "hoy"
@@ -1839,7 +2037,7 @@ app.get('/api/solicitudes', requireLegacyOrInternal, async (req, res) => {
 });
 
 // GET /api/solicitudes/:id — detalle completo para el ERP (interno, sin auth de cliente)
-app.get('/api/solicitudes/:id', requireInternalApiKey, async (req, res) => {
+app.get('/api/solicitudes/:id', requireErpAuth, requirePermiso('solicitudes:listar', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1963,7 +2161,7 @@ app.get('/api/solicitudes/:id', requireInternalApiKey, async (req, res) => {
 });
 
 // PATCH /api/solicitudes/:id/estado — cambia estado manualmente (interno, sin auth)
-app.patch('/api/solicitudes/:id/estado', requireLegacyOrInternal, async (req, res) => {
+app.patch('/api/solicitudes/:id/estado', requireLegacyOrErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { estado, conductor_nombre, placa_asignada, conductor_tel } = req.body;
@@ -2013,26 +2211,60 @@ async function syncCumplidos() {
   try {
     if (!cache.viajes.data.length) return;
 
-    // Cargar todas las filas existentes en lotes para evitar el límite de 1.000 registros.
-    const SB_PAGE = 500;
-    let sbOffset = 0;
-    const allExistentes = [];
-    while (true) {
-      const page = await sbFetch(
-        `/cumplidos?select=id,estado_cumplido,tiene_soporte,cliente,empresa_cliente_id,fecha_finalizacion&limit=${SB_PAGE}&offset=${sbOffset}`
-      );
-      if (!page || page.length === 0) break;
-      allExistentes.push(...page);
-      if (page.length < SB_PAGE) break;
-      sbOffset += SB_PAGE;
-    }
-    const existentes = new Map(allExistentes.map(c => [c.id, c]));
-
     const ESTADOS_ACTIVOS           = new Set(['LIVE', 'SOLICITADO', 'CUMPLIDO RECIBIDO']);
     // Estados escritos exclusivamente por syncCumplidos durante una finalización automática.
     // Usados para distinguir finalizaciones auto-generadas de estados asignados manualmente.
     const ESTADOS_AUTO_FINALIZACION = new Set(['FINALIZADO CONTROLT', 'PENDIENTE LIQUIDACION']);
     const apiSet = new Set(cache.viajes.data.map(v => v.trip_number).filter(Boolean));
+
+    // Sprint EGRESS-CUMPLIDOS-1 (diseño aprobado): en vez de escanear TODA la
+    // tabla `cumplidos` (crece indefinidamente con el histórico), se cargan
+    // solo las filas que el resto de esta función puede llegar a necesitar —
+    // la unión de dos conjuntos acotados:
+    //   Query 1 (id in apiSet): filas del feed activo actual — cubre el
+    //     lookup de insert-vs-update más abajo y la reconciliación
+    //     (hayFinalizacion), que necesita encontrar la fila aunque ya esté
+    //     marcada como finalizada en BD.
+    //   Query 2 (estado_cumplido in ESTADOS_ACTIVOS): filas cuyo estado
+    //     sigue activo en BD — cubre la detección de viajes que
+    //     desaparecieron del feed (bucle de finalización, más abajo), que
+    //     necesita encontrarlas aunque ya no estén en apiSet.
+    // Toda fila fuera de ambos conjuntos es, por construcción, irrelevante
+    // para el resto de esta función: si no está en apiSet, el lookup de
+    // arriba no la usa; si además su estado no es activo, `estadoActivo`
+    // (bucle de finalización) sería false de todos modos.
+    // Dos queries separadas, no or=() — mismo motivo ya documentado en
+    // services/customerResolver.js (PGRST100: el parser de or() falla con
+    // valores que contienen comas/paréntesis).
+    const SELECT_CUMPLIDOS = 'id,estado_cumplido,tiene_soporte,cliente,empresa_cliente_id,' +
+      'fecha_finalizacion,estado_controlt,pct,tipo_negocio';
+    const SB_PAGE = 500;
+
+    async function cargarCumplidosPaginado(filtroQs) {
+      let sbOffset = 0;
+      const filas = [];
+      while (true) {
+        const page = await sbFetch(
+          `/cumplidos?select=${SELECT_CUMPLIDOS}&${filtroQs}&limit=${SB_PAGE}&offset=${sbOffset}`
+        );
+        if (!page || page.length === 0) break;
+        filas.push(...page);
+        if (page.length < SB_PAGE) break;
+        sbOffset += SB_PAGE;
+      }
+      return filas;
+    }
+
+    const idsFeedQs = [...apiSet].map(encodeURIComponent).join(',');
+    const filasFeed = idsFeedQs
+      ? await cargarCumplidosPaginado(`id=in.(${idsFeedQs})`)
+      : [];
+    const estadosActivosQs = [...ESTADOS_ACTIVOS].map(encodeURIComponent).join(',');
+    const filasActivasEnBD = await cargarCumplidosPaginado(`estado_cumplido=in.(${estadosActivosQs})`);
+
+    const existentes = new Map(
+      [...filasFeed, ...filasActivasEnBD].map(c => [c.id, c])
+    );
 
     let insertados = 0, actualizados = 0, revertidos = 0, clientesCreados = 0, placeholdersOmitidos = 0;
     for (const v of cache.viajes.data) {
@@ -2100,7 +2332,28 @@ async function syncCumplidos() {
           }
         }
 
-        await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(v.trip_number)}`, 'PATCH', patch);
+        // Sprint EGRESS-1: no reescribir campos cuyo valor ya es idéntico al
+        // existente — antes se enviaba `patch` completo en cada ciclo (60s)
+        // aunque nada hubiera cambiado (evidencia: 500 PATCH/8min sobre solo
+        // ~30 IDs activos). `patch` (arriba) NO se modifica — sigue siendo la
+        // fuente de verdad para el log de reconciliación de más abajo, que
+        // sigue leyendo `patch.estado_cumplido`/`patch.fecha_finalizacion`
+        // exactamente igual que antes. Solo se filtra lo que se envía por red.
+        const patchReal = {};
+        for (const campo of Object.keys(patch)) {
+          if (existe[campo] !== patch[campo]) patchReal[campo] = patch[campo];
+        }
+        if (Object.keys(patchReal).length > 0) {
+          // return=minimal: este PATCH no usa la fila devuelta (nunca se lee
+          // el resultado) — override puntual, NO toca el header global
+          // (que sigue siendo return=representation para todo lo demás).
+          await sbFetch(
+            `/cumplidos?id=eq.${encodeURIComponent(v.trip_number)}`,
+            'PATCH',
+            patchReal,
+            { "Prefer": "return=minimal" }
+          );
+        }
 
         if (hayFinalizacion) {
           revertidos++;
@@ -3836,7 +4089,7 @@ app.get('/catalogos/vehiculos', (req, res) => {
 });
 
 // Planeados — desde Supabase
-app.get("/api/planeados", requireInternalApiKey, async (req, res) => {
+app.get("/api/planeados", requireErpAuth, async (req, res) => {
   try {
     const hoyStr = fechaHoyColombia();
     const data = await sbFetch(
@@ -3862,7 +4115,7 @@ app.get("/api/planeados", requireInternalApiKey, async (req, res) => {
 // GET /api/programacion — bandeja operativa completa del día
 // Enriquece cada fila con nombre_cliente: razon_social oficial cuando existe,
 // company_customer_name como fallback. El original siempre se conserva.
-app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
+app.get("/api/programacion", requireErpAuth, requirePermiso('programacion:listar', { sbFetch }), async (req, res) => {
   const getId  = ++getProgCounter;
   const tGet0  = Date.now();
   try {
@@ -3957,7 +4210,7 @@ app.get("/api/programacion", requireInternalApiKey, async (req, res) => {
 // GET /api/programacion/:id/solicitud — solicitud origen vinculada al viaje
 // Un viaje sin solicitud asociada es un estado de negocio válido → { vinculada: false }.
 // Solo un error de infraestructura devuelve 500.
-app.get("/api/programacion/:id/solicitud", requireInternalApiKey, async (req, res) => {
+app.get("/api/programacion/:id/solicitud", requireErpAuth, requirePermiso('programacion:listar', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -4013,7 +4266,7 @@ app.get("/api/programacion/:id/solicitud", requireInternalApiKey, async (req, re
 });
 
 // GET /api/programacion/:id — detalle de un viaje planeado por trip_number
-app.get("/api/programacion/:id", requireInternalApiKey, async (req, res) => {
+app.get("/api/programacion/:id", requireErpAuth, requirePermiso('programacion:listar', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
     const data = await sbFetch(
@@ -4029,7 +4282,7 @@ app.get("/api/programacion/:id", requireInternalApiKey, async (req, res) => {
 
 // PATCH /api/programacion/:id/estado — cambia estado ERP del viaje
 // Solo actualiza estado_programacion. Las observaciones son exclusivas de /observaciones.
-app.patch("/api/programacion/:id/estado", requireInternalApiKey, async (req, res) => {
+app.patch("/api/programacion/:id/estado", requireErpAuth, requirePermiso('programacion:gestionar', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
     const { estado } = req.body || {};
@@ -4052,7 +4305,7 @@ app.patch("/api/programacion/:id/estado", requireInternalApiKey, async (req, res
 
 // PATCH /api/programacion/:id/observaciones — guarda nota del operador
 // Endpoint exclusivo para observaciones; no toca estado_programacion.
-app.patch("/api/programacion/:id/observaciones", requireInternalApiKey, async (req, res) => {
+app.patch("/api/programacion/:id/observaciones", requireErpAuth, requirePermiso('programacion:gestionar', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
     const { observaciones } = req.body || {};
@@ -4072,7 +4325,7 @@ app.patch("/api/programacion/:id/observaciones", requireInternalApiKey, async (r
 });
 
 // POST /api/programacion/:id/sync — reintenta sincronizar un viaje individual con la caché de la plataforma
-app.post("/api/programacion/:id/sync", requireInternalApiKey, async (req, res) => {
+app.post("/api/programacion/:id/sync", requireErpAuth, requirePermiso('programacion:gestionar', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -4217,7 +4470,7 @@ async function enrichClientes(empresas) {
   return empresas.map(e => mapEmpresaToCliente(e, genMap[e.id] ?? null, relMap[e.id] ?? null));
 }
 
-app.get("/api/clientes", async (req, res) => {
+app.get("/api/clientes", requireErpAuth, requirePermiso('clientes:listar', { sbFetch }), async (req, res) => {
   try {
     const data = await sbFetch("/empresas_cliente?order=razon_social.asc&limit=1000");
     if (!data) return res.status(502).json({ error: "Error al consultar clientes" });
@@ -4228,7 +4481,7 @@ app.get("/api/clientes", async (req, res) => {
   }
 });
 
-app.get("/api/clientes/:id", async (req, res) => {
+app.get("/api/clientes/:id", requireErpAuth, requirePermiso('clientes:listar', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
     const detalle = await fetchClienteDetalle(id);
@@ -4259,9 +4512,9 @@ async function generarCodigoCliente() {
   return "CLI-000001";
 }
 
-app.post("/api/clientes", async (req, res) => {
+app.post("/api/clientes", requireErpAuth, async (req, res) => {
   try {
-    const actor = req.headers["x-user-email"] ?? "sistema";
+    const actor = getActor(req);
     const {
       razon_social, nit, dv, nombre_comercial, estado = "prospecto",
       sector_economico, ciudad_principal, departamento, pais, direccion,
@@ -4356,10 +4609,10 @@ app.post("/api/clientes", async (req, res) => {
   }
 });
 
-app.patch("/api/clientes/:id", async (req, res) => {
+app.patch("/api/clientes/:id", requireErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const actor = req.headers["x-user-email"] ?? "sistema";
+    const actor = getActor(req);
     const {
       razon_social, nit, dv, nombre_comercial,
       sector_economico, ciudad_principal, departamento, pais, direccion,
@@ -4450,10 +4703,10 @@ app.patch("/api/clientes/:id", async (req, res) => {
   }
 });
 
-app.patch("/api/clientes/:id/estado", async (req, res) => {
+app.patch("/api/clientes/:id/estado", requireErpAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const actor = req.headers["x-user-email"] ?? "sistema";
+    const actor = getActor(req);
     const { estado, motivo, observacion } = req.body ?? {};
 
     const ESTADOS_VALIDOS = ["activo", "inactivo", "suspendido", "prospecto", "bloqueado"];
@@ -4498,7 +4751,7 @@ app.patch("/api/clientes/:id/estado", async (req, res) => {
 // ─── CUSTOMER MERGE ─────────────────────────────────────────────────────────
 
 // Preview: cuántos registros se reasignarán al fusionar duplicado_id en :id.
-app.get("/api/clientes/:id/merge-preview", async (req, res) => {
+app.get("/api/clientes/:id/merge-preview", requireErpAuth, requirePermiso('clientes:listar', { sbFetch }), async (req, res) => {
   try {
     const { id: oficialId } = req.params;
     const { duplicado_id } = req.query;
@@ -4544,10 +4797,10 @@ app.get("/api/clientes/:id/merge-preview", async (req, res) => {
 //   3. Marcar duplicado como fusionado.
 //   4. Registrar historial en ambos clientes.
 //   5. Refrescar lookup in-memory.
-app.post("/api/clientes/:id/merge", async (req, res) => {
+app.post("/api/clientes/:id/merge", requireErpAuth, async (req, res) => {
   try {
     const { id: oficialId } = req.params;
-    const actor = req.headers["x-user-email"] ?? "sistema";
+    const actor = getActor(req);
     const { duplicado_id, motivo = "Fusión de clientes duplicados" } = req.body ?? {};
 
     if (!duplicado_id) return res.status(400).json({ error: "duplicado_id es requerido" });
@@ -4640,7 +4893,7 @@ app.post("/api/clientes/:id/merge", async (req, res) => {
 // ─── ALIAS CRUD ─────────────────────────────────────────────────────────────
 
 // Listar todos los alias de un cliente (activos e inactivos)
-app.get("/api/clientes/:id/alias", requireInternalApiKey, async (req, res) => {
+app.get("/api/clientes/:id/alias", requireErpAuth, requirePermiso('clientes:listar', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
     const rows = await sbFetch(
@@ -4654,10 +4907,10 @@ app.get("/api/clientes/:id/alias", requireInternalApiKey, async (req, res) => {
 });
 
 // Crear un alias manualmente para un cliente
-app.post("/api/clientes/:id/alias", requireInternalApiKey, async (req, res) => {
+app.post("/api/clientes/:id/alias", requireErpAuth, async (req, res) => {
   try {
     const { id: empresa_cliente_id } = req.params;
-    const actor = req.headers["x-user-email"] ?? "sistema";
+    const actor = getActor(req);
     const { nombre_raw, integracion = 'controlt', observacion } = req.body ?? {};
 
     if (!nombre_raw?.trim()) return res.status(400).json({ error: "nombre_raw es requerido" });
@@ -4688,7 +4941,7 @@ app.post("/api/clientes/:id/alias", requireInternalApiKey, async (req, res) => {
 });
 
 // Activar / desactivar un alias (nunca se elimina físicamente)
-app.patch("/api/clientes/:id/alias/:aliasId", requireInternalApiKey, async (req, res) => {
+app.patch("/api/clientes/:id/alias/:aliasId", requireErpAuth, async (req, res) => {
   try {
     const { id: empresa_cliente_id, aliasId } = req.params;
     const { activo, observacion } = req.body ?? {};
@@ -4731,7 +4984,7 @@ app.patch("/api/clientes/:id/alias/:aliasId", requireInternalApiKey, async (req,
 //
 // Usado por Configuración → Reportes Automáticos → Etapa 05 · Destinatarios
 // para poblar la lista de "Personal INLOP" seleccionable — nunca hardcodeada.
-app.get("/api/personal", requireInternalApiKey, async (req, res) => {
+app.get("/api/personal", requireErpAuth, requirePermiso('configuracion:acceso', { sbFetch }), async (req, res) => {
   try {
     const rows = await sbFetch(
       "/personal?select=id,nombre,cargo,correo_compartido&activo=eq.true&order=nombre.asc"
@@ -4752,6 +5005,1033 @@ app.get("/api/personal", requireInternalApiKey, async (req, res) => {
     res.json(personal);
   } catch (e) {
     console.error("GET /api/personal error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// ─── RBAC — API de solo lectura (Sprint 3D-3) ──────────────────────────────
+// Módulo: Configuración → Parámetros → Usuarios / Roles / Permisos (UI aún
+// no construida — estos 4 endpoints son la capa de lectura que la
+// alimentará). Ninguno escribe: sin INSERT/UPDATE/DELETE, sin tocar
+// profiles, usuario_roles ni usuario_permisos.
+//
+// Los 3 endpoints administrativos (/api/usuarios, /api/roles, /api/permisos)
+// están protegidos con requirePermiso('rbac:gestionar') — primer uso real de
+// ese middleware (Sprint 3D-2). Como usuario_roles está vacía todavía (la
+// migración de usuarios es un sprint separado, aún no ejecutado), estos 3
+// endpoints son inalcanzables hasta que exista al menos una fila de
+// usuario_roles apuntando al rol master — consecuencia esperada del orden de
+// sprints ya decidido (Sprint 3D-3, diseño aprobado, sección F/R1), no un bug.
+//
+// GET /api/me/permisos es la excepción deliberada: solo requireErpAuth, sin
+// requirePermiso — su propósito es que CUALQUIER usuario autenticado sepa
+// qué puede hacer, nunca condicionado a un permiso administrativo.
+
+// GET /api/usuarios — profiles + sus roles RBAC activos.
+// profiles.rol es el campo legacy (texto libre, aún no migrado) — se expone
+// solo como contexto para la futura migración; NUNCA se usa aquí para
+// derivar permisos. Esa es exclusivamente la función de roles_rbac (vía
+// usuario_roles + roles, ambos con activo=true).
+app.get("/api/usuarios", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const [perfiles, asignaciones, excepcionesRaw, catalogo] = await Promise.all([
+      sbFetch("/profiles?select=id,nombre,email,rol,activo,created_at&order=nombre.asc"),
+      sbFetch("/usuario_roles?activo=eq.true&select=profile_id,rol_id"),
+      // Excepciones individuales activas de usuario_permisos (Sprint 3D-7.6)
+      // — mismo campo añadido a este endpoint ya existente (3D-3), sin crear
+      // uno nuevo: el frontend necesita el estado actual de grant/revoke por
+      // usuario para precargar la edición en PUT /api/usuarios/:id/permisos.
+      sbFetch("/usuario_permisos?activo=eq.true&select=profile_id,permiso_id,efecto"),
+      obtenerCatalogo({ sbFetch }),
+    ]);
+
+    const rolesPorProfile = new Map(); // profile_id -> [{id, nombre}]
+    for (const a of (asignaciones ?? [])) {
+      const rolInfo = catalogo.rolesPorId.get(a.rol_id);
+      if (!rolInfo || rolInfo.activo !== true) continue; // rol desactivado globalmente — no cuenta
+      if (!rolesPorProfile.has(a.profile_id)) rolesPorProfile.set(a.profile_id, []);
+      rolesPorProfile.get(a.profile_id).push({ id: a.rol_id, nombre: rolInfo.nombre });
+    }
+
+    const excepcionesPorProfile = new Map(); // profile_id -> [{permiso_id, nombre, efecto}]
+    for (const e of (excepcionesRaw ?? [])) {
+      const nombre = catalogo.permisoNombrePorId.get(e.permiso_id);
+      if (!nombre) continue; // permiso inexistente en catálogo — dato inconsistente, se omite
+      if (!excepcionesPorProfile.has(e.profile_id)) excepcionesPorProfile.set(e.profile_id, []);
+      excepcionesPorProfile.get(e.profile_id).push({ permiso_id: e.permiso_id, nombre, efecto: e.efecto });
+    }
+
+    const usuarios = (perfiles ?? []).map(p => ({
+      id:          p.id,
+      nombre:      p.nombre || "",
+      email:       p.email  || "",
+      rol:         p.rol    || "", // legacy — solo contexto, ver comentario arriba
+      activo:      p.activo === true,
+      created_at:  p.created_at,
+      roles_rbac:  rolesPorProfile.get(p.id) ?? [],
+      excepciones: excepcionesPorProfile.get(p.id) ?? [],
+    }));
+
+    res.json(usuarios);
+  } catch (e) {
+    console.error("GET /api/usuarios error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// GET /api/roles — catálogo de roles + conteo de usuarios asignados.
+app.get("/api/roles", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const [rolesRaw, asignaciones] = await Promise.all([
+      sbFetch("/roles?select=id,nombre,descripcion,es_sistema,activo&order=nombre.asc"),
+      sbFetch("/usuario_roles?activo=eq.true&select=rol_id"),
+    ]);
+
+    const conteoPorRol = new Map();
+    for (const a of (asignaciones ?? [])) {
+      conteoPorRol.set(a.rol_id, (conteoPorRol.get(a.rol_id) ?? 0) + 1);
+    }
+
+    const roles = (rolesRaw ?? []).map(r => ({
+      id:                 r.id,
+      nombre:             r.nombre,
+      descripcion:        r.descripcion || "",
+      es_sistema:         r.es_sistema === true,
+      activo:             r.activo === true,
+      usuarios_asignados: conteoPorRol.get(r.id) ?? 0,
+    }));
+
+    res.json(roles);
+  } catch (e) {
+    console.error("GET /api/roles error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// GET /api/permisos — catálogo de permisos + roles que los poseen.
+// El reverse-map (permiso → roles) se calcula en memoria contra el catálogo
+// ya cacheado por el motor RBAC (obtenerCatalogo, Sprint 3D-2) — sin
+// duplicar su lógica ni agregar consultas adicionales a Supabase.
+app.get("/api/permisos", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const [permisosRaw, catalogo] = await Promise.all([
+      sbFetch("/permisos?select=id,nombre,modulo,descripcion&order=modulo.asc,nombre.asc"),
+      obtenerCatalogo({ sbFetch }),
+    ]);
+
+    const rolesPorPermiso = new Map(); // permiso_id -> [{id, nombre}]
+    for (const [rolId, permisoIds] of catalogo.permisosPorRol) {
+      const rolInfo = catalogo.rolesPorId.get(rolId);
+      if (!rolInfo) continue;
+      for (const permisoId of permisoIds) {
+        if (!rolesPorPermiso.has(permisoId)) rolesPorPermiso.set(permisoId, []);
+        rolesPorPermiso.get(permisoId).push({ id: rolId, nombre: rolInfo.nombre });
+      }
+    }
+
+    const permisos = (permisosRaw ?? []).map(p => ({
+      id:          p.id,
+      nombre:      p.nombre,
+      modulo:      p.modulo || "",
+      descripcion: p.descripcion || "",
+      roles:       rolesPorPermiso.get(p.id) ?? [],
+    }));
+
+    res.json(permisos);
+  } catch (e) {
+    console.error("GET /api/permisos error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// GET /api/me/permisos — permisos efectivos del usuario autenticado.
+// Usa req.erpUserId directamente (identidad verificada por requireErpAuth
+// vía JWT) — NUNCA acepta un profile_id por parámetro, para que nadie pueda
+// pedir los permisos de otra persona por esta vía (evita IDOR).
+app.get("/api/me/permisos", requireErpAuth, async (req, res) => {
+  try {
+    if (!req.erpUserId) {
+      // Ruta de compatibilidad X-Internal-Api-Key: sin JWT no hay identidad
+      // verificada contra la que resolver RBAC — mismo criterio fail-closed
+      // que requirePermiso() (Sprint 3D-2, decisión G1).
+      return res.status(403).json({ error: "Identidad verificada requerida (JWT)" });
+    }
+    const resultado = await calcularPermisosEfectivos(req.erpUserId, { sbFetch });
+    res.json({
+      esMaster: resultado.esMaster,
+      permisos: Array.from(resultado.permisos),
+    });
+  } catch (e) {
+    console.error("GET /api/me/permisos error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+const UUID_REGEX_RBAC = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const NOMBRE_ROL_MASTER_RBAC = 'master';
+
+// PUT /api/usuarios/:id/roles — reemplaza el conjunto COMPLETO de roles RBAC
+// activos de un usuario (Sprint 3D-7.2 — primer endpoint de escritura RBAC).
+//
+// Body: { rol_ids: string[] } — el conjunto deseado. Reconciliación de
+// conjunto sobre usuario_roles: activa (upsert) los rol_id presentes que no
+// estaban activos, desactiva LÓGICAMENTE (activo=false, nunca DELETE físico
+// — usuario_roles no tiene historial propio, ver diseño 3D-7) los que
+// estaban activos y ya no están en la lista. Sin cambios para el resto —
+// idempotente: reenviar el mismo conjunto no escribe nada.
+//
+// Guard reforzado (diseño 3D-7, "poderes reforzados"): si la operación
+// agrega o quita el rol `master` para este usuario, el ACTOR debe ser
+// master real (esMaster===true vía el motor RBAC), no basta con tener
+// `rbac:gestionar` genérico — evita que alguien con rbac:gestionar por otra
+// vía se auto-promueva o promueva a terceros a master.
+//
+// Guard de integridad: nunca se permite dejar el sistema sin al menos un
+// master "funcionando" (usuario_roles.activo=true Y profiles.activo=true) —
+// 409 si la operación dejaría ese conteo en cero.
+app.put("/api/usuarios/:id/roles", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!UUID_REGEX_RBAC.test(id || "")) {
+      return res.status(400).json({ error: "id de usuario inválido" });
+    }
+
+    const { rol_ids } = req.body || {};
+    if (!Array.isArray(rol_ids) || rol_ids.some(r => typeof r !== "string" || !UUID_REGEX_RBAC.test(r))) {
+      return res.status(400).json({ error: "rol_ids debe ser un arreglo de UUID válidos" });
+    }
+    const targetSet = new Set(rol_ids); // dedup — reenviar el mismo id dos veces no es un error
+
+    // Profile debe existir.
+    const perfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}&select=id,activo`);
+    const perfil = perfiles?.[0];
+    if (!perfil) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    // profiles.rol NO participa en autorización ni en esta validación —
+    // solo profiles.activo, que sí es relevante: un usuario inactivo no
+    // puede recibir roles activos nuevos (sí puede recibir un rol_ids=[]
+    // para limpiar sus asignaciones existentes).
+    if (rol_ids.length > 0 && perfil.activo !== true) {
+      return res.status(400).json({ error: "El usuario está inactivo — no puede recibir roles activos" });
+    }
+
+    // Catálogo — valida que cada rol_id exista y esté activo. Reutiliza el
+    // motor RBAC ya cacheado (catalogo.js), sin duplicar su lógica.
+    const catalogo = await obtenerCatalogo({ sbFetch });
+    for (const rolId of targetSet) {
+      const info = catalogo.rolesPorId.get(rolId);
+      if (!info) return res.status(400).json({ error: `rol_id inexistente: ${rolId}` });
+      if (info.activo !== true) return res.status(400).json({ error: `rol inactivo, no asignable: ${info.nombre}` });
+    }
+
+    let rolIdMaster = null;
+    for (const [rolId, info] of catalogo.rolesPorId) {
+      if (info.nombre?.toLowerCase() === NOMBRE_ROL_MASTER_RBAC) { rolIdMaster = rolId; break; }
+    }
+
+    // Estado actual de asignaciones activas de este usuario.
+    const asignacionesActuales = await sbFetch(
+      `/usuario_roles?profile_id=eq.${encodeURIComponent(id)}&activo=eq.true&select=rol_id`
+    ) || [];
+    const activosActuales = new Set(asignacionesActuales.map(a => a.rol_id));
+
+    const toActivate   = [...targetSet].filter(rolId => !activosActuales.has(rolId));
+    const toDeactivate = [...activosActuales].filter(rolId => !targetSet.has(rolId));
+
+    const tocaMaster = rolIdMaster !== null && (toActivate.includes(rolIdMaster) || toDeactivate.includes(rolIdMaster));
+    if (tocaMaster) {
+      const actorResuelto = await calcularPermisosEfectivos(req.erpUserId, { sbFetch });
+      if (!actorResuelto.esMaster) {
+        return res.status(403).json({ error: "Solo un master puede asignar o quitar el rol master" });
+      }
+    }
+
+    // Último master: si esta operación desactiva el rol master de este
+    // usuario, verificar que quede al menos otro master "funcionando"
+    // (asignación activa + profile activo) en el resto del sistema.
+    if (rolIdMaster !== null && toDeactivate.includes(rolIdMaster)) {
+      const filasMaster = await sbFetch(
+        `/usuario_roles?rol_id=eq.${encodeURIComponent(rolIdMaster)}&activo=eq.true&select=profile_id`
+      ) || [];
+      const otrosIds = filasMaster.map(f => f.profile_id).filter(pid => pid !== id);
+      let otrosMasterFuncionando = 0;
+      if (otrosIds.length > 0) {
+        const perfilesOtros = await sbFetch(
+          `/profiles?id=in.(${otrosIds.map(encodeURIComponent).join(',')})&activo=eq.true&select=id`
+        ) || [];
+        otrosMasterFuncionando = perfilesOtros.length;
+      }
+      if (otrosMasterFuncionando === 0) {
+        return res.status(409).json({ error: "No se puede quitar master: quedaría el sistema sin ningún master activo" });
+      }
+    }
+
+    const actor = getActor(req);
+    const nowIso = new Date().toISOString();
+
+    // Reconciliación en dos escrituras atómicas (no granulares) — cada
+    // dirección de cambio (desactivar / activar) se envía como UNA sola
+    // sentencia PostgREST sobre múltiples filas, en vez de un loop de N
+    // llamadas sbFetch. Esto evita el riesgo real (Sprint 3D-7.2, auditoría)
+    // de que una falla a mitad de un loop deje usuario_roles parcialmente
+    // modificada: al ser una sola sentencia por dirección, o se aplica
+    // completa o sbFetch devuelve null y no se aplica nada de esa dirección.
+    // No se usa ninguna transacción ni dependencia nueva — mismo mecanismo
+    // (sbFetch + filtros PostgREST) ya usado en el resto del endpoint.
+    //
+    // Orden fail-closed: primero desactivar, luego activar. Si la activación
+    // falla después de una desactivación ya confirmada, el usuario queda con
+    // MENOS permisos de los deseados (seguro), nunca con roles obsoletos de
+    // más. invalidarUsuario() se llama tras cada escritura confirmada, no
+    // solo al final, para que el cache nunca quede desalineado con una
+    // escritura parcial ya aplicada en la base de datos.
+    if (toDeactivate.length > 0) {
+      const resultado = await sbFetch(
+        `/usuario_roles?profile_id=eq.${encodeURIComponent(id)}&rol_id=in.(${toDeactivate.map(encodeURIComponent).join(',')})`,
+        'PATCH',
+        { activo: false, asignado_por: actor, asignado_en: nowIso }
+      );
+      if (resultado === null) {
+        console.error("PUT /api/usuarios/:id/roles: falló la desactivación en lote, abortando sin activar");
+        return res.status(500).json({ error: "Error interno" });
+      }
+      invalidarUsuario(id);
+    }
+    if (toActivate.length > 0) {
+      const resultado = await sbFetch('/usuario_roles?on_conflict=profile_id,rol_id', 'POST', toActivate.map(rolId => ({
+        profile_id:   id,
+        rol_id:       rolId,
+        asignado_por: actor,
+        asignado_en:  nowIso,
+        activo:       true,
+      })));
+      if (resultado === null) {
+        console.error("PUT /api/usuarios/:id/roles: falló la activación en lote");
+        return res.status(500).json({ error: "Error interno" });
+      }
+      invalidarUsuario(id);
+    }
+
+    const roles_rbac = [...targetSet].map(rolId => ({ id: rolId, nombre: catalogo.rolesPorId.get(rolId).nombre }));
+    res.json({ id, roles_rbac });
+  } catch (e) {
+    console.error("PUT /api/usuarios/:id/roles error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+const NOMBRE_PERMISO_GESTIONAR_RBAC = 'rbac:gestionar';
+
+// PUT /api/roles/:id/permisos — reemplaza el conjunto COMPLETO de permisos
+// asignados a un rol RBAC (Sprint 3D-7.3). Mismo patrón de reconciliación
+// que PUT /api/usuarios/:id/roles (3D-7.2): calcula toAdd/toRemove contra el
+// estado actual de rol_permisos y aplica cada dirección como UNA sola
+// escritura batch (nunca una escritura por fila), comprobando explícitamente
+// que sbFetch no devuelva null antes de continuar con la siguiente.
+//
+// master queda fuera de esta operación (400): su acceso total se resuelve
+// por el corto-circuito especial del motor RBAC (resolver.js) y nunca tiene
+// filas en rol_permisos — permitir "editarlas" aquí no tendría ningún efecto
+// real sobre lo que master puede hacer, y daría al operador la falsa
+// impresión de estar controlando su acceso por esta vía.
+//
+// Guard reforzado (mismo principio "poderes reforzados" de 3D-7): si la
+// operación agrega o quita `rbac:gestionar` de un rol, el ACTOR debe ser
+// master real (esMaster===true vía el motor RBAC), no basta con tener
+// `rbac:gestionar` genérico — evita que admin (u otro rol que ya tenga
+// rbac:gestionar) se autoeleve u otorgue esa exclusividad a otro rol.
+app.put("/api/roles/:id/permisos", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!UUID_REGEX_RBAC.test(id || "")) {
+      return res.status(400).json({ error: "id de rol inválido" });
+    }
+
+    const { permiso_ids } = req.body || {};
+    if (!Array.isArray(permiso_ids) || permiso_ids.some(p => typeof p !== "string" || !UUID_REGEX_RBAC.test(p))) {
+      return res.status(400).json({ error: "permiso_ids debe ser un arreglo de UUID válidos" });
+    }
+    const targetSet = new Set(permiso_ids); // dedup — reenviar el mismo id dos veces no es un error
+
+    const catalogo = await obtenerCatalogo({ sbFetch });
+    const rolInfo = catalogo.rolesPorId.get(id);
+    if (!rolInfo) return res.status(404).json({ error: "Rol no encontrado" });
+    if (rolInfo.activo !== true) return res.status(400).json({ error: "Rol inactivo" });
+    if (rolInfo.nombre?.toLowerCase() === NOMBRE_ROL_MASTER_RBAC) {
+      return res.status(400).json({ error: "master se resuelve por la regla especial del motor RBAC — no admite asignación de permisos" });
+    }
+
+    // Todos los permiso_ids deben existir en el catálogo. La tabla `permisos`
+    // no tiene columna `activo` (sql/20260819_rbac_ddl.sql) — todo permiso
+    // cargado en el catálogo es, por definición del esquema, utilizable;
+    // "existir en el catálogo" es la única verificación aplicable aquí.
+    for (const permisoId of targetSet) {
+      if (!catalogo.permisoNombrePorId.has(permisoId)) {
+        return res.status(400).json({ error: `permiso_id inexistente: ${permisoId}` });
+      }
+    }
+
+    let permisoIdGestionar = null;
+    for (const [pid, nombre] of catalogo.permisoNombrePorId) {
+      if (nombre === NOMBRE_PERMISO_GESTIONAR_RBAC) { permisoIdGestionar = pid; break; }
+    }
+
+    const actualesSet = catalogo.permisosPorRol.get(id) ?? new Set();
+
+    const toAdd    = [...targetSet].filter(pid => !actualesSet.has(pid));
+    const toRemove = [...actualesSet].filter(pid => !targetSet.has(pid));
+
+    const tocaGestionar = permisoIdGestionar !== null && (toAdd.includes(permisoIdGestionar) || toRemove.includes(permisoIdGestionar));
+    if (tocaGestionar) {
+      const actorResuelto = await calcularPermisosEfectivos(req.erpUserId, { sbFetch });
+      if (!actorResuelto.esMaster) {
+        return res.status(403).json({ error: "Solo un master puede asignar o quitar rbac:gestionar de un rol" });
+      }
+    }
+
+    // Reconciliación en dos escrituras atómicas — mismo mecanismo fail-closed
+    // que PUT /api/usuarios/:id/roles (3D-7.2, auditoría): cada dirección de
+    // cambio es una única sentencia PostgREST sobre múltiples filas, nunca
+    // un loop de N llamadas sbFetch. Se elimina antes de agregar: si agregar
+    // falla después de una eliminación ya confirmada, el rol queda con MENOS
+    // permisos de los deseados (seguro), nunca con permisos obsoletos de más.
+    if (toRemove.length > 0) {
+      const resultado = await sbFetch(
+        `/rol_permisos?rol_id=eq.${encodeURIComponent(id)}&permiso_id=in.(${toRemove.map(encodeURIComponent).join(',')})`,
+        'DELETE'
+      );
+      if (resultado === null) {
+        console.error("PUT /api/roles/:id/permisos: falló la eliminación en lote, abortando sin agregar");
+        return res.status(500).json({ error: "Error interno" });
+      }
+    }
+    if (toAdd.length > 0) {
+      const resultado = await sbFetch('/rol_permisos', 'POST', toAdd.map(permisoId => ({
+        rol_id:     id,
+        permiso_id: permisoId,
+      })));
+      if (resultado === null) {
+        console.error("PUT /api/roles/:id/permisos: falló la inserción en lote");
+        return res.status(500).json({ error: "Error interno" });
+      }
+    }
+
+    // Cache — solo se invalida si realmente hubo escritura. invalidarCatalogo()
+    // porque rol_permisos forma parte del catálogo cacheado (catalogo.js);
+    // invalidarTodosLosUsuarios() porque un cambio en rol_permisos puede
+    // afectar la resolución de permisos de CUALQUIER usuario que tenga este
+    // rol asignado, no solo uno puntual (a diferencia de invalidarUsuario()
+    // en 3D-7.2, que solo toca usuario_roles de un usuario específico).
+    if (toAdd.length > 0 || toRemove.length > 0) {
+      invalidarCatalogo();
+      invalidarTodosLosUsuarios();
+    }
+
+    // Estado resultante — se consulta solo lo necesario para el contrato de
+    // respuesta (modulo/descripcion no están en el catálogo en memoria, ver
+    // catalogo.js) en vez de reconsultar todo /api/permisos o todo el
+    // catálogo; sin esta consulta puntual no habría forma de evitar un
+    // refetch más amplio.
+    const permisos = targetSet.size > 0
+      ? ((await sbFetch(
+          `/permisos?id=in.(${[...targetSet].map(encodeURIComponent).join(',')})&select=id,nombre,modulo,descripcion&order=modulo.asc,nombre.asc`
+        )) || []).map(p => ({
+          id:          p.id,
+          nombre:      p.nombre,
+          modulo:      p.modulo || "",
+          descripcion: p.descripcion || "",
+        }))
+      : [];
+
+    res.json({ id, permisos });
+  } catch (e) {
+    console.error("PUT /api/roles/:id/permisos error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+const EFECTOS_VALIDOS_RBAC = new Set(['grant', 'revoke']);
+
+// PUT /api/usuarios/:id/permisos — reemplaza el conjunto COMPLETO de
+// excepciones individuales activas de un usuario en usuario_permisos
+// (Sprint 3D-7.6). NO toca roles, rol_permisos ni el catálogo RBAC —
+// exclusivamente excepciones puntuales, superpuestas a lo que el usuario ya
+// tiene por sus roles (ver resolver.js: permisos del rol + grants − revokes).
+//
+// master queda fuera del alcance de este guard de negocio: sus permisos
+// efectivos se resuelven por el corto-circuito especial del motor RBAC
+// (resolver.js#calcularPermisosEfectivos corta ANTES de consultar
+// usuario_permisos) — una excepción sobre un usuario master es una
+// operación de base de datos válida, pero inerte; el frontend lo advierte,
+// el backend no la bloquea (a diferencia de PUT /api/roles/:id/permisos,
+// que sí rechaza al rol master porque ahí "editar" no tendría ni siquiera
+// una fila de destino coherente).
+//
+// Guard reforzado (mismo principio "poderes reforzados" de 3D-7): si la
+// operación agrega, MODIFICA (cambia el efecto) o elimina una excepción
+// sobre `rbac:gestionar`, el ACTOR debe ser master real (esMaster===true),
+// no basta con tener `rbac:gestionar` genérico.
+app.put("/api/usuarios/:id/permisos", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!UUID_REGEX_RBAC.test(id || "")) {
+      return res.status(400).json({ error: "id de usuario inválido" });
+    }
+
+    const { excepciones } = req.body || {};
+    if (!Array.isArray(excepciones)) {
+      return res.status(400).json({ error: "excepciones debe ser un arreglo" });
+    }
+    for (const exc of excepciones) {
+      const permisoIdValido = exc && typeof exc.permiso_id === "string" && UUID_REGEX_RBAC.test(exc.permiso_id);
+      const efectoValido    = exc && EFECTOS_VALIDOS_RBAC.has(exc.efecto);
+      if (typeof exc !== "object" || exc === null || !permisoIdValido || !efectoValido) {
+        return res.status(400).json({ error: "cada excepción requiere permiso_id (UUID) y efecto ('grant'|'revoke')" });
+      }
+    }
+    const idsVistos = new Set();
+    for (const exc of excepciones) {
+      if (idsVistos.has(exc.permiso_id)) {
+        return res.status(400).json({ error: `permiso_id duplicado en excepciones: ${exc.permiso_id}` });
+      }
+      idsVistos.add(exc.permiso_id);
+    }
+    const targetMap = new Map(excepciones.map(e => [e.permiso_id, e.efecto])); // permiso_id -> efecto deseado
+
+    // Profile debe existir.
+    const perfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}&select=id,activo`);
+    const perfil = perfiles?.[0];
+    if (!perfil) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    // Catálogo — valida que cada permiso_id exista. La tabla `permisos` no
+    // tiene columna `activo` (sql/20260819_rbac_ddl.sql) — mismo criterio ya
+    // aplicado en PUT /api/roles/:id/permisos (Sprint 3D-7.3): "existir en
+    // el catálogo" es la única verificación aplicable.
+    const catalogo = await obtenerCatalogo({ sbFetch });
+    for (const permisoId of targetMap.keys()) {
+      if (!catalogo.permisoNombrePorId.has(permisoId)) {
+        return res.status(400).json({ error: `permiso_id inexistente: ${permisoId}` });
+      }
+    }
+
+    let permisoIdGestionar = null;
+    for (const [pid, nombre] of catalogo.permisoNombrePorId) {
+      if (nombre === NOMBRE_PERMISO_GESTIONAR_RBAC) { permisoIdGestionar = pid; break; }
+    }
+
+    // Estado actual de excepciones ACTIVAS de este usuario.
+    const actualesRaw = await sbFetch(
+      `/usuario_permisos?profile_id=eq.${encodeURIComponent(id)}&activo=eq.true&select=permiso_id,efecto`
+    ) || [];
+    const actualesMap = new Map(actualesRaw.map(a => [a.permiso_id, a.efecto]));
+
+    // toDeactivate: excepciones activas hoy que ya no están en el conjunto deseado.
+    const toDeactivate = [...actualesMap.keys()].filter(pid => !targetMap.has(pid));
+    // toUpsert: deseadas que no coinciden con una fila ya activa con el MISMO
+    // efecto — cubre altas nuevas, reactivaciones y cambios de efecto
+    // (grant↔revoke) en una sola sentencia de upsert.
+    const toUpsert = [...targetMap.entries()]
+      .filter(([pid, efecto]) => actualesMap.get(pid) !== efecto)
+      .map(([pid, efecto]) => ({ permiso_id: pid, efecto }));
+
+    const tocaGestionar = permisoIdGestionar !== null && (
+      toDeactivate.includes(permisoIdGestionar) ||
+      toUpsert.some(u => u.permiso_id === permisoIdGestionar)
+    );
+    if (tocaGestionar) {
+      const actorResuelto = await calcularPermisosEfectivos(req.erpUserId, { sbFetch });
+      if (!actorResuelto.esMaster) {
+        return res.status(403).json({ error: "Solo un master puede modificar una excepción sobre rbac:gestionar" });
+      }
+    }
+
+    const actor = getActor(req);
+    const nowIso = new Date().toISOString();
+
+    // Reconciliación en dos escrituras atómicas — mismo mecanismo fail-closed
+    // que PUT /api/usuarios/:id/roles (3D-7.2) y PUT /api/roles/:id/permisos
+    // (3D-7.3): cada dirección de cambio es una única sentencia PostgREST
+    // sobre múltiples filas, nunca un loop de N llamadas sbFetch. Desactivar
+    // primero, upsert después: si el upsert falla tras una desactivación ya
+    // confirmada, el usuario queda con MENOS excepciones que las deseadas
+    // (seguro), nunca con excepciones obsoletas de más.
+    if (toDeactivate.length > 0) {
+      const resultado = await sbFetch(
+        `/usuario_permisos?profile_id=eq.${encodeURIComponent(id)}&permiso_id=in.(${toDeactivate.map(encodeURIComponent).join(',')})`,
+        'PATCH',
+        { activo: false, asignado_por: actor, asignado_en: nowIso }
+      );
+      if (resultado === null) {
+        console.error("PUT /api/usuarios/:id/permisos: falló la desactivación en lote, abortando sin upsert");
+        return res.status(500).json({ error: "Error interno" });
+      }
+      invalidarUsuario(id);
+    }
+    if (toUpsert.length > 0) {
+      const resultado = await sbFetch('/usuario_permisos?on_conflict=profile_id,permiso_id', 'POST', toUpsert.map(({ permiso_id, efecto }) => ({
+        profile_id:   id,
+        permiso_id,
+        efecto,
+        asignado_por: actor,
+        asignado_en:  nowIso,
+        activo:       true,
+      })));
+      if (resultado === null) {
+        console.error("PUT /api/usuarios/:id/permisos: falló el upsert en lote");
+        return res.status(500).json({ error: "Error interno" });
+      }
+      invalidarUsuario(id);
+    }
+
+    const excepcionesRespuesta = [...targetMap.entries()].map(([permisoId, efecto]) => ({
+      permiso_id: permisoId,
+      nombre:     catalogo.permisoNombrePorId.get(permisoId),
+      efecto,
+      activo:     true,
+    }));
+
+    res.json({ id, excepciones: excepcionesRespuesta });
+  } catch (e) {
+    console.error("PUT /api/usuarios/:id/permisos error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// POST /api/usuarios — crea un usuario ERP: identidad en Supabase Auth +
+// fila en profiles (Sprint 3D-7.8D). Solo responde éxito (201) cuando AMBOS
+// existen confirmados — a diferencia del precedente de Portal Cliente
+// (POST /usuarios, más arriba), que puede dejar un usuario de Auth huérfano
+// si el fallback de perfil también falla: aquí, si profiles no puede
+// confirmarse tras el mismo fallback, se compensa eliminando el usuario de
+// Auth recién creado antes de responder error (auditoría 3D-7.8C).
+//
+// Usa /invite (no /admin/users con password) — el backend nunca genera ni
+// transmite una contraseña; el usuario establece la suya propia desde el
+// correo de invitación, en la página de "nueva contraseña" del ERP
+// (redirect_to = ERP_RESET_PASSWORD_URL — nunca un valor enviado por el
+// frontend).
+const EMAIL_REGEX_RBAC = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+app.post("/api/usuarios", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const { nombre, email } = req.body || {};
+    if (typeof nombre !== "string" || !nombre.trim()) {
+      return res.status(400).json({ error: "nombre es requerido" });
+    }
+    const emailNormalizado = typeof email === "string" ? email.trim().toLowerCase() : "";
+    if (!EMAIL_REGEX_RBAC.test(emailNormalizado)) {
+      return res.status(400).json({ error: "email inválido" });
+    }
+
+    let authRes;
+    try {
+      const inviteUrl = ERP_RESET_PASSWORD_URL
+        ? `/invite?redirect_to=${encodeURIComponent(`${ERP_RESET_PASSWORD_URL}/set-password`)}`
+        : '/invite';
+      authRes = await sbAuthAdmin(inviteUrl, 'POST', {
+        email: emailNormalizado,
+        data: { nombre: nombre.trim() },
+      });
+    } catch (e) {
+      if (respondSupabaseAuthError(e, res, 'POST /api/usuarios')) return;
+      throw e;
+    }
+    if (!authRes || !authRes.id) {
+      return res.status(500).json({ error: "Error creando usuario en Auth" });
+    }
+
+    // Esperar un posible trigger auth.users → profiles (mismo patrón
+    // defensivo que POST /usuarios de Portal Cliente — no se puede confirmar
+    // desde este repo si ese trigger existe para `profiles`, ver auditoría
+    // 3D-7.8A) y crear la fila manualmente si no llegó.
+    await new Promise(r => setTimeout(r, 300));
+
+    const SELECT_PERFIL_NUEVO = "id,nombre,email,rol,activo,created_at";
+    let perfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(authRes.id)}&select=${SELECT_PERFIL_NUEVO}`);
+
+    if (!perfiles || !perfiles.length) {
+      await sbFetch('/profiles', 'POST', {
+        id: authRes.id, nombre: nombre.trim(), email: emailNormalizado, activo: true,
+      });
+      perfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(authRes.id)}&select=${SELECT_PERFIL_NUEVO}`);
+    }
+
+    if (!perfiles || !perfiles.length) {
+      // Compensación: no dejar una identidad de Auth huérfana sin profile
+      // (mejora explícita sobre el precedente de Portal Cliente — 3D-7.8C).
+      try {
+        await sbAuthAdmin(`/admin/users/${encodeURIComponent(authRes.id)}`, 'DELETE');
+      } catch (compErr) {
+        console.error("POST /api/usuarios: falló la compensación (borrar usuario Auth huérfano)", authRes.id, compErr.message);
+      }
+      return res.status(500).json({ error: "No se pudo crear el perfil del usuario — la operación fue revertida" });
+    }
+
+    const p = perfiles[0];
+    res.status(201).json({
+      id:          p.id,
+      nombre:      p.nombre || "",
+      email:       p.email  || emailNormalizado,
+      rol:         p.rol    || "",
+      activo:      p.activo === true,
+      created_at:  p.created_at,
+      roles_rbac:  [],
+      excepciones: [],
+    });
+  } catch (e) {
+    console.error("POST /api/usuarios error:", e.stack || e.message);
+    res.status(500).json({ error: "Ocurrió un error inesperado al crear el usuario. Intenta de nuevo." });
+  }
+});
+
+// POST /api/usuarios/:id/reset-password — dispara el correo oficial de
+// recuperación de Supabase Auth para el usuario objetivo (Sprint 3D-7.8D).
+// Mismo mecanismo GoTrue que el autoservicio POST /auth/recuperar
+// (/recover, sin service_role — usa el mismo apikey anon), iniciado aquí
+// por un administrador autorizado en vez de por el propio usuario. Nunca
+// genera ni transmite una contraseña.
+app.post("/api/usuarios/:id/reset-password", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!UUID_REGEX_RBAC.test(id || "")) {
+      return res.status(400).json({ error: "id de usuario inválido" });
+    }
+
+    const perfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}&select=id,email`);
+    const perfil = perfiles?.[0];
+    if (!perfil || !perfil.email) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    // redirect_to construido exclusivamente desde la configuración del
+    // backend (ERP_RESET_PASSWORD_URL) — nunca desde el body/query del
+    // frontend (auditoría 3D-7.8B).
+    const recoverUrl = ERP_RESET_PASSWORD_URL
+      ? `${SB_AUTH_URL}/recover?redirect_to=${encodeURIComponent(`${ERP_RESET_PASSWORD_URL}/set-password`)}`
+      : `${SB_AUTH_URL}/recover`;
+    const r = await fetchConTimeout(recoverUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SB_KEY },
+      body: JSON.stringify({ email: perfil.email }),
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '');
+      console.error(`POST /api/usuarios/:id/reset-password: Supabase /recover → ${r.status}: ${txt}`);
+      return res.status(502).json({ error: "No se pudo enviar el correo de recuperación" });
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /api/usuarios/:id/reset-password error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// PATCH /api/usuarios/:id/activo — activa o desactiva un usuario ERP
+// (Sprint 3D-7.8D). El mecanismo PRINCIPAL de bloqueo es profiles.activo +
+// verificarJwtErpActivo() (Sprint 3D-7.7C, decisión ya cerrada) — el
+// ban/unban de Supabase Auth Admin aplicado aquí es únicamente defensa
+// COMPLEMENTARIA (bloquea inicios de sesión/refresh nuevos; no revoca
+// sesiones ya emitidas, ver auditoría 3D-7.7A), nunca el mecanismo del que
+// depende la seguridad real.
+//
+// Reglas (mismo criterio ya usado en PUT /api/usuarios/:id/roles):
+//   - Nadie puede desactivarse a sí mismo.
+//   - Si el usuario objetivo tiene el rol master activo, activar O
+//     desactivar exige esMaster real del actor (poderes reforzados) —
+//     mismo peso que agregar/quitar el rol master, porque profiles.activo
+//     por sí solo ya determina si master tiene o no acceso efectivo
+//     (resolver.js: "profiles.activo = false bloquea TODO, incluido master").
+//   - No se puede desactivar al último master operativo (guard idéntico al
+//     de PUT /api/usuarios/:id/roles, reutilizado tal cual).
+const BAN_DURATION_DESACTIVAR = '87600h'; // ~10 años — GoTrue no admite "permanente" (ver auditoría 3D-7.7A)
+
+app.patch("/api/usuarios/:id/activo", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!UUID_REGEX_RBAC.test(id || "")) {
+      return res.status(400).json({ error: "id de usuario inválido" });
+    }
+    const { activo } = req.body || {};
+    if (typeof activo !== "boolean") {
+      return res.status(400).json({ error: "activo debe ser boolean" });
+    }
+
+    if (!activo && id === req.erpUserId) {
+      return res.status(400).json({ error: "No puedes desactivarte a ti mismo" });
+    }
+
+    const perfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}&select=id,activo`);
+    const perfil = perfiles?.[0];
+    if (!perfil) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    // ¿El objetivo tiene el rol master activo? Mismo criterio RBAC del
+    // resto del motor — nunca profiles.rol (legacy).
+    const catalogo = await obtenerCatalogo({ sbFetch });
+    let rolIdMaster = null;
+    for (const [rolId, info] of catalogo.rolesPorId) {
+      if (info.nombre?.toLowerCase() === NOMBRE_ROL_MASTER_RBAC) { rolIdMaster = rolId; break; }
+    }
+    let objetivoEsMaster = false;
+    if (rolIdMaster !== null) {
+      const asignacionMaster = await sbFetch(
+        `/usuario_roles?profile_id=eq.${encodeURIComponent(id)}&rol_id=eq.${encodeURIComponent(rolIdMaster)}&activo=eq.true&select=profile_id`
+      ) || [];
+      objetivoEsMaster = asignacionMaster.length > 0;
+    }
+
+    if (objetivoEsMaster) {
+      const actorResuelto = await calcularPermisosEfectivos(req.erpUserId, { sbFetch });
+      if (!actorResuelto.esMaster) {
+        return res.status(403).json({ error: "Solo un master puede activar o desactivar a otro master" });
+      }
+    }
+
+    // Último master operativo — mismo guard que PUT /api/usuarios/:id/roles.
+    if (!activo && objetivoEsMaster) {
+      const filasMaster = await sbFetch(
+        `/usuario_roles?rol_id=eq.${encodeURIComponent(rolIdMaster)}&activo=eq.true&select=profile_id`
+      ) || [];
+      const otrosIds = filasMaster.map(f => f.profile_id).filter(pid => pid !== id);
+      let otrosMasterFuncionando = 0;
+      if (otrosIds.length > 0) {
+        const perfilesOtros = await sbFetch(
+          `/profiles?id=in.(${otrosIds.map(encodeURIComponent).join(',')})&activo=eq.true&select=id`
+        ) || [];
+        otrosMasterFuncionando = perfilesOtros.length;
+      }
+      if (otrosMasterFuncionando === 0) {
+        return res.status(409).json({ error: "No se puede desactivar: quedaría el sistema sin ningún master activo" });
+      }
+    }
+
+    const resultado = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}`, 'PATCH', { activo });
+    if (resultado === null) {
+      console.error(`PATCH /api/usuarios/:id/activo: falló la actualización de profiles.activo para ${id}`);
+      return res.status(500).json({ error: "Error interno" });
+    }
+    invalidarUsuario(id);
+
+    // Ban/unban — defensa complementaria (ver comentario arriba). Un fallo
+    // aquí NO revierte el cambio de profiles.activo ya confirmado, porque el
+    // mecanismo principal de bloqueo ya quedó aplicado; se registra para
+    // diagnóstico sin bloquear la respuesta de éxito. Pero la respuesta sí
+    // debe reflejar honestamente que esta parte complementaria no se pudo
+    // sincronizar (auditoría 3D-7.8E: sin esto, un unban fallido en una
+    // reactivación se reporta como éxito total aunque el usuario, con el
+    // ban de ~10 años todavía activo en Supabase Auth, no podrá iniciar
+    // sesión de nuevo una vez su token actual expire).
+    let authSincronizado = true;
+    try {
+      await sbAuthAdmin(`/admin/users/${encodeURIComponent(id)}`, 'PUT', {
+        ban_duration: activo ? 'none' : BAN_DURATION_DESACTIVAR,
+      });
+    } catch (banErr) {
+      authSincronizado = false;
+      console.error(`PATCH /api/usuarios/:id/activo: falló el ${activo ? 'unban' : 'ban'} complementario para ${id}:`, banErr.message);
+    }
+
+    res.json({ id, activo, auth_sincronizado: authSincronizado });
+  } catch (e) {
+    console.error("PATCH /api/usuarios/:id/activo error:", e.message);
+    res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// PATCH /api/usuarios/:id/datos — edita nombre y/o correo de un usuario ERP
+// ya existente (Sprint 3D-7.9D — diseño aprobado en las auditorías
+// 3D-7.9A/B/C; corrección de atomicidad en 3D-7.9F tras el hallazgo de
+// 3D-7.9E). Separado de roles/permisos/activo: solo toca profiles.nombre y
+// el par auth.users.email / profiles.email.
+//
+// Correo — flujo aprobado en 3D-7.9C (reemplaza la primera propuesta de
+// 3D-7.9B, que dejaba un "profiles_sincronizado:false" como 200 — aquí
+// NUNCA se responde 200 con un estado parcial):
+//   1. Leer el email ACTUAL directamente desde Supabase Auth — nunca desde
+//      profiles.email, que podría ya estar desincronizado por un fallo
+//      previo no resuelto; leerlo de Auth también confirma que el usuario
+//      existe ahí.
+//   2. Actualizar Auth al nuevo email (email_confirm:true — es una
+//      corrección administrativa, no depende de que el usuario confirme un
+//      enlace que quizás ya no puede recibir).
+//   3. Actualizar profiles.email, con un reintento corto único si falla
+//      (mismo idioma de wait+retry que ya usa POST /api/usuarios) antes de
+//      declarar fallo.
+//   4. Si profiles sigue fallando: revertir Auth al email leído en el paso 1.
+//      - Rollback exitoso → la operación NO se completó: se responde error
+//        (revertido, sin huérfanos ni divergencia).
+//      - Rollback también falla → estado inconsistente real entre Auth y
+//        profiles: se responde error explícito con ambos valores, nunca 200.
+//
+// Nombre + Correo combinados (corrección 3D-7.9F — hallazgo de 3D-7.9E: el
+// nombre se escribía ANTES del correo y quedaba cambiado silenciosamente si
+// el correo fallaba después): el correo se resuelve PRIMERO por completo
+// —exactamente el flujo de arriba, sin modificarlo— y el nombre solo se
+// toca cuando Auth y profiles.email ya quedaron sincronizados. Si el correo
+// falla en cualquier punto, el nombre nunca se toca. Si el correo tuvo
+// éxito pero el nombre falla después, se revierte también el correo (Auth +
+// profiles) al valor leído en el paso 1, con el mismo criterio de
+// "revertido" vs. "estado inconsistente" que ya usa el flujo de solo correo.
+app.patch("/api/usuarios/:id/datos", requireErpAuth, requirePermiso('rbac:gestionar', { sbFetch }), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!UUID_REGEX_RBAC.test(id || "")) {
+      return res.status(400).json({ error: "id de usuario inválido" });
+    }
+
+    const { nombre, email } = req.body || {};
+    const tocaNombre = typeof nombre === "string";
+    const tocaEmail  = typeof email === "string";
+    if (!tocaNombre && !tocaEmail) {
+      return res.status(400).json({ error: "Debes indicar nombre y/o email" });
+    }
+
+    const nombreLimpio = tocaNombre ? nombre.trim() : null;
+    if (tocaNombre && !nombreLimpio) {
+      return res.status(400).json({ error: "nombre no puede estar vacío" });
+    }
+    const emailNormalizado = tocaEmail ? email.trim().toLowerCase() : null;
+    if (tocaEmail && !EMAIL_REGEX_RBAC.test(emailNormalizado)) {
+      return res.status(400).json({ error: "email inválido" });
+    }
+
+    const perfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}&select=id`);
+    if (!perfiles || !perfiles.length) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    // ── Correo — se resuelve PRIMERO (ver comentario arriba). Nunca toca
+    // nombre; en cualquier fallo responde y sale, exactamente igual que el
+    // flujo aprobado en 3D-7.9C/D, sin modificarlo. ──
+    // `emailAnteriorParaRevertir` queda seteado solo si el correo cambió
+    // realmente de valor — es lo que permite, más abajo, revertirlo si el
+    // nombre falla después.
+    let emailAnteriorParaRevertir = null;
+    if (tocaEmail) {
+      let usuarioAuth;
+      try {
+        usuarioAuth = await sbAuthAdmin(`/admin/users/${encodeURIComponent(id)}`, 'GET');
+      } catch (e) {
+        if (respondSupabaseAuthError(e, res, 'PATCH /api/usuarios/:id/datos (lectura Auth)')) return;
+        throw e;
+      }
+      const emailAnterior = usuarioAuth?.user?.email || usuarioAuth?.email || null;
+      if (!emailAnterior) {
+        return res.status(404).json({ error: "Usuario no encontrado en Auth" });
+      }
+
+      // Solo se toca Auth/profiles si el correo realmente cambia — evita
+      // trabajo y efectos secundarios (reenvío de confirmación) innecesarios
+      // cuando el formulario reenvía el mismo email ya vigente.
+      if (emailAnterior.toLowerCase() !== emailNormalizado) {
+        try {
+          await sbAuthAdmin(`/admin/users/${encodeURIComponent(id)}`, 'PUT', {
+            email: emailNormalizado,
+            email_confirm: true,
+          });
+        } catch (e) {
+          if (respondSupabaseAuthError(e, res, 'PATCH /api/usuarios/:id/datos (Auth)')) return;
+          throw e;
+        }
+
+        let resultadoPerfil = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}`, 'PATCH', { email: emailNormalizado });
+        if (resultadoPerfil === null) {
+          await new Promise(r => setTimeout(r, 300)); // reintento corto único
+          resultadoPerfil = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}`, 'PATCH', { email: emailNormalizado });
+        }
+
+        if (resultadoPerfil === null) {
+          // profiles no se pudo actualizar tras el reintento — revertir Auth
+          // al valor leído en el paso 1 (nunca a profiles.email). El nombre
+          // todavía no se tocó en absoluto en este punto.
+          try {
+            await sbAuthAdmin(`/admin/users/${encodeURIComponent(id)}`, 'PUT', {
+              email: emailAnterior,
+              email_confirm: true,
+            });
+          } catch (rollbackErr) {
+            console.error(
+              `PATCH /api/usuarios/:id/datos: ESTADO INCONSISTENTE para ${id} — Auth quedó en "${emailNormalizado}", profiles sigue en "${emailAnterior}", y el rollback de Auth también falló:`,
+              rollbackErr.message
+            );
+            return res.status(500).json({
+              error: "Estado inconsistente entre autenticación y perfil — requiere verificación manual",
+              estado_inconsistente: true,
+              email_auth_actual: emailNormalizado,
+              email_profiles_actual: emailAnterior,
+            });
+          }
+          console.error(`PATCH /api/usuarios/:id/datos: falló profiles.email para ${id}; Auth revertido a "${emailAnterior}"`);
+          return res.status(500).json({ error: "No se pudo actualizar el correo — la operación fue revertida" });
+        }
+
+        // Correo aplicado y sincronizado — se guarda para poder revertirlo
+        // si el nombre falla a continuación.
+        emailAnteriorParaRevertir = emailAnterior;
+      }
+    }
+
+    // ── Nombre — solo se llega aquí cuando el correo (si se pidió) ya quedó
+    // sincronizado. Si falla y el correo SÍ cambió en esta misma llamada, se
+    // revierte también el correo para no dejar una edición a medias. ──
+    if (tocaNombre) {
+      const resultadoNombre = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}`, 'PATCH', { nombre: nombreLimpio });
+      if (resultadoNombre === null) {
+        console.error(`PATCH /api/usuarios/:id/datos: falló la actualización de profiles.nombre para ${id}`);
+
+        if (emailAnteriorParaRevertir === null) {
+          // Solo nombre (o correo no cambió realmente) — mismo mensaje de
+          // siempre, sin nada que revertir.
+          return res.status(500).json({ error: "Error interno" });
+        }
+
+        // El correo de esta misma llamada ya había quedado aplicado en Auth
+        // y profiles — revertir ambos al valor anterior para no dejar el
+        // correo cambiado sin el nombre.
+        let authRevertido = true;
+        try {
+          await sbAuthAdmin(`/admin/users/${encodeURIComponent(id)}`, 'PUT', {
+            email: emailAnteriorParaRevertir,
+            email_confirm: true,
+          });
+        } catch (revertAuthErr) {
+          authRevertido = false;
+          console.error(
+            `PATCH /api/usuarios/:id/datos: falló revertir Auth a "${emailAnteriorParaRevertir}" tras error de nombre para ${id}:`,
+            revertAuthErr.message
+          );
+        }
+        const resultadoRevertProfiles = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}`, 'PATCH', { email: emailAnteriorParaRevertir });
+        const profilesRevertido = resultadoRevertProfiles !== null;
+
+        if (authRevertido && profilesRevertido) {
+          return res.status(500).json({ error: "No se pudo actualizar el nombre — la operación fue revertida (correo y nombre sin cambios)" });
+        }
+
+        console.error(
+          `PATCH /api/usuarios/:id/datos: ESTADO INCONSISTENTE para ${id} tras fallo de nombre — ` +
+          `Auth ${authRevertido ? "revertido" : "SIGUE en " + emailNormalizado}, ` +
+          `profiles ${profilesRevertido ? "revertido" : "SIGUE en " + emailNormalizado}.`
+        );
+        return res.status(500).json({
+          error: "Estado inconsistente entre autenticación y perfil — requiere verificación manual",
+          estado_inconsistente: true,
+          email_auth_actual: authRevertido ? emailAnteriorParaRevertir : emailNormalizado,
+          email_profiles_actual: profilesRevertido ? emailAnteriorParaRevertir : emailNormalizado,
+        });
+      }
+    }
+
+    const perfilFinal = await sbFetch(`/profiles?id=eq.${encodeURIComponent(id)}&select=id,nombre,email`);
+    const p = perfilFinal?.[0];
+    if (!p) {
+      console.error(`PATCH /api/usuarios/:id/datos: no se pudo releer el perfil ${id} tras aplicar los cambios`);
+      return res.status(500).json({ error: "Error interno" });
+    }
+
+    res.json({ id: p.id, nombre: p.nombre || "", email: p.email || "" });
+  } catch (e) {
+    console.error("PATCH /api/usuarios/:id/datos error:", e.message);
     res.status(500).json({ error: "Error interno" });
   }
 });
@@ -4781,7 +6061,7 @@ function errorDestinatarios(destinatarios) {
   return null;
 }
 
-app.get("/api/reportes-automaticos", requireInternalApiKey, async (req, res) => {
+app.get("/api/reportes-automaticos", requireErpAuth, requirePermiso('configuracion:acceso', { sbFetch }), async (req, res) => {
   try {
     const rows = await sbFetch("/reportes_automaticos?order=created_at.desc&limit=500");
     res.json(rows ?? []);
@@ -4791,9 +6071,9 @@ app.get("/api/reportes-automaticos", requireInternalApiKey, async (req, res) => 
   }
 });
 
-app.post("/api/reportes-automaticos", requireInternalApiKey, async (req, res) => {
+app.post("/api/reportes-automaticos", requireErpAuth, requirePermiso('configuracion:acceso', { sbFetch }), async (req, res) => {
   try {
-    const actor = req.headers["x-user-email"] ?? "sistema";
+    const actor = getActor(req);
     const {
       nombre,
       modulo_id    = "gestion_logistica",
@@ -4869,10 +6149,10 @@ app.post("/api/reportes-automaticos", requireInternalApiKey, async (req, res) =>
   }
 });
 
-app.patch("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, res) => {
+app.patch("/api/reportes-automaticos/:id", requireErpAuth, requirePermiso('configuracion:acceso', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
-    const actor = req.headers["x-user-email"] ?? "sistema";
+    const actor = getActor(req);
     const { nombre, modulo_id, tipo_reporte, asunto, cuerpo, formato, activo, borrador, frecuencia, filtros, columnas, recurrencia, destinatarios, seguimiento_gps } = req.body ?? {};
 
     const patch = { updated_by: actor };
@@ -4956,10 +6236,10 @@ app.patch("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, re
   }
 });
 
-app.patch("/api/reportes-automaticos/:id/activo", requireInternalApiKey, async (req, res) => {
+app.patch("/api/reportes-automaticos/:id/activo", requireErpAuth, requirePermiso('configuracion:acceso', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
-    const actor = req.headers["x-user-email"] ?? "sistema";
+    const actor = getActor(req);
     const { activo } = req.body ?? {};
 
     if (typeof activo !== "boolean") {
@@ -5011,7 +6291,7 @@ app.patch("/api/reportes-automaticos/:id/activo", requireInternalApiKey, async (
 // sbFetch(..., "DELETE") siempre devuelve null (ver sbFetch arriba), así que
 // primero se verifica existencia — mismo patrón que
 // DELETE /api/cumplidos/:trip/documentos/:id más arriba.
-app.delete("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, res) => {
+app.delete("/api/reportes-automaticos/:id", requireErpAuth, requirePermiso('configuracion:acceso', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
     const existente = await sbFetch(`/reportes_automaticos?id=eq.${encodeURIComponent(id)}&select=id`);
@@ -5031,7 +6311,7 @@ app.delete("/api/reportes-automaticos/:id", requireInternalApiKey, async (req, r
 // el filtro real en generación (ver services/reportes/datasetProvider.js —
 // listarClientesDataset / cliente_normalizado) — nunca un catálogo aparte
 // que pueda desalinearse de lo que el filtro realmente hace.
-app.get("/api/reportes-automaticos/clientes", requireInternalApiKey, async (req, res) => {
+app.get("/api/reportes-automaticos/clientes", requireErpAuth, requirePermiso('configuracion:acceso', { sbFetch }), async (req, res) => {
   try {
     const tipoReporte = String(req.query.tipo_reporte ?? "").trim();
     if (!tipoReporte) return res.status(400).json({ error: "tipo_reporte es obligatorio" });
@@ -5068,7 +6348,7 @@ const STATUS_POR_CODIGO_ENVIO = {
   error_envio:           502,
 };
 
-app.post("/api/reportes-automaticos/:id/enviar", requireInternalApiKey, async (req, res) => {
+app.post("/api/reportes-automaticos/:id/enviar", requireErpAuth, requirePermiso('configuracion:acceso', { sbFetch }), async (req, res) => {
   try {
     const { id } = req.params;
     const resultado = await ejecutarReporteManual(id, {
@@ -5159,7 +6439,7 @@ app.delete('/push/suscripcion', requireClienteAuth, async (req, res) => {
 });
 
 // ─── DIAGNÓSTICO CONTROLT SOAP ───────────────────────────────────────────────
-app.use('/api/controlt', requireInternalApiKey, controltDiagRouter);
+app.use('/api/controlt', requireErpAuth, controltDiagRouter);
 
 // ─── SEGUIMIENTO GPS EXTERNO (Fase 10B) ──────────────────────────────────────
 // Rutas PÚBLICAS (sin requireInternalApiKey — decisión cerrada de Fase 10B:

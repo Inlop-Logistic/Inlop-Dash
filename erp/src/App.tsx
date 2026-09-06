@@ -2,6 +2,7 @@ import { AuthProvider, useAuth } from "@/state/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { NavigationProvider, useNavigationContext } from "@/core/navigation";
 import { LoginPage } from "@/pages/LoginPage";
+import { SetPasswordPage } from "@/pages/SetPasswordPage";
 import { SolicitudesPage } from "@/pages/SolicitudesPage";
 import { ProgramacionPage } from "@/pages/ProgramacionPage";
 import { ViajesPage } from "@/pages/ViajesPage";
@@ -20,8 +21,8 @@ function ComingSoon({ titulo }: { titulo: string }) {
 }
 
 function AppInner() {
-  const { user, loading } = useAuth();
-  const { vista, setVista } = useNavigationContext();
+  const { user, loading, recoveryMode } = useAuth();
+  const { vista, setVista, navigateTo, breadcrumbTrail, configActiveItem } = useNavigationContext();
 
   if (loading) {
     return (
@@ -30,6 +31,12 @@ function AppInner() {
       </div>
     );
   }
+
+  // Sesión de recuperación de contraseña (Sprint 3D-7.8D) — SIEMPRE tiene
+  // prioridad sobre `user`: un usuario que llega por /invite o /recover
+  // nunca debe entrar al dashboard, sin importar que Supabase le haya dado
+  // una sesión temporal válida (ver AuthContext.tsx#recoveryMode).
+  if (recoveryMode) return <SetPasswordPage />;
 
   if (!user) return <LoginPage />;
 
@@ -45,7 +52,7 @@ function AppInner() {
   };
 
   return (
-    <AppShell vista={vista} setVista={setVista}>
+    <AppShell vista={vista} setVista={setVista} navigateTo={navigateTo} breadcrumbTrail={breadcrumbTrail} configActiveItem={configActiveItem}>
       {renderPage()}
     </AppShell>
   );

@@ -456,3 +456,167 @@ export function formatFechaCorta(iso: string | null | undefined): string {
   if (isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }
+
+// ─── Tipos de Configuración → Parámetros → Usuarios / Roles y Permisos ───────
+// Sprint 3D-4 — UI de solo lectura sobre las APIs RBAC de Sprint 3D-3
+// (GET /api/usuarios, /api/roles, /api/permisos, /api/me/permisos).
+// Los campos aquí son un espejo literal de la respuesta de esos endpoints —
+// ver index.js para la fuente de verdad exacta de cada uno.
+
+/** Referencia mínima a un rol, tal como se embebe en usuarios y permisos. */
+export interface RolRbacRef {
+  id:     string;
+  nombre: string;
+}
+
+/**
+ * Una excepción individual activa de `usuario_permisos`, tal como la embebe
+ * GET /api/usuarios (Sprint 3D-7.6) — un grant concede un permiso adicional
+ * al que ya tiene por sus roles; un revoke le niega uno que normalmente
+ * tendría. Nunca reemplaza `roles_rbac`, se superpone.
+ */
+export interface ExcepcionPermisoRef {
+  permiso_id: string;
+  nombre:     string;
+  efecto:     "grant" | "revoke";
+}
+
+/**
+ * Fila de GET /api/usuarios. `rol` es el campo legacy de `profiles.rol`
+ * (texto libre, aún no migrado) — se expone solo como contexto para la
+ * futura migración; NUNCA se usa para derivar permisos en la UI. La fuente
+ * de verdad de qué puede hacer un usuario es exclusivamente `roles_rbac` +
+ * `excepciones` (y, en el backend, el motor de services/rbac/).
+ */
+export interface UsuarioRbac {
+  id:          string;
+  nombre:      string;
+  email:       string;
+  rol:         string;
+  activo:      boolean;
+  created_at:  string;
+  roles_rbac:  RolRbacRef[];
+  excepciones: ExcepcionPermisoRef[];
+}
+
+/** Fila de GET /api/roles. */
+export interface RolRbac {
+  id:                 string;
+  nombre:             string;
+  descripcion:        string;
+  es_sistema:         boolean;
+  activo:             boolean;
+  usuarios_asignados: number;
+}
+
+/** Fila de GET /api/permisos. */
+export interface PermisoRbac {
+  id:          string;
+  nombre:      string;
+  modulo:      string;
+  descripcion: string;
+  roles:       RolRbacRef[];
+}
+
+/** Respuesta de GET /api/me/permisos. */
+export interface MisPermisos {
+  esMaster: boolean;
+  permisos: string[];
+}
+
+// ─── Edición de roles RBAC de un usuario (Sprint 3D-7.4) ─────────────────────
+// PUT /api/usuarios/:id/roles (backend, Sprint 3D-7.2). `rol_ids` es el
+// conjunto COMPLETO deseado, no un delta — reenviar el mismo conjunto no
+// escribe nada (idempotente, ver index.js).
+
+/** Respuesta de PUT /api/usuarios/:id/roles — roles_rbac ya actualizado. */
+export interface ActualizarRolesUsuarioResponse {
+  id:         string;
+  roles_rbac: RolRbacRef[];
+}
+
+// ─── Edición de permisos de un rol RBAC (Sprint 3D-7.5) ──────────────────────
+// PUT /api/roles/:id/permisos (backend, Sprint 3D-7.3). `permiso_ids` es el
+// conjunto COMPLETO deseado, no un delta — reenviar el mismo conjunto no
+// escribe nada (idempotente, ver index.js).
+
+/** Un permiso tal como lo embebe la respuesta de PUT /api/roles/:id/permisos
+ *  — mismos 4 campos que PermisoRbac, sin `roles` (ese endpoint responde por
+ *  rol, no por permiso). */
+export interface PermisoRolRef {
+  id:          string;
+  nombre:      string;
+  modulo:      string;
+  descripcion: string;
+}
+
+/** Respuesta de PUT /api/roles/:id/permisos — permisos ya actualizados del rol. */
+export interface ActualizarPermisosRolResponse {
+  id:       string;
+  permisos: PermisoRolRef[];
+}
+
+// ─── Edición de excepciones individuales de un usuario (Sprint 3D-7.6) ───────
+// PUT /api/usuarios/:id/permisos (backend). `excepciones` es el conjunto
+// COMPLETO de excepciones ACTIVAS deseadas, no un delta — reenviar el mismo
+// conjunto no escribe nada (idempotente, ver index.js). NO modifica roles
+// ni rol_permisos — exclusivamente usuario_permisos.
+
+/** Una excepción tal como se envía en el body de PUT /api/usuarios/:id/permisos. */
+export interface ExcepcionUsuarioBody {
+  permiso_id: string;
+  efecto:     "grant" | "revoke";
+}
+
+/** Respuesta de PUT /api/usuarios/:id/permisos — excepciones ya actualizadas. */
+export interface ActualizarExcepcionesUsuarioResponse {
+  id:          string;
+  excepciones: Array<{ permiso_id: string; nombre: string; efecto: "grant" | "revoke"; activo: boolean }>;
+}
+
+// ─── Crear usuario, reset password, activar/desactivar (Sprint 3D-7.8D) ─────
+// POST /api/usuarios, POST /api/usuarios/:id/reset-password,
+// PATCH /api/usuarios/:id/activo (backend). Ninguno maneja contraseñas —
+// crear usuario usa /invite de Supabase Auth (el usuario la establece él
+// mismo); reset password reutiliza el flujo oficial de recuperación.
+
+/** Body de POST /api/usuarios. */
+export interface CrearUsuarioBody {
+  nombre: string;
+  email:  string;
+}
+
+/** Respuesta de POST /api/usuarios — mismo contrato que una fila de
+ *  GET /api/usuarios, recién creada (sin roles ni excepciones todavía). */
+export type CrearUsuarioResponse = UsuarioRbac;
+
+/** Respuesta de POST /api/usuarios/:id/reset-password. */
+export interface ResetPasswordResponse {
+  ok: true;
+}
+
+/** Respuesta de PATCH /api/usuarios/:id/activo.
+ *  auth_sincronizado = false (Sprint 3D-7.8F) significa que profiles.activo
+ *  quedó aplicado correctamente (mecanismo principal), pero el ban/unban
+ *  complementario en Supabase Auth falló — ver auditoría 3D-7.8E. */
+export interface ActualizarActivoUsuarioResponse {
+  id:     string;
+  activo: boolean;
+  auth_sincronizado: boolean;
+}
+
+// ─── Editar datos básicos: nombre y correo (Sprint 3D-7.9D) ─────────────────
+// PATCH /api/usuarios/:id/datos. Al menos uno de los dos campos debe
+// enviarse. El correo se sincroniza entre Supabase Auth y profiles con
+// compensación en el backend — ver auditorías 3D-7.9A/B/C: esta respuesta
+// solo llega en caso de éxito total (nunca un 200 con estado parcial).
+export interface ActualizarDatosUsuarioBody {
+  nombre?: string;
+  email?:  string;
+}
+
+export interface ActualizarDatosUsuarioResponse {
+  id:     string;
+  nombre: string;
+  email:  string;
+}
