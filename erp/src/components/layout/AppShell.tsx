@@ -124,20 +124,23 @@ interface Props {
 export function AppShell({ vista, setVista, navigateTo, children, badges = {}, breadcrumbTrail, configActiveItem }: Props) {
   const { profile, signOut } = useAuth();
 
-  // ── Permisos (Sprint 3D-7.11K.1) ──────────────────────────────────────────
+  // ── Permisos (Sprint 3D-7.11K.1 / K.1.1) ─────────────────────────────────
   // Una única llamada a GET /api/me/permisos para toda la shell.
-  // Fail-open: mientras cargando===true (o si falló), se muestran todos los ítems.
-  const { esMaster, permisos: listaPermisos, cargando: cargandoPermisos } = usePermisos();
+  // Fail-closed (K.1.1): ítems protegidos ocultos mientras carga o si la
+  // llamada falla — sin parpadeo de "aparecen y luego desaparecen".
+  const { esMaster, permisos: listaPermisos, cargando: cargandoPermisos, error: errorPermisos, reintentar } = usePermisos();
 
-  /** Devuelve true si el ítem con ese permiso requerido debe mostrarse. */
+  /** Devuelve true si el ítem con ese permiso requerido debe mostrarse.
+   *  Fail-closed: mientras carga o en error, solo ítems sin permiso requerido
+   *  (ej. dashboard) permanecen visibles. */
   const puedeVer = useMemo(() => {
     return (permiso: string | undefined): boolean => {
-      if (cargandoPermisos) return true;          // fail-open (cargando o error)
-      if (esMaster) return true;                  // master ve todo
-      if (!permiso) return true;                  // sin permiso requerido → siempre visible
+      if (!permiso) return true;                          // sin permiso → siempre visible (ej. dashboard)
+      if (cargandoPermisos || errorPermisos) return false; // fail-closed
+      if (esMaster) return true;                          // master ve todo
       return listaPermisos.includes(permiso);
     };
-  }, [cargandoPermisos, esMaster, listaPermisos]);
+  }, [cargandoPermisos, errorPermisos, esMaster, listaPermisos]);
 
   /** Secciones de nav con sus ítems filtrados por permiso. */
   const navSeccionesVisibles = useMemo(
@@ -351,6 +354,46 @@ export function AppShell({ vista, setVista, navigateTo, children, badges = {}, b
               )}
             </div>
           ))}
+
+          {/* Error de permisos — estado claro de reintento (Sprint K.1.1).
+              Solo visible cuando la llamada a /api/me/permisos falló.
+              En modo colapsado: solo ícono de advertencia con tooltip. */}
+          {errorPermisos && (
+            <div className="mt-3">
+              {collapsed ? (
+                <div className="relative group/permerr flex justify-center">
+                  <button
+                    type="button"
+                    onClick={reintentar}
+                    aria-label="Error de permisos — reintentar"
+                    className="w-8 h-8 flex items-center justify-center rounded-[var(--radius-lg)] text-amber-400 hover:bg-[rgba(255,255,255,0.07)] transition-colors duration-150"
+                  >
+                    ⚠
+                  </button>
+                  <div role="tooltip" className={`${tooltipCls} group-hover/permerr:opacity-100`} style={tooltipStyle}>
+                    Error al cargar permisos — reintentar
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="mx-1 px-3 py-2 rounded-[var(--radius-lg)] flex flex-col gap-1"
+                  style={{ background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.25)" }}
+                >
+                  <span className="text-[var(--text-xs)] leading-snug" style={{ color: "rgba(251,191,36,0.9)" }}>
+                    No se pudieron cargar los permisos
+                  </span>
+                  <button
+                    type="button"
+                    onClick={reintentar}
+                    className="text-left text-[var(--text-xs)] font-semibold underline underline-offset-2 transition-opacity duration-150 hover:opacity-75"
+                    style={{ color: "rgba(251,191,36,0.9)" }}
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Toggle ── empujado al fondo del nav con mt-auto */}
           <div className="mt-auto pt-3">
