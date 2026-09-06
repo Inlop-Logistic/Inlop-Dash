@@ -19,6 +19,7 @@ import { ejecutarTickScheduler, calcularProgramacionAlGuardar } from './services
 import { obtenerCatalogo, invalidarCatalogo } from './services/rbac/catalogo.js';
 import { calcularPermisosEfectivos, invalidarUsuario, invalidarTodosLosUsuarios } from './services/rbac/resolver.js';
 import { requirePermiso } from './services/rbac/middleware.js';
+import { validarEstadoHumano } from './services/cumplidos/dominioEstados.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -1708,6 +1709,7 @@ app.get('/api/cumplidos/:trip/documentos', requireErpAuth, requirePermiso('cumpl
 app.post(
   '/api/cumplidos/:trip/documentos',
   requireErpAuth,
+  requirePermiso('cumplidos:gestionar-docs', { sbFetch }),
   express.raw({ type: '*/*', limit: '21mb' }),
   async (req, res) => {
     try {
@@ -1783,6 +1785,7 @@ app.post(
 app.put(
   '/api/cumplidos/:trip/documentos/:id/reemplazar',
   requireErpAuth,
+  requirePermiso('cumplidos:gestionar-docs', { sbFetch }),
   express.raw({ type: '*/*', limit: '21mb' }),
   async (req, res) => {
     try {
@@ -1863,7 +1866,7 @@ app.put(
 
 // DELETE /api/cumplidos/:trip/documentos/:id — elimina un soporte (Storage + metadata)
 // y actualiza tiene_soporte / estado_documental si el viaje queda sin documentos.
-app.delete('/api/cumplidos/:trip/documentos/:id', requireErpAuth, async (req, res) => {
+app.delete('/api/cumplidos/:trip/documentos/:id', requireErpAuth, requirePermiso('cumplidos:gestionar-docs', { sbFetch }), async (req, res) => {
   try {
     const { trip, id } = req.params;
     const rows = await sbFetch(
@@ -1917,11 +1920,21 @@ app.get('/api/cumplidos/:trip/documentos/:id/sign', requireErpAuth, requirePermi
 });
 
 // PATCH /api/cumplidos/:trip/estado — actualiza estado_cumplido (y opcionalmente fecha_cumplido).
-app.patch('/api/cumplidos/:trip/estado', requireErpAuth, async (req, res) => {
+// Protegido por:
+//   - requirePermiso('cumplidos:cambiar-estado'): solo usuarios autorizados.
+//   - validarEstadoHumano(): rechaza estados exclusivos del sistema
+//     (LIVE, FINALIZADO CONTROLT, PENDIENTE LIQUIDACION) — escritos únicamente
+//     por syncCumplidos. Ver services/cumplidos/dominioEstados.js.
+app.patch('/api/cumplidos/:trip/estado', requireErpAuth, requirePermiso('cumplidos:cambiar-estado', { sbFetch }), async (req, res) => {
   try {
     const { trip }                    = req.params;
     const { estado_cumplido, fecha_cumplido } = req.body || {};
     if (!estado_cumplido) return res.status(400).json({ error: 'estado_cumplido requerido' });
+
+    // Integridad de dominio: rechazar estados exclusivos del sistema (syncCumplidos).
+    const errorDominio = validarEstadoHumano(estado_cumplido);
+    if (errorDominio) return res.status(422).json({ error: errorDominio, codigo: 'estado_exclusivo_sistema' });
+
     const patch = { estado_cumplido };
     if (fecha_cumplido) patch.fecha_cumplido = fecha_cumplido;
     await sbFetch(`/cumplidos?id=eq.${encodeURIComponent(trip)}`, 'PATCH', patch);
