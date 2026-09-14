@@ -8356,10 +8356,11 @@ window.PersonalMaestro=PersonalMaestro;
 /* Encabezado institucional — estructura documental de 3 columnas
    (logo | título/subtítulo | control de documento). Única fuente
    visual: se renderiza desde renderActa() y por eso es idéntica en
-   Vista Previa, Ver Acta y PDF — ver _generarPDF (FASE Encabezado INLOP). */
-.co-acta-hdr-table{display:table;width:100%;table-layout:fixed;border:1.5px solid #012a6b;border-collapse:collapse;margin-bottom:18px;font-family:'Arial',sans-serif;page-break-inside:avoid;break-inside:avoid;}
-.co-acta-hdr-cell{display:table-cell;vertical-align:middle;border-right:1px solid #012a6b;padding:8px 12px;}
-.co-acta-hdr-cell:last-child{border-right:none;}
+   Vista Previa, Ver Acta y PDF — ver _generarPDF (FASE Encabezado INLOP).
+   Sin líneas verticales entre columnas: una sola franja institucional
+   limpia, con acento navy únicamente en el borde inferior. */
+.co-acta-hdr-table{display:table;width:100%;table-layout:fixed;border:none;border-bottom:2px solid #012a6b;background:#fff;margin-bottom:18px;font-family:'Arial',sans-serif;page-break-inside:avoid;break-inside:avoid;}
+.co-acta-hdr-cell{display:table-cell;vertical-align:middle;padding:8px 12px;}
 .co-acta-hdr-logo{width:24%;text-align:center;}
 .co-acta-hdr-logo-img{max-width:100%;max-height:42px;display:inline-block;vertical-align:middle;}
 .co-acta-hdr-titles{width:52%;text-align:center;}
@@ -11361,6 +11362,8 @@ function _generarPDF(snap,descargar){
         pdf.setFont('helvetica','normal');
         pdf.setFontSize(7.5);
         pdf.setTextColor(140,140,140);
+        pdf.text('Versión 1',pageW-10,pageH-14,{align:'right'});
+        pdf.text('Fecha 18/01/24',pageW-10,pageH-10,{align:'right'});
         pdf.text('Página '+i+' de '+total,pageW-10,pageH-6,{align:'right'});
       }
     }).save().then(function(){tpl.style.display='none';});
