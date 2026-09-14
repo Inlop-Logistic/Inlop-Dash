@@ -8365,7 +8365,6 @@ window.PersonalMaestro=PersonalMaestro;
 .co-acta-hdr-logo-img{max-width:100%;max-height:42px;display:inline-block;vertical-align:middle;}
 .co-acta-hdr-titles{width:52%;text-align:center;}
 .co-acta-hdr-title{font-size:14px;font-weight:800;color:#012a6b;letter-spacing:.04em;text-transform:uppercase;line-height:1.3;}
-.co-acta-hdr-subtitle{font-size:10.5px;font-weight:700;color:#012a6b;letter-spacing:.1em;text-transform:uppercase;margin-top:2px;}
 .co-acta-hdr-meta{width:24%;text-align:left;font-size:9px;color:#1e293b;line-height:1.7;}
 .co-acta-hdr-meta b{color:#012a6b;}
 .co-acta-section{margin-bottom:22px;page-break-after:auto;page-break-inside:avoid;break-inside:avoid;}
@@ -10915,21 +10914,16 @@ function renderActa(snap){
   var html='<div class="co-acta-page">';
 
   /* 1. ENCABEZADO INSTITUCIONAL — estructura documental de 3 columnas
-     (logo | título/subtítulo | control de documento). Código, versión
-     y fecha son del FORMATO (control documental fijo), no del snapshot
-     de la reunión — el código/fecha de la reunión ya se muestran en la
-     grilla de información (Semana/Fecha/etc.) inmediatamente debajo. */
+     (logo | título | código de formato). DIR-FR-004 es el código del
+     FORMATO (control documental fijo), no del snapshot de la reunión —
+     la semana/fecha de la reunión ya se muestran en la grilla de
+     información inmediatamente debajo. */
   html+='<div class="co-acta-hdr-table">'
     +'<div class="co-acta-hdr-cell co-acta-hdr-logo"><img class="co-acta-hdr-logo-img" src="'+INLOP_LOGO_B64+'" alt="INLOP"></div>'
     +'<div class="co-acta-hdr-cell co-acta-hdr-titles">'
       +'<div class="co-acta-hdr-title">ACTA DE REUNIÓN</div>'
-      +'<div class="co-acta-hdr-subtitle">COMITÉ OPERATIVO</div>'
     +'</div>'
-    +'<div class="co-acta-hdr-cell co-acta-hdr-meta">'
-      +'<div><b>Código:</b> DIR-FR-004</div>'
-      +'<div><b>Versión:</b> 1</div>'
-      +'<div><b>Fecha:</b> 18/01/2024</div>'
-    +'</div>'
+    +'<div class="co-acta-hdr-cell co-acta-hdr-meta"><b>DIR-FR-004</b></div>'
     +'</div>';
 
   html+='<div class="co-acta-info-grid">'
@@ -11362,8 +11356,8 @@ function _generarPDF(snap,descargar){
         pdf.setFont('helvetica','normal');
         pdf.setFontSize(7.5);
         pdf.setTextColor(140,140,140);
-        pdf.text('Versión 1',pageW-10,pageH-14,{align:'right'});
-        pdf.text('Fecha 18/01/24',pageW-10,pageH-10,{align:'right'});
+        pdf.text('Versión  1',pageW-10,pageH-14,{align:'right'});
+        pdf.text('Fecha  18/01/24',pageW-10,pageH-10,{align:'right'});
         pdf.text('Página '+i+' de '+total,pageW-10,pageH-6,{align:'right'});
       }
     }).save().then(function(){tpl.style.display='none';});
