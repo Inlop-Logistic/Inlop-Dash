@@ -3,6 +3,7 @@
   "crm_cliente_id": "crm-cli-001",
   "cliente_nombre": "Empresa de Prueba S.A.S.",
   "cliente_nit": "900000000-1",
+  "creador_email": "pruebas@inloplogistica.com",
   "agencia": {
     "id": null,
     "nombre": "Cartagena"
