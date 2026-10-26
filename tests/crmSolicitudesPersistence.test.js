@@ -2,47 +2,29 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createCrmSolicitudesPersistence } from "../services/crmSolicitudesPersistence.js";
 
-test("consulta por ID estable de solicitud CRM", async () => {
+test("usa la RPC transaccional para crear/resolver empresa y solicitud", async () => {
   const calls = [];
   const persistence = createCrmSolicitudesPersistence({
     sbFetch: async (...args) => {
       calls.push(args);
-      return [{ id: "sol-1", codigo_solicitud: "SOL-00001", crm_solicitud_id: "crm-1" }];
+      return {
+        ok: true, duplicada: false, solicitud_id: "sol-1",
+        codigo_solicitud: "SOL-00001", empresa_cliente_id: "empresa-1",
+      };
     },
-    createCodigoSolicitud: async () => "SOL-00002",
   });
-  const row = await persistence.findByCrmSolicitudId("crm-1");
-  assert.equal(row.id, "sol-1");
-  assert.match(calls[0][0], /crm_solicitud_id=eq.crm-1/);
-});
-
-test("inserción usa conflicto atómico y no crea segunda fila", async () => {
-  const calls = [];
-  const persistence = createCrmSolicitudesPersistence({
-    sbFetch: async (...args) => {
-      calls.push(args);
-      // PostgREST devuelve lista vacía con resolution=ignore-duplicates si
-      // la clave única ya existe y no se insertó una fila nueva.
-      return [];
-    },
-    createCodigoSolicitud: async () => "SOL-00002",
-  });
-  const result = await persistence.insertIfAbsent({
-    crm_solicitud_id: "crm-1", canal: "CRM",
-  });
-  assert.equal(result, null);
+  const payload = { crm_solicitud_id: "crm-sol-1", crm_cliente_id: "crm-cli-1" };
+  const result = await persistence.receiveCrmSolicitud(payload);
+  assert.equal(result.solicitud_id, "sol-1");
+  assert.equal(calls[0][0], "/rpc/recibir_solicitud_crm");
   assert.equal(calls[0][1], "POST");
-  assert.match(calls[0][0], /on_conflict=crm_solicitud_id/);
-  assert.equal(calls[0][3].Prefer, "resolution=ignore-duplicates,return=representation");
+  assert.deepEqual(calls[0][2], { p_payload: payload });
 });
 
-test("falla de forma explícita si PostgREST no confirma la inserción", async () => {
-  const persistence = createCrmSolicitudesPersistence({
-    sbFetch: async () => null,
-    createCodigoSolicitud: async () => "SOL-00002",
-  });
+test("falla si la RPC no confirma la operación", async () => {
+  const persistence = createCrmSolicitudesPersistence({ sbFetch: async () => null });
   await assert.rejects(
-    () => persistence.insertIfAbsent({ crm_solicitud_id: "crm-1" }),
-    /No se pudo confirmar la inserción CRM/,
+    () => persistence.receiveCrmSolicitud({ crm_solicitud_id: "crm-sol-1" }),
+    /no confirmó la operación/,
   );
 });
