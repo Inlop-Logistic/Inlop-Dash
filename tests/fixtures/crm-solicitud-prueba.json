@@ -1,0 +1,22 @@
+{
+  "crm_solicitud_id": "crm-sol-001",
+  "crm_cliente_id": "crm-cli-001",
+  "cliente_nombre": "Empresa de Prueba S.A.S.",
+  "cliente_nit": "900000000-1",
+  "agencia": {
+    "id": null,
+    "nombre": "Cartagena"
+  },
+  "tipo_vehiculo": "NHR 2.5 toneladas",
+  "tipo_operacion": "NACIONAL",
+  "origen": "Cartagena",
+  "destino": "Barranquilla",
+  "fecha_requerida": "2026-10-26T09:00:00-05:00",
+  "observaciones_cliente": "DATOS FICTICIOS. Prueba de contrato local; no procesar como solicitud real.",
+  "external_ref": "CRM:crm-sol-001",
+  "canal": "CRM",
+  "metadata": {
+    "origen": "CRM",
+    "crm_solicitud_id": "crm-sol-001"
+  }
+}
