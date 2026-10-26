@@ -80,6 +80,9 @@ DECLARE
   v_cliente_nombre TEXT;
   v_cliente_nit TEXT;
   v_cliente_dv TEXT;
+  v_agencia_nombre TEXT;
+  v_agencia_id UUID;
+  v_agencia_ids UUID[];
   v_empresa_creada BOOLEAN := FALSE;
   v_inserted_empresa_id UUID;
   v_inserted_solicitud_id UUID;
@@ -99,8 +102,10 @@ BEGIN
   v_cliente_nit := NULLIF(btrim(p_payload->>'cliente_nit'), '');
   v_cliente_dv := NULLIF(btrim(p_payload->>'cliente_dv'), '');
   v_creador_email := lower(NULLIF(btrim(p_payload->>'creador_email'), ''));
+  v_agencia_nombre := NULLIF(btrim(p_payload#>>'{agencia,nombre}'), '');
 
-  IF v_cliente_id IS NULL OR v_cliente_nombre IS NULL OR v_creador_email IS NULL THEN
+  IF v_cliente_id IS NULL OR v_cliente_nombre IS NULL OR v_creador_email IS NULL
+     OR v_agencia_nombre IS NULL THEN
     RETURN jsonb_build_object('ok', FALSE, 'error_code', 'required_identity_missing');
   END IF;
 
@@ -193,6 +198,40 @@ BEGIN
     END IF;
   END IF;
 
+  -- La agencia enviada por CRM debe resolverse contra el catálogo ERP de la misma empresa.
+  -- No se acepta agencia por nombre únicamente ni se confía en un UUID externo.
+  IF NULLIF(btrim(p_payload#>>'{agencia,id}'), '') IS NOT NULL THEN
+    BEGIN
+      v_agencia_id := (p_payload#>>'{agencia,id}')::UUID;
+    EXCEPTION WHEN invalid_text_representation THEN
+      v_agencia_id := NULL;
+    END;
+  END IF;
+
+  IF v_agencia_id IS NOT NULL THEN
+    SELECT array_agg(a.id)
+      INTO v_agencia_ids
+      FROM public.agencias_cliente a
+     WHERE a.id = v_agencia_id
+       AND a.empresa_cliente_id = v_empresa_id
+       AND COALESCE(a.activa, TRUE) = TRUE;
+  ELSE
+    SELECT array_agg(a.id)
+      INTO v_agencia_ids
+      FROM public.agencias_cliente a
+     WHERE lower(btrim(a.nombre)) = lower(v_agencia_nombre)
+       AND a.empresa_cliente_id = v_empresa_id
+       AND COALESCE(a.activa, TRUE) = TRUE;
+  END IF;
+
+  IF COALESCE(cardinality(v_agencia_ids), 0) = 0 THEN
+    RETURN jsonb_build_object('ok', FALSE, 'error_code', 'agency_not_found');
+  END IF;
+  IF cardinality(v_agencia_ids) > 1 THEN
+    RETURN jsonb_build_object('ok', FALSE, 'error_code', 'agency_ambiguous');
+  END IF;
+  v_agencia_id := v_agencia_ids[1];
+
   v_fecha := NULLIF(btrim(p_payload->>'fecha_requerida'), '')::TIMESTAMPTZ;
   v_codigo_solicitud := public.generar_codigo_solicitud();
 
@@ -216,8 +255,8 @@ BEGIN
     lower(btrim(p_payload->>'tipo_operacion')),
     btrim(p_payload->>'origen'),
     btrim(p_payload->>'destino'),
-    NULL,
-    btrim(p_payload#>>'{agencia,nombre}'),
+    v_agencia_id,
+    v_agencia_nombre,
     btrim(p_payload->>'external_ref'),
     v_fecha,
     NULLIF(btrim(p_payload->>'observaciones_cliente'), ''),
