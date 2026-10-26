@@ -20,6 +20,8 @@ import { obtenerCatalogo, invalidarCatalogo } from './services/rbac/catalogo.js'
 import { calcularPermisosEfectivos, invalidarUsuario, invalidarTodosLosUsuarios } from './services/rbac/resolver.js';
 import { requirePermiso } from './services/rbac/middleware.js';
 import { validarEstadoHumano } from './services/cumplidos/dominioEstados.js';
+import { createCrmSolicitudesRouter } from './services/crmSolicitudesRouter.js';
+import { createCrmSolicitudesPersistence } from './services/crmSolicitudesPersistence.js';
 
 // ─── TIMEOUT EN LLAMADAS SALIENTES (Hotfix RC v1.0) ────────────────────
 // Ninguna llamada a ControlT ni a Supabase tenía timeout — una respuesta
@@ -3810,7 +3812,7 @@ serviciosRouter.post('/', async (req, res) => {
     const codigo_solicitud = typeof generated === 'string'
       ? generated
       : (Array.isArray(generated) ? generated[0] : generated)?.generar_codigo_solicitud;
-    if (typeof codigo_solicitud !== 'string' || !/^SOL-\\d{5,}$/.test(codigo_solicitud)) {
+    if (typeof codigo_solicitud !== 'string' || !/^SOL-\d{5,}$/.test(codigo_solicitud)) {
       return res.status(503).json({ error: 'No fue posible generar un código de solicitud seguro' });
     }
 
@@ -6462,6 +6464,37 @@ app.use('/api/controlt', requireErpAuth, controltDiagRouter);
 // routes/gpsSeguimiento.js.
 app.use('/api/seguimiento-gps', crearRouterGpsSeguimiento({
   sbFetch, cache, tripCustomerCache, extraerTelefono, primerNombreCliente,
+}));
+
+// ─── INTEGRACIÓN SERVIDOR A SERVIDOR CRM → ERP ───────────────────────────────
+// Solo se habilita con un secreto dedicado. Nunca reutiliza INTERNAL_API_KEY
+// y no expone la credencial al navegador.
+const CRM_INGESTION_API_KEY = process.env.CRM_INGESTION_API_KEY || '';
+const crmSolicitudPersistence = createCrmSolicitudesPersistence({
+  sbFetch,
+  createCodigoSolicitud: async () => {
+    const result = await sbFetch('/rpc/generar_codigo_solicitud', 'POST', {});
+    const code = typeof result === 'string'
+      ? result
+      : (Array.isArray(result) ? result[0] : result)?.generar_codigo_solicitud;
+    if (typeof code !== 'string' || !/^SOL-\d{5,}$/.test(code)) {
+      throw new Error('No se pudo generar el código SOL mediante RPC');
+    }
+    return code;
+  },
+});
+const CRM_TIPO_VEHICULO_MAP = new Map([
+  ['NHR 2.5 toneladas', 'NHR'],
+]);
+app.use('/api/integraciones/crm', (req, res, next) => {
+  if (!CRM_INGESTION_API_KEY) {
+    return res.status(503).json({ error: 'Integración CRM no configurada' });
+  }
+  next();
+}, createCrmSolicitudesRouter({
+  apiKey: CRM_INGESTION_API_KEY || 'DISABLED_NOT_A_SECRET',
+  ...crmSolicitudPersistence,
+  mapTipoVehiculo: (value) => CRM_TIPO_VEHICULO_MAP.get(String(value || '').trim()) || null,
 }));
 
 // ─── MANEJADOR DE ERRORES — respuestas JSON limpias para fallos de body-parser ──
