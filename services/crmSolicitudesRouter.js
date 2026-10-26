@@ -1,10 +1,10 @@
 /**
  * Receptor aislado CRM → ERP.
  *
- * No crea clientes maestros ni se monta automáticamente en index.js.
- * Requiere que el integrador proporcione una función atómica para el código
- * de solicitud y un mapeo explícito del catálogo de vehículos. Se mantiene
- * separado hasta validar el esquema real y decidir el servicio de despliegue.
+ * No crea clientes maestros. index.js lo monta en la rama de pruebas bajo
+ * /api/integraciones/crm; no se habilita hasta configurar el secreto y la
+ * clave de servicio. La migración y el servicio backend aún no están activos
+ * en el entorno de Desarrollo.
  */
 import express from "express";
 import { validateCrmSolicitud } from "./crmSolicitudContractValidator.js";
