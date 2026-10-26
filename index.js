@@ -1970,7 +1970,8 @@ app.get('/api/solicitudes', requireLegacyOrErpAuth, async (req, res) => {
       'tipo_operacion','tipo_vehiculo','origen','destino',
       'fecha_requerida','observacion_coordinadora',
       'placa_asignada','conductor_nombre','conductor_tel',
-      'controlt_trip_number','canal',
+      'controlt_trip_number','canal','cliente_nombre_externo','cliente_nit_externo',
+      'crm_solicitud_id','crm_cliente_id',
     ].join(',');
     let qs = `/solicitudes?order=creado_en.desc&limit=500&select=${SOL_SELECT}`;
 
@@ -2012,7 +2013,11 @@ app.get('/api/solicitudes', requireLegacyOrErpAuth, async (req, res) => {
       id:               s.id,
       codigo_solicitud: s.codigo_solicitud,
       external_ref:     s.external_ref              || null,
-      cliente:          empMap[s.empresa_cliente_id] || '—',
+      cliente:          empMap[s.empresa_cliente_id] || s.cliente_nombre_externo || '—',
+      cliente_nombre_externo: s.cliente_nombre_externo || null,
+      cliente_nit_externo: s.cliente_nit_externo || null,
+      crm_solicitud_id: s.crm_solicitud_id || null,
+      crm_cliente_id: s.crm_cliente_id || null,
       agencia:          agMap[s.agencia_id]          || s.agencia_nombre || '—',
       solicitante:      usrMap[s.creado_por]         || '—',
       tipo_operacion:   s.tipo_operacion             || '',
@@ -2047,7 +2052,8 @@ app.get('/api/solicitudes/:id', requireErpAuth, requirePermiso('solicitudes:list
       'tipo_operacion','tipo_vehiculo','origen','destino',
       'fecha_requerida','observacion_coordinadora',
       'placa_asignada','conductor_nombre','conductor_tel',
-      'controlt_trip_number','canal',
+      'controlt_trip_number','canal','cliente_nombre_externo','cliente_nit_externo',
+      'crm_solicitud_id','crm_cliente_id',
       'fecha_confirmacion','fecha_inicio_real','fecha_fin_real',
       'manifiesto','pct','fecha_cancelacion',
     ].join(',');
@@ -2071,7 +2077,7 @@ app.get('/api/solicitudes/:id', requireErpAuth, requirePermiso('solicitudes:list
         : Promise.resolve([]),
     ]);
 
-    const cliente     = empresas?.[0]?.razon_social || '—';
+    const cliente     = empresas?.[0]?.razon_social || sol.cliente_nombre_externo || '—';
     const agencia     = agencias?.[0]?.nombre       || sol.agencia_nombre || '—';
     const solicitante = usuarios?.[0]?.nombre       || null;
 
@@ -2119,6 +2125,10 @@ app.get('/api/solicitudes/:id', requireErpAuth, requirePermiso('solicitudes:list
       codigo_solicitud: sol.codigo_solicitud,
       external_ref:     sol.external_ref   || null,
       canal:            sol.canal          || 'APP',
+      crm_solicitud_id: sol.crm_solicitud_id || null,
+      crm_cliente_id:   sol.crm_cliente_id || null,
+      cliente_nombre_externo: sol.cliente_nombre_externo || null,
+      cliente_nit_externo: sol.cliente_nit_externo || null,
       creado_en:        sol.creado_en,
       solicitante,
       cliente,
@@ -3796,10 +3806,13 @@ serviciosRouter.post('/', async (req, res) => {
       return res.status(403).json({ error: 'Agencia fuera de tu alcance' });
     }
 
-    const last = await sbFetch('/solicitudes?select=codigo_solicitud&order=creado_en.desc&limit=1') || [];
-    const lastCode = last[0]?.codigo_solicitud;
-    const n = lastCode?.startsWith('SOL-') ? parseInt(lastCode.slice(4), 10) : 0;
-    const codigo_solicitud = 'SOL-' + String((isNaN(n) ? 0 : n) + 1).padStart(5, '0');
+    const generated = await sbFetch('/rpc/generar_codigo_solicitud', 'POST', {});
+    const codigo_solicitud = typeof generated === 'string'
+      ? generated
+      : (Array.isArray(generated) ? generated[0] : generated)?.generar_codigo_solicitud;
+    if (typeof codigo_solicitud !== 'string' || !/^SOL-\\d{5,}$/.test(codigo_solicitud)) {
+      return res.status(503).json({ error: 'No fue posible generar un código de solicitud seguro' });
+    }
 
     const normalizedRef = normalizeExternalRef(tipo_vehiculo, external_ref);
 
