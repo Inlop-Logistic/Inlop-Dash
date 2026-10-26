@@ -1,30 +1,41 @@
-# Receptor CRM de solicitudes — estado y contrato del adaptador
+# Receptor CRM de solicitudes — auditoría y estado
 
-El módulo `services/crmSolicitudesRouter.js` está montado en `index.js` en la rama de pruebas, pero **no está desplegado ni conectado a la base real**. El servicio Railway actual `Inlop-Dash` ejecuta `npx serve .`, no el backend Express raíz; no cambiar el comando de ese servicio porque podría interrumpir el frontend.
+## Decisiones de producto
+- La fuente oficial de identidad de cliente externo es `crm_cliente_id` (ID estable del CRM), no el NIT.
+- Si no existe `crm_cliente_id` en `empresas_cliente`, la RPC crea una empresa en estado `prospecto`, inactiva, y registra las tablas satélite básicas del maestro.
+- Si existe el ID CRM, reutiliza la empresa vinculada; los cambios de NIT no crean una empresa nueva.
+- El creador se resuelve por correo normalizado contra `profiles.email`; cero o varias coincidencias se rechazan.
+- `solicitudes.empresa_cliente_id` y `solicitudes.creado_por` siguen siendo obligatorios. No se cambia su nulabilidad.
+- Empresa y solicitud se guardan dentro de una RPC PostgreSQL, en una sola transacción.
+- El ID de solicitud CRM es clave de idempotencia; reintentos no deben duplicar solicitudes.
 
 ## Endpoint propuesto
-- Método/ruta en el código: `POST /api/integraciones/crm/solicitudes`
-- Autenticación: header `x-crm-api-key`, comparado con un secreto dedicado `CRM_INGESTION_API_KEY` que debe inyectarse por configuración; nunca aceptar el secreto en el body o query string.
-- Contrato: `services/crmSolicitudContractValidator.js`.
-- El módulo no crea clientes maestros ni usa `resolveCustomer`.
-- Si no hay mapeo aprobado de vehículo, responde `422` y no escribe.
-- Solicitud repetida: devuelve la fila existente; ante una carrera, depende de que `insertIfAbsent` implemente inserción atómica contra la clave única y se vuelve a consultar el ID de origen.
+- `POST /api/integraciones/crm/solicitudes`
+- Autenticación mediante `x-crm-api-key`, con `CRM_INGESTION_API_KEY` y `SUPABASE_SERVICE_KEY` configuradas solo en backend.
+- El contrato requiere `creador_email`, además de `crm_cliente_id`, `crm_solicitud_id` y datos de la solicitud.
+- El mapa de vehículos continúa limitado a `NHR 2.5 toneladas` → `NHR`; cualquier otro valor se rechaza con 422 hasta aprobar el catálogo.
 
-## Funciones de persistencia montadas en la rama
-1. `findByCrmSolicitudId(id)`: consulta por el identificador estable de CRM.
-2. `insertIfAbsent(row)`: usa conflicto atómico en PostgREST y requiere el índice único de `crm_solicitud_id` creado por la migración.
-3. `createCodigoSolicitud()`: llama la función RPC `generar_codigo_solicitud`; requiere que la migración esté aplicada y que el backend use `SUPABASE_SERVICE_KEY`.
-4. `mapTipoVehiculo(valor)`: por ahora solo mapea `NHR 2.5 toneladas` a `NHR`; el catálogo real debe validarse antes de ampliar.
+## Cambios preparados en la rama
+Rama: `test/integracion-crm-solicitudes`
+- El router delega la operación a `rpc/recibir_solicitud_crm`.
+- El adaptador de persistencia llama la RPC transaccional.
+- El contrato valida correo del creador y el fixture de pruebas incluye `creador_email`.
+- La migración agrega `empresas_cliente.crm_cliente_id` con índice único parcial, conserva las restricciones obligatorias de `solicitudes` y crea la RPC.
+- Se corrigió la RPC para tratar los IDs externos como texto, sin exigir formato UUID.
 
-## Bloqueos antes de conectar a la base real
-- La migración propuesta ahora permite NULL en `empresa_cliente_id` y `creado_por`, agrega campos CRM, índice único de idempotencia y una función RPC/secuencia para generar códigos `SOL-` atómicos. **No se ha aplicado**.
-- El GET de listado y el detalle de solicitud ya priorizan el nombre del maestro ERP y, si no existe, muestran `cliente_nombre_externo`.
-- El generador de códigos del endpoint `POST /servicios` se cambió en esta rama para usar la misma función RPC que usará CRM.
-- El receptor falla cerrado si falta `CRM_INGESTION_API_KEY` o `SUPABASE_SERVICE_KEY`; el mapa de vehículos solo incluye el valor de prueba aprobado hasta ampliar el catálogo explícitamente.
-- El código del backend raíz no está desplegado en el servicio de Desarrollo que actualmente sirve archivos estáticos. No cambiar la configuración de ese servicio.
-- GitHub Actions: ejecución `40257053008` completada con `success`; los pasos de instalación y pruebas de contrato/router/persistencia pasaron. [Ver ejecución](https://github.com/Inlop-Logistic/Inlop-Dash/actions/runs/40257053008).
-- El proyecto Railway de Desarrollo no tiene actualmente un servicio que ejecute el backend raíz en esta rama. No cambiar el servicio estático existente.
-- Bloqueo restante: aplicar la migración en Supabase de Desarrollo y disponer de un secreto `CRM_INGESTION_API_KEY` más la `SUPABASE_SERVICE_KEY` de ese entorno. No desplegar ni enviar la solicitud real antes de ello.
+## Riesgos y bloqueos antes de producción
+- **No ejecutar todavía la migración en Supabase compartido.** El proyecto actual es compartido entre desarrollo y producción.
+- La migración aún debe validarse contra el esquema real y las restricciones actuales de la base. También debe revisarse la inicialización de la secuencia de códigos durante una ventana controlada.
+- La aplicación CRM debe enviar `creador_email` con el correo del usuario que creó la solicitud; todavía debe confirmarse y probarse ese contrato extremo a extremo.
+- La creación automática genera la empresa en estado `prospecto` e inactiva. No se activa automáticamente ni se aprueban condiciones comerciales; esto es deliberado para evitar autorizar un cliente nuevo sin revisión.
+- Los IDs de cliente CRM existentes en la base necesitan una estrategia de backfill si ya hay empresas creadas desde CRM antes de habilitar la integración.
+- La rama no está desplegada en Railway. El servicio `Inlop-Dash` actual sirve frontend estático; no cambiar su comando de inicio. Se necesita un servicio backend separado o un plan de despliegue aprobado.
+- Las pruebas automatizadas del cambio deben correr en CI. No se ha confirmado todavía una ejecución CI exitosa de estos últimos commits.
+- No se ha aplicado ninguna migración a Supabase ni se ha enviado ninguna solicitud real.
 
-## Pruebas escritas
-`tests/crmSolicitudesRouter.test.js`, `tests/crmSolicitudContractValidator.test.js` y `tests/crmSolicitudesPersistence.test.js` se ejecutaron en GitHub Actions y pasaron en la ejecución 40257053008. Esto valida pruebas automatizadas, no una inserción contra la base real.
+## Próximas validaciones
+1. Ejecutar CI de la rama y corregir fallos.
+2. Confirmar el contrato desde el repositorio del CRM, especialmente `creador_email`.
+3. Revisar en el esquema compartido los tipos/FK de `solicitudes.creado_por`, `profiles.id`, columnas de `empresas_cliente` y políticas de seguridad.
+4. Preparar respaldo y procedimiento de reversión antes de cualquier migración.
+5. Desplegar solo tras aprobar la base de datos, el secreto dedicado y el servicio backend.
