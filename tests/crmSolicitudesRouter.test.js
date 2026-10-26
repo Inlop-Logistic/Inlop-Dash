@@ -14,9 +14,12 @@ async function withServer(deps, run) {
   app.use(express.json());
   app.use("/crm", createCrmSolicitudesRouter({
     apiKey: "test-only-secret",
-    createCodigoSolicitud: async () => "SOL-TEST-00001",
+    receiveCrmSolicitud: async () => ({
+      ok: true, duplicada: false, solicitud_id: "sol-1",
+      codigo_solicitud: "SOL-TEST-00001", empresa_cliente_id: "empresa-1",
+      empresa_creada: true,
+    }),
     mapTipoVehiculo: (value) => value === "NHR 2.5 toneladas" ? "NHR" : null,
-    now: () => "2026-10-25T12:00:00.000Z",
     ...deps,
   }));
   const server = createServer(app);
@@ -29,83 +32,87 @@ async function withServer(deps, run) {
   }
 }
 
+async function post(url, payload = fixture, apiKey = "test-only-secret") {
+  return fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...(apiKey ? { "x-crm-api-key": apiKey } : {}) },
+    body: JSON.stringify(payload),
+  });
+}
+
 test("rechaza solicitudes sin la clave del CRM", async () => {
-  await withServer({
-    insertIfAbsent: async () => { throw new Error("no debe insertar"); },
-    findByCrmSolicitudId: async () => null,
-  }, async (url) => {
-    const response = await fetch(url, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify(fixture),
-    });
+  await withServer({}, async (url) => {
+    const response = await post(url, fixture, null);
     assert.equal(response.status, 401);
   });
 });
 
-test("rechaza payload inválido antes de acceder a persistencia", async () => {
-  await withServer({
-    insertIfAbsent: async () => { throw new Error("no debe insertar"); },
-    findByCrmSolicitudId: async () => null,
-  }, async (url) => {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-crm-api-key": "test-only-secret" },
-      body: JSON.stringify({ ...fixture, canal: "APP" }),
-    });
+test("rechaza payload inválido antes de invocar la RPC", async () => {
+  let calls = 0;
+  await withServer({ receiveCrmSolicitud: async () => { calls++; } }, async (url) => {
+    const response = await post(url, { ...fixture, canal: "APP" });
     assert.equal(response.status, 400);
     assert.match((await response.json()).error, /Contrato CRM inválido/);
+    assert.equal(calls, 0);
   });
 });
 
-test("crea solicitud sin crear cliente maestro y preserva nombre externo", async () => {
-  let row;
-  await withServer({
-    findByCrmSolicitudId: async () => null,
-    insertIfAbsent: async (value) => { row = value; return { id: "sol-1", codigo_solicitud: value.codigo_solicitud }; },
-  }, async (url) => {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-crm-api-key": "test-only-secret" },
-      body: JSON.stringify(fixture),
-    });
+test("envía ID CRM y correo normalizado a la operación transaccional", async () => {
+  let received;
+  await withServer({ receiveCrmSolicitud: async (payload) => {
+    received = payload;
+    return {
+      ok: true, duplicada: false, solicitud_id: "sol-1",
+      codigo_solicitud: "SOL-TEST-00001", empresa_cliente_id: "empresa-1",
+      empresa_creada: true,
+    };
+  } }, async (url) => {
+    const response = await post(url, { ...fixture, creador_email: " Pruebas@InlopLogistica.com " });
     assert.equal(response.status, 201);
-    assert.equal(row.empresa_cliente_id, null);
-    assert.equal(row.creado_por, null);
-    assert.equal(row.cliente_nombre_externo, fixture.cliente_nombre);
-    assert.equal(row.canal, "CRM");
-    assert.equal(row.crm_solicitud_id, fixture.crm_solicitud_id);
-    assert.equal(row.estado, "pendiente");
+    const body = await response.json();
+    assert.equal(body.empresa_cliente_id, "empresa-1");
+    assert.equal(body.empresa_creada, true);
+    assert.equal(received.crm_cliente_id, fixture.crm_cliente_id);
+    assert.equal(received.creador_email, "pruebas@inloplogistica.com");
+    assert.equal(received.empresa_cliente_id, undefined);
+    assert.equal(received.creado_por, undefined);
   });
 });
 
-test("reintento devuelve la solicitud existente sin insertar otra", async () => {
+test("reintento devuelve la solicitud existente sin duplicarla", async () => {
   let inserts = 0;
-  await withServer({
-    findByCrmSolicitudId: async () => ({ id: "sol-existing", codigo_solicitud: "SOL-00001" }),
-    insertIfAbsent: async () => { inserts++; return null; },
-  }, async (url) => {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-crm-api-key": "test-only-secret" },
-      body: JSON.stringify(fixture),
-    });
+  await withServer({ receiveCrmSolicitud: async () => {
+    inserts++;
+    return {
+      ok: true, duplicada: true, solicitud_id: "sol-existing",
+      codigo_solicitud: "SOL-00001", empresa_cliente_id: "empresa-existing",
+    };
+  } }, async (url) => {
+    const response = await post(url);
     assert.equal(response.status, 200);
     assert.equal((await response.json()).duplicada, true);
-    assert.equal(inserts, 0);
+    assert.equal(inserts, 1);
+  });
+});
+
+test("responde con error claro si el correo no corresponde a un usuario ERP", async () => {
+  await withServer({ receiveCrmSolicitud: async () => ({
+    ok: false, error_code: "creator_not_found",
+  }) }, async (url) => {
+    const response = await post(url);
+    assert.equal(response.status, 422);
+    assert.equal((await response.json()).codigo, "creator_not_found");
   });
 });
 
 test("rechaza un vehículo sin mapeo aprobado", async () => {
+  let calls = 0;
   await withServer({
     mapTipoVehiculo: () => null,
-    findByCrmSolicitudId: async () => null,
-    insertIfAbsent: async () => { throw new Error("no debe insertar"); },
+    receiveCrmSolicitud: async () => { calls++; },
   }, async (url) => {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-crm-api-key": "test-only-secret" },
-      body: JSON.stringify(fixture),
-    });
+    const response = await post(url);
     assert.equal(response.status, 422);
+    assert.equal(calls, 0);
   });
 });
