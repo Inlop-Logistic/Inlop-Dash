@@ -2090,7 +2090,7 @@ app.get('/api/solicitudes/:id', requireErpAuth, requirePermiso('solicitudes:list
 
     const cliente     = empresas?.[0]?.razon_social || sol.cliente_nombre_externo || '—';
     const agencia     = agencias?.[0]?.nombre       || sol.agencia_nombre || '—';
-    const solicitante = usuarios?.[0]?.nombre       || null;
+    const solicitante = usuarios?.[0]?.nombre || usuarios?.[0]?.email || null;
 
     // Buscar viaje activo en caché de ControlT; si no, buscar en histórico cumplidos
     let viaje    = null;
