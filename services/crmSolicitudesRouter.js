@@ -85,6 +85,10 @@ export function createCrmSolicitudesRouter({
         fecha_requerida: p.fecha_requerida,
         observacion_coordinadora: typeof p.observaciones_cliente === "string"
           ? p.observaciones_cliente.trim() : null,
+        metadata: {
+          ...(p.metadata && typeof p.metadata === "object" ? p.metadata : {}),
+          origen_integracion: "CRM",
+        },
         estado: "pendiente",
         canal: "CRM",
         creado_en: now(),
