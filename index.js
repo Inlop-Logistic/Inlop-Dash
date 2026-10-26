@@ -6490,7 +6490,7 @@ const CRM_TIPO_VEHICULO_MAP = new Map([
   ['NHR 2.5 toneladas', 'NHR'],
 ]);
 app.use('/api/integraciones/crm', (req, res, next) => {
-  if (!CRM_INGESTION_API_KEY) {
+  if (!CRM_INGESTION_API_KEY || !process.env.SUPABASE_SERVICE_KEY) {
     return res.status(503).json({ error: 'Integración CRM no configurada' });
   }
   next();
