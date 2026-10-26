@@ -54,8 +54,8 @@ Rama: `test/integracion-crm-solicitudes`
 | Entrada | `POST /servicios`, con autenticación de cliente y alcance de empresa/agencia | `POST /api/integraciones/crm/solicitudes`, autenticado con secreto dedicado |
 | Cliente | Empresa del usuario autenticado | ID estable del cliente CRM; crea maestro ERP si no existe |
 | Creador | `usuarios_cliente` | `profiles`, por correo normalizado |
-| Canal almacenado | Actualmente el flujo APP depende del valor por defecto `APP` al leer si está vacío; el handler de creación no escribe explícitamente `canal` | La RPC escribe explícitamente `CRM` |
+| Canal almacenado | El handler `POST /servicios` ahora escribe explícitamente `canal = 'APP'`; el fallback de lectura se conserva para históricos | La RPC escribe explícitamente `CRM` |
 | Visibilidad ERP | Badge `APP` | Badge `CRM` distinto, con título “Canal interno de solicitudes” |
 
-### Hallazgo de consistencia APP
-El handler existente `POST /servicios` no asigna `canal: 'APP'` en el objeto insertado; el GET del ERP sustituye los canales vacíos por `APP`. Esto permite que solicitudes sin canal definido se muestren como APP. Se recomienda una mejora separada para escribir `APP` explícitamente en el handler y mantener el fallback histórico, evitando cambiar el flujo actual en la misma intervención sin pruebas.
+### Corrección de consistencia APP
+Se agregó `canal: 'APP'` explícitamente al objeto que inserta `POST /servicios`. El fallback de lectura (`canal || 'APP'`) se conserva para no alterar la visualización de solicitudes históricas que tengan el canal vacío.
