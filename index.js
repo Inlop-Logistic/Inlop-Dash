@@ -3871,6 +3871,7 @@ serviciosRouter.post('/', async (req, res) => {
       fecha_requerida,
       observacion_coordinadora: observaciones || null,
       estado:    'pendiente',
+      canal:     'APP',
       creado_en: new Date().toISOString(),
     };
 
