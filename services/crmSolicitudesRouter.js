@@ -1,10 +1,6 @@
 /**
- * Receptor aislado CRM → ERP.
- *
- * No crea clientes maestros. index.js lo monta en la rama de pruebas bajo
- * /api/integraciones/crm; no se habilita hasta configurar el secreto y la
- * clave de servicio. La migración y el servicio backend aún no están activos
- * en el entorno de Desarrollo.
+ * Receptor autenticado CRM → ERP.
+ * La resolución y escritura de empresa + solicitud ocurre en una RPC transaccional.
  */
 import express from "express";
 import { validateCrmSolicitud } from "./crmSolicitudContractValidator.js";
@@ -15,18 +11,13 @@ function jsonError(res, status, error, extra = {}) {
 
 export function createCrmSolicitudesRouter({
   apiKey,
-  insertIfAbsent,
-  findByCrmSolicitudId,
-  createCodigoSolicitud,
+  receiveCrmSolicitud,
   mapTipoVehiculo,
-  now = () => new Date().toISOString(),
 }) {
   if (typeof apiKey !== "string" || !apiKey.trim()) {
     throw new Error("CRM_INGESTION_API_KEY debe configurarse antes de crear el router");
   }
-  for (const [name, fn] of Object.entries({
-    insertIfAbsent, findByCrmSolicitudId, createCodigoSolicitud, mapTipoVehiculo,
-  })) {
+  for (const [name, fn] of Object.entries({ receiveCrmSolicitud, mapTipoVehiculo })) {
     if (typeof fn !== "function") throw new TypeError(`${name} debe ser una función`);
   }
 
@@ -50,74 +41,71 @@ export function createCrmSolicitudesRouter({
     }
 
     try {
-      const existente = await findByCrmSolicitudId(p.crm_solicitud_id);
-      if (existente) {
-        return res.status(200).json({
-          ok: true, duplicada: true,
-          crm_solicitud_id: p.crm_solicitud_id,
-          codigo_solicitud: existente.codigo_solicitud ?? null,
-          solicitud_id: existente.id ?? null,
-        });
-      }
-
-      const codigoSolicitud = await createCodigoSolicitud();
-      if (typeof codigoSolicitud !== "string" || !codigoSolicitud.trim()) {
-        return jsonError(res, 503, "No fue posible generar un código de solicitud");
-      }
-
-      // Importante: no se usa el ID de agencia CRM como FK ERP y no se llama
-      // a resolveCustomer/POST /api/clientes. El nombre externo se conserva.
-      const row = {
-        codigo_solicitud: codigoSolicitud,
+      const result = await receiveCrmSolicitud({
+        ...p,
         crm_solicitud_id: p.crm_solicitud_id.trim(),
         crm_cliente_id: p.crm_cliente_id.trim(),
-        cliente_nombre_externo: p.cliente_nombre.trim(),
-        cliente_nit_externo: typeof p.cliente_nit === "string" ? p.cliente_nit.trim() : null,
-        empresa_cliente_id: null,
-        creado_por: null,
+        cliente_nombre: p.cliente_nombre.trim(),
+        creador_email: p.creador_email.trim().toLowerCase(),
         tipo_vehiculo: tipoVehiculo.trim(),
         tipo_operacion: p.tipo_operacion.trim().toLowerCase(),
         origen: p.origen.trim(),
         destino: p.destino.trim(),
-        agencia_id: null,
-        agencia_nombre: p.agencia.nombre.trim(),
         external_ref: p.external_ref.trim(),
-        fecha_requerida: p.fecha_requerida,
-        observacion_coordinadora: typeof p.observaciones_cliente === "string"
-          ? p.observaciones_cliente.trim() : null,
-        metadata: {
-          ...(p.metadata && typeof p.metadata === "object" ? p.metadata : {}),
-          origen_integracion: "CRM",
-        },
-        estado: "pendiente",
-        canal: "CRM",
-        creado_en: now(),
-      };
+      });
 
-      const inserted = await insertIfAbsent(row);
-      if (inserted?.id || inserted?.codigo_solicitud) {
-        return res.status(201).json({
-          ok: true, duplicada: false,
-          crm_solicitud_id: p.crm_solicitud_id,
-          codigo_solicitud: inserted.codigo_solicitud ?? codigoSolicitud,
-          solicitud_id: inserted.id ?? null,
+      const outcome = Array.isArray(result) ? result[0] : result;
+      if (!outcome || typeof outcome !== "object") {
+        return jsonError(res, 502, "No se pudo confirmar la persistencia de la solicitud");
+      }
+
+      if (outcome.ok === false) {
+        if (outcome.error_code === "creator_not_found") {
+          return jsonError(res, 422, "El correo del creador CRM no corresponde a un usuario del ERP", {
+            codigo: outcome.error_code,
+          });
+        }
+        if (outcome.error_code === "creator_ambiguous") {
+          return jsonError(res, 409, "El correo del creador coincide con varios usuarios del ERP", {
+            codigo: outcome.error_code,
+          });
+        }
+        if (outcome.error_code === "customer_identity_conflict") {
+          return jsonError(res, 409, "El ID del cliente CRM está asociado a una empresa distinta", {
+            codigo: outcome.error_code,
+          });
+        }
+        return jsonError(res, 422, "El ERP no pudo validar los datos de la solicitud", {
+          codigo: outcome.error_code || "crm_request_rejected",
         });
       }
 
-      // Un conflicto concurrente puede haber ganado después de la primera
-      // consulta. Volver a leer la clave estable para responder idempotente.
-      const concurrente = await findByCrmSolicitudId(p.crm_solicitud_id);
-      if (concurrente) {
+      if (outcome.duplicada) {
         return res.status(200).json({
-          ok: true, duplicada: true,
+          ok: true,
+          duplicada: true,
           crm_solicitud_id: p.crm_solicitud_id,
-          codigo_solicitud: concurrente.codigo_solicitud ?? null,
-          solicitud_id: concurrente.id ?? null,
+          codigo_solicitud: outcome.codigo_solicitud,
+          solicitud_id: outcome.solicitud_id,
+          empresa_cliente_id: outcome.empresa_cliente_id,
         });
       }
-      return jsonError(res, 502, "No se pudo confirmar la persistencia de la solicitud");
+
+      if (!outcome.solicitud_id || !outcome.empresa_cliente_id || !outcome.codigo_solicitud) {
+        return jsonError(res, 502, "El ERP no confirmó los identificadores de empresa y solicitud");
+      }
+
+      return res.status(201).json({
+        ok: true,
+        duplicada: false,
+        crm_solicitud_id: p.crm_solicitud_id,
+        crm_cliente_id: p.crm_cliente_id,
+        empresa_cliente_id: outcome.empresa_cliente_id,
+        solicitud_id: outcome.solicitud_id,
+        codigo_solicitud: outcome.codigo_solicitud,
+        empresa_creada: outcome.empresa_creada === true,
+      });
     } catch (error) {
-      // No devolver detalles de infraestructura ni datos sensibles al emisor.
       console.error("Error receptor CRM solicitudes:", error?.message || "error desconocido");
       return jsonError(res, 502, "Error interno al recibir la solicitud CRM");
     }
