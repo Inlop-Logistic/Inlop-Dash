@@ -2,8 +2,8 @@
  * Contrato de entrada CRM: validación pura, sin llamadas de red ni escrituras.
  */
 const REQUIRED_TEXT = [
-  "crm_solicitud_id", "crm_cliente_id", "cliente_nombre", "tipo_vehiculo",
-  "tipo_operacion", "origen", "destino", "fecha_requerida", "external_ref",
+  "crm_solicitud_id", "crm_cliente_id", "cliente_nombre", "creador_email",
+  "tipo_vehiculo", "tipo_operacion", "origen", "destino", "fecha_requerida", "external_ref",
 ];
 
 export function validateCrmSolicitud(payload) {
@@ -15,6 +15,10 @@ export function validateCrmSolicitud(payload) {
     if (typeof payload[field] !== "string" || !payload[field].trim()) {
       errors.push(`'${field}' es obligatorio y debe ser texto`);
     }
+  }
+  if (typeof payload.creador_email === "string" &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.creador_email.trim())) {
+    errors.push("'creador_email' debe ser un correo válido");
   }
   if (payload.canal !== "CRM") errors.push("'canal' debe ser exactamente 'CRM'");
   if (!payload.agencia || typeof payload.agencia !== "object" || Array.isArray(payload.agencia)) {
