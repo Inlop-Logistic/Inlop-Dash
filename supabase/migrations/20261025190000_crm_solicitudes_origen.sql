@@ -11,12 +11,8 @@ ALTER TABLE public.solicitudes
   ADD COLUMN IF NOT EXISTS cliente_nombre_externo TEXT,
   ADD COLUMN IF NOT EXISTS cliente_nit_externo TEXT;
 
--- Las solicitudes originadas en CRM no deben exigir una fila de cliente ni
--- un usuario humano del ERP. Validar el esquema real antes de aplicar esto.
-ALTER TABLE public.solicitudes
-  ALTER COLUMN empresa_cliente_id DROP NOT NULL,
-  ALTER COLUMN creado_por DROP NOT NULL;
-
+-- La documentación de dominio registra empresa_cliente_id y creado_por
+-- como anulables. No alteramos estas columnas sin verificar el esquema real.
 -- Un índice UNIQUE no parcial permite usar crm_solicitud_id como objetivo
 -- explícito de ON CONFLICT en PostgREST/PostgreSQL. Los NULL existentes se
 -- permiten múltiples veces por la semántica UNIQUE estándar de PostgreSQL.
