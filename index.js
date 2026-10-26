@@ -2753,6 +2753,9 @@ function _fields(viaje, nuevoEstado, ahora, esPrimerEnlace) {
 // construir el payload del canal Push (mismo action_type/action_payload que
 // consume executeEventAction en el frontend, Blueprint v3.0 §5.2/§5.4).
 function _notifs(sol, nuevoEstado, viaje, estadoAnterior) {
+  // Las solicitudes CRM no tienen usuario de Portal Cliente; no generar
+  // notificaciones personales con usuario_id NULL.
+  if (!sol?.creado_por) return [];
   const cod   = sol.codigo_solicitud;
   const placa = viaje?.license_plate || '';
   const cond  = viaje?.driver_name   || '';
