@@ -1995,7 +1995,10 @@ app.get('/api/solicitudes', requireLegacyOrErpAuth, async (req, res) => {
     const agenciaIds = [...new Set(solicitudes.map(s => s.agencia_id).filter(Boolean))];
     const usuarioIds = [...new Set(solicitudes.map(s => s.creado_por).filter(Boolean))];
 
-    const [empresas, agencias, usuarios] = await Promise.all([
+    const crmUsuarioIds = [...new Set(
+      solicitudes.filter(s => s.canal === 'CRM' && s.creado_por).map(s => s.creado_por)
+    )];
+    const [empresas, agencias, usuarios, perfilesCrm] = await Promise.all([
       empresaIds.length
         ? sbFetch(`/empresas_cliente?id=in.(${empresaIds.map(encodeURIComponent).join(',')})&select=id,razon_social`)
         : Promise.resolve([]),
@@ -2005,11 +2008,15 @@ app.get('/api/solicitudes', requireLegacyOrErpAuth, async (req, res) => {
       usuarioIds.length
         ? sbFetch(`/usuarios_cliente?id=in.(${usuarioIds.map(encodeURIComponent).join(',')})&select=id,nombre`)
         : Promise.resolve([]),
+      crmUsuarioIds.length
+        ? sbFetch(`/profiles?id=in.(${crmUsuarioIds.map(encodeURIComponent).join(',')})&select=id,nombre,email`)
+        : Promise.resolve([]),
     ]);
 
     const empMap = {}; (empresas || []).forEach(e => { empMap[e.id] = e.razon_social; });
     const agMap  = {}; (agencias || []).forEach(a => { agMap[a.id]  = a.nombre; });
     const usrMap = {}; (usuarios || []).forEach(u => { usrMap[u.id] = u.nombre; });
+    (perfilesCrm || []).forEach(p => { usrMap[p.id] = p.nombre || p.email || '—'; });
 
     const result = solicitudes.map(s => ({
       id:               s.id,
@@ -2075,7 +2082,9 @@ app.get('/api/solicitudes/:id', requireErpAuth, requirePermiso('solicitudes:list
         ? sbFetch(`/agencias_cliente?id=eq.${encodeURIComponent(sol.agencia_id)}&select=id,nombre`)
         : Promise.resolve([]),
       sol.creado_por
-        ? sbFetch(`/usuarios_cliente?id=eq.${encodeURIComponent(sol.creado_por)}&select=id,nombre`)
+        ? sbFetch(sol.canal === 'CRM'
+            ? `/profiles?id=eq.${encodeURIComponent(sol.creado_por)}&select=id,nombre,email`
+            : `/usuarios_cliente?id=eq.${encodeURIComponent(sol.creado_por)}&select=id,nombre`)
         : Promise.resolve([]),
     ]);
 
