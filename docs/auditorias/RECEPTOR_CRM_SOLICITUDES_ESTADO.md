@@ -15,6 +15,13 @@
 - El contrato requiere `creador_email`, además de `crm_cliente_id`, `crm_solicitud_id` y datos de la solicitud.
 - El mapa de vehículos continúa limitado a `NHR 2.5 toneladas` → `NHR`; cualquier otro valor se rechaza con 422 hasta aprobar el catálogo.
 
+## Canales de entrada y módulo ERP Solicitudes
+- `APP` representa solicitudes que crea el cliente desde su Portal de Clientes. El flujo existente es `POST /servicios`, autenticado con el contexto del cliente, y persiste `empresa_cliente_id` y `creado_por` del usuario cliente.
+- `CRM` representa solicitudes internas creadas por el equipo comercial en el CRM. El receptor nuevo debe persistir `canal = 'CRM'` y resolver `empresa_cliente_id` por `crm_cliente_id`, y `creado_por` por correo contra `profiles`.
+- El módulo Solicitudes del ERP ya tiene una columna `Canal` y un componente `CanalBadge`. Se actualizó para distinguir visualmente `APP` y `CRM`; el detalle/listado enriquecen el creador CRM desde `profiles`, mientras que el creador APP sigue resolviéndose desde `usuarios_cliente`.
+- El backend de listado y detalle ya incluye los campos CRM y usa el nombre externo del cliente como respaldo si no hay razón social disponible.
+- Para CRM, la agencia se recibe como objeto externo y la RPC guarda el nombre de agencia; no se asigna `agencia_id` del CRM directamente porque su UUID no puede asumirse igual al ID de agencia del ERP. Si el proceso exige asociar agencias maestras, hará falta una correspondencia explícita de agencias.
+
 ## Cambios preparados en la rama
 Rama: `test/integracion-crm-solicitudes`
 - El router delega la operación a `rpc/recibir_solicitud_crm`.
@@ -39,3 +46,16 @@ Rama: `test/integracion-crm-solicitudes`
 3. Revisar en el esquema compartido los tipos/FK de `solicitudes.creado_por`, `profiles.id`, columnas de `empresas_cliente` y políticas de seguridad.
 4. Preparar respaldo y procedimiento de reversión antes de cualquier migración.
 5. Desplegar solo tras aprobar la base de datos, el secreto dedicado y el servicio backend.
+
+## Auditoría comparativa APP vs CRM
+| Aspecto | APP | CRM |
+|---|---|---|
+| Propósito | Canal externo: el cliente solicita desde su portal | Canal interno: comercial crea la solicitud en CRM |
+| Entrada | `POST /servicios`, con autenticación de cliente y alcance de empresa/agencia | `POST /api/integraciones/crm/solicitudes`, autenticado con secreto dedicado |
+| Cliente | Empresa del usuario autenticado | ID estable del cliente CRM; crea maestro ERP si no existe |
+| Creador | `usuarios_cliente` | `profiles`, por correo normalizado |
+| Canal almacenado | Actualmente el flujo APP depende del valor por defecto `APP` al leer si está vacío; el handler de creación no escribe explícitamente `canal` | La RPC escribe explícitamente `CRM` |
+| Visibilidad ERP | Badge `APP` | Badge `CRM` distinto, con título “Canal interno de solicitudes” |
+
+### Hallazgo de consistencia APP
+El handler existente `POST /servicios` no asigna `canal: 'APP'` en el objeto insertado; el GET del ERP sustituye los canales vacíos por `APP`. Esto permite que solicitudes sin canal definido se muestren como APP. Se recomienda una mejora separada para escribir `APP` explícitamente en el handler y mantener el fallback histórico, evitando cambiar el flujo actual en la misma intervención sin pruebas.
