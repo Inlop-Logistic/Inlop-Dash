@@ -72,7 +72,6 @@ SECURITY DEFINER
 SET search_path = ''
 AS $function$
 DECLARE
-  v_solicitud_id UUID;
   v_codigo_solicitud TEXT;
   v_empresa_id UUID;
   v_usuario_ids UUID[];
@@ -91,9 +90,7 @@ BEGIN
     RETURN jsonb_build_object('ok', FALSE, 'error_code', 'invalid_payload');
   END IF;
 
-  v_solicitud_id := NULLIF(btrim(p_payload->>'crm_solicitud_id'), '')::UUID;
-  -- El ID externo del CRM puede ser UUID o texto. Se valida como texto para
-  -- mantener compatibilidad con IDs CRM no UUID.
+  -- El ID externo del CRM se maneja como texto estable; no se fuerza a UUID.
   IF NULLIF(btrim(p_payload->>'crm_solicitud_id'), '') IS NULL THEN
     RETURN jsonb_build_object('ok', FALSE, 'error_code', 'crm_solicitud_id_required');
   END IF;
