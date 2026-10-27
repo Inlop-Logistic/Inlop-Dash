@@ -224,11 +224,13 @@ BEGIN
        AND COALESCE(a.activa, TRUE) = TRUE;
   END IF;
 
+  -- Estas condiciones deben lanzar excepción, no devolver JSON: si la empresa
+  -- prospecto ya fue insertada, PostgreSQL debe revertir toda la transacción.
   IF COALESCE(cardinality(v_agencia_ids), 0) = 0 THEN
-    RETURN jsonb_build_object('ok', FALSE, 'error_code', 'agency_not_found');
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'agency_not_found';
   END IF;
   IF cardinality(v_agencia_ids) > 1 THEN
-    RETURN jsonb_build_object('ok', FALSE, 'error_code', 'agency_ambiguous');
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'agency_ambiguous';
   END IF;
   v_agencia_id := v_agencia_ids[1];
 
