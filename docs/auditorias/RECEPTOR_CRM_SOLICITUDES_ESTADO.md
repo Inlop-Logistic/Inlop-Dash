@@ -13,6 +13,7 @@
 - `POST /api/integraciones/crm/solicitudes`
 - Autenticación mediante `x-crm-api-key`, con `CRM_INGESTION_API_KEY` y `SUPABASE_SERVICE_KEY` configuradas solo en backend.
 - El contrato requiere `creador_email`, además de `crm_cliente_id`, `crm_solicitud_id` y datos de la solicitud.
+- La agencia es obligatoria: el contrato exige `agencia.id` como UUID de una agencia del ERP y `agencia.nombre` como etiqueta. No se acepta solo el nombre.
 - El mapa de vehículos continúa limitado a `NHR 2.5 toneladas` → `NHR`; cualquier otro valor se rechaza con 422 hasta aprobar el catálogo.
 
 ## Canales de entrada y módulo ERP Solicitudes
@@ -20,7 +21,8 @@
 - `CRM` representa solicitudes internas creadas por el equipo comercial en el CRM. El receptor nuevo debe persistir `canal = 'CRM'` y resolver `empresa_cliente_id` por `crm_cliente_id`, y `creado_por` por correo contra `profiles`.
 - El módulo Solicitudes del ERP ya tiene una columna `Canal` y un componente `CanalBadge`. Se actualizó para distinguir visualmente `APP` y `CRM`; el detalle/listado enriquecen el creador CRM desde `profiles`, mientras que el creador APP sigue resolviéndose desde `usuarios_cliente`.
 - El backend de listado y detalle ya incluye los campos CRM y usa el nombre externo del cliente como respaldo si no hay razón social disponible.
-- Para CRM, la agencia se recibe como objeto externo y la RPC guarda el nombre de agencia; no se asigna `agencia_id` del CRM directamente porque su UUID no puede asumirse igual al ID de agencia del ERP. Si el proceso exige asociar agencias maestras, hará falta una correspondencia explícita de agencias.
+- Para CRM, la solicitud debe enviar una agencia ya identificada en el catálogo ERP; no se debe confiar en el ID interno del CRM como si fuera un ID ERP.
+- **Bloqueo funcional pendiente:** cuando el cliente CRM no exista aún en ERP, la empresa se crea como prospecto y normalmente no tendrá agencias ERP asociadas. Debe definirse una regla de correspondencia/creación de agencia para ese caso antes de ejecutar la migración. No debe resolverse creando agencias automáticamente sin aprobación.
 
 ## Cambios preparados en la rama
 Rama: `test/integracion-crm-solicitudes`
