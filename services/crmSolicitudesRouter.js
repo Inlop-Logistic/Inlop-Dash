@@ -106,7 +106,19 @@ export function createCrmSolicitudesRouter({
         empresa_creada: outcome.empresa_creada === true,
       });
     } catch (error) {
-      console.error("Error receptor CRM solicitudes:", error?.message || "error desconocido");
+      const message = String(error?.message || "");
+      console.error("Error receptor CRM solicitudes:", message || "error desconocido");
+      // La RPC lanza excepción para forzar rollback completo cuando falla la agencia.
+      if (message.includes("agency_not_found")) {
+        return jsonError(res, 422, "La agencia seleccionada no existe o no está activa en el ERP para esta empresa", {
+          codigo: "agency_not_found",
+        });
+      }
+      if (message.includes("agency_ambiguous")) {
+        return jsonError(res, 409, "La agencia seleccionada no se puede resolver de forma única en el ERP", {
+          codigo: "agency_ambiguous",
+        });
+      }
       return jsonError(res, 502, "Error interno al recibir la solicitud CRM");
     }
   });
