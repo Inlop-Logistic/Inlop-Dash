@@ -5,7 +5,7 @@
   "cliente_nit": "900000000-1",
   "creador_email": "pruebas@inloplogistica.com",
   "agencia": {
-    "id": null,
+    "id": "123e4567-e89b-42d3-a456-426614174000",
     "nombre": "Cartagena"
   },
   "tipo_vehiculo": "NHR 2.5 toneladas",
