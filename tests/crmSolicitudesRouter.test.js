@@ -116,3 +116,23 @@ test("rechaza un vehículo sin mapeo aprobado", async () => {
     assert.equal(calls, 0);
   });
 });
+
+test("rechaza solicitud sin agencia antes de invocar la RPC", async () => {
+  let calls = 0;
+  await withServer({ receiveCrmSolicitud: async () => { calls++; } }, async (url) => {
+    const response = await post(url, { ...fixture, agencia: { id: "", nombre: "Cartagena" } });
+    assert.equal(response.status, 400);
+    assert.match((await response.json()).detalles.join(" "), /agencia.id/);
+    assert.equal(calls, 0);
+  });
+});
+
+test("convierte agencia no resuelta en error 422 sin confirmar persistencia", async () => {
+  await withServer({ receiveCrmSolicitud: async () => {
+    throw new Error("agency_not_found");
+  } }, async (url) => {
+    const response = await post(url);
+    assert.equal(response.status, 422);
+    assert.equal((await response.json()).codigo, "agency_not_found");
+  });
+});
