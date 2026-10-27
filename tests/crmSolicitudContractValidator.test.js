@@ -37,3 +37,23 @@ test("rechaza fechas no válidas", () => {
 test("rechaza cuerpo que no sea objeto", () => {
   assert.equal(validateCrmSolicitud(null).ok, false);
 });
+
+test("rechaza solicitud sin agencia", () => {
+  const result = validateCrmSolicitud({ ...fixture, agencia: { id: "", nombre: "Cartagena" } });
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes("agencia.id")));
+});
+
+test("rechaza agencia sin identificador ERP válido", () => {
+  const result = validateCrmSolicitud({ ...fixture, agencia: { id: "agencia-cartagena", nombre: "Cartagena" } });
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes("UUID válido")));
+});
+
+test("acepta agencia con UUID y nombre", () => {
+  const result = validateCrmSolicitud({
+    ...fixture,
+    agencia: { id: "123e4567-e89b-42d3-a456-426614174000", nombre: "Cartagena" },
+  });
+  assert.equal(result.ok, true);
+});
