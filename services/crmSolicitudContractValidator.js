@@ -24,8 +24,10 @@ export function validateCrmSolicitud(payload) {
   if (!payload.agencia || typeof payload.agencia !== "object" || Array.isArray(payload.agencia)) {
     errors.push("'agencia' debe ser un objeto con id y nombre");
   } else {
-    if (payload.agencia.id != null && typeof payload.agencia.id !== "string") {
-      errors.push("'agencia.id' debe ser texto o null");
+    if (typeof payload.agencia.id !== "string" || !payload.agencia.id.trim()) {
+      errors.push("'agencia.id' es obligatorio y debe identificar una agencia del ERP");
+    } else if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.agencia.id.trim())) {
+      errors.push("'agencia.id' debe ser un UUID válido del ERP");
     }
     if (typeof payload.agencia.nombre !== "string" || !payload.agencia.nombre.trim()) {
       errors.push("'agencia.nombre' es obligatorio");
