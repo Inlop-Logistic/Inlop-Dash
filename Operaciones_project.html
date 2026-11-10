@@ -2606,6 +2606,11 @@ function cerrarSesionInlop(){
      vehiculos_enturnes, solo consulta (dbGet, protegido por RLS
      — ver supabase/migrations/20261110000000_vehiculos_enturnes.sql).
      ═══════════════════════════════════════════════════════ -->
+<style>
+.ent-act-btn{width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line2);border-radius:6px;background:var(--c3);color:var(--w3);cursor:pointer;font-size:13px;padding:0;transition:.15s}
+.ent-act-btn:hover{background:var(--c4);color:var(--w1)}
+.ent-act-btn:disabled{opacity:.35;cursor:not-allowed}
+</style>
 <div class="tc" id="tc-ent">
 <div class="page" style="max-width:1400px">
 
@@ -2656,7 +2661,9 @@ function cerrarSesionInlop(){
       <thead>
         <tr>
           <th>Nombre</th>
+          <th>Teléfono</th>
           <th>Placa</th>
+          <th>Ciudad</th>
           <th>Tipo de vehículo</th>
           <th>Tipo de carrocería</th>
           <th class="c">Capacidad (ton)</th>
@@ -2664,6 +2671,7 @@ function cerrarSesionInlop(){
           <th>Ruta frecuente</th>
           <th class="c">Fecha de enturnamiento</th>
           <th class="c">Hora de enturnamiento</th>
+          <th class="c">Acciones</th>
         </tr>
       </thead>
       <tbody id="ent-tbody"></tbody>
@@ -2674,6 +2682,18 @@ function cerrarSesionInlop(){
 </div>
 
 </div><!-- /ent-contenido -->
+
+<!-- Vista de detalle de un registro — mismo patrón visual que el modal de
+     PersonalMaestro (pm-modal-*), sin CSS nuevo. -->
+<div id="ent-modal-overlay" class="pm-modal-overlay">
+  <div class="pm-modal-box" style="width:min(460px,94vw)">
+    <div class="pm-modal-hdr">
+      <div class="pm-modal-ttl">Detalle del enturne</div>
+      <button class="co-btn-close" style="position:static" onclick="ENT.cerrarDetalle()" title="Cerrar"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="pm-modal-body" id="ent-modal-body"></div>
+  </div>
+</div>
 
 </div><!-- /page -->
 </div><!-- /tc-ent -->
@@ -7494,7 +7514,7 @@ function pintarOpciones(){
 }
 
 function buildParams(){
-  var parts=['select=nombre,placa,tipo_vehiculo,tipo_carroceria,capacidad_toneladas,volumen_m3,ruta_frecuente,fecha_operativa,created_at'];
+  var parts=['select=nombre,telefono,placa,ciudad,tipo_vehiculo,tipo_carroceria,capacidad_toneladas,volumen_m3,ruta_frecuente,fecha_operativa,created_at'];
   parts.push('order=created_at.desc');
   if(state.fecha)parts.push('fecha_operativa=eq.'+encodeURIComponent(state.fecha));
   if(state.tipoVehiculo)parts.push('tipo_vehiculo=eq.'+encodeURIComponent(state.tipoVehiculo));
@@ -7541,10 +7561,12 @@ function pintarTabla(filas){
     return;
   }
   if(vacio)vacio.style.display='none';
-  tbody.innerHTML=filas.map(function(r){
+  tbody.innerHTML=filas.map(function(r,i){
     return '<tr>'+
       '<td>'+esc(r.nombre)+'</td>'+
+      '<td>'+(r.telefono?esc(r.telefono):'—')+'</td>'+
       '<td><b>'+esc(r.placa)+'</b></td>'+
+      '<td>'+(r.ciudad?esc(r.ciudad):'—')+'</td>'+
       '<td>'+esc(r.tipo_vehiculo)+'</td>'+
       '<td>'+esc(r.tipo_carroceria)+'</td>'+
       '<td class="c">'+esc(r.capacidad_toneladas)+'</td>'+
@@ -7552,8 +7574,22 @@ function pintarTabla(filas){
       '<td>'+esc(r.ruta_frecuente)+'</td>'+
       '<td class="c">'+formatoFecha(r.fecha_operativa)+'</td>'+
       '<td class="c">'+formatoHora(r.created_at)+'</td>'+
+      '<td class="c">'+pintarAcciones(r,i)+'</td>'+
     '</tr>';
   }).join('');
+}
+
+// Botones pequeños, alineados, sin menú desplegable — exactamente los tres
+// pedidos: WhatsApp (precarga el mensaje, el operador decide si lo envía —
+// nunca se envía solo), Copiar (portapapeles) y Ver (modal de detalle).
+function pintarAcciones(r,i){
+  var sinTelefono=!r.telefono;
+  return '<div style="display:flex;gap:4px;justify-content:center">'+
+    '<button class="ent-act-btn" title="'+(sinTelefono?'Sin teléfono registrado':'Abrir WhatsApp')+'" '+
+      (sinTelefono?'disabled':'onclick="ENT.abrirWhatsapp('+i+')"')+'><i class="ti ti-brand-whatsapp" aria-hidden="true"></i></button>'+
+    '<button class="ent-act-btn" title="Copiar información" onclick="ENT.copiarRegistro('+i+')"><i class="ti ti-copy" aria-hidden="true"></i></button>'+
+    '<button class="ent-act-btn" title="Ver detalle" onclick="ENT.verDetalle('+i+')"><i class="ti ti-eye" aria-hidden="true"></i></button>'+
+  '</div>';
 }
 
 async function cargar(){
@@ -7602,7 +7638,9 @@ function exportarExcel(){
   var datos=state.rows.map(function(r){
     return{
       'Nombre':r.nombre,
+      'Teléfono':r.telefono||'',
       'Placa':r.placa,
+      'Ciudad':r.ciudad||'',
       'Tipo de vehículo':r.tipo_vehiculo,
       'Tipo de carrocería':r.tipo_carroceria,
       'Capacidad (ton)':r.capacidad_toneladas,
@@ -7619,9 +7657,110 @@ function exportarExcel(){
   XLSX.writeFile(wb,nombreArchivo);
 }
 
+// ── Acciones de fila: WhatsApp / Copiar / Ver ───────────────────────────────
+
+// Mensaje EXACTO pedido por el negocio — no modificar el texto, solo [Nombre].
+// Nunca se envía solo: siempre abre WhatsApp con el mensaje precargado y es
+// el operador quien decide si lo envía.
+function mensajeWhatsapp(nombre){
+  return '¡Hola, '+(nombre||'')+'! 👋\n'+
+    'Te saludamos de parte de INLOP – Integral Logistics Operations.\n'+
+    'Hemos recibido tu registro de enturnamiento y queremos darte la bienvenida.\n'+
+    'Nos gustaría completar tu información como transportador y conocer tu disponibilidad para futuras operaciones de transporte.\n'+
+    '¿Podrías confirmarnos si actualmente tienes disponibilidad de vehículo y qué tipo de servicios o rutas puedes atender?\n'+
+    '¡Gracias por confiar en INLOP! 🚛';
+}
+
+// wa.me exige solo dígitos con indicativo de país, sin '+' ni separadores.
+// El transportador escribe el teléfono en el formulario sin ningún formato
+// exigido (ver services/enturnes/normalizar.js) — si ya trae indicativo
+// (12 dígitos, ej. 57XXXXXXXXXX) se usa tal cual; si son 10 dígitos
+// (celular colombiano típico sin indicativo) se antepone 57, el indicativo
+// de Colombia — único supuesto regional de esta función, documentado aquí.
+function telefonoParaWhatsapp(telefono){
+  var digitos=(telefono||'').replace(/[^0-9]/g,'');
+  if(!digitos)return'';
+  if(digitos.length===10)digitos='57'+digitos;
+  return digitos;
+}
+
+function abrirWhatsapp(i){
+  var r=state.rows[i];
+  if(!r)return;
+  var digitos=telefonoParaWhatsapp(r.telefono);
+  if(!digitos){
+    if(typeof toast==='function')toast('Este registro no tiene teléfono.','info');
+    return;
+  }
+  var url='https://wa.me/'+digitos+'?text='+encodeURIComponent(mensajeWhatsapp(r.nombre));
+  window.open(url,'_blank','noopener');
+}
+
+// Texto legible reutilizado por Copiar y por el modal de Ver detalle.
+function textoRegistro(r){
+  return [
+    'Nombre: '+(r.nombre||'—'),
+    'Teléfono: '+(r.telefono||'—'),
+    'Placa: '+(r.placa||'—'),
+    'Ciudad: '+(r.ciudad||'—'),
+    'Tipo de vehículo: '+(r.tipo_vehiculo||'—'),
+    'Tipo de carrocería: '+(r.tipo_carroceria||'—'),
+    'Capacidad: '+(r.capacidad_toneladas!=null?r.capacidad_toneladas+' ton':'—'),
+    'Volumen: '+(r.volumen_m3!=null?r.volumen_m3+' m³':'—'),
+    'Ruta frecuente: '+(r.ruta_frecuente||'—'),
+    'Fecha de enturnamiento: '+formatoFecha(r.fecha_operativa),
+    'Hora de enturnamiento: '+formatoHora(r.created_at)
+  ].join('\n');
+}
+
+function copiarRegistro(i){
+  var r=state.rows[i];
+  if(!r)return;
+  var texto=textoRegistro(r);
+  function ok(){ if(typeof toast==='function')toast('Información copiada al portapapeles.','ok'); }
+  function fallo(){ if(typeof toast==='function')toast('No se pudo copiar. Copia manualmente desde Ver detalle.','err'); }
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(texto).then(ok).catch(function(){
+      _copiarConTextarea(texto)?ok():fallo();
+    });
+  }else{
+    _copiarConTextarea(texto)?ok():fallo();
+  }
+}
+
+// Fallback para navegadores/contextos sin Clipboard API (ej. sin HTTPS).
+function _copiarConTextarea(texto){
+  try{
+    var ta=document.createElement('textarea');
+    ta.value=texto;
+    ta.style.position='fixed';
+    ta.style.opacity='0';
+    document.body.appendChild(ta);
+    ta.focus();ta.select();
+    var ok=document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  }catch(e){return false;}
+}
+
+function verDetalle(i){
+  var r=state.rows[i];
+  if(!r)return;
+  var body=document.getElementById('ent-modal-body');
+  if(body)body.innerHTML='<pre style="white-space:pre-wrap;font-family:inherit;font-size:13px;color:var(--w1);margin:0;line-height:1.7">'+esc(textoRegistro(r))+'</pre>';
+  var ov=document.getElementById('ent-modal-overlay');
+  if(ov)ov.style.display='flex';
+}
+
+function cerrarDetalle(){
+  var ov=document.getElementById('ent-modal-overlay');
+  if(ov)ov.style.display='none';
+}
+
 return{render:render,setFecha:setFecha,irAHoy:irAHoy,setBusqueda:setBusqueda,
   setFiltroTipoVehiculo:setFiltroTipoVehiculo,setFiltroTipoCarroceria:setFiltroTipoCarroceria,
-  exportarExcel:exportarExcel};
+  exportarExcel:exportarExcel,abrirWhatsapp:abrirWhatsapp,copiarRegistro:copiarRegistro,
+  verDetalle:verDetalle,cerrarDetalle:cerrarDetalle};
 })();
 window.ENT=ENT;
 </script>

@@ -49,7 +49,9 @@ function crearRouterConFetch(fetchImpl, overrides = {}) {
 function solicitudValida(overrides = {}) {
   return {
     nombre: 'Juan Pérez',
+    telefono: '300 123 4567',
     placa: 'ABC 123',
+    ciudad: 'Cartagena',
     tipo_vehiculo: 'Turbo',
     tipo_carroceria: 'Estaca',
     capacidad_toneladas: 5,
@@ -248,4 +250,20 @@ test('solicitud válida con volumen_m3: se envía fecha_operativa y los datos sa
   assert.equal(cuerpoEnviado.placa_normalizada, 'ABC123');
   assert.equal(cuerpoEnviado.volumen_m3, 12.5);
   assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(cuerpoEnviado.fecha_operativa));
+  assert.equal(cuerpoEnviado.telefono, '300 123 4567');
+  assert.equal(cuerpoEnviado.ciudad, 'Cartagena');
+});
+
+test('telefono/ciudad faltantes: 400 antes de llegar a Supabase', async () => {
+  let llamadoFetch = false;
+  const router = crearRouterConFetch(async () => { llamadoFetch = true; });
+  const handler = obtenerHandler(router);
+
+  const res = crearResMock();
+  await handler(crearReqMock({ body: solicitudValida({ telefono: '', ciudad: '' }) }), res);
+
+  assert.equal(llamadoFetch, false);
+  assert.equal(res.statusCode, 400);
+  assert.ok(res.body.error.includes('telefono'));
+  assert.ok(res.body.error.includes('ciudad'));
 });

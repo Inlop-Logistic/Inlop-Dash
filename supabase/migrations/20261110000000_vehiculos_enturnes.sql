@@ -74,8 +74,10 @@
 CREATE TABLE IF NOT EXISTS vehiculos_enturnes (
   id                    UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   nombre                TEXT        NOT NULL,
+  telefono              TEXT        NULL,                  -- ver nota "Ajuste: telefono/ciudad" abajo
   placa                 TEXT        NOT NULL,              -- tal como la escribió el conductor, sin normalizar
   placa_normalizada     TEXT        NOT NULL,               -- mayúsculas, sin espacios — ver normalizarPlaca() en index.js
+  ciudad                TEXT        NULL,                   -- ver nota "Ajuste: telefono/ciudad" abajo
   tipo_vehiculo         TEXT        NOT NULL CHECK (tipo_vehiculo IN ('NHR','Turbo','Sencillo','Dobletroque','Patineta','Tractomula')),
   tipo_carroceria       TEXT        NOT NULL CHECK (tipo_carroceria IN ('Estaca','Furgón','Plancha','Cisterna')),
   capacidad_toneladas   NUMERIC     NOT NULL CHECK (capacidad_toneladas > 0),
@@ -87,6 +89,22 @@ CREATE TABLE IF NOT EXISTS vehiculos_enturnes (
   -- Regla fundamental del proyecto: una placa, un enturne por día calendario Colombia.
   CONSTRAINT vehiculos_enturnes_placa_dia_unico UNIQUE (placa_normalizada, fecha_operativa)
 );
+
+-- ── Ajuste: telefono/ciudad (posterior a la primera versión de esta migración) ──
+-- Si esta migración ya se había aplicado antes sin estas dos columnas, los
+-- ALTER TABLE siguientes las agregan de forma idempotente (mismo patrón
+-- defensivo que SQL_01_profiles_check.sql). Ambas son NULLABLE a propósito:
+-- la validación "obligatorio" vive en services/enturnes/normalizar.js (capa
+-- de aplicación, lo que SÍ pidió el negocio) — a nivel de columna se dejan
+-- nullable para que cualquier fila insertada por una versión anterior del
+-- endpoint (antes de este ajuste) siga siendo válida y legible sin romper
+-- ni backfill ni migración de datos. El panel administrativo muestra "—"
+-- cuando vienen vacías (ver Operaciones_project.html, módulo ENT).
+-- `ciudad` se guarda tal como la escribe el transportador — sin lista
+-- cerrada, sin normalización, sin asociación a sedes ni zonas (decisión
+-- explícita del negocio: no crear esa configuración).
+ALTER TABLE vehiculos_enturnes ADD COLUMN IF NOT EXISTS telefono TEXT;
+ALTER TABLE vehiculos_enturnes ADD COLUMN IF NOT EXISTS ciudad   TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_vehiculos_enturnes_fecha
   ON vehiculos_enturnes (fecha_operativa DESC, created_at DESC);
@@ -152,6 +170,14 @@ SELECT
 FROM pg_policies
 WHERE tablename = 'vehiculos_enturnes'
   AND qual LIKE '%personal%' AND qual LIKE '%OPERACIONES%';
+
+-- V7. Las columnas telefono y ciudad existen (y son NULLABLE, por compatibilidad
+-- con filas insertadas antes de este ajuste)
+SELECT
+  CASE WHEN COUNT(*) = 2 THEN '✅ V7 OK — telefono y ciudad existen'
+       ELSE '❌ V7 FALLO — se esperaban 2 columnas, encontradas: ' || COUNT(*)::text END AS validacion_v7
+FROM information_schema.columns
+WHERE table_name = 'vehiculos_enturnes' AND column_name IN ('telefono', 'ciudad');
 
 -- V6 (ejecutar manualmente antes de aplicar en producción — ver nota de riesgo
 -- arriba): lista todo el staff ERP activo y si ya está vinculado a `personal`

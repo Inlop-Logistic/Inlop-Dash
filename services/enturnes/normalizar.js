@@ -44,6 +44,18 @@ export function validarSolicitudEnturne(body) {
   const nombre = typeof b.nombre === 'string' ? b.nombre.trim() : '';
   if (!nombre) errores.push('nombre es obligatorio');
 
+  // Teléfono: solo se exige que, quitando separadores visuales (espacios,
+  // guiones, paréntesis, '+'), queden entre 7 y 15 dígitos — rango general
+  // de un número de contacto real (E.164), sin atarse al formato colombiano
+  // específico (el conductor puede escribir "300 123 4567", "+57 300...",
+  // "3001234567", etc. — todas válidas).
+  const telefonoCrudo = typeof b.telefono === 'string' ? b.telefono.trim() : '';
+  if (!telefonoCrudo) errores.push('telefono es obligatorio');
+  const telefonoDigitos = telefonoCrudo.replace(/[^0-9]/g, '');
+  if (telefonoCrudo && (telefonoDigitos.length < 7 || telefonoDigitos.length > 15)) {
+    errores.push('telefono debe tener entre 7 y 15 dígitos');
+  }
+
   const placaCruda = typeof b.placa === 'string' ? b.placa.trim() : '';
   if (!placaCruda) errores.push('placa es obligatoria');
   const placaNormalizada = normalizarPlaca(placaCruda);
@@ -68,6 +80,13 @@ export function validarSolicitudEnturne(body) {
   const ruta = typeof b.ruta_frecuente === 'string' ? b.ruta_frecuente.trim() : '';
   if (!ruta) errores.push('ruta_frecuente es obligatoria');
 
+  // Ciudad: texto abierto, tal como la escribe el transportador — sin lista
+  // cerrada, sin normalización ni asociación a ninguna sede/zona geográfica
+  // (decisión explícita del negocio, ver brief de ajustes). Solo se exige
+  // que no venga vacía.
+  const ciudad = typeof b.ciudad === 'string' ? b.ciudad.trim() : '';
+  if (!ciudad) errores.push('ciudad es obligatoria');
+
   if (errores.length) return { ok: false, errores };
 
   return {
@@ -75,8 +94,10 @@ export function validarSolicitudEnturne(body) {
     errores: [],
     datos: {
       nombre,
+      telefono: telefonoCrudo,
       placa: placaCruda,
       placa_normalizada: placaNormalizada,
+      ciudad,
       tipo_vehiculo: tipoVehiculo,
       tipo_carroceria: tipoCarroceria,
       capacidad_toneladas: capacidad,

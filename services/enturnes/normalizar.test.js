@@ -36,7 +36,9 @@ test('normalizarPlaca: entrada vacía o no-string → cadena vacía', () => {
 function solicitudValida(overrides = {}) {
   return {
     nombre: 'Juan Pérez',
+    telefono: '300 123 4567',
     placa: 'abc 123',
+    ciudad: 'Cartagena',
     tipo_vehiculo: 'Turbo',
     tipo_carroceria: 'Estaca',
     capacidad_toneladas: 5,
@@ -51,6 +53,48 @@ test('validarSolicitudEnturne: solicitud completa y válida pasa', () => {
   assert.deepEqual(r.errores, []);
   assert.equal(r.datos.placa_normalizada, 'ABC123');
   assert.equal(r.datos.volumen_m3, null);
+  assert.equal(r.datos.telefono, '300 123 4567');
+  assert.equal(r.datos.ciudad, 'Cartagena');
+});
+
+// ── telefono ─────────────────────────────────────────────────────────────────
+
+test('validarSolicitudEnturne: telefono vacío falla', () => {
+  const r = validarSolicitudEnturne(solicitudValida({ telefono: '' }));
+  assert.equal(r.ok, false);
+  assert.ok(r.errores.some((e) => e.includes('telefono')));
+});
+
+test('validarSolicitudEnturne: telefono con muy pocos dígitos falla', () => {
+  const r = validarSolicitudEnturne(solicitudValida({ telefono: '123' }));
+  assert.equal(r.ok, false);
+  assert.ok(r.errores.some((e) => e.includes('telefono')));
+});
+
+test('validarSolicitudEnturne: telefono con separadores visuales se acepta tal cual (no se normaliza)', () => {
+  const r = validarSolicitudEnturne(solicitudValida({ telefono: '+57 300 123 4567' }));
+  assert.equal(r.ok, true);
+  assert.equal(r.datos.telefono, '+57 300 123 4567');
+});
+
+test('validarSolicitudEnturne: telefono con demasiados dígitos falla', () => {
+  const r = validarSolicitudEnturne(solicitudValida({ telefono: '1234567890123456' }));
+  assert.equal(r.ok, false);
+  assert.ok(r.errores.some((e) => e.includes('telefono')));
+});
+
+// ── ciudad ───────────────────────────────────────────────────────────────────
+
+test('validarSolicitudEnturne: ciudad vacía falla', () => {
+  const r = validarSolicitudEnturne(solicitudValida({ ciudad: '' }));
+  assert.equal(r.ok, false);
+  assert.ok(r.errores.some((e) => e.includes('ciudad')));
+});
+
+test('validarSolicitudEnturne: ciudad se guarda tal como la escribe el transportador, sin normalizar', () => {
+  const r = validarSolicitudEnturne(solicitudValida({ ciudad: '  cartagena de Indias  ' }));
+  assert.equal(r.ok, true);
+  assert.equal(r.datos.ciudad, 'cartagena de Indias');
 });
 
 test('validarSolicitudEnturne: volumen_m3 opcional, se parsea si viene', () => {

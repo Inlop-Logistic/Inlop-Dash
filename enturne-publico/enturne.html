@@ -141,14 +141,26 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:9
 
     <form id="enturne-form" novalidate>
 
-      <div class="field">
-        <label class="field-label" for="nombre">Nombre <span class="req">*</span></label>
-        <input type="text" id="nombre" name="nombre" class="field-input" placeholder="Nombre completo" required autocomplete="name">
+      <div class="row2">
+        <div class="field">
+          <label class="field-label" for="nombre">Nombre <span class="req">*</span></label>
+          <input type="text" id="nombre" name="nombre" class="field-input" placeholder="Nombre completo" required autocomplete="name">
+        </div>
+        <div class="field">
+          <label class="field-label" for="telefono">Teléfono <span class="req">*</span></label>
+          <input type="tel" id="telefono" name="telefono" class="field-input" placeholder="300 123 4567" required inputmode="tel" autocomplete="tel"
+                 pattern="[0-9+\-\s()]{7,20}" title="Solo números, espacios, +, - y paréntesis (7 a 20 caracteres)">
+        </div>
       </div>
 
       <div class="field">
         <label class="field-label" for="placa">Placa <span class="req">*</span></label>
         <input type="text" id="placa" name="placa" class="field-input" placeholder="ABC123" required autocapitalize="characters" autocomplete="off">
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="ciudad">Ciudad donde te enturnas <span class="req">*</span></label>
+        <input type="text" id="ciudad" name="ciudad" class="field-input" placeholder="Ej: Cartagena" required autocomplete="address-level2">
       </div>
 
       <div class="row2">
@@ -295,7 +307,9 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:9
 
     var payload = {
       nombre: document.getElementById('nombre').value.trim(),
+      telefono: document.getElementById('telefono').value.trim(),
       placa: document.getElementById('placa').value.trim(),
+      ciudad: document.getElementById('ciudad').value.trim(),
       tipo_vehiculo: document.getElementById('tipo_vehiculo').value,
       tipo_carroceria: document.getElementById('tipo_carroceria').value,
       capacidad_toneladas: document.getElementById('capacidad_toneladas').value,
