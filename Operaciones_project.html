@@ -2124,6 +2124,9 @@ function cerrarSesionInlop(){
   <button class="tb" id="tab-proj" onclick="showTab('proj');setTimeout(function(){if(typeof projRender==='function')projRender();},50);" data-label="Project">
     <i class="ti ti-clipboard-check" aria-hidden="true"></i>Project
   </button>
+  <button class="tb" id="tab-ent" onclick="showTab('ent');setTimeout(function(){if(typeof ENT!=='undefined'&&typeof ENT.render==='function')ENT.render();},50);" data-label="Enturne de Vehículos">
+    <i class="ti ti-truck" aria-hidden="true"></i>Enturne de Vehículos
+  </button>
 
   <div class="sb-footer">
     <button class="tb" onclick="toggleSidebar()" type="button" id="sbCollapseBtn" data-label="Expandir">
@@ -2590,6 +2593,76 @@ function cerrarSesionInlop(){
 
 </div><!-- /page -->
 </div><!-- /tc-proj -->
+
+<!-- ═══════════════════════════════════════════════════════
+     MÓDULO: ENTURNE DE VEHÍCULOS — consulta de registros del
+     formulario público (enturne.html → POST /api/enturnes).
+     Solo lectura: esta pantalla nunca inserta ni modifica
+     vehiculos_enturnes, solo consulta (dbGet, protegido por RLS
+     — ver supabase/migrations/20261110000000_vehiculos_enturnes.sql).
+     ═══════════════════════════════════════════════════════ -->
+<div class="tc" id="tc-ent">
+<div class="page" style="max-width:1400px">
+
+<div class="sh" style="margin-bottom:14px">
+  <div class="sh-bar" style="background:var(--navy2)"></div>
+  <span class="sh-txt">Enturne de Vehículos · registros del formulario público</span>
+  <div class="sh-line"></div>
+</div>
+
+<div class="commit-kpi-bar" style="margin-bottom:20px">
+  <div class="commit-kpi"><div class="ck-val" id="ent-kpi-total">—</div><div class="ck-label">Registros</div></div>
+  <div class="commit-kpi"><div class="ck-val" id="ent-kpi-capacidad">—</div><div class="ck-label">Capacidad total (ton)</div></div>
+  <div class="commit-kpi"><div class="ck-val" id="ent-kpi-tipos">—</div><div class="ck-label">Tipos de vehículo</div></div>
+  <div class="commit-kpi"><div class="ck-val" id="ent-kpi-rutas">—</div><div class="ck-label">Rutas distintas</div></div>
+</div>
+
+<div class="card" style="margin-bottom:20px;overflow:visible">
+  <div class="tbl-hdr" style="flex-wrap:wrap;gap:10px">
+    <span class="tbl-title"><i class="ti ti-truck" aria-hidden="true" style="margin-right:6px"></i>Registros de enturne</span>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="date" id="ent-f-fecha" onchange="ENT.setFecha(this.value)"
+        style="background:var(--c3);border:1px solid var(--line2);border-radius:5px;color:var(--w1);font-size:12px;padding:6px 10px;outline:none">
+      <button id="ent-btn-hoy" onclick="ENT.irAHoy()" style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:6px 12px;border-radius:5px;background:transparent;border:1px solid var(--line2);color:var(--w3);cursor:pointer">Hoy</button>
+      <input type="text" id="ent-f-buscar" placeholder="Buscar nombre o placa..." oninput="ENT.setBusqueda(this.value)"
+        style="background:var(--c3);border:1px solid var(--line2);border-radius:5px;color:var(--w1);font-size:12px;padding:6px 10px;outline:none;min-width:180px">
+      <select id="ent-f-tipo-vehiculo" onchange="ENT.setFiltroTipoVehiculo(this.value)"
+        style="background:var(--c3);border:1px solid var(--line2);border-radius:5px;color:var(--w1);font-size:12px;padding:6px 10px;outline:none">
+        <option value="">Tipo de vehículo</option>
+      </select>
+      <select id="ent-f-tipo-carroceria" onchange="ENT.setFiltroTipoCarroceria(this.value)"
+        style="background:var(--c3);border:1px solid var(--line2);border-radius:5px;color:var(--w1);font-size:12px;padding:6px 10px;outline:none">
+        <option value="">Carrocería</option>
+      </select>
+      <button id="ent-btn-export" onclick="ENT.exportarExcel()" style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;padding:6px 14px;border-radius:5px;background:var(--navy);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:5px">
+        <i class="ti ti-file-spreadsheet" aria-hidden="true"></i>Exportar a Excel
+      </button>
+    </div>
+  </div>
+  <div style="overflow-x:auto">
+    <table style="width:100%;min-width:980px">
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Placa</th>
+          <th>Tipo de vehículo</th>
+          <th>Tipo de carrocería</th>
+          <th class="c">Capacidad (ton)</th>
+          <th class="c">Volumen (m³)</th>
+          <th>Ruta frecuente</th>
+          <th class="c">Fecha de enturnamiento</th>
+          <th class="c">Hora de enturnamiento</th>
+        </tr>
+      </thead>
+      <tbody id="ent-tbody"></tbody>
+    </table>
+  </div>
+  <div id="ent-empty" style="display:none;padding:28px;text-align:center;color:var(--w4);font-size:12.5px">Sin registros para los filtros seleccionados.</div>
+  <div id="ent-loading" style="display:none;padding:28px;text-align:center;color:var(--w4);font-size:12.5px"><i class="ti ti-loader" aria-hidden="true"></i> Cargando...</div>
+</div>
+
+</div><!-- /page -->
+</div><!-- /tc-ent -->
 
 </div><!-- /page -->
 
@@ -3294,6 +3367,7 @@ function showTab(id){
     pla: { main:'Planeación Operativa',       sub:'Viajes programados vs activos · fecha · cliente · estado — Supabase + ControlT' },
     res: { main:'Centro de Operaciones',      sub:'Planificación, seguimiento y control Operativo' },
     proj:{ main:'Centro de Operaciones',      sub:'Planificación, seguimiento y control Operativo' },
+    ent: { main:'Enturne de Vehículos',       sub:'Registros del formulario público · consulta, históricos y exportación' },
   };
   const hdr = HDR[id] || HDR.res;
   const elMain = document.getElementById('hdrMain');
@@ -7309,6 +7383,181 @@ window.dbUpsert=dbUpsert;
 if(document.readyState!=='loading'){tryInit();}
 
 })();
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   INLOP — Enturne de Vehículos (Fase 2 del brief): consulta de
+   vehiculos_enturnes desde Operaciones_project.html, reutilizando
+   el panel administrativo existente (misma pestaña/sidebar que
+   Project, mismo dbGet/RLS que Compromisos y Turnos — ver
+   window.dbGet expuesto arriba). Solo lectura: nunca inserta,
+   actualiza ni borra — el único camino de escritura es el
+   formulario público vía POST /api/enturnes (ver routes/enturnes.js).
+   ════════════════════════════════════════════════════════════ */
+var ENT=(function(){
+'use strict';
+
+var TIPOS_VEHICULO=['NHR','Turbo','Sencillo','Dobletroque','Patineta','Tractomula'];
+var TIPOS_CARROCERIA=['Estaca','Furgón','Plancha','Cisterna'];
+
+var state={fecha:hoyBogota(),busqueda:'',tipoVehiculo:'',tipoCarroceria:'',rows:[],cargando:false};
+var _debounce=null;
+var _opcionesListas=false;
+
+// "Hoy" en Bogotá — solo para el VALOR POR DEFECTO del filtro de fecha en
+// esta pantalla de consulta; la regla de negocio (una placa por día) ya la
+// garantiza Postgres con fecha_operativa calculada en el servidor (ver
+// routes/enturnes.js) — este cálculo en el navegador nunca se usa para eso.
+function hoyBogota(){
+  try{return new Date().toLocaleDateString('en-CA',{timeZone:'America/Bogota'});}
+  catch(e){return new Date().toISOString().slice(0,10);}
+}
+
+function esc(s){
+  if(s===null||s===undefined)return'';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function pintarOpciones(){
+  if(_opcionesListas)return;
+  var selV=document.getElementById('ent-f-tipo-vehiculo');
+  var selC=document.getElementById('ent-f-tipo-carroceria');
+  if(selV){TIPOS_VEHICULO.forEach(function(t){var o=document.createElement('option');o.value=t;o.textContent=t;selV.appendChild(o);});}
+  if(selC){TIPOS_CARROCERIA.forEach(function(t){var o=document.createElement('option');o.value=t;o.textContent=t;selC.appendChild(o);});}
+  var fInput=document.getElementById('ent-f-fecha');
+  if(fInput)fInput.value=state.fecha;
+  _opcionesListas=true;
+}
+
+function buildParams(){
+  var parts=['select=nombre,placa,tipo_vehiculo,tipo_carroceria,capacidad_toneladas,volumen_m3,ruta_frecuente,fecha_operativa,created_at'];
+  parts.push('order=created_at.desc');
+  if(state.fecha)parts.push('fecha_operativa=eq.'+encodeURIComponent(state.fecha));
+  if(state.tipoVehiculo)parts.push('tipo_vehiculo=eq.'+encodeURIComponent(state.tipoVehiculo));
+  if(state.tipoCarroceria)parts.push('tipo_carroceria=eq.'+encodeURIComponent(state.tipoCarroceria));
+  var termino=(state.busqueda||'').trim().replace(/[,()]/g,'');
+  if(termino)parts.push('or=(nombre.ilike.*'+encodeURIComponent(termino)+'*,placa.ilike.*'+encodeURIComponent(termino)+'*)');
+  return parts.join('&');
+}
+
+function formatoFecha(iso){
+  if(!iso)return'—';
+  var p=iso.split('-');
+  return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso;
+}
+
+function formatoHora(createdAt){
+  if(!createdAt)return'—';
+  try{
+    return new Date(createdAt).toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'2-digit',minute:'2-digit',hour12:false});
+  }catch(e){return'—';}
+}
+
+function pintarKpis(filas){
+  var capacidad=filas.reduce(function(a,r){return a+(Number(r.capacidad_toneladas)||0);},0);
+  var tipos=new Set(filas.map(function(r){return r.tipo_vehiculo;})).size;
+  var rutas=new Set(filas.map(function(r){return (r.ruta_frecuente||'').trim().toLowerCase();}).filter(Boolean)).size;
+  var elTotal=document.getElementById('ent-kpi-total');
+  var elCap=document.getElementById('ent-kpi-capacidad');
+  var elTipos=document.getElementById('ent-kpi-tipos');
+  var elRutas=document.getElementById('ent-kpi-rutas');
+  if(elTotal)elTotal.textContent=filas.length;
+  if(elCap)elCap.textContent=capacidad?capacidad.toLocaleString('es-CO',{maximumFractionDigits:1}):'0';
+  if(elTipos)elTipos.textContent=tipos;
+  if(elRutas)elRutas.textContent=rutas;
+}
+
+function pintarTabla(filas){
+  var tbody=document.getElementById('ent-tbody');
+  var vacio=document.getElementById('ent-empty');
+  if(!tbody)return;
+  if(!filas.length){
+    tbody.innerHTML='';
+    if(vacio)vacio.style.display='';
+    return;
+  }
+  if(vacio)vacio.style.display='none';
+  tbody.innerHTML=filas.map(function(r){
+    return '<tr>'+
+      '<td>'+esc(r.nombre)+'</td>'+
+      '<td><b>'+esc(r.placa)+'</b></td>'+
+      '<td>'+esc(r.tipo_vehiculo)+'</td>'+
+      '<td>'+esc(r.tipo_carroceria)+'</td>'+
+      '<td class="c">'+esc(r.capacidad_toneladas)+'</td>'+
+      '<td class="c">'+(r.volumen_m3!==null&&r.volumen_m3!==undefined?esc(r.volumen_m3):'—')+'</td>'+
+      '<td>'+esc(r.ruta_frecuente)+'</td>'+
+      '<td class="c">'+formatoFecha(r.fecha_operativa)+'</td>'+
+      '<td class="c">'+formatoHora(r.created_at)+'</td>'+
+    '</tr>';
+  }).join('');
+}
+
+async function cargar(){
+  if(state.cargando)return;
+  state.cargando=true;
+  var loading=document.getElementById('ent-loading');
+  var tbl=document.getElementById('ent-tbody');
+  if(loading)loading.style.display='';
+  try{
+    var filas=await window.dbGet('vehiculos_enturnes',buildParams());
+    state.rows=Array.isArray(filas)?filas:[];
+  }catch(e){
+    console.error('[ENT] cargar',e.message);
+    state.rows=[];
+  }finally{
+    state.cargando=false;
+    if(loading)loading.style.display='none';
+  }
+  pintarKpis(state.rows);
+  pintarTabla(state.rows);
+}
+
+function render(){
+  pintarOpciones();
+  cargar();
+}
+
+function setFecha(v){state.fecha=v;cargar();}
+function irAHoy(){state.fecha=hoyBogota();var f=document.getElementById('ent-f-fecha');if(f)f.value=state.fecha;cargar();}
+function setFiltroTipoVehiculo(v){state.tipoVehiculo=v;cargar();}
+function setFiltroTipoCarroceria(v){state.tipoCarroceria=v;cargar();}
+function setBusqueda(v){
+  state.busqueda=v;
+  clearTimeout(_debounce);
+  _debounce=setTimeout(cargar,350);
+}
+
+function exportarExcel(){
+  if(!state.rows.length){
+    if(typeof toast==='function')toast('No hay registros para exportar con los filtros actuales.','info');
+    return;
+  }
+  var datos=state.rows.map(function(r){
+    return{
+      'Nombre':r.nombre,
+      'Placa':r.placa,
+      'Tipo de vehículo':r.tipo_vehiculo,
+      'Tipo de carrocería':r.tipo_carroceria,
+      'Capacidad (ton)':r.capacidad_toneladas,
+      'Volumen (m³)':r.volumen_m3!==null&&r.volumen_m3!==undefined?r.volumen_m3:'',
+      'Ruta frecuente':r.ruta_frecuente,
+      'Fecha de enturnamiento':formatoFecha(r.fecha_operativa),
+      'Hora de enturnamiento':formatoHora(r.created_at)
+    };
+  });
+  var ws=XLSX.utils.json_to_sheet(datos);
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Enturnes');
+  var nombreArchivo='enturnes_'+(state.fecha||'historico')+'.xlsx';
+  XLSX.writeFile(wb,nombreArchivo);
+}
+
+return{render:render,setFecha:setFecha,irAHoy:irAHoy,setBusqueda:setBusqueda,
+  setFiltroTipoVehiculo:setFiltroTipoVehiculo,setFiltroTipoCarroceria:setFiltroTipoCarroceria,
+  exportarExcel:exportarExcel};
+})();
+window.ENT=ENT;
 </script>
 
 <!-- ═══════════════════════════════════════════════════════

@@ -8,6 +8,8 @@ import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } f
 import { getUserPreferences, updatePreference, KNOWN_CHANNELS } from './services/preferenceResolver.js';
 import { normalizeExternalRef } from './services/normalizeExternalRef.js';
 import { fechaHoyColombia, parseFechaTMS, extraerFechaColombia } from './utils/fechas.js';
+import { limpiarGolpesExpirados } from './services/enturnes/antiSpam.js';
+import crearRouterEnturnes from './routes/enturnes.js';
 import controltDiagRouter from './routes/controltDiag.js';
 import crearRouterGpsSeguimiento from './routes/gpsSeguimiento.js';
 import { getTripDetail, makeSbFetchAdapter } from './services/controlt-soap/tripService.js';
@@ -556,6 +558,12 @@ app.get("/legacy/tc-init", (req, res) => {
   }
   res.json({ token: LEGACY_TC_TOKEN });
 });
+
+// ─── ENTURNE DE VEHÍCULOS — formulario público, sin autenticación (intencional) ───
+// Lógica completa en routes/enturnes.js (mismo patrón factory+deps que
+// routes/gpsSeguimiento.js) — aquí solo se inyectan fetchConTimeout/SB_URL/
+// SB_HEADERS, igual que el resto de este archivo usa sbFetch.
+app.use('/api/enturnes', crearRouterEnturnes({ fetchConTimeout, SB_URL, SB_HEADERS }));
 
 const LOGIN_URL = "https://integrations.controlt.io/Auth/login";
 const BASE_URL  = "https://app.controlt.com.co/apipublic/api";
@@ -6532,4 +6540,5 @@ app.listen(PORT, async () => {
   setInterval(syncCumplidos,          60 * 1000);
   setInterval(syncSolicitudes,        65 * 1000);
   setInterval(() => tickSchedulerReportes('scheduler'), 60 * 1000);
+  setInterval(limpiarGolpesExpirados, 5 * 60 * 1000); // enturnes: limpieza del contador de tasa en memoria
 });
