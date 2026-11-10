@@ -42,7 +42,7 @@ app.get('/config.js', (_req, res) => {
 });
 
 // Recursos de marca compartidos desde la carpeta assets/img en la raíz del repositorio.
-app.use('/assets/img', express.static(join(__dirname, '..', 'assets', 'img')));
+app.use('/assets/img', express.static(join(__dirname, 'assets', 'img')));
 app.use(express.static(__dirname));
 app.get('/', (_req, res) => res.sendFile(join(__dirname, 'enturne.html')));
 
