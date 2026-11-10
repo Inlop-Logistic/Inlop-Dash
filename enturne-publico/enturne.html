@@ -46,7 +46,7 @@ body{display:flex;flex-direction:column;align-items:center;padding:20px 16px 48p
 
 body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:9999;background:linear-gradient(90deg,var(--inlop-navy) 0%,var(--inlop-red) 50%,var(--inlop-navy) 100%)}
 
-.bg-pattern{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(90deg,rgba(255,255,255,.80) 0%,rgba(255,255,255,.50) 43%,rgba(255,255,255,.03) 100%),url("/assets/img/enturne-fondo-inlop.webp");background-size:cover;background-position:center;background-repeat:no-repeat}
+.bg-pattern{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:url("/assets/img/enturne-fondo-inlop.webp");background-size:cover;background-position:center;background-repeat:no-repeat}
 
 .wrap{position:relative;z-index:10;width:100%;max-width:440px;animation:fadeUp .5s ease both}
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
@@ -116,6 +116,8 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:9
 .result-btn{margin-top:12px;background:none;border:1px solid var(--border2);border-radius:8px;padding:10px 20px;font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--text1);cursor:pointer}
 
 @media(max-width:480px){
+  .bg-pattern{background-position:68% center}
+
   .brand-logo{width:170px}
   .card{padding:26px 18px}
 }
