@@ -239,6 +239,10 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:9
   <button type="button" class="result-btn" id="result-ya-cerrar">Cerrar</button>
 </div>
 
+<!-- /config.js lo genera server.js de este servicio en tiempo de ejecución
+     (nunca en build time) — define window.ENTURNE_API_URL a partir de
+     INLOP_DASH_API_URL. Debe cargar ANTES del script principal. -->
+<script src="/config.js"></script>
 <script>
 (function(){
   var form   = document.getElementById('enturne-form');
@@ -263,9 +267,26 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:9
     resultYa.classList.remove('show');
   });
 
+  // window.ENTURNE_API_URL lo inyecta /config.js (ver server.js de este
+  // mismo servicio) a partir de INLOP_DASH_API_URL — nunca se hardcodea
+  // aquí, para no tener que reconstruir este HTML si el backend cambia de
+  // dominio. Si falta, el formulario se bloquea con un error claro en vez
+  // de intentar un POST relativo que iría al dominio equivocado (este
+  // mismo servicio estático, que no tiene /api/enturnes).
+  var apiUrl = (typeof window.ENTURNE_API_URL === 'string' ? window.ENTURNE_API_URL.trim() : '');
+  if (!apiUrl) {
+    mostrarBanner('Formulario no disponible temporalmente (configuración incompleta). Contacta a INLOP.', null);
+    btn.disabled = true;
+  }
+
   form.addEventListener('submit', function(ev){
     ev.preventDefault();
     ocultarBanner();
+
+    if (!apiUrl) {
+      mostrarBanner('Formulario no disponible temporalmente (configuración incompleta). Contacta a INLOP.', null);
+      return;
+    }
 
     if (!form.checkValidity()) {
       form.reportValidity();
@@ -286,7 +307,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:9
     btn.disabled = true;
     btn.classList.add('loading');
 
-    fetch('/api/enturnes', {
+    fetch(apiUrl + '/api/enturnes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

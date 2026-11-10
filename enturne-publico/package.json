@@ -1,0 +1,16 @@
+{
+  "name": "enturne-publico",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Formulario público de Enturne de Vehículos — servicio Railway independiente, sin lógica de negocio ni credenciales de Supabase. El backend real es Inlop-Dash (routes/enturnes.js).",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

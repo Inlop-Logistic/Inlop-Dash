@@ -165,6 +165,19 @@ if (!ERP_RESET_PASSWORD_URL) {
 // que un usuario la active explícitamente.
 const SEGUIMIENTO_GPS_URL = process.env.SEGUIMIENTO_GPS_URL || "";
 
+// URL pública (SIN barra final) del servicio Railway independiente que sirve
+// el formulario público de Enturne de Vehículos (enturne-publico/ — ver ese
+// repo/carpeta, no tiene credenciales de Supabase ni lógica propia). Se suma
+// automáticamente a la whitelist de CORS más abajo, mismo patrón que
+// CLIENT_PORTAL_URL — sin esto, ese servicio no podría hacer el POST
+// cross-origin a /api/enturnes (el navegador bloquearía la respuesta por
+// falta de Access-Control-Allow-Origin). No se usa para nada más (a
+// diferencia de CLIENT_PORTAL_URL/ERP_RESET_PASSWORD_URL, que también arman
+// un `redirect_to` de Auth) — por eso no lleva aviso de arranque propio: su
+// ausencia solo afecta CORS, ya cubierto por el aviso genérico de la
+// sección CORS de abajo si terminan sin ningún origen configurado.
+const ENTURNE_PUBLICO_URL = process.env.ENTURNE_PUBLICO_URL || "";
+
 const SB_HEADERS = {
   "apikey": SB_ANON_KEY,
   "Authorization": `Bearer ${SB_KEY}`,
@@ -497,10 +510,14 @@ const app = express();
 // pasan siempre. Solo las peticiones cross-origin del navegador se filtran.
 // CLIENT_PORTAL_URL se incluye automáticamente si está configurada (reutiliza
 // la misma variable que ya declara POST /auth/recuperar — no hay que duplicarla).
+// ENTURNE_PUBLICO_URL igual (ver su declaración arriba) — el formulario
+// público de Enturne de Vehículos vive en un servicio Railway aparte y
+// necesita este origen habilitado para su POST cross-origin a /api/enturnes.
 const _allowedOriginsSet = new Set(
   [
     ...(process.env.ALLOWED_ORIGINS || "").split(",").map(s => s.trim()).filter(Boolean),
     CLIENT_PORTAL_URL,
+    ENTURNE_PUBLICO_URL,
   ].filter(Boolean)
 );
 // Localhost solo en entornos no-producción (desarrollo local y staging con NODE_ENV sin set)
