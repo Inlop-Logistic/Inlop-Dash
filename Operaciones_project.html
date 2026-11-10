@@ -2124,7 +2124,12 @@ function cerrarSesionInlop(){
   <button class="tb" id="tab-proj" onclick="showTab('proj');setTimeout(function(){if(typeof projRender==='function')projRender();},50);" data-label="Project">
     <i class="ti ti-clipboard-check" aria-hidden="true"></i>Project
   </button>
-  <button class="tb" id="tab-ent" onclick="showTab('ent');setTimeout(function(){if(typeof ENT!=='undefined'&&typeof ENT.render==='function')ENT.render();},50);" data-label="Enturne de Vehículos">
+  <!-- Oculto por defecto (fail-closed en la interfaz): ENT revela esta
+       pestaña solo si confirma que el usuario pertenece a personal.area =
+       'OPERACIONES'. La restricción real está en la policy RLS de
+       vehiculos_enturnes — esto es solo para no ofrecer en la UI algo que
+       el backend igualmente bloquearía. -->
+  <button class="tb" id="tab-ent" style="display:none" onclick="showTab('ent');setTimeout(function(){if(typeof ENT!=='undefined'&&typeof ENT.render==='function')ENT.render();},50);" data-label="Enturne de Vehículos">
     <i class="ti ti-truck" aria-hidden="true"></i>Enturne de Vehículos
   </button>
 
@@ -2610,6 +2615,13 @@ function cerrarSesionInlop(){
   <div class="sh-line"></div>
 </div>
 
+<div id="ent-sin-acceso" style="display:none;padding:48px;text-align:center;color:var(--w4);font-size:12.5px">
+  <i class="ti ti-lock" aria-hidden="true" style="font-size:22px;display:block;margin-bottom:10px"></i>
+  Enturne de Vehículos es exclusivo del área de Operaciones.
+</div>
+
+<div id="ent-contenido">
+
 <div class="commit-kpi-bar" style="margin-bottom:20px">
   <div class="commit-kpi"><div class="ck-val" id="ent-kpi-total">—</div><div class="ck-label">Registros</div></div>
   <div class="commit-kpi"><div class="ck-val" id="ent-kpi-capacidad">—</div><div class="ck-label">Capacidad total (ton)</div></div>
@@ -2660,6 +2672,8 @@ function cerrarSesionInlop(){
   <div id="ent-empty" style="display:none;padding:28px;text-align:center;color:var(--w4);font-size:12.5px">Sin registros para los filtros seleccionados.</div>
   <div id="ent-loading" style="display:none;padding:28px;text-align:center;color:var(--w4);font-size:12.5px"><i class="ti ti-loader" aria-hidden="true"></i> Cargando...</div>
 </div>
+
+</div><!-- /ent-contenido -->
 
 </div><!-- /page -->
 </div><!-- /tc-ent -->
@@ -7404,6 +7418,55 @@ var TIPOS_CARROCERIA=['Estaca','Furgón','Plancha','Cisterna'];
 var state={fecha:hoyBogota(),busqueda:'',tipoVehiculo:'',tipoCarroceria:'',rows:[],cargando:false};
 var _debounce=null;
 var _opcionesListas=false;
+var _autorizado=null; // null=aún no verificado, true/false=resultado cacheado
+
+// Decisión aprobada: Enturne de Vehículos es exclusivo del área de
+// Operaciones. No hay ningún campo de "área" en profiles ni un módulo RBAC
+// que cubra Operaciones_project.html (el RBAC de roles/permisos es
+// exclusivo de /erp — ver sql/20260819_rbac_ddl.sql) — el único campo de
+// área que ya existe en el esquema es personal.area, vinculado al usuario
+// ERP vía personal.profile_id (ver SQL_04_personal.sql). Esta verificación
+// en la interfaz es solo UX (ocultar lo que de todas formas se bloquearía) —
+// la restricción real y autoritativa es la policy RLS de
+// vehiculos_enturnes (ver supabase/migrations/20261110000000_vehiculos_enturnes.sql),
+// que aplica el mismo criterio del lado del servidor.
+function getUser(){
+  try{var raw=sessionStorage.getItem('inlop_user');if(!raw)return{};return JSON.parse(raw)||{};}
+  catch(e){return{};}
+}
+
+// Fail-closed: cualquier duda (sin id de sesión, error de red, respuesta
+// inesperada) se resuelve como NO autorizado — nunca al revés.
+async function verificarAcceso(){
+  if(_autorizado!==null)return _autorizado;
+  try{
+    var id=getUser().id;
+    if(!id){_autorizado=false;return false;}
+    var filas=await window.dbGet('personal','select=area,activo&profile_id=eq.'+encodeURIComponent(id)+'&activo=eq.true');
+    _autorizado=Array.isArray(filas)&&filas.some(function(p){return p.area==='OPERACIONES';});
+  }catch(e){
+    console.error('[ENT] verificarAcceso',e.message);
+    _autorizado=false;
+  }
+  return _autorizado;
+}
+
+function _mostrarSegunAcceso(autorizado){
+  var contenido=document.getElementById('ent-contenido');
+  var sinAcceso=document.getElementById('ent-sin-acceso');
+  if(contenido)contenido.style.display=autorizado?'':'none';
+  if(sinAcceso)sinAcceso.style.display=autorizado?'none':'';
+}
+
+// Revela la pestaña del sidebar solo si corresponde — se llama una vez al
+// cargar el script (no requiere que el usuario haya hecho clic en nada).
+async function _inicializarVisibilidadTab(){
+  var autorizado=await verificarAcceso();
+  var btn=document.getElementById('tab-ent');
+  if(btn)btn.style.display=autorizado?'':'none';
+}
+if(document.readyState!=='loading'){_inicializarVisibilidadTab();}
+else{document.addEventListener('DOMContentLoaded',_inicializarVisibilidadTab);}
 
 // "Hoy" en Bogotá — solo para el VALOR POR DEFECTO del filtro de fecha en
 // esta pantalla de consulta; la regla de negocio (una placa por día) ya la
@@ -7513,7 +7576,10 @@ async function cargar(){
   pintarTabla(state.rows);
 }
 
-function render(){
+async function render(){
+  var autorizado=await verificarAcceso();
+  _mostrarSegunAcceso(autorizado);
+  if(!autorizado)return; // no se consulta vehiculos_enturnes sin acceso confirmado
   pintarOpciones();
   cargar();
 }

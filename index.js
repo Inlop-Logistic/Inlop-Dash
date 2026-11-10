@@ -563,7 +563,19 @@ app.get("/legacy/tc-init", (req, res) => {
 // Lógica completa en routes/enturnes.js (mismo patrón factory+deps que
 // routes/gpsSeguimiento.js) — aquí solo se inyectan fetchConTimeout/SB_URL/
 // SB_HEADERS, igual que el resto de este archivo usa sbFetch.
-app.use('/api/enturnes', crearRouterEnturnes({ fetchConTimeout, SB_URL, SB_HEADERS }));
+//
+// `serviceKeyConfigurado` (auditoría de seguridad): SB_KEY cae globalmente a
+// SB_ANON_KEY si SUPABASE_SERVICE_KEY no está en el entorno (ver el aviso de
+// "Usando fallback (anon key)" más arriba en este archivo) — ese fallback es
+// compartido por TODO el backend y está fuera de alcance tocarlo aquí. Pero
+// vehiculos_enturnes no tiene policy de INSERT para anon/authenticated (ver
+// migración): un INSERT con la anon key fallaría silenciosamente contra
+// Supabase. En vez de dejar que ese intento llegue a Supabase sin la service
+// key real, el router corta antes (503) — ver routes/enturnes.js.
+app.use('/api/enturnes', crearRouterEnturnes({
+  fetchConTimeout, SB_URL, SB_HEADERS,
+  serviceKeyConfigurado: !!process.env.SUPABASE_SERVICE_KEY,
+}));
 
 const LOGIN_URL = "https://integrations.controlt.io/Auth/login";
 const BASE_URL  = "https://app.controlt.com.co/apipublic/api";

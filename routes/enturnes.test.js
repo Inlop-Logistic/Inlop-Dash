@@ -36,11 +36,13 @@ function crearReqMock({ body = {}, ip = '10.0.0.1' } = {}) {
   return { body, headers: { 'x-forwarded-for': ip }, socket: { remoteAddress: ip } };
 }
 
-function crearRouterConFetch(fetchImpl) {
+function crearRouterConFetch(fetchImpl, overrides = {}) {
   return crearRouterEnturnes({
     fetchConTimeout: fetchImpl,
     SB_URL: 'https://fake.supabase.co/rest/v1',
     SB_HEADERS: { apikey: 'fake', Authorization: 'Bearer fake' },
+    serviceKeyConfigurado: true,
+    ...overrides,
   });
 }
 
@@ -58,14 +60,57 @@ function solicitudValida(overrides = {}) {
 
 // ── helper ipClienteEnturne ─────────────────────────────────────────────────
 
-test('ipClienteEnturne: usa x-forwarded-for cuando viene', () => {
-  const req = { headers: { 'x-forwarded-for': '203.0.113.5, 10.0.0.1' }, socket: { remoteAddress: '10.0.0.1' } };
+test('ipClienteEnturne: con un solo valor en x-forwarded-for, lo usa', () => {
+  const req = { headers: { 'x-forwarded-for': '203.0.113.5' }, socket: { remoteAddress: '10.0.0.1' } };
+  assert.equal(ipClienteEnturne(req), '203.0.113.5');
+});
+
+test('ipClienteEnturne: con varios valores, usa el ÚLTIMO (el que agrega el proxy confiable), no el primero', () => {
+  // El primer valor es lo que el propio cliente envió (no confiable — un
+  // atacante puede poner cualquier cosa ahí para evadir el límite de tasa).
+  // Railway agrega la IP real como último valor de la lista.
+  const req = { headers: { 'x-forwarded-for': '1.2.3.4-FALSO-DEL-CLIENTE, 203.0.113.5' }, socket: { remoteAddress: '10.0.0.1' } };
+  assert.equal(ipClienteEnturne(req), '203.0.113.5');
+});
+
+test('ipClienteEnturne: ignora espacios y valores vacíos al tomar el último', () => {
+  const req = { headers: { 'x-forwarded-for': '198.51.100.1,  203.0.113.5  ' }, socket: { remoteAddress: '10.0.0.1' } };
   assert.equal(ipClienteEnturne(req), '203.0.113.5');
 });
 
 test('ipClienteEnturne: cae a socket.remoteAddress sin x-forwarded-for', () => {
   const req = { headers: {}, socket: { remoteAddress: '10.0.0.9' } };
   assert.equal(ipClienteEnturne(req), '10.0.0.9');
+});
+
+// ── fail-closed: SUPABASE_SERVICE_KEY no configurada ────────────────────────
+
+test('serviceKeyConfigurado=false: responde 503 sin llamar a fetch (nunca intenta con la anon key)', async () => {
+  let llamadoFetch = false;
+  const router = crearRouterConFetch(async () => { llamadoFetch = true; }, { serviceKeyConfigurado: false });
+  const handler = obtenerHandler(router);
+
+  const res = crearResMock();
+  await handler(crearReqMock({ body: solicitudValida() }), res);
+
+  assert.equal(llamadoFetch, false);
+  assert.equal(res.statusCode, 503);
+  assert.equal(res.body.ok, false);
+});
+
+test('serviceKeyConfigurado=false: se corta ANTES del honeypot/rate-limit (ni siquiera los evalúa)', async () => {
+  // No debe consumirse el contador de tasa cuando el servicio está
+  // deshabilitado por falta de service key — evita que una ventana de
+  // mala configuración "gaste" el límite de tasa real de los usuarios.
+  let llamadoFetch = false;
+  const router = crearRouterConFetch(async () => { llamadoFetch = true; }, { serviceKeyConfigurado: false });
+  const handler = obtenerHandler(router);
+
+  const res = crearResMock();
+  await handler(crearReqMock({ body: { ...solicitudValida(), _hp: 'spam' } }), res);
+
+  assert.equal(llamadoFetch, false);
+  assert.equal(res.statusCode, 503);
 });
 
 // ── POST / (handler) ────────────────────────────────────────────────────────

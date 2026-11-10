@@ -16,24 +16,57 @@
  *
  * No se usa `trust proxy` global (cambiaría req.ip para TODO index.js, fuera
  * del alcance de este cambio) — se lee x-forwarded-for localmente, solo para
- * el límite de tasa de esta ruta.
+ * el límite de tasa de esta ruta. Ver ipClienteEnturne() sobre qué valor del
+ * encabezado se toma como confiable y por qué.
  */
 import { Router } from 'express';
 import { fechaHoyColombia } from '../utils/fechas.js';
 import { validarSolicitudEnturne } from '../services/enturnes/normalizar.js';
 import { excedeLimiteTasa, pareceSpam } from '../services/enturnes/antiSpam.js';
 
+// `x-forwarded-for` es un encabezado que el propio cliente puede enviar
+// libremente — Railway (el único proxy inverso delante de este servicio)
+// AGREGA la IP real del cliente como último valor de la lista; cualquier
+// valor anterior en la lista es autodeclarado por quien hizo la petición
+// (el cliente, o quien esté antes de Railway) y NO es confiable. Tomar el
+// PRIMER valor (como hacía la versión anterior de esta función, y como
+// hace hoy mismo ipDe() en routes/gpsSeguimiento.js) deja que cualquiera
+// evada el límite de tasa simplemente enviando un valor distinto en cada
+// solicitud — el límite por IP se volvería inútil contra un atacante que
+// sepa esto. Se toma el ÚLTIMO valor, asumiendo exactamente un proxy
+// confiable delante de este servicio (la topología actual en Railway); si
+// en el futuro se agrega un CDN u otro proxy adicional delante, este
+// supuesto hay que revisarlo.
+//
+// Esto es una mitigación de abuso de mejor esfuerzo, NO el límite de
+// seguridad real — ese lo da la restricción UNIQUE de Postgres y la
+// validación del servidor, que no dependen de ninguna IP.
 export function ipClienteEnturne(req) {
   const xff = req.headers['x-forwarded-for'];
-  if (typeof xff === 'string' && xff.trim()) return xff.split(',')[0].trim();
+  if (typeof xff === 'string' && xff.trim()) {
+    const partes = xff.split(',').map((p) => p.trim()).filter(Boolean);
+    if (partes.length) return partes[partes.length - 1];
+  }
   return req.socket?.remoteAddress || 'desconocida';
 }
 
-export default function crearRouterEnturnes({ fetchConTimeout, SB_URL, SB_HEADERS }) {
+export default function crearRouterEnturnes({ fetchConTimeout, SB_URL, SB_HEADERS, serviceKeyConfigurado }) {
   const router = Router();
 
   router.post('/', async (req, res) => {
     try {
+      // Fail-closed: sin SUPABASE_SERVICE_KEY real, index.js cae globalmente
+      // a la anon key (SB_KEY, patrón preexistente del resto del backend —
+      // fuera de alcance tocarlo aquí). vehiculos_enturnes no tiene policy de
+      // INSERT para anon/authenticated, así que ese intento fallaría de
+      // todos modos — pero este endpoint corta ANTES de construir ese
+      // intento contra Supabase, en vez de dejarlo salir con una credencial
+      // que nunca debió usarse para escribir.
+      if (!serviceKeyConfigurado) {
+        console.error('[enturnes] SUPABASE_SERVICE_KEY no configurada — rechazando sin intentar con la anon key.');
+        return res.status(503).json({ ok: false, error: 'Servicio de enturne no disponible temporalmente. Intenta más tarde.' });
+      }
+
       const ip = ipClienteEnturne(req);
 
       // Honeypot: un bot que llena _hp recibe la MISMA respuesta de éxito que
