@@ -2006,11 +2006,30 @@ function _recalcularHeaderUserMenuSiAbierto(){
 }
 window.addEventListener('resize',_recalcularHeaderUserMenuSiAbierto);
 window.addEventListener('scroll',_recalcularHeaderUserMenuSiAbierto,{passive:true,capture:true});
-function cerrarSesionInlop(){
+async function cerrarSesionInlop(){
+  // Dentro del portal, delega el cierre real al contenedor (Supabase signOut).
+  try{
+    if(window.parent&&window.parent!==window&&typeof window.parent.logout==='function'){
+      await window.parent.logout();return;
+    }
+    if(window.top&&window.top!==window&&typeof window.top.logout==='function'){
+      await window.top.logout();return;
+    }
+  }catch(e){console.error('[INLOP] Error cerrando sesión desde el portal:',e);}
+  // Acceso directo: revoca la sesión Supabase y limpia el estado local.
+  try{
+    var raw=localStorage.getItem('sb-gtyydandwcgoaratmnqh-auth-token');
+    var ses=raw?JSON.parse(raw):null;
+    if(ses&&ses.access_token){
+      await fetch('https://gtyydandwcgoaratmnqh.supabase.co/auth/v1/logout',{
+        method:'POST',
+        headers:{'apikey':window.SUPABASE_KEY||'', 'Authorization':'Bearer '+ses.access_token}
+      });
+    }
+  }catch(e){console.warn('[INLOP] No fue posible revocar la sesión remota:',e);}
   try{sessionStorage.removeItem('inlop_user');}catch(e){}
-  if(window.parent&&typeof window.parent.cerrarSesion==='function'){window.parent.cerrarSesion();return;}
-  if(window.top&&typeof window.top.cerrarSesion==='function'){window.top.cerrarSesion();return;}
-  volverPortal();
+  try{localStorage.removeItem('sb-gtyydandwcgoaratmnqh-auth-token');}catch(e){}
+  window.location.href='login.html';
 }
 </script>
 
@@ -7460,10 +7479,17 @@ function getUser(){
 async function verificarAcceso(){
   if(_autorizado!==null)return _autorizado;
   try{
-    var id=getUser().id;
+    var usuario=getUser();
+    var id=usuario.id;
     if(!id){_autorizado=false;return false;}
+    // El rol proviene del perfil cargado tras el login; RLS vuelve a validar
+    // identidad, estado activo y rol en Supabase antes de entregar registros.
+    var esMaster=String(usuario.rol||'').trim().toLowerCase()==='master';
+    if(esMaster){_autorizado=true;return true;}
     var filas=await window.dbGet('personal','select=area,activo&profile_id=eq.'+encodeURIComponent(id)+'&activo=eq.true');
-    _autorizado=Array.isArray(filas)&&filas.some(function(p){return p.area==='OPERACIONES';});
+    _autorizado=Array.isArray(filas)&&filas.some(function(p){
+      return String(p.area||'').trim().toUpperCase()==='OPERACIONES';
+    });
   }catch(e){
     console.error('[ENT] verificarAcceso',e.message);
     _autorizado=false;
