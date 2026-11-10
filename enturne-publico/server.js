@@ -41,6 +41,8 @@ app.get('/config.js', (_req, res) => {
   res.send(`window.ENTURNE_API_URL = ${JSON.stringify(INLOP_DASH_API_URL)};\n`);
 });
 
+// Recursos de marca compartidos desde la carpeta assets/img en la raíz del repositorio.
+app.use('/assets/img', express.static(join(__dirname, '..', 'assets', 'img')));
 app.use(express.static(__dirname));
 app.get('/', (_req, res) => res.sendFile(join(__dirname, 'enturne.html')));
 
