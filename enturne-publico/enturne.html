@@ -5,15 +5,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>INLOP · Enturne de Vehículos</title>
 <meta name="robots" content="noindex, nofollow">
+<!-- Favicon corporativo INLOP — mismo archivo que ya usan erp/public/favicon.svg
+     y seguimiento-gps/public/favicon.svg (reutilizado, no se creó ningún
+     recurso nuevo). Evita el 404 de /favicon.ico que el navegador pide
+     automáticamente cuando no hay ningún <link rel="icon">. -->
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <!-- Cloudflare Turnstile (control de seguridad pendiente de la auditoría).
      Render EXPLÍCITO (sin data-sitekey en el HTML): la Site Key llega en
      tiempo de ejecución desde /config.js (ver server.js de este servicio),
-     nunca hardcodeada aquí. onloadTurnstileCallback se define más abajo,
-     antes de que este script pueda ejecutarse. -->
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback" async defer></script>
+     nunca hardcodeada aquí.
+
+     SOLO `defer`, NUNCA `async`: un script `async` puede ejecutarse (y
+     Cloudflare puede disparar su propio onload) en cuanto termina de
+     descargarse, en cualquier momento — incluso antes de que el HTML haya
+     terminado de parsearse y, por lo tanto, antes de que el script inline
+     de más abajo haya definido window.onloadTurnstileCallback. Eso
+     producía el bug reportado: la llamada de Cloudflare llegaba a un
+     callback todavía indefinido. `defer` (sin `async`) garantiza, por
+     especificación, que este script se ejecuta DESPUÉS de que el parser
+     termine el documento — y por lo tanto después de que el script
+     inline (síncrono, sin defer/async) ya corrió y definió el callback.
+     No hace falta ningún chequeo manual de respaldo: el orden queda
+     determinado por el propio HTML, no por una carrera de red. -->
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback" defer></script>
 <style>
 /* ═══════════════════════════════════════════════════════════
    INLOP · ENTURNE DE VEHÍCULOS · formulario público (sin login)
@@ -157,7 +174,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:9
         <div class="field">
           <label class="field-label" for="telefono">Teléfono <span class="req">*</span></label>
           <input type="tel" id="telefono" name="telefono" class="field-input" placeholder="300 123 4567" required inputmode="tel" autocomplete="tel"
-                 pattern="[0-9+\-\s()]{7,20}" title="Solo números, espacios, +, - y paréntesis (7 a 20 caracteres)" maxlength="20">
+                 pattern="[0-9+\-\s\(\)]{7,20}" title="Solo números, espacios, +, - y paréntesis (7 a 20 caracteres)" maxlength="20">
         </div>
       </div>
 
@@ -318,9 +335,16 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:9
   // pero así el formulario pide uno nuevo en vez de fallar sin explicación.
   var turnstileToken = '';
   var turnstileWidgetId = null;
+  // Guarda contra doble inicialización/renderizado duplicado del mismo
+  // contenedor: window.onloadTurnstileCallback solo debe ejecutar
+  // turnstile.render() la PRIMERA vez que se llama, sin importar cuántas
+  // veces Cloudflare (u otro código) termine invocándolo.
+  var turnstileInicializado = false;
 
   window.onloadTurnstileCallback = function(){
+    if (turnstileInicializado) return;
     if (!turnstileSiteKey || typeof turnstile === 'undefined') return;
+    turnstileInicializado = true;
     turnstileWidgetId = turnstile.render('#turnstile-container', {
       sitekey: turnstileSiteKey,
       action: 'enturne',
@@ -335,15 +359,6 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:9
       }
     });
   };
-
-  // Si el script de Turnstile (async defer) ya cargó y disparó su propio
-  // onload ANTES de que esta línea definiera el callback arriba, Cloudflare
-  // no vuelve a llamarlo — por eso se verifica aquí también: si
-  // window.turnstile ya existe, se renderiza de inmediato en vez de esperar
-  // un callback que ya no va a llegar.
-  if (typeof turnstile !== 'undefined') {
-    window.onloadTurnstileCallback();
-  }
 
   function resetearTurnstile(){
     turnstileToken = '';
