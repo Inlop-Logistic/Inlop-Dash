@@ -36,12 +36,27 @@ function crearReqMock({ body = {}, ip = '10.0.0.1' } = {}) {
   return { body, headers: { 'x-forwarded-for': ip }, socket: { remoteAddress: ip } };
 }
 
+// Envuelve el fetchImpl del caller: cualquier llamada a Cloudflare Turnstile
+// se resuelve automáticamente como éxito (success/hostname/action correctos)
+// sin que cada prueba existente tenga que simularla — así, las pruebas que
+// ya existían antes de Turnstile (honeypot, rate-limit, validación,
+// respuestas de Supabase) siguen probando exactamente lo mismo que probaban,
+// sin tener que mockear Turnstile cada una. Las pruebas específicas de
+// Turnstile, más abajo, llaman a crearRouterEnturnes directamente para
+// controlar esa respuesta.
 function crearRouterConFetch(fetchImpl, overrides = {}) {
+  const fetchEnvuelto = async (url, opts) => {
+    if (typeof url === 'string' && url.includes('challenges.cloudflare.com')) {
+      return { status: 200, json: async () => ({ success: true, hostname: 'enturne.inloplogistica.com', action: 'enturne' }) };
+    }
+    return fetchImpl(url, opts);
+  };
   return crearRouterEnturnes({
-    fetchConTimeout: fetchImpl,
+    fetchConTimeout: fetchEnvuelto,
     SB_URL: 'https://fake.supabase.co/rest/v1',
     SB_HEADERS: { apikey: 'fake', Authorization: 'Bearer fake' },
     serviceKeyConfigurado: true,
+    turnstileSecretKey: 'fake-turnstile-secret',
     ...overrides,
   });
 }
@@ -56,6 +71,7 @@ function solicitudValida(overrides = {}) {
     tipo_carroceria: 'Estaca',
     capacidad_toneladas: 5,
     ruta_frecuente: 'Cartagena-Barranquilla',
+    turnstileToken: 'token-valido-de-prueba',
     ...overrides,
   };
 }
@@ -266,4 +282,171 @@ test('telefono/ciudad faltantes: 400 antes de llegar a Supabase', async () => {
   assert.equal(res.statusCode, 400);
   assert.ok(res.body.error.includes('telefono'));
   assert.ok(res.body.error.includes('ciudad'));
+});
+
+// ── Cloudflare Turnstile (control de seguridad pendiente de la auditoría) ──
+
+test('turnstileSecretKey no configurada: responde 503 sin llamar a fetch (fail-closed)', async () => {
+  let llamadoFetch = false;
+  const router = crearRouterConFetch(async () => { llamadoFetch = true; }, { turnstileSecretKey: '' });
+  const handler = obtenerHandler(router);
+
+  const res = crearResMock();
+  await handler(crearReqMock({ body: solicitudValida() }), res);
+
+  assert.equal(llamadoFetch, false);
+  assert.equal(res.statusCode, 503);
+  assert.equal(res.body.ok, false);
+});
+
+test('turnstileSecretKey no configurada: se corta ANTES del honeypot/rate-limit', async () => {
+  let llamadoFetch = false;
+  const router = crearRouterConFetch(async () => { llamadoFetch = true; }, { turnstileSecretKey: '' });
+  const handler = obtenerHandler(router);
+
+  const res = crearResMock();
+  await handler(crearReqMock({ body: { ...solicitudValida(), _hp: 'spam' } }), res);
+
+  assert.equal(llamadoFetch, false);
+  assert.equal(res.statusCode, 503);
+});
+
+test('turnstileToken ausente: 400, ningún registro llega a Supabase', async () => {
+  let llamadoSupabase = false;
+  const router = crearRouterConFetch(async () => { llamadoSupabase = true; });
+  const handler = obtenerHandler(router);
+
+  const res = crearResMock();
+  await handler(crearReqMock({ body: solicitudValida({ turnstileToken: '' }) }), res);
+
+  assert.equal(llamadoSupabase, false);
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.ok, false);
+});
+
+test('Turnstile responde success:false (inválido/expirado/reutilizado): 400, ningún registro llega a Supabase', async () => {
+  let llamadoSupabase = false;
+  const router = crearRouterEnturnes({
+    fetchConTimeout: async (url) => {
+      if (String(url).includes('challenges.cloudflare.com')) {
+        return { status: 200, json: async () => ({ success: false, 'error-codes': ['timeout-or-duplicate'] }) };
+      }
+      llamadoSupabase = true;
+      return { status: 201, text: async () => '' };
+    },
+    SB_URL: 'https://fake.supabase.co/rest/v1',
+    SB_HEADERS: {},
+    serviceKeyConfigurado: true,
+    turnstileSecretKey: 'fake-secret',
+  });
+  const handler = obtenerHandler(router);
+
+  const res = crearResMock();
+  await handler(crearReqMock({ body: solicitudValida() }), res);
+
+  assert.equal(llamadoSupabase, false);
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.ok, false);
+});
+
+test('Turnstile responde hostname inesperado: 400, ningún registro llega a Supabase', async () => {
+  let llamadoSupabase = false;
+  const router = crearRouterEnturnes({
+    fetchConTimeout: async (url) => {
+      if (String(url).includes('challenges.cloudflare.com')) {
+        return { status: 200, json: async () => ({ success: true, hostname: 'otro-dominio.example', action: 'enturne' }) };
+      }
+      llamadoSupabase = true;
+      return { status: 201, text: async () => '' };
+    },
+    SB_URL: 'https://fake.supabase.co/rest/v1',
+    SB_HEADERS: {},
+    serviceKeyConfigurado: true,
+    turnstileSecretKey: 'fake-secret',
+  });
+  const handler = obtenerHandler(router);
+
+  const res = crearResMock();
+  await handler(crearReqMock({ body: solicitudValida() }), res);
+
+  assert.equal(llamadoSupabase, false);
+  assert.equal(res.statusCode, 400);
+});
+
+test('Turnstile responde action inesperada: 400, ningún registro llega a Supabase', async () => {
+  let llamadoSupabase = false;
+  const router = crearRouterEnturnes({
+    fetchConTimeout: async (url) => {
+      if (String(url).includes('challenges.cloudflare.com')) {
+        return { status: 200, json: async () => ({ success: true, hostname: 'enturne.inloplogistica.com', action: 'otra-accion' }) };
+      }
+      llamadoSupabase = true;
+      return { status: 201, text: async () => '' };
+    },
+    SB_URL: 'https://fake.supabase.co/rest/v1',
+    SB_HEADERS: {},
+    serviceKeyConfigurado: true,
+    turnstileSecretKey: 'fake-secret',
+  });
+  const handler = obtenerHandler(router);
+
+  const res = crearResMock();
+  await handler(crearReqMock({ body: solicitudValida() }), res);
+
+  assert.equal(llamadoSupabase, false);
+  assert.equal(res.statusCode, 400);
+});
+
+test('Cloudflare inalcanzable (timeout/caída): 400, fail-closed, ningún registro llega a Supabase', async () => {
+  let llamadoSupabase = false;
+  const router = crearRouterEnturnes({
+    fetchConTimeout: async (url) => {
+      if (String(url).includes('challenges.cloudflare.com')) {
+        throw new Error('fetch failed: timeout');
+      }
+      llamadoSupabase = true;
+      return { status: 201, text: async () => '' };
+    },
+    SB_URL: 'https://fake.supabase.co/rest/v1',
+    SB_HEADERS: {},
+    serviceKeyConfigurado: true,
+    turnstileSecretKey: 'fake-secret',
+  });
+  const handler = obtenerHandler(router);
+
+  const res = crearResMock();
+  await handler(crearReqMock({ body: solicitudValida() }), res);
+
+  assert.equal(llamadoSupabase, false);
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.ok, false);
+});
+
+test('Turnstile válido: el registro sí llega a Supabase y se envía el token esperado a Cloudflare', async () => {
+  let cuerpoEnviadoCloudflare = null;
+  let llegoASupabase = false;
+  const router = crearRouterEnturnes({
+    fetchConTimeout: async (url, opts) => {
+      if (String(url).includes('challenges.cloudflare.com')) {
+        cuerpoEnviadoCloudflare = new URLSearchParams(opts.body);
+        return { status: 200, json: async () => ({ success: true, hostname: 'enturne.inloplogistica.com', action: 'enturne' }) };
+      }
+      llegoASupabase = true;
+      return { status: 201, text: async () => '' };
+    },
+    SB_URL: 'https://fake.supabase.co/rest/v1',
+    SB_HEADERS: {},
+    serviceKeyConfigurado: true,
+    turnstileSecretKey: 'mi-secret-real',
+  });
+  const handler = obtenerHandler(router);
+
+  const res = crearResMock();
+  await handler(crearReqMock({ body: solicitudValida({ turnstileToken: 'token-del-navegador' }) }), res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.ok, true);
+  assert.equal(llegoASupabase, true);
+  assert.equal(cuerpoEnviadoCloudflare.get('secret'), 'mi-secret-real');
+  assert.equal(cuerpoEnviadoCloudflare.get('response'), 'token-del-navegador');
 });

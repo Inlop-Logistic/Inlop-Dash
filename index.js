@@ -178,6 +178,23 @@ const SEGUIMIENTO_GPS_URL = process.env.SEGUIMIENTO_GPS_URL || "";
 // sección CORS de abajo si terminan sin ningún origen configurado.
 const ENTURNE_PUBLICO_URL = process.env.ENTURNE_PUBLICO_URL || "";
 
+// Cloudflare Turnstile — Secret Key del widget del formulario público de
+// Enturne de Vehículos (control de seguridad pendiente de la auditoría).
+// Se usa EXCLUSIVAMENTE en routes/enturnes.js, contra el servicio oficial
+// de verificación de Cloudflare (services/enturnes/turnstile.js) — nunca se
+// envía al navegador ni a enturne-publico/ (ese servicio solo conoce la
+// Site Key, pública por diseño de Turnstile, inyectada vía su propio
+// /config.js). Fail-closed: sin esta variable, POST /api/enturnes rechaza
+// toda solicitud con 503 en vez de aceptar registros sin CAPTCHA.
+const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || "";
+if (!TURNSTILE_SECRET_KEY) {
+  console.warn(
+    "⚠️  TURNSTILE_SECRET_KEY no configurada. POST /api/enturnes rechazará " +
+    "todas las solicitudes con 503 (fail-closed) hasta configurar esta " +
+    "variable en Railway — ver services/enturnes/turnstile.js."
+  );
+}
+
 const SB_HEADERS = {
   "apikey": SB_ANON_KEY,
   "Authorization": `Bearer ${SB_KEY}`,
@@ -592,6 +609,7 @@ app.get("/legacy/tc-init", (req, res) => {
 app.use('/api/enturnes', crearRouterEnturnes({
   fetchConTimeout, SB_URL, SB_HEADERS,
   serviceKeyConfigurado: !!process.env.SUPABASE_SERVICE_KEY,
+  turnstileSecretKey: TURNSTILE_SECRET_KEY,
 }));
 
 const LOGIN_URL = "https://integrations.controlt.io/Auth/login";

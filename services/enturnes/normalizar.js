@@ -37,12 +37,26 @@ export function normalizarPlaca(placaCruda) {
  * @param {object} body - req.body crudo del formulario público.
  * @returns {{ok:boolean, errores:string[], datos?:object}}
  */
+// Límites de longitud (control de seguridad pendiente de la auditoría) —
+// no cambian ningún campo, regla comercial ni dato existente: solo acotan
+// cuánto puede medir cada texto que llega del formulario público, antes de
+// guardarlo. Mismos valores que el `maxlength` del HTML en
+// enturne-publico/enturne.html (ese es solo UX; esta es la validación
+// real — nunca se confía en el navegador, mismo criterio que el resto de
+// este módulo).
+const LONGITUD_MAX_NOMBRE = 120;
+const LONGITUD_MAX_TELEFONO = 20;
+const LONGITUD_MAX_PLACA = 20;
+const LONGITUD_MAX_CIUDAD = 100;
+const LONGITUD_MAX_RUTA = 160;
+
 export function validarSolicitudEnturne(body) {
   const errores = [];
   const b = body && typeof body === 'object' ? body : {};
 
   const nombre = typeof b.nombre === 'string' ? b.nombre.trim() : '';
   if (!nombre) errores.push('nombre es obligatorio');
+  if (nombre.length > LONGITUD_MAX_NOMBRE) errores.push(`nombre no puede superar los ${LONGITUD_MAX_NOMBRE} caracteres`);
 
   // Teléfono: solo se exige que, quitando separadores visuales (espacios,
   // guiones, paréntesis, '+'), queden entre 7 y 15 dígitos — rango general
@@ -51,6 +65,7 @@ export function validarSolicitudEnturne(body) {
   // "3001234567", etc. — todas válidas).
   const telefonoCrudo = typeof b.telefono === 'string' ? b.telefono.trim() : '';
   if (!telefonoCrudo) errores.push('telefono es obligatorio');
+  if (telefonoCrudo.length > LONGITUD_MAX_TELEFONO) errores.push(`telefono no puede superar los ${LONGITUD_MAX_TELEFONO} caracteres`);
   const telefonoDigitos = telefonoCrudo.replace(/[^0-9]/g, '');
   if (telefonoCrudo && (telefonoDigitos.length < 7 || telefonoDigitos.length > 15)) {
     errores.push('telefono debe tener entre 7 y 15 dígitos');
@@ -58,6 +73,7 @@ export function validarSolicitudEnturne(body) {
 
   const placaCruda = typeof b.placa === 'string' ? b.placa.trim() : '';
   if (!placaCruda) errores.push('placa es obligatoria');
+  if (placaCruda.length > LONGITUD_MAX_PLACA) errores.push(`placa no puede superar los ${LONGITUD_MAX_PLACA} caracteres`);
   const placaNormalizada = normalizarPlaca(placaCruda);
   if (placaCruda && !placaNormalizada) errores.push('placa no contiene caracteres válidos');
 
@@ -79,6 +95,7 @@ export function validarSolicitudEnturne(body) {
 
   const ruta = typeof b.ruta_frecuente === 'string' ? b.ruta_frecuente.trim() : '';
   if (!ruta) errores.push('ruta_frecuente es obligatoria');
+  if (ruta.length > LONGITUD_MAX_RUTA) errores.push(`ruta_frecuente no puede superar los ${LONGITUD_MAX_RUTA} caracteres`);
 
   // Ciudad: texto abierto, tal como la escribe el transportador — sin lista
   // cerrada, sin normalización ni asociación a ninguna sede/zona geográfica
@@ -86,6 +103,7 @@ export function validarSolicitudEnturne(body) {
   // que no venga vacía.
   const ciudad = typeof b.ciudad === 'string' ? b.ciudad.trim() : '';
   if (!ciudad) errores.push('ciudad es obligatoria');
+  if (ciudad.length > LONGITUD_MAX_CIUDAD) errores.push(`ciudad no puede superar los ${LONGITUD_MAX_CIUDAD} caracteres`);
 
   if (errores.length) return { ok: false, errores };
 

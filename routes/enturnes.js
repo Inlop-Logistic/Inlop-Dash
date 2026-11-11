@@ -18,11 +18,17 @@
  * del alcance de este cambio) — se lee x-forwarded-for localmente, solo para
  * el límite de tasa de esta ruta. Ver ipClienteEnturne() sobre qué valor del
  * encabezado se toma como confiable y por qué.
+ *
+ * Cloudflare Turnstile (control de seguridad pendiente de la auditoría): la
+ * verificación real vive en services/enturnes/turnstile.js. TURNSTILE_SECRET_KEY
+ * se usa EXCLUSIVAMENTE aquí, en Inlop Dash — nunca se envía al navegador ni
+ * a enturne-publico/ (ese servicio solo conoce la Site Key, que no es secreta).
  */
 import { Router } from 'express';
 import { fechaHoyColombia } from '../utils/fechas.js';
 import { validarSolicitudEnturne } from '../services/enturnes/normalizar.js';
 import { excedeLimiteTasa, pareceSpam } from '../services/enturnes/antiSpam.js';
+import { verificarTurnstile } from '../services/enturnes/turnstile.js';
 
 // `x-forwarded-for` es un encabezado que el propio cliente puede enviar
 // libremente — Railway (el único proxy inverso delante de este servicio)
@@ -50,7 +56,7 @@ export function ipClienteEnturne(req) {
   return req.socket?.remoteAddress || 'desconocida';
 }
 
-export default function crearRouterEnturnes({ fetchConTimeout, SB_URL, SB_HEADERS, serviceKeyConfigurado }) {
+export default function crearRouterEnturnes({ fetchConTimeout, SB_URL, SB_HEADERS, serviceKeyConfigurado, turnstileSecretKey }) {
   const router = Router();
 
   router.post('/', async (req, res) => {
@@ -67,6 +73,17 @@ export default function crearRouterEnturnes({ fetchConTimeout, SB_URL, SB_HEADER
         return res.status(503).json({ ok: false, error: 'Servicio de enturne no disponible temporalmente. Intenta más tarde.' });
       }
 
+      // Fail-closed (control de seguridad pendiente de la auditoría): sin
+      // TURNSTILE_SECRET_KEY real, no hay forma de verificar ningún token
+      // contra Cloudflare — se corta aquí, antes de aceptar ninguna
+      // solicitud, en vez de dejar pasar registros sin CAPTCHA "porque la
+      // config falta". La Secret Key vive únicamente en este backend
+      // (Inlop Dash), nunca en enturne-publico/ ni en el navegador.
+      if (!turnstileSecretKey) {
+        console.error('[enturnes] TURNSTILE_SECRET_KEY no configurada — rechazando sin verificar.');
+        return res.status(503).json({ ok: false, error: 'Servicio de enturne no disponible temporalmente. Intenta más tarde.' });
+      }
+
       const ip = ipClienteEnturne(req);
 
       // Honeypot: un bot que llena _hp recibe la MISMA respuesta de éxito que
@@ -79,6 +96,17 @@ export default function crearRouterEnturnes({ fetchConTimeout, SB_URL, SB_HEADER
       if (excedeLimiteTasa(ip)) {
         console.warn(`[enturnes] límite de tasa excedido — ip=${ip}`);
         return res.status(429).json({ ok: false, error: 'Demasiadas solicitudes. Intenta de nuevo en un minuto.' });
+      }
+
+      // Cloudflare Turnstile — ningún registro llega a Supabase sin un token
+      // válido, verificado contra el servicio oficial (success, hostname y
+      // action esperados; token ausente/inválido/expirado/reutilizado se
+      // tratan todos como rechazo, ver services/enturnes/turnstile.js).
+      const turnstileToken = req.body && typeof req.body.turnstileToken === 'string' ? req.body.turnstileToken : '';
+      const resultadoTurnstile = await verificarTurnstile({ token: turnstileToken, secretKey: turnstileSecretKey, ip, fetchConTimeout });
+      if (!resultadoTurnstile.ok) {
+        console.warn(`[enturnes] Turnstile rechazado — motivo=${resultadoTurnstile.motivo} ip=${ip}`);
+        return res.status(400).json({ ok: false, error: 'No se pudo verificar que eres una persona real. Recarga la página e intenta de nuevo.' });
       }
 
       const { ok, errores, datos } = validarSolicitudEnturne(req.body);

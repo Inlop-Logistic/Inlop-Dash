@@ -8,6 +8,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<!-- Cloudflare Turnstile (control de seguridad pendiente de la auditoría).
+     Render EXPLÍCITO (sin data-sitekey en el HTML): la Site Key llega en
+     tiempo de ejecución desde /config.js (ver server.js de este servicio),
+     nunca hardcodeada aquí. onloadTurnstileCallback se define más abajo,
+     antes de que este script pueda ejecutarse. -->
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback" async defer></script>
 <style>
 /* ═══════════════════════════════════════════════════════════
    INLOP · ENTURNE DE VEHÍCULOS · formulario público (sin login)
@@ -146,23 +152,23 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:9
       <div class="row2">
         <div class="field">
           <label class="field-label" for="nombre">Nombre <span class="req">*</span></label>
-          <input type="text" id="nombre" name="nombre" class="field-input" placeholder="Nombre completo" required autocomplete="name">
+          <input type="text" id="nombre" name="nombre" class="field-input" placeholder="Nombre completo" required autocomplete="name" maxlength="120">
         </div>
         <div class="field">
           <label class="field-label" for="telefono">Teléfono <span class="req">*</span></label>
           <input type="tel" id="telefono" name="telefono" class="field-input" placeholder="300 123 4567" required inputmode="tel" autocomplete="tel"
-                 pattern="[0-9+\-\s()]{7,20}" title="Solo números, espacios, +, - y paréntesis (7 a 20 caracteres)">
+                 pattern="[0-9+\-\s()]{7,20}" title="Solo números, espacios, +, - y paréntesis (7 a 20 caracteres)" maxlength="20">
         </div>
       </div>
 
       <div class="field">
         <label class="field-label" for="placa">Placa <span class="req">*</span></label>
-        <input type="text" id="placa" name="placa" class="field-input" placeholder="ABC123" required autocapitalize="characters" autocomplete="off">
+        <input type="text" id="placa" name="placa" class="field-input" placeholder="ABC123" required autocapitalize="characters" autocomplete="off" maxlength="20">
       </div>
 
       <div class="field">
         <label class="field-label" for="ciudad">Ciudad donde te enturnas <span class="req">*</span></label>
-        <input type="text" id="ciudad" name="ciudad" class="field-input" placeholder="Ej: Cartagena" required autocomplete="address-level2">
+        <input type="text" id="ciudad" name="ciudad" class="field-input" placeholder="Ej: Cartagena" required autocomplete="address-level2" maxlength="100">
       </div>
 
       <div class="row2">
@@ -203,7 +209,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:9
 
       <div class="field">
         <label class="field-label" for="ruta_frecuente">Ruta que frecuentas <span class="req">*</span></label>
-        <input type="text" id="ruta_frecuente" name="ruta_frecuente" class="field-input" placeholder="Ej: Cartagena - Barranquilla" required>
+        <input type="text" id="ruta_frecuente" name="ruta_frecuente" class="field-input" placeholder="Ej: Cartagena - Barranquilla" required maxlength="160">
         <div class="field-hint">Origen y destino habituales</div>
       </div>
 
@@ -221,6 +227,10 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:9
           gestionar este enturne.
         </label>
       </div>
+
+      <!-- Widget de Cloudflare Turnstile — se renderiza por JS (ver script
+           principal) una vez que /config.js entrega la Site Key. -->
+      <div id="turnstile-container" style="margin-bottom:16px;display:flex;justify-content:center"></div>
 
       <button type="submit" class="btn" id="btn">
         <div class="spinner"></div>
@@ -288,22 +298,76 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:9
   // de intentar un POST relativo que iría al dominio equivocado (este
   // mismo servicio estático, que no tiene /api/enturnes).
   var apiUrl = (typeof window.ENTURNE_API_URL === 'string' ? window.ENTURNE_API_URL.trim() : '');
-  if (!apiUrl) {
+  // window.ENTURNE_TURNSTILE_SITE_KEY, mismo mecanismo (/config.js), a
+  // partir de TURNSTILE_SITE_KEY. No es secreta (ver server.js) — pero sin
+  // ella no hay widget, y sin widget no hay token que enviar: se bloquea el
+  // envío igual que sin apiUrl, en vez de mandar un registro sin CAPTCHA
+  // (que el backend rechazaría de todas formas, fail-closed).
+  var turnstileSiteKey = (typeof window.ENTURNE_TURNSTILE_SITE_KEY === 'string' ? window.ENTURNE_TURNSTILE_SITE_KEY.trim() : '');
+  var configIncompleta = !apiUrl || !turnstileSiteKey;
+  if (configIncompleta) {
     mostrarBanner('Formulario no disponible temporalmente (configuración incompleta). Contacta a INLOP.', null);
     btn.disabled = true;
+  }
+
+  // ── Cloudflare Turnstile — render explícito ────────────────────────────
+  // Token de un solo uso: se guarda aquí al resolverse el challenge y se
+  // limpia (turnstile.reset) después de CADA intento de envío, éxito o
+  // error, para que un segundo intento nunca reenvíe un token ya usado o
+  // vencido — Cloudflare lo rechazaría igual (fail-closed en el backend),
+  // pero así el formulario pide uno nuevo en vez de fallar sin explicación.
+  var turnstileToken = '';
+  var turnstileWidgetId = null;
+
+  window.onloadTurnstileCallback = function(){
+    if (!turnstileSiteKey || typeof turnstile === 'undefined') return;
+    turnstileWidgetId = turnstile.render('#turnstile-container', {
+      sitekey: turnstileSiteKey,
+      action: 'enturne',
+      callback: function(token){ turnstileToken = token; },
+      'expired-callback': function(){
+        turnstileToken = '';
+        mostrarBanner('La verificación de seguridad expiró. Resuélvela de nuevo antes de enviar.', 'warn');
+      },
+      'error-callback': function(){
+        turnstileToken = '';
+        mostrarBanner('No se pudo cargar la verificación de seguridad. Recarga la página.', null);
+      }
+    });
+  };
+
+  // Si el script de Turnstile (async defer) ya cargó y disparó su propio
+  // onload ANTES de que esta línea definiera el callback arriba, Cloudflare
+  // no vuelve a llamarlo — por eso se verifica aquí también: si
+  // window.turnstile ya existe, se renderiza de inmediato en vez de esperar
+  // un callback que ya no va a llegar.
+  if (typeof turnstile !== 'undefined') {
+    window.onloadTurnstileCallback();
+  }
+
+  function resetearTurnstile(){
+    turnstileToken = '';
+    if (turnstileWidgetId !== null && typeof turnstile !== 'undefined') {
+      turnstile.reset(turnstileWidgetId);
+    }
   }
 
   form.addEventListener('submit', function(ev){
     ev.preventDefault();
     ocultarBanner();
 
-    if (!apiUrl) {
+    if (configIncompleta) {
       mostrarBanner('Formulario no disponible temporalmente (configuración incompleta). Contacta a INLOP.', null);
       return;
     }
 
     if (!form.checkValidity()) {
       form.reportValidity();
+      return;
+    }
+
+    if (!turnstileToken) {
+      mostrarBanner('Completa la verificación de seguridad antes de enviar.', 'warn');
       return;
     }
 
@@ -317,6 +381,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:9
       capacidad_toneladas: document.getElementById('capacidad_toneladas').value,
       volumen_m3: document.getElementById('volumen_m3').value || undefined,
       ruta_frecuente: document.getElementById('ruta_frecuente').value.trim(),
+      turnstileToken: turnstileToken,
       _hp: document.getElementById('_hp').value
     };
 
@@ -348,6 +413,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:9
     .finally(function(){
       btn.disabled = false;
       btn.classList.remove('loading');
+      resetearTurnstile();
     });
   });
 })();

@@ -154,3 +154,51 @@ test('catálogos exportados coinciden con el brief', () => {
   assert.deepEqual(TIPOS_VEHICULO, ['NHR', 'Turbo', 'Sencillo', 'Dobletroque', 'Patineta', 'Tractomula']);
   assert.deepEqual(TIPOS_CARROCERIA, ['Estaca', 'Furgón', 'Plancha', 'Cisterna']);
 });
+
+// ── Límites de longitud (control de seguridad pendiente de la auditoría) ───
+// No cambian campos, reglas comerciales ni datos existentes — solo acotan
+// cuánto puede medir cada texto. Cada caso usa EXACTAMENTE el límite +1
+// para aislar el límite de longitud de cualquier otra validación del mismo
+// campo (ej. el rango de dígitos del teléfono).
+
+test('validarSolicitudEnturne: nombre de hasta 120 caracteres pasa; 121 falla', () => {
+  assert.equal(validarSolicitudEnturne(solicitudValida({ nombre: 'a'.repeat(120) })).ok, true);
+  const r = validarSolicitudEnturne(solicitudValida({ nombre: 'a'.repeat(121) }));
+  assert.equal(r.ok, false);
+  assert.ok(r.errores.some((e) => e.includes('nombre') && e.includes('120')));
+});
+
+test('validarSolicitudEnturne: telefono de hasta 20 caracteres pasa; 21 falla por longitud', () => {
+  // 10 dígitos reales (dentro del rango 7–15) + relleno de guiones EN EL
+  // MEDIO (nunca al borde, para que trim() no se los coma) — así se aísla
+  // el límite de longitud del límite de cantidad de dígitos.
+  const telefono20 = '30012' + '-'.repeat(10) + '34567'; // 20 caracteres, 10 dígitos
+  const telefono21 = '30012' + '-'.repeat(11) + '34567'; // 21 caracteres, 10 dígitos
+  assert.equal(telefono20.length, 20);
+  assert.equal(telefono21.length, 21);
+  assert.equal(validarSolicitudEnturne(solicitudValida({ telefono: telefono20 })).ok, true);
+  const r = validarSolicitudEnturne(solicitudValida({ telefono: telefono21 }));
+  assert.equal(r.ok, false);
+  assert.ok(r.errores.some((e) => e.includes('telefono') && e.includes('20')));
+});
+
+test('validarSolicitudEnturne: placa de hasta 20 caracteres pasa; 21 falla', () => {
+  assert.equal(validarSolicitudEnturne(solicitudValida({ placa: 'A'.repeat(20) })).ok, true);
+  const r = validarSolicitudEnturne(solicitudValida({ placa: 'A'.repeat(21) }));
+  assert.equal(r.ok, false);
+  assert.ok(r.errores.some((e) => e.includes('placa') && e.includes('20')));
+});
+
+test('validarSolicitudEnturne: ciudad de hasta 100 caracteres pasa; 101 falla', () => {
+  assert.equal(validarSolicitudEnturne(solicitudValida({ ciudad: 'a'.repeat(100) })).ok, true);
+  const r = validarSolicitudEnturne(solicitudValida({ ciudad: 'a'.repeat(101) }));
+  assert.equal(r.ok, false);
+  assert.ok(r.errores.some((e) => e.includes('ciudad') && e.includes('100')));
+});
+
+test('validarSolicitudEnturne: ruta_frecuente de hasta 160 caracteres pasa; 161 falla', () => {
+  assert.equal(validarSolicitudEnturne(solicitudValida({ ruta_frecuente: 'a'.repeat(160) })).ok, true);
+  const r = validarSolicitudEnturne(solicitudValida({ ruta_frecuente: 'a'.repeat(161) }));
+  assert.equal(r.ok, false);
+  assert.ok(r.errores.some((e) => e.includes('ruta_frecuente') && e.includes('160')));
+});
