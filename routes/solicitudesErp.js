@@ -73,6 +73,21 @@ export default function crearRouterSolicitudesErp({ sbFetch, sbFetchCount, requi
 
   async function obtenerFilas(query, { all = false } = {}) {
     const { filtros, cliente } = construirFiltros(query);
+    const term = textoSeguro(query.busqueda, 80);
+    if (term) {
+      const clientesCoincidentes = await sbFetch(`/empresas_cliente?razon_social=ilike.*${encodeURIComponent(term)}*&select=id&limit=100`);
+      const ids = (clientesCoincidentes || []).map(x => x.id).filter(Boolean);
+      const termLike = `*${encodeURIComponent(term)}*`;
+      const condiciones = [
+        `codigo_solicitud.ilike.${termLike}`,
+        `external_ref.ilike.${termLike}`,
+        `origen.ilike.${termLike}`,
+        `destino.ilike.${termLike}`,
+        `agencia_nombre.ilike.${termLike}`,
+      ];
+      if (ids.length) condiciones.push(`empresa_cliente_id.in.(${ids.map(encodeURIComponent).join(',')})`);
+      filtros.push(`or=(${condiciones.join(',')})`);
+    }
     if (cliente) {
       const id = await resolverClienteId(cliente);
       filtros.push(id === '__no_match__' ? 'id=eq.00000000-0000-0000-0000-000000000000' : `empresa_cliente_id=eq.${encodeURIComponent(id)}`);
@@ -97,6 +112,16 @@ export default function crearRouterSolicitudesErp({ sbFetch, sbFetchCount, requi
     if (!rows) throw new Error('Error consultando solicitudes');
     return { rows, total, page, pageSize, filtros };
   }
+
+  router.get('/clientes', ...auth, async (_req, res) => {
+    try {
+      const rows = await sbFetch('/empresas_cliente?estado=not.in.(inactivo,fusionado)&select=razon_social&order=razon_social.asc&limit=1000');
+      const clientes = [...new Set((rows || []).map(x => x.razon_social).filter(Boolean))];
+      res.json(clientes);
+    } catch (e) {
+      res.status(500).json({ error: 'No fue posible cargar los clientes' });
+    }
+  });
 
   router.get('/', ...auth, async (req, res) => {
     try {
