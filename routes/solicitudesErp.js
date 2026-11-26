@@ -28,11 +28,6 @@ function construirFiltros(query) {
   if (estado && estado !== 'todos') {
     filtros[0] = `estado=eq.${encodeURIComponent(estado === 'aprobado' ? 'confirmado' : estado)}`;
   }
-  const term = textoSeguro(busqueda, 80);
-  if (term) {
-    const like = `*${encodeURIComponent(term)}*`;
-    filtros.push(`or=(codigo_solicitud.ilike.${like},external_ref.ilike.${like},origen.ilike.${like},destino.ilike.${like},agencia_nombre.ilike.${like})`);
-  }
   return { filtros, cliente: textoSeguro(cliente, 120), fechaDesde, fechaHasta };
 }
 
