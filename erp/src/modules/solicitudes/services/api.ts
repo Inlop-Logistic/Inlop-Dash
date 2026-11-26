@@ -8,8 +8,8 @@ export interface SolicitudesPageResult {
 }
 
 export interface SolicitudesFilters {
-  desde: string;
-  hasta: string;
+  desde?: string;
+  hasta?: string;
   page: number;
   pageSize: number;
   estado?: string;
