@@ -16,7 +16,7 @@ function textoSeguro(value, max = 100) {
 }
 
 function construirFiltros(query) {
-  const { desde, hasta, estado, busqueda, cliente } = query;
+  const { desde, hasta, estado, cliente } = query;
   const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
   const fechaDesde = desde || hoy;
   const fechaHasta = hasta || hoy;
