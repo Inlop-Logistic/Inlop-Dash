@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from "react";
-import { hoy, hace7dias } from "@/utils/date";
 import type { Solicitud, ActorAccion } from "../types";
 import { getSolicitudes, getClientesSolicitudes, cambiarEstadoSolicitud, exportarSolicitudes } from "../services/api";
 import { useFiltrosComunes } from "@/hooks/useFiltrosComunes";
@@ -21,7 +20,7 @@ export function useSolicitudes() {
   const [kpis, setKpis] = useState({ total: 0, pendientes: 0, enRuta: 0, finalizadas: 0 });
 
   const { busqueda, setBusqueda, fechaDesde, fechaHasta, setFechaRango, limpiarBase } =
-    useFiltrosComunes({ defaultDesde: hace7dias(), defaultHasta: hoy() });
+    useFiltrosComunes();
 
   const estadoEfectivo = estadoFiltro || (tabEstado !== "todos" ? tabEstado : "");
 
@@ -30,8 +29,8 @@ export function useSolicitudes() {
     setError(null);
     try {
       const result = await getSolicitudes({
-        desde: fechaDesde || hace7dias(),
-        hasta: fechaHasta || hoy(),
+        desde: fechaDesde,
+        hasta: fechaHasta,
         page,
         pageSize: PAGE_SIZE,
         estado: estadoEfectivo,
@@ -69,7 +68,7 @@ export function useSolicitudes() {
   const panelSol = panelId ? data.find((s) => s.id === panelId) ?? null : null;
 
   const hayFiltros = Boolean(busqueda || tabEstado !== "todos" || estadoFiltro || clienteFiltro ||
-    fechaDesde !== hace7dias() || fechaHasta !== hoy());
+    Boolean(fechaDesde || fechaHasta));
 
   function limpiarFiltros() {
     limpiarBase();
@@ -84,8 +83,8 @@ export function useSolicitudes() {
     setExportando(true);
     try {
       await exportarSolicitudes({
-        desde: fechaDesde || hace7dias(),
-        hasta: fechaHasta || hoy(),
+        desde: fechaDesde,
+        hasta: fechaHasta,
         estado: estadoEfectivo,
         busqueda: busqueda.trim(),
         cliente: clienteFiltro,
