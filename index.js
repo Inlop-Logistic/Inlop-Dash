@@ -8,6 +8,9 @@ import { resolverScopeUsuario, construirFiltroScope, obtenerSolicitudEnScope } f
 import { getUserPreferences, updatePreference, KNOWN_CHANNELS } from './services/preferenceResolver.js';
 import { normalizeExternalRef } from './services/normalizeExternalRef.js';
 import { fechaHoyColombia, parseFechaTMS, extraerFechaColombia } from './utils/fechas.js';
+import { limpiarGolpesExpirados } from './services/enturnes/antiSpam.js';
+import crearRouterEnturnes from './routes/enturnes.js';
+import crearRouterSolicitudesErp from './routes/solicitudesErp.js';
 import controltDiagRouter from './routes/controltDiag.js';
 import crearRouterGpsSeguimiento from './routes/gpsSeguimiento.js';
 import { getTripDetail, makeSbFetchAdapter } from './services/controlt-soap/tripService.js';
@@ -163,12 +166,59 @@ if (!ERP_RESET_PASSWORD_URL) {
 // que un usuario la active explícitamente.
 const SEGUIMIENTO_GPS_URL = process.env.SEGUIMIENTO_GPS_URL || "";
 
+// URL pública (SIN barra final) del servicio Railway independiente que sirve
+// el formulario público de Enturne de Vehículos (enturne-publico/ — ver ese
+// repo/carpeta, no tiene credenciales de Supabase ni lógica propia). Se suma
+// automáticamente a la whitelist de CORS más abajo, mismo patrón que
+// CLIENT_PORTAL_URL — sin esto, ese servicio no podría hacer el POST
+// cross-origin a /api/enturnes (el navegador bloquearía la respuesta por
+// falta de Access-Control-Allow-Origin). No se usa para nada más (a
+// diferencia de CLIENT_PORTAL_URL/ERP_RESET_PASSWORD_URL, que también arman
+// un `redirect_to` de Auth) — por eso no lleva aviso de arranque propio: su
+// ausencia solo afecta CORS, ya cubierto por el aviso genérico de la
+// sección CORS de abajo si terminan sin ningún origen configurado.
+const ENTURNE_PUBLICO_URL = process.env.ENTURNE_PUBLICO_URL || "";
+
+// Cloudflare Turnstile — Secret Key del widget del formulario público de
+// Enturne de Vehículos (control de seguridad pendiente de la auditoría).
+// Se usa EXCLUSIVAMENTE en routes/enturnes.js, contra el servicio oficial
+// de verificación de Cloudflare (services/enturnes/turnstile.js) — nunca se
+// envía al navegador ni a enturne-publico/ (ese servicio solo conoce la
+// Site Key, pública por diseño de Turnstile, inyectada vía su propio
+// /config.js). Fail-closed: sin esta variable, POST /api/enturnes rechaza
+// toda solicitud con 503 en vez de aceptar registros sin CAPTCHA.
+const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || "";
+if (!TURNSTILE_SECRET_KEY) {
+  console.warn(
+    "⚠️  TURNSTILE_SECRET_KEY no configurada. POST /api/enturnes rechazará " +
+    "todas las solicitudes con 503 (fail-closed) hasta configurar esta " +
+    "variable en Railway — ver services/enturnes/turnstile.js."
+  );
+}
+
 const SB_HEADERS = {
   "apikey": SB_ANON_KEY,
   "Authorization": `Bearer ${SB_KEY}`,
   "Content-Type": "application/json",
   "Prefer": "resolution=merge-duplicates,return=representation"
 };
+
+
+async function sbFetchCount(path) {
+  const r = await fetchConTimeout(`${SB_URL}${path}`, {
+    method: 'HEAD',
+    headers: { ...SB_HEADERS, 'Prefer': 'count=exact', 'Range-Unit': 'items', 'Range': '0-0' },
+  });
+  if (!r.ok) {
+    const txt = await r.text();
+    console.error(`Supabase HEAD ${path} → ${r.status}: ${txt}`);
+    throw new Error('No fue posible consultar el total de solicitudes');
+  }
+  const range = r.headers.get('content-range') || '';
+  const total = Number(range.split('/')[1]);
+  if (!Number.isFinite(total)) throw new Error('Supabase no devolvió el conteo total');
+  return total;
+}
 
 async function sbFetch(path, method="GET", body=null, extraHeaders=null) {
   // extraHeaders: override puntual por llamada (ej. Prefer: return=minimal en
@@ -495,10 +545,14 @@ const app = express();
 // pasan siempre. Solo las peticiones cross-origin del navegador se filtran.
 // CLIENT_PORTAL_URL se incluye automáticamente si está configurada (reutiliza
 // la misma variable que ya declara POST /auth/recuperar — no hay que duplicarla).
+// ENTURNE_PUBLICO_URL igual (ver su declaración arriba) — el formulario
+// público de Enturne de Vehículos vive en un servicio Railway aparte y
+// necesita este origen habilitado para su POST cross-origin a /api/enturnes.
 const _allowedOriginsSet = new Set(
   [
     ...(process.env.ALLOWED_ORIGINS || "").split(",").map(s => s.trim()).filter(Boolean),
     CLIENT_PORTAL_URL,
+    ENTURNE_PUBLICO_URL,
   ].filter(Boolean)
 );
 // Localhost solo en entornos no-producción (desarrollo local y staging con NODE_ENV sin set)
@@ -556,6 +610,25 @@ app.get("/legacy/tc-init", (req, res) => {
   }
   res.json({ token: LEGACY_TC_TOKEN });
 });
+
+// ─── ENTURNE DE VEHÍCULOS — formulario público, sin autenticación (intencional) ───
+// Lógica completa en routes/enturnes.js (mismo patrón factory+deps que
+// routes/gpsSeguimiento.js) — aquí solo se inyectan fetchConTimeout/SB_URL/
+// SB_HEADERS, igual que el resto de este archivo usa sbFetch.
+//
+// `serviceKeyConfigurado` (auditoría de seguridad): SB_KEY cae globalmente a
+// SB_ANON_KEY si SUPABASE_SERVICE_KEY no está en el entorno (ver el aviso de
+// "Usando fallback (anon key)" más arriba en este archivo) — ese fallback es
+// compartido por TODO el backend y está fuera de alcance tocarlo aquí. Pero
+// vehiculos_enturnes no tiene policy de INSERT para anon/authenticated (ver
+// migración): un INSERT con la anon key fallaría silenciosamente contra
+// Supabase. En vez de dejar que ese intento llegue a Supabase sin la service
+// key real, el router corta antes (503) — ver routes/enturnes.js.
+app.use('/api/enturnes', crearRouterEnturnes({
+  fetchConTimeout, SB_URL, SB_HEADERS,
+  serviceKeyConfigurado: !!process.env.SUPABASE_SERVICE_KEY,
+  turnstileSecretKey: TURNSTILE_SECRET_KEY,
+}));
 
 const LOGIN_URL = "https://integrations.controlt.io/Auth/login";
 const BASE_URL  = "https://app.controlt.com.co/apipublic/api";
@@ -6451,6 +6524,16 @@ app.use('/api/seguimiento-gps', crearRouterGpsSeguimiento({
   sbFetch, cache, tripCustomerCache, extraerTelefono, primerNombreCliente,
 }));
 
+
+// ─── SOLICITUDES ERP — listado paginado y exportación (JWT + RBAC) ──────────
+// Ruta separada para no alterar el contrato legacy consumido por TorreControl.
+app.use('/api/erp/solicitudes', crearRouterSolicitudesErp({
+  sbFetch,
+  sbFetchCount,
+  requireErpAuth,
+  requirePermiso,
+}));
+
 // ─── MANEJADOR DE ERRORES — respuestas JSON limpias para fallos de body-parser ──
 // (ej. archivo de soporte que excede el límite de express.raw). Sin este
 // handler, Express respondería con una página HTML de error por defecto.
@@ -6532,4 +6615,5 @@ app.listen(PORT, async () => {
   setInterval(syncCumplidos,          60 * 1000);
   setInterval(syncSolicitudes,        65 * 1000);
   setInterval(() => tickSchedulerReportes('scheduler'), 60 * 1000);
+  setInterval(limpiarGolpesExpirados, 5 * 60 * 1000); // enturnes: limpieza del contador de tasa en memoria
 });
