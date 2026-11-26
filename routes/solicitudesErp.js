@@ -18,13 +18,11 @@ function textoSeguro(value, max = 100) {
 function construirFiltros(query) {
   const { desde, hasta, estado, cliente } = query;
   const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-  const fechaDesde = desde || hoy;
-  const fechaHasta = hasta || hoy;
-  const filtros = [
-    `estado=in.(${ESTADOS.join(',')})`,
-    `creado_en=gte.${encodeURIComponent(fechaDesde + 'T00:00:00.000-05:00')}`,
-    `creado_en=lte.${encodeURIComponent(fechaHasta + 'T23:59:59.999-05:00')}`,
-  ];
+  const fechaDesde = desde || null;
+  const fechaHasta = hasta || null;
+  const filtros = [`estado=in.(${ESTADOS.join(',')})`];
+  if (fechaDesde) filtros.push(`creado_en=gte.${encodeURIComponent(fechaDesde + 'T00:00:00.000-05:00')}`);
+  if (fechaHasta) filtros.push(`creado_en=lte.${encodeURIComponent(fechaHasta + 'T23:59:59.999-05:00')}`);
   if (estado && estado !== 'todos') {
     filtros[0] = `estado=eq.${encodeURIComponent(estado === 'aprobado' ? 'confirmado' : estado)}`;
   }
@@ -124,10 +122,14 @@ export default function crearRouterSolicitudesErp({ sbFetch, sbFetchCount, requi
     try {
       const result = await obtenerFilas(req.query);
       const data = await enriquecer(result.rows, sbFetch);
+      const filtrosKpi = [];
+      if (req.query.desde) filtrosKpi.push(`creado_en=gte.${encodeURIComponent(req.query.desde + 'T00:00:00.000-05:00')}`);
+      if (req.query.hasta) filtrosKpi.push(`creado_en=lte.${encodeURIComponent(req.query.hasta + 'T23:59:59.999-05:00')}`);
+      const sufijoKpi = filtrosKpi.length ? `&${filtrosKpi.join('&')}` : '';
       const [pendientes, enRuta, finalizadas] = await Promise.all([
-        sbFetchCount(`/solicitudes?select=id&estado=eq.pendiente&creado_en=gte.${encodeURIComponent((req.query.desde || new Date().toLocaleDateString('en-CA',{timeZone:'America/Bogota'}))+'T00:00:00.000-05:00')}&creado_en=lte.${encodeURIComponent((req.query.hasta || new Date().toLocaleDateString('en-CA',{timeZone:'America/Bogota'}))+'T23:59:59.999-05:00')}`),
-        sbFetchCount(`/solicitudes?select=id&estado=eq.en_ruta&creado_en=gte.${encodeURIComponent((req.query.desde || new Date().toLocaleDateString('en-CA',{timeZone:'America/Bogota'}))+'T00:00:00.000-05:00')}&creado_en=lte.${encodeURIComponent((req.query.hasta || new Date().toLocaleDateString('en-CA',{timeZone:'America/Bogota'}))+'T23:59:59.999-05:00')}`),
-        sbFetchCount(`/solicitudes?select=id&estado=eq.completado&creado_en=gte.${encodeURIComponent((req.query.desde || new Date().toLocaleDateString('en-CA',{timeZone:'America/Bogota'}))+'T00:00:00.000-05:00')}&creado_en=lte.${encodeURIComponent((req.query.hasta || new Date().toLocaleDateString('en-CA',{timeZone:'America/Bogota'}))+'T23:59:59.999-05:00')}`),
+        sbFetchCount(`/solicitudes?select=id&estado=eq.pendiente${sufijoKpi}`),
+        sbFetchCount(`/solicitudes?select=id&estado=eq.en_ruta${sufijoKpi}`),
+        sbFetchCount(`/solicitudes?select=id&estado=eq.completado${sufijoKpi}`),
       ]);
       res.json({ data, pagination:{ page:result.page, pageSize:result.pageSize, total:result.total, totalPages:Math.ceil(result.total/result.pageSize) }, kpis:{ total:result.total, pendientes, enRuta, finalizadas } });
     } catch (e) {
