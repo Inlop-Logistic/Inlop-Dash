@@ -67,7 +67,7 @@ export function SolicitudesPage() {
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard label="Solicitudes" subtitle="Total en el rango" value={kpis.total} icon={<ClipboardList className="w-4.5 h-4.5" />} color="#1D4ED8" bg="#DBEAFE" onClick={() => setTabEstado("todos")} />
+        <KpiCard label="Solicitudes" subtitle="Total solicitudes" value={kpis.total} icon={<ClipboardList className="w-4.5 h-4.5" />} color="#1D4ED8" bg="#DBEAFE" onClick={() => setTabEstado("todos")} />
         <KpiCard label="Pendientes" subtitle="Pendientes por gestionar" value={kpis.pendientes} icon={<Clock className="w-4.5 h-4.5" />} color="#B45309" bg="#FEF3C7" onClick={() => setTabEstado("pendiente")} />
         <KpiCard label="En Ruta" subtitle="Viajes activos" value={kpis.enRuta} icon={<Truck className="w-4.5 h-4.5" />} color="var(--navy)" bg="#DBEAFE" onClick={() => setTabEstado("en_ruta")} />
         <KpiCard label="Finalizadas" subtitle="Servicios completados" value={kpis.finalizadas} icon={<CheckCircle className="w-4.5 h-4.5" />} color="#065F46" bg="#D1FAE5" onClick={() => setTabEstado("completado")} />
@@ -105,7 +105,7 @@ export function SolicitudesPage() {
           </div>
         ) : (
           <>
-            <DataTable columns={COLUMNS} rows={filtradas} rowKey={(s) => s.id} onRowClick={(s) => setPanelId(s.id)} loading={loading} emptyMessage="No hay solicitudes en el rango seleccionado." />
+            <DataTable columns={COLUMNS} rows={filtradas} rowKey={(s) => s.id} onRowClick={(s) => setPanelId(s.id)} loading={loading} emptyMessage="No hay solicitudes con los filtros seleccionados." />
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t" style={{ borderColor: "var(--gray-100)" }}>
               <span className="text-[12px]" style={{ color: "var(--gray-500)" }}>
                 {pagination.total === 0 ? "Sin registros" : `Mostrando ${(page - 1) * pagination.pageSize + 1}–${Math.min(page * pagination.pageSize, pagination.total)} de ${pagination.total}`}
