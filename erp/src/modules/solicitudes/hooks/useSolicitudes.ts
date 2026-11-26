@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { hoy, hace7dias } from "@/utils/date";
 import type { Solicitud, ActorAccion } from "../types";
-import { getSolicitudes, cambiarEstadoSolicitud, exportarSolicitudes } from "../services/api";
+import { getSolicitudes, getClientesSolicitudes, cambiarEstadoSolicitud, exportarSolicitudes } from "../services/api";
 import { useFiltrosComunes } from "@/hooks/useFiltrosComunes";
 
 const PAGE_SIZE = 25;
@@ -14,6 +14,7 @@ export function useSolicitudes() {
   const [tabEstado, setTabEstado] = useState("todos");
   const [estadoFiltro, setEstadoFiltro] = useState("");
   const [clienteFiltro, setClienteFiltro] = useState("");
+  const [clientes, setClientes] = useState<string[]>([]);
   const [panelId, setPanelId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, pageSize: PAGE_SIZE, total: 0, totalPages: 0 });
@@ -52,6 +53,10 @@ export function useSolicitudes() {
 
   useEffect(() => { void cargar(); }, [cargar]);
 
+  useEffect(() => {
+    getClientesSolicitudes().then(setClientes).catch(() => setClientes([]));
+  }, []);
+
   useEffect(() => { setPage(1); }, [fechaDesde, fechaHasta, estadoEfectivo, busqueda, clienteFiltro]);
 
   const handleEstado = async (id: string, estado: string) => {
@@ -59,12 +64,6 @@ export function useSolicitudes() {
     await cambiarEstadoSolicitud(id, estado, actor ? { actor } : {});
     await cargar();
   };
-
-  const clientes = useMemo<string[]>(() => {
-    const seen = new Set<string>();
-    data.forEach((s) => { if (s.cliente && s.cliente !== "—") seen.add(s.cliente); });
-    return [...seen].sort((a, b) => a.localeCompare(b, "es"));
-  }, [data]);
 
   const filtradas = data;
   const panelSol = panelId ? data.find((s) => s.id === panelId) ?? null : null;
