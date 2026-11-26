@@ -25,6 +25,10 @@ function queryString(filters: SolicitudesFilters) {
   return params.toString();
 }
 
+export function getClientesSolicitudes() {
+  return req<string[]>("/api/erp/solicitudes/clientes");
+}
+
 export function getSolicitudes(filters: SolicitudesFilters) {
   return req<SolicitudesPageResult>(`/api/erp/solicitudes?${queryString(filters)}`);
 }
