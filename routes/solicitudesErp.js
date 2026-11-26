@@ -62,8 +62,8 @@ export default function crearRouterSolicitudesErp({ sbFetch, sbFetchCount, requi
 
   async function resolverClienteId(nombre) {
     if (!nombre) return null;
-    const rows = await sbFetch(`/empresas_cliente?razon_social=eq.${encodeURIComponent(nombre)}&select=id&limit=1`);
-    return rows?.[0]?.id || '__no_match__';
+    const rows = await sbFetch(`/empresas_cliente?razon_social=eq.${encodeURIComponent(nombre)}&select=id`);
+    return (rows || []).map(row => row.id).filter(Boolean);
   }
 
   async function obtenerFilas(query, { all = false } = {}) {
@@ -84,8 +84,10 @@ export default function crearRouterSolicitudesErp({ sbFetch, sbFetchCount, requi
       filtros.push(`or=(${condiciones.join(',')})`);
     }
     if (cliente) {
-      const id = await resolverClienteId(cliente);
-      filtros.push(id === '__no_match__' ? 'id=eq.00000000-0000-0000-0000-000000000000' : `empresa_cliente_id=eq.${encodeURIComponent(id)}`);
+      const ids = await resolverClienteId(cliente);
+      filtros.push(ids.length
+        ? `empresa_cliente_id=in.(${ids.map(encodeURIComponent).join(',')})`
+        : 'id=eq.00000000-0000-0000-0000-000000000000');
     }
     const base = `/solicitudes?select=${SELECT}&order=creado_en.desc,id.desc&${filtros.join('&')}`;
     if (all) {
