@@ -11,7 +11,7 @@ import { TABS, ESTADO_CFG } from "./constants";
 
 export function SolicitudesPage() {
   const {
-    data, loading, error, exportando,
+    loading, error, exportando,
     busqueda, setBusqueda, setFechaRango,
     tabEstado, setTabEstado, estadoFiltro, setEstadoFiltro,
     clienteFiltro, setClienteFiltro, clientes,
