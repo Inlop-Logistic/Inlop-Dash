@@ -10,6 +10,7 @@ import { normalizeExternalRef } from './services/normalizeExternalRef.js';
 import { fechaHoyColombia, parseFechaTMS, extraerFechaColombia } from './utils/fechas.js';
 import controltDiagRouter from './routes/controltDiag.js';
 import crearRouterGpsSeguimiento from './routes/gpsSeguimiento.js';
+import crearRouterSolicitudesErp from './routes/solicitudesErp.js';
 import { getTripDetail, makeSbFetchAdapter } from './services/controlt-soap/tripService.js';
 import {
   transformarViajesActivos, transformarCentroGps, listarClientesDataset,
@@ -162,6 +163,22 @@ if (!ERP_RESET_PASSWORD_URL) {
 // CLIENT_PORTAL_URL, todavía no hay ningún reporte usando la función salvo
 // que un usuario la active explícitamente.
 const SEGUIMIENTO_GPS_URL = process.env.SEGUIMIENTO_GPS_URL || "";
+
+async function sbFetchCount(path) {
+  const r = await fetchConTimeout(`${SB_URL}${path}`, {
+    method: 'HEAD',
+    headers: { ...SB_HEADERS, 'Prefer': 'count=exact', 'Range-Unit': 'items', 'Range': '0-0' },
+  });
+  if (!r.ok) {
+    const txt = await r.text();
+    console.error(`Supabase HEAD ${path} → ${r.status}: ${txt}`);
+    throw new Error('No fue posible consultar el total de solicitudes');
+  }
+  const range = r.headers.get('content-range') || '';
+  const total = Number(range.split('/')[1]);
+  if (!Number.isFinite(total)) throw new Error('Supabase no devolvió el conteo total');
+  return total;
+}
 
 const SB_HEADERS = {
   "apikey": SB_ANON_KEY,
@@ -6449,6 +6466,15 @@ app.use('/api/controlt', requireErpAuth, controltDiagRouter);
 // routes/gpsSeguimiento.js.
 app.use('/api/seguimiento-gps', crearRouterGpsSeguimiento({
   sbFetch, cache, tripCustomerCache, extraerTelefono, primerNombreCliente,
+}));
+
+// ─── SOLICITUDES ERP — listado paginado y exportación (JWT + RBAC) ──────────
+// Ruta independiente: conserva intacto el contrato legacy /api/solicitudes.
+app.use('/api/erp/solicitudes', crearRouterSolicitudesErp({
+  sbFetch,
+  sbFetchCount,
+  requireErpAuth,
+  requirePermiso,
 }));
 
 // ─── MANEJADOR DE ERRORES — respuestas JSON limpias para fallos de body-parser ──
