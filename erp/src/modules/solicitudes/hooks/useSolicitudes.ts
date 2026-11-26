@@ -1,126 +1,112 @@
-import { useState, useEffect, useMemo } from "react";
-import { hoy, hace7dias, extraerFechaColombia } from "@/utils/date";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { hoy, hace7dias } from "@/utils/date";
 import type { Solicitud, ActorAccion } from "../types";
-import { getSolicitudes, cambiarEstadoSolicitud } from "../services/api";
+import { getSolicitudes, cambiarEstadoSolicitud, exportarSolicitudes } from "../services/api";
 import { useFiltrosComunes } from "@/hooks/useFiltrosComunes";
 
-export function useSolicitudes() {
-  const [data, setData]       = useState<Solicitud[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
-  const [tabEstado,     setTabEstado]     = useState("todos");
-  const [estadoFiltro,  setEstadoFiltro]  = useState("");
-  const [clienteFiltro, setClienteFiltro] = useState("");
-  const [panelId, setPanelId]             = useState<string | null>(null);
+const PAGE_SIZE = 25;
 
-  // Filtros comunes — fechas inicializadas a últimos 7 días (define la ventana de carga inicial)
+export function useSolicitudes() {
+  const [data, setData] = useState<Solicitud[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [exportando, setExportando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [tabEstado, setTabEstado] = useState("todos");
+  const [estadoFiltro, setEstadoFiltro] = useState("");
+  const [clienteFiltro, setClienteFiltro] = useState("");
+  const [panelId, setPanelId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, pageSize: PAGE_SIZE, total: 0, totalPages: 0 });
+  const [kpis, setKpis] = useState({ total: 0, pendientes: 0, enRuta: 0, finalizadas: 0 });
+
   const { busqueda, setBusqueda, fechaDesde, fechaHasta, setFechaRango, limpiarBase } =
     useFiltrosComunes({ defaultDesde: hace7dias(), defaultHasta: hoy() });
 
-  const cargar = async () => {
+  const estadoEfectivo = estadoFiltro || (tabEstado !== "todos" ? tabEstado : "");
+
+  const cargar = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const list = await getSolicitudes(fechaDesde || hace7dias(), fechaHasta || hoy());
-      setData(list);
+      const result = await getSolicitudes({
+        desde: fechaDesde || hace7dias(),
+        hasta: fechaHasta || hoy(),
+        page,
+        pageSize: PAGE_SIZE,
+        estado: estadoEfectivo,
+        busqueda: busqueda.trim(),
+        cliente: clienteFiltro,
+      });
+      setData(result.data);
+      setPagination(result.pagination);
+      setKpis(result.kpis);
+      if (result.pagination.totalPages > 0 && page > result.pagination.totalPages) {
+        setPage(result.pagination.totalPages);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al cargar solicitudes");
     } finally {
       setLoading(false);
     }
-  };
+  }, [fechaDesde, fechaHasta, page, estadoEfectivo, busqueda, clienteFiltro]);
 
-  // Carga solo al montar — el selector de fechas aplica client-side (igual que Viajes).
-  // "Actualizar" recarga el servidor con el rango vigente.
-  useEffect(() => { cargar(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void cargar(); }, [cargar]);
+
+  useEffect(() => { setPage(1); }, [fechaDesde, fechaHasta, estadoEfectivo, busqueda, clienteFiltro]);
 
   const handleEstado = async (id: string, estado: string) => {
     const actor: ActorAccion | null = null;
     await cambiarEstadoSolicitud(id, estado, actor ? { actor } : {});
-    setData((prev) =>
-      prev.map((s) => s.id === id ? { ...s, estado: estado as Solicitud["estado"] } : s)
-    );
+    await cargar();
   };
 
-  // ── Clientes únicos (para el select de cliente) ───────────────────────────
   const clientes = useMemo<string[]>(() => {
     const seen = new Set<string>();
-    const result: string[] = [];
-    for (const s of data) {
-      if (s.cliente && !seen.has(s.cliente)) { seen.add(s.cliente); result.push(s.cliente); }
-    }
-    return result.sort((a, b) => a.localeCompare(b, "es"));
+    data.forEach((s) => { if (s.cliente && s.cliente !== "—") seen.add(s.cliente); });
+    return [...seen].sort((a, b) => a.localeCompare(b, "es"));
   }, [data]);
 
-  // ── Filtrado acumulativo (client-side, igual que Viajes) ──────────────────
-  const filtradas = useMemo(() => {
-    const term = busqueda.trim().toLowerCase();
-
-    return data.filter((s) => {
-      // Tab de estado
-      if (tabEstado !== "todos" && s.estado !== tabEstado) return false;
-
-      // Select de estado (acumulativo sobre el tab)
-      if (estadoFiltro && s.estado !== estadoFiltro) return false;
-
-      // Select de cliente
-      if (clienteFiltro && s.cliente !== clienteFiltro) return false;
-
-      // Filtro de fecha (client-side; solo activo cuando el usuario aplica un rango)
-      if (fechaDesde || fechaHasta) {
-        const vFecha = s.creado_en ? extraerFechaColombia(new Date(s.creado_en)) : "";
-        if (fechaDesde && vFecha < fechaDesde) return false;
-        if (fechaHasta && vFecha > fechaHasta) return false;
-      }
-
-      // Búsqueda texto libre
-      if (term) {
-        return (
-          s.codigo_solicitud.toLowerCase().includes(term) ||
-          s.cliente.toLowerCase().includes(term) ||
-          s.agencia.toLowerCase().includes(term) ||
-          (s.external_ref ?? "").toLowerCase().includes(term) ||
-          s.origen.toLowerCase().includes(term) ||
-          s.destino.toLowerCase().includes(term)
-        );
-      }
-
-      return true;
-    });
-  }, [data, tabEstado, estadoFiltro, clienteFiltro, busqueda, fechaDesde, fechaHasta]);
-
-  const kpis = useMemo(() => ({
-    total:       data.length,
-    pendientes:  data.filter((s) => s.estado === "pendiente").length,
-    enRuta:      data.filter((s) => s.estado === "en_ruta").length,
-    finalizadas: data.filter((s) => s.estado === "completado").length,
-  }), [data]);
-
+  const filtradas = data;
   const panelSol = panelId ? data.find((s) => s.id === panelId) ?? null : null;
 
-  const hayFiltros =
-    busqueda !== "" || tabEstado !== "todos" ||
-    estadoFiltro !== "" || clienteFiltro !== "" ||
-    fechaDesde !== hace7dias() || fechaHasta !== hoy();
+  const hayFiltros = Boolean(busqueda || tabEstado !== "todos" || estadoFiltro || clienteFiltro ||
+    fechaDesde !== hace7dias() || fechaHasta !== hoy());
 
   function limpiarFiltros() {
     limpiarBase();
     setTabEstado("todos");
     setEstadoFiltro("");
     setClienteFiltro("");
+    setBusqueda("");
+    setPage(1);
+  }
+
+  async function exportar() {
+    setExportando(true);
+    try {
+      await exportarSolicitudes({
+        desde: fechaDesde || hace7dias(),
+        hasta: fechaHasta || hoy(),
+        estado: estadoEfectivo,
+        busqueda: busqueda.trim(),
+        cliente: clienteFiltro,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al exportar solicitudes");
+    } finally {
+      setExportando(false);
+    }
   }
 
   return {
-    data, loading, error,
+    data, loading, error, exportando,
     busqueda, setBusqueda,
     fechaDesde, fechaHasta, setFechaRango,
     tabEstado, setTabEstado,
     estadoFiltro, setEstadoFiltro,
     clienteFiltro, setClienteFiltro,
-    clientes,
-    panelId, setPanelId, panelSol,
-    filtradas, kpis,
-    hayFiltros, limpiarFiltros,
-    cargar, handleEstado,
+    clientes, panelId, setPanelId, panelSol,
+    filtradas, kpis, pagination, page, setPage,
+    hayFiltros, limpiarFiltros, cargar, handleEstado, exportar,
   };
 }
